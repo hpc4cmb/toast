@@ -101,7 +101,7 @@ class BuildHitMap(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -321,7 +321,7 @@ class BuildInverseCovariance(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -613,7 +613,7 @@ class BuildNoiseWeighted(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         if self.pixel_dist is None:
             raise RuntimeError(
@@ -756,9 +756,7 @@ class BuildNoiseWeighted(Operator):
                 pix_indx,
                 ob.detdata[self.pixels].data,
                 weight_indx,
-                ob.detdata[self.weights].data.reshape(
-                    (n_weight_dets, ob.n_local_samples, -1)
-                ),
+                ob.detdata[self.weights].data,
                 data_indx,
                 ob.detdata[self.det_data].data,
                 flag_indx,
@@ -788,12 +786,6 @@ class BuildNoiseWeighted(Operator):
                 data[self.zmap].sync_alltoallv()
             else:
                 data[self.zmap].sync_allreduce()
-            if use_accel:
-                log.verbose_rank(
-                    f"Operator {self.name} finalize calling zmap update device",
-                    comm=data.comm.comm_group,
-                )
-                data[self.zmap].accel_update_device()
 
             zmap_good = data[self.zmap].data[:, :, 0] != 0.0
             zmap_min = np.zeros((data[self.zmap].n_value), dtype=np.float64)
@@ -811,6 +803,13 @@ class BuildNoiseWeighted(Operator):
                 for m in range(data[self.zmap].n_value):
                     msg += f"    map {m} {zmap_min[m]:1.3e} ... {zmap_max[m]:1.3e}"
                 log.debug(msg)
+
+            if use_accel:
+                log.verbose_rank(
+                    f"Operator {self.name} finalize calling zmap update device",
+                    comm=data.comm.comm_group,
+                )
+                data[self.zmap].accel_update_device()
         return
 
     def _requires(self):

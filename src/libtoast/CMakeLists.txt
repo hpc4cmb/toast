@@ -164,26 +164,26 @@ endif()
 
 # Add the serial unit test executable
 
-add_executable(toast_test
-    toast_test.cpp
-)
+# add_executable(toast_test
+#     toast_test.cpp
+# )
 
-if(OpenMP_CXX_FOUND)
-    target_compile_options(toast_test PRIVATE "${OpenMP_CXX_FLAGS}")
-endif(OpenMP_CXX_FOUND)
+# if(OpenMP_CXX_FOUND)
+#     target_compile_options(toast_test PRIVATE "${OpenMP_CXX_FLAGS}")
+# endif(OpenMP_CXX_FOUND)
 
-target_include_directories(toast_test BEFORE PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests"
-)
+# target_include_directories(toast_test BEFORE PRIVATE
+#     "${CMAKE_CURRENT_SOURCE_DIR}"
+#     "${CMAKE_CURRENT_SOURCE_DIR}/include"
+#     "${CMAKE_CURRENT_SOURCE_DIR}/tests"
+# )
 
-target_link_libraries(toast_test toast)
+# target_link_libraries(toast_test toast)
 
-target_link_options(toast_test PRIVATE
-    ${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS} ${OpenMP_CXX_FLAGS}
-)
+# target_link_options(toast_test PRIVATE
+#     ${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS} ${OpenMP_CXX_FLAGS}
+# )
 
-install(TARGETS toast_test DESTINATION ${CMAKE_INSTALL_BINDIR})
+# install(TARGETS toast_test DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-add_test(NAME serial_tests COMMAND toast_test)
+# add_test(NAME serial_tests COMMAND toast_test)

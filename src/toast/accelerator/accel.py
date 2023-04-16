@@ -7,6 +7,7 @@ import os
 from .._libtoast import Logger
 from .._libtoast import accel_assign_device as omp_accel_assign_device
 from .._libtoast import accel_create as omp_accel_create
+from .._libtoast import accel_reset as omp_accel_reset
 from .._libtoast import accel_delete as omp_accel_delete
 from .._libtoast import accel_enabled as omp_accel_enabled
 from .._libtoast import accel_get_device as omp_accel_get_device
@@ -33,6 +34,7 @@ use_accel_jax = False
 if ("TOAST_GPU_JAX" in os.environ) and (os.environ["TOAST_GPU_JAX"] in enable_vals):
     try:
         import jax
+        import jax.numpy as jnp
 
         from ..jax.device import jax_accel_assign_device, jax_accel_get_device
         from ..jax.intervals import INTERVALS_JAX
@@ -80,25 +82,29 @@ def accel_get_device():
         return -1
 
 
-def accel_assign_device(node_procs, node_rank, disabled):
+def accel_assign_device(node_procs, node_rank, mem_gb, disabled):
     """
     Assign processes to target devices.
 
-    NOTE:
-    One can pick devices visible to processes using Slurm and teh following commands
-    `--gpus-per-task=1 --gpu-bind=single:1`
+    NOTE for NERSC:
+    One can pick devices visible to processes using Slurm and the following
+    commands:
+
+        `--gpus-per-task=1 --gpu-bind=single:1`
 
     Args:
         node_procs (int): number of processes per node
         node_rank (int): rank of the current process, within the node
+        mem_gb (float):  The GPU device memory in GB.
         disabled (bool): gpu computing is disabled
 
     Returns:
         None: the device is stored in a backend specific global variable
+
     """
-    # FIXME some functions (such as poiting_detector) require the omp device to have been assigned
-    # so it should be called even when using JAX or running on CPU
-    omp_accel_assign_device(node_procs, node_rank, disabled)
+    # This function should always be called to avoid extra logic
+    # in the compiled kernels.
+    omp_accel_assign_device(node_procs, node_rank, mem_gb, disabled)
     if use_accel_jax:
         jax_accel_assign_device(node_procs, node_rank, disabled)
 
@@ -133,6 +139,7 @@ def accel_data_present(data):
         log.warning("Accelerator support not enabled, data not present")
         return False
 
+
 @function_timer
 def accel_data_create(data):
     """Create device buffers.
@@ -156,6 +163,31 @@ def accel_data_create(data):
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot create")
+
+
+@function_timer
+def accel_data_reset(data):
+    """Reset device buffers.
+
+    Using the input data array, reset to zero the corresponding device array.
+    For OpenMP target offload, this runs a small device kernel that sets the
+    memory to zero.  For jax arrays, this is a no-op, since those
+    arrays are mapped and managed elsewhere.
+
+    Args:
+        data (array):  The host array.
+    Returns:
+        None
+
+    """
+    if use_accel_omp:
+        omp_accel_reset(data)
+    elif use_accel_jax:
+        data.data = jnp.zeroes_like(data.data)
+    else:
+        log = Logger.get()
+        log.warning("Accelerator support not enabled, cannot reset")
+
 
 @function_timer
 def accel_data_update_device(data):
@@ -182,6 +214,7 @@ def accel_data_update_device(data):
         log.warning("Accelerator support not enabled, not updating device")
         return None
 
+
 @function_timer
 def accel_data_update_host(data):
     """Update host buffers.
@@ -206,6 +239,7 @@ def accel_data_update_host(data):
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating host")
+
 
 @function_timer
 def accel_data_delete(data):
@@ -390,3 +424,23 @@ class AcceleratorObject(object):
             raise RuntimeError(msg)
         self._accel_delete()
         self._accel_used = False
+
+    def _accel_reset(self):
+        msg = f"The _accel_reset function was not defined for this class."
+        raise RuntimeError(msg)
+
+    def accel_reset(self):
+        """Reset to zero the data on the accelerator.
+
+        Returns:
+            None
+
+        """
+        if not accel_enabled():
+            return
+        if not self.accel_in_use():
+            log = Logger.get()
+            msg = f"Device data not in use, cannot reset"
+            log.error(msg)
+            raise RuntimeError(msg)
+        self._accel_reset()

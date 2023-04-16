@@ -168,9 +168,6 @@ class TemplateMatrix(Operator):
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
-        # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
-
         # Check that the detector data is set
         if self.det_data is None:
             raise RuntimeError("You must set the det_data trait before calling exec()")
@@ -193,7 +190,9 @@ class TemplateMatrix(Operator):
         if not self._initialized:
             if use_accel:
                 # fail when a user tries to run the initialization pipeline on GPU
-                raise RuntimeError("You cannot currently initialize templates on device (please disable accel for this operator/pipeline).") 
+                raise RuntimeError(
+                    "You cannot currently initialize templates on device (please disable accel for this operator/pipeline)."
+                )
             for tmpl in self.templates:
                 tmpl.view = self.view
                 tmpl.det_data_units = self.det_data_units
@@ -265,8 +264,13 @@ class TemplateMatrix(Operator):
                 )
                 ob.detdata[self.det_data].update_units(self.det_data_units)
 
-                for d in dets:
-                    ob.detdata[self.det_data][d, :] = 0
+                if use_accel:
+                    # We are running on the accelerator, so our output data must exist
+                    # on the device and will be used there.
+                    ob.detdata[self.det_data].accel_reset()
+                else:
+                    for d in dets:
+                        ob.detdata[self.det_data][d, :] = 0
 
             for d in all_dets:
                 for tmpl in self.templates:
@@ -922,7 +926,7 @@ class SolveAmplitudes(Operator):
         self.template_matrix.det_flags = save_tmpl_flags
         self.template_matrix.det_flag_mask = save_tmpl_mask
         # FIXME: this reset does not seem needed
-        #if not self.mc_mode:
+        # if not self.mc_mode:
         #    self.template_matrix.reset_templates()
 
         memreport.prefix = "End of amplitude solve"
@@ -1037,7 +1041,9 @@ class ApplyAmplitudes(Operator):
 
         if self.output is not None:
             # We just copy the input here, since it will be overwritten
-            Copy(detdata=[(self.det_data, self.output)]).apply(data, use_accel=use_accel)
+            Copy(detdata=[(self.det_data, self.output)]).apply(
+                data, use_accel=use_accel
+            )
 
         # Projecting amplitudes to timestreams
         self.template_matrix.transpose = False
@@ -1051,8 +1057,6 @@ class ApplyAmplitudes(Operator):
             combine.result = self.det_data
         else:
             combine.result = self.output
-
-        apply_input = np.array(data.obs[0].detdata[self.det_data][:])
 
         # Project and operate, one detector at a time
         pipe = Pipeline(

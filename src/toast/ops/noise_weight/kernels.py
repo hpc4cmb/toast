@@ -4,12 +4,17 @@
 
 import numpy as np
 
-# from ..._libtoast import noise_weight as libtoast_noise_weight
+from ..._libtoast import noise_weight as libtoast_noise_weight
 from ...accelerator import ImplementationType, kernel, use_accel_jax
 from .kernels_numpy import noise_weight_numpy
 
 if use_accel_jax:
     from .kernels_jax import noise_weight_jax
+
+
+@kernel(impl=ImplementationType.COMPILED, name="noise_weight")
+def noise_weight_compiled(*args, use_accel=False):
+    return libtoast_noise_weight(*args, use_accel)
 
 
 @kernel(impl=ImplementationType.DEFAULT)
@@ -33,19 +38,10 @@ def noise_weight(
         None
 
     """
-    # FIXME to be replaced by a *direct* call to libtoast_noise_weight once it is ported
-    return noise_weight(
+    return libtoast_noise_weight(
         det_data,
         det_data_index,
         intervals,
         detector_weights,
-        impl=ImplementationType.NUMPY,
-        use_accel=use_accel,
+        use_accel,
     )
-
-
-# FIXME:  Add this to _libtoast
-
-# @kernel(impl=ImplementationType.COMPILED, name="noise_weight")
-# def noise_weight_compiled(*args, use_accel=False):
-#     return libtoast_noise_weight(*args, use_accel)

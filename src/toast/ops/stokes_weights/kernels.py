@@ -36,7 +36,7 @@ def stokes_weights_I(
 
     Args:
         weight_index (array):  The index into the weights array for each detector.
-        weights (array):  The array of I, Q, and U weights at each sample for each
+        weights (array):  The array of intensity weights at each sample for each
             detector.
         intervals (array):  The array of sample intervals.
         use_accel (bool):  Whether to use the accelerator for this call (if supported).

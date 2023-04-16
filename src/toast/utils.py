@@ -797,7 +797,7 @@ class SetDict(UserDict):
         -= operation performing set difference on all keys
         `other` can be a normal dict
         """
-        for (key, value) in other.items():
+        for key, value in other.items():
             self[key] -= set(value)
         return self
 
@@ -806,7 +806,7 @@ class SetDict(UserDict):
         |= operation performing set union on all keys
         `other` can be a normal dict
         """
-        for (key, value) in other.items():
+        for key, value in other.items():
             self[key] |= set(value)
         return self
 
@@ -815,14 +815,14 @@ class SetDict(UserDict):
         &= operation performing set intersection on all keys
         `other` can be a normal dict
         """
-        for (key, value) in other.items():
+        for key, value in other.items():
             self[key] &= set(value)
         return self
 
     def __str__(self):
         """prints only the non-empty/None sets for brevity sake"""
         result = "{ "
-        for (k, v) in self.items():
+        for k, v in self.items():
             if (len(v) > 0) and not all(x is None for x in v):
                 result += f"{k}:{list(v)} "
         result += "}"
@@ -830,7 +830,7 @@ class SetDict(UserDict):
 
     def is_empty(self):
         """returns True if the container is empty or contains only None"""
-        for (k, v) in self.items():
+        for k, v in self.items():
             if (len(v) > 0) and not all(x is None for x in v):
                 return False
         return True

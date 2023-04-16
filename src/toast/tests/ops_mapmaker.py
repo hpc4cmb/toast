@@ -125,11 +125,11 @@ class MapmakerTest(MPITestCase):
             solve_rcond_threshold=1.0e-1,
             map_rcond_threshold=1.0e-1,
             write_hits=False,
-            write_map=False,
+            write_map=True,
             write_cov=False,
             write_rcond=False,
-            keep_solver_products=True,
-            keep_final_products=True,
+            keep_solver_products=False,
+            keep_final_products=False,
             output_dir=testdir,
         )
 
@@ -137,7 +137,12 @@ class MapmakerTest(MPITestCase):
         mapper.apply(data)
 
         # Check that we can also run in full-memory mode
-        use_accel = False
+        tmatrix.reset()
+        mapper.reset_pix_dist = True
+        pixels.apply(data)
+        weights.apply(data)
+
+        use_accel = None
         if accel_enabled() and (
             pixels.supports_accel()
             and weights.supports_accel()
@@ -151,8 +156,6 @@ class MapmakerTest(MPITestCase):
             data.accel_update_device(weights.requires())
             data.accel_update_device(mapper.requires())
 
-        pixels.apply(data, use_accel=use_accel)
-        weights.apply(data, use_accel=use_accel)
         binner.full_pointing = True
         mapper.name = "test2"
         mapper.apply(data, use_accel=use_accel)

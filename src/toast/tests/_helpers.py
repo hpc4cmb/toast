@@ -148,7 +148,7 @@ def create_boresight_telescope(group_size, sample_rate=10.0 * u.Hz):
         det_table[idet]["psd_fmin"] = 1.0e-5 * u.Hz
         det_table[idet]["psd_fknee"] = 0.05 * u.Hz
         det_table[idet]["psd_alpha"] = 1.0
-        det_table[idet]["psd_net"] = 100 * (u.K * np.sqrt(1.0 * u.second))
+        det_table[idet]["psd_net"] = 0.001 * (u.K * np.sqrt(1.0 * u.second))
 
     fp = Focalplane(
         detector_data=det_table,
@@ -409,11 +409,17 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
     for obs in range(obs_per_group):
         oname = "test-{}-{}".format(toastcomm.group, obs)
         oid = obs_per_group * toastcomm.group + obs
-        tele = create_space_telescope(toastcomm.group_size)
+        tele = create_space_telescope(
+            toastcomm.group_size, 
+            sample_rate=rate * u.Hz,
+            pixel_per_process=4,
+        )
 
         # Move all detectors to the boresight
         for row in tele.focalplane.detector_data:
             row["quat"] = np.array([0, 0, 0, 1], dtype=np.float64)
+            row["psd_net"] = 1.0 * (u.K * np.sqrt(1.0 * u.second))
+            row["psd_fknee"] = 0.0 * u.Hz
 
         # FIXME: for full testing we should set detranks as approximately the sqrt
         # of the grid size so that we test the row / col communicators.
@@ -446,7 +452,9 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
             dtype=np.float64,
         )
         ob.detdata.create(defaults.det_data, dtype=np.float64, units=u.K)
+        ob.detdata[defaults.det_data][:] = 0
         ob.detdata.create(defaults.det_flags, dtype=np.uint8)
+        ob.detdata[defaults.det_flags][:] = 0
         # Rank zero of each grid column creates the data
         stamps = None
         position = None

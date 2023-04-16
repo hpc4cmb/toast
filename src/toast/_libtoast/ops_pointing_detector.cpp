@@ -124,7 +124,7 @@ void init_ops_pointing_detector(py::module & m) {
                 shared_flags, "flags", 1, temp_shape, {-1}
             );
             if (temp_shape[0] != n_samp) {
-                raw_flags = (uint8_t *)omgr.null;
+                raw_flags = omgr.null_ptr <uint8_t> ();
                 use_flags = false;
             }
 
@@ -146,10 +146,6 @@ void init_ops_pointing_detector(py::module & m) {
                 n_det,                     \
                 n_samp,                    \
                 use_flags                  \
-                )                          \
-                use_device_ptr(            \
-                raw_focalplane,            \
-                raw_quat_index             \
                 )
                 {
                     # pragma omp target teams distribute collapse(2) \
@@ -161,24 +157,27 @@ void init_ops_pointing_detector(py::module & m) {
                     )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            # pragma omp parallel for default(shared)
-                            for (
-                                int64_t isamp = dev_intervals[iview].first;
-                                isamp <= dev_intervals[iview].last;
-                                isamp++
-                            ) {
-                                pointing_detector_inner(
-                                    raw_quat_index,
-                                    dev_flags,
-                                    dev_boresight,
-                                    raw_focalplane,
-                                    dev_quats,
-                                    isamp,
-                                    n_samp,
-                                    idet,
-                                    shared_flag_mask,
-                                    use_flags
-                                );
+                            # pragma omp parallel
+                            {
+                                # pragma omp for default(shared)
+                                for (
+                                    int64_t isamp = dev_intervals[iview].first;
+                                    isamp <= dev_intervals[iview].last;
+                                    isamp++
+                                ) {
+                                    pointing_detector_inner(
+                                        raw_quat_index,
+                                        dev_flags,
+                                        dev_boresight,
+                                        raw_focalplane,
+                                        dev_quats,
+                                        isamp,
+                                        n_samp,
+                                        idet,
+                                        shared_flag_mask,
+                                        use_flags
+                                    );
+                                }
                             }
                         }
                     }

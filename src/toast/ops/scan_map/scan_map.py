@@ -70,7 +70,7 @@ class ScanMap(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         # Check that the detector data is set
         if self.det_data is None:
@@ -144,10 +144,10 @@ class ScanMap(Operator):
                 weights,
                 weight_indx,
                 intervals,
-                data_scale=data_scale,
-                should_zero=self.zero,
-                should_subtract=self.subtract,
-                should_scale=False,
+                data_scale,
+                self.zero,
+                self.subtract,
+                False,
                 impl=implementation,
                 use_accel=use_accel,
             )
@@ -235,7 +235,7 @@ class ScanMask(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         # Check that the detector data is set
         if self.det_flags is None:
@@ -346,7 +346,7 @@ class ScanScale(Operator):
         log = Logger.get()
 
         # Kernel selection
-        implementation = self.select_kernels(use_accel=use_accel)
+        implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         # Check that the detector data is set
         if self.det_data is None:
@@ -407,10 +407,10 @@ class ScanScale(Operator):
                 weights,
                 weight_indx,
                 intervals,
-                data_scale=1.0,
-                should_zero=False,
-                should_subtract=False,
-                should_scale=True,
+                1.0,
+                False,
+                False,
+                True,
                 impl=implementation,
                 use_accel=use_accel,
             )

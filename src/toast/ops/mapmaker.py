@@ -377,7 +377,7 @@ class MapMaker(Operator):
             out_cleaned = self.clean_name
             if self.save_cleaned and self.overwrite_cleaned:
                 # Modify data in place
-                out_cleaned = self.det_data
+                out_cleaned = None
 
             amplitudes_apply = ApplyAmplitudes(
                 op="subtract",

@@ -94,7 +94,8 @@ if(OpenMP_CXX_FOUND)
             # and need to override the flags. NOTE:  The use of "nordc"
             # is painful and needed since nvc++ cannot (as of 22.5) build
             # standalone shared loadable modules.
-            list(APPEND omp_opts -mp=gpu -gpu=nordc -cuda -cudalibs)
+            #list(APPEND omp_opts -mp=gpu -gpu=nordc -cuda -cudalibs)
+            list(APPEND omp_opts -mp=gpu)
         else()
             list(APPEND omp_opts ${OpenMP_CXX_FLAGS})
         endif()

@@ -16,15 +16,17 @@ import os
 import glob
 import pandas as pd
 
+
 def find_csv_files(folder, file_pattern):
     """
     Find all CSV files matching the specified pattern in the given folder and its subfolders.
-    
+
     :param folder: The root folder to start searching for CSV files.
     :param file_pattern: The pattern of the CSV files to search for.
     :return: A list of file paths matching the specified pattern.
     """
     return glob.glob(os.path.join(folder, file_pattern), recursive=True)
+
 
 def process_timer_path(s):
     """
@@ -35,39 +37,40 @@ def process_timer_path(s):
     :return: A tuple containing the simplified path, kernel type, and operation name.
     """
     # Remove occurrences of '(function) ' and '._exec'
-    simplified_path = s.replace('(function) ', '').replace('._exec', '')
+    simplified_path = s.replace("(function) ", "").replace("._exec", "")
 
     # Determine kernel type
-    if s.endswith('_jax'):
-        kernel_type = 'JAX'
-        simplified_path = simplified_path.replace('_jax', '')
-    elif s.endswith('_compiled'):
-        kernel_type = 'COMPILED'
-        simplified_path = simplified_path.replace('_compiled', '')
-    elif s.endswith('_numpy'):
-        kernel_type = 'NUMPY'
-        simplified_path = simplified_path.replace('_numpy', '')
-    elif ('accel_data' in simplified_path) or ('INTERVALS_JAX' in simplified_path):
-        kernel_type = 'DATA_MOVEMENT'
-    elif '|dispatch|' in simplified_path:
-        kernel_type = 'DEFAULT'
+    if s.endswith("_jax"):
+        kernel_type = "JAX"
+        simplified_path = simplified_path.replace("_jax", "")
+    elif s.endswith("_compiled"):
+        kernel_type = "COMPILED"
+        simplified_path = simplified_path.replace("_compiled", "")
+    elif s.endswith("_numpy"):
+        kernel_type = "NUMPY"
+        simplified_path = simplified_path.replace("_numpy", "")
+    elif ("accel_data" in simplified_path) or ("INTERVALS_JAX" in simplified_path):
+        kernel_type = "DATA_MOVEMENT"
+    elif "|dispatch|" in simplified_path:
+        kernel_type = "DEFAULT"
     else:
         kernel_type = None
 
     # Extract operation name
-    operation_name = simplified_path.split('|')[-1]
-    if kernel_type == 'DATA_MOVEMENT':
+    operation_name = simplified_path.split("|")[-1]
+    if kernel_type == "DATA_MOVEMENT":
         # Name clean-up specific to INTERVALS_JAX data movement operations
-        if operation_name == 'INTERVALS_JAX.__init__':
-            operation_name = 'accel_data_update_device'
-        elif operation_name == 'INTERVALS_JAX.to_host':
-            operation_name = 'accel_data_update_host'
+        if operation_name == "INTERVALS_JAX.__init__":
+            operation_name = "accel_data_update_device"
+        elif operation_name == "INTERVALS_JAX.to_host":
+            operation_name = "accel_data_update_host"
 
     # Add '_kernel' at the end of simplified_path if it contains '|dispatch|'
-    if '|dispatch|' in simplified_path:
-        simplified_path += '_kernel'
+    if "|dispatch|" in simplified_path:
+        simplified_path += "_kernel"
 
     return simplified_path, kernel_type, operation_name
+
 
 def load_csv_files(file_paths):
     """
@@ -84,14 +87,16 @@ def load_csv_files(file_paths):
 
         # Process the index and extract simplified_path, kernel_type, and operation_name
         processed_indices = list(map(process_timer_path, df.index))
-        simplified_paths, kernel_types, operation_names = zip(*processed_indices) # unzip
+        simplified_paths, kernel_types, operation_names = zip(
+            *processed_indices
+        )  # unzip
 
         # Replace index with simplified_path
         df.index = simplified_paths
 
         # Add kernel_type and operation_name columns
-        df['kernel_type'] = kernel_types
-        df['operation_name'] = operation_names
+        df["kernel_type"] = kernel_types
+        df["operation_name"] = operation_names
 
         # Rename the 'Mean Time' column to the folder name
         df = df.rename(columns={"Mean Time": folder_name})
@@ -99,6 +104,7 @@ def load_csv_files(file_paths):
         dataframes.append(df)
 
     return dataframes
+
 
 def combine_kernel_types(k1, k2):
     """
@@ -109,18 +115,19 @@ def combine_kernel_types(k1, k2):
     :param k2: The second kernel type (string or None).
     :return: The combined kernel type (string).
     """
-    if (k1 is None):
-        return k2 
+    if k1 is None:
+        return k2
     if (k2 is None) or (k1 == k2):
         return k1
-    return 'MULTIPLE'
+    return "MULTIPLE"
+
 
 def merge_dataframes(dataframes):
     """
     Merge the given DataFrames using the union of all row names and keeping only
     the specified columns. The columns are intermeshed as best as possible based
     on their original order in the input CSV files.
-    
+
     :param dataframes: A dictionary of DataFrames to merge.
     :return: A merged DataFrame with the union of all row names.
     """
@@ -129,16 +136,36 @@ def merge_dataframes(dataframes):
 
     # Merge the remaining DataFrames one-by-one
     for df in dataframes[1:]:
-        merged_df = pd.merge(merged_df, df, left_index=True, right_index=True, how='outer', suffixes=('_1', '_2'))
+        merged_df = pd.merge(
+            merged_df,
+            df,
+            left_index=True,
+            right_index=True,
+            how="outer",
+            suffixes=("_1", "_2"),
+        )
 
         # Combine kernel_type and operation_name columns
-        merged_df['kernel_type'] = merged_df['kernel_type_1'].combine(merged_df['kernel_type_2'], combine_kernel_types)
-        merged_df['operation_name'] = merged_df['operation_name_1'].combine_first(merged_df['operation_name_2'])
+        merged_df["kernel_type"] = merged_df["kernel_type_1"].combine(
+            merged_df["kernel_type_2"], combine_kernel_types
+        )
+        merged_df["operation_name"] = merged_df["operation_name_1"].combine_first(
+            merged_df["operation_name_2"]
+        )
 
         # Drop extra kernel_type and operation_name columns
-        merged_df.drop(columns=['kernel_type_1', 'kernel_type_2', 'operation_name_1', 'operation_name_2'], inplace=True)
+        merged_df.drop(
+            columns=[
+                "kernel_type_1",
+                "kernel_type_2",
+                "operation_name_1",
+                "operation_name_2",
+            ],
+            inplace=True,
+        )
 
     return merged_df
+
 
 def merge_kernel_rows(df):
     """
@@ -150,18 +177,21 @@ def merge_kernel_rows(df):
     :return: A filtered and grouped DataFrame.
     """
     # Filter DataFrame to keep only rows where kernel_type is 'MULTIPLE' or 'DATA_MOVEMENT'
-    df_filtered = df[df['kernel_type'].isin(['MULTIPLE', 'DATA_MOVEMENT'])]
+    df_filtered = df[df["kernel_type"].isin(["MULTIPLE", "DATA_MOVEMENT"])]
 
     # Drop the kernel_type column
-    df_filtered = df_filtered.drop(columns=['kernel_type'])
+    df_filtered = df_filtered.drop(columns=["kernel_type"])
 
     # Group by operation_name and sum the values of rows that get collapsed together
     # Some columns contains None/nan, hence the need for numeric_only=False
-    df_grouped = df_filtered.groupby('operation_name').apply(lambda x: x.sum(numeric_only=False))
+    df_grouped = df_filtered.groupby("operation_name").apply(
+        lambda x: x.sum(numeric_only=False)
+    )
     # Remove additional operation_name column added by the non-numeric-only summation
-    df_grouped.drop(columns=['operation_name'], inplace=True)
+    df_grouped.drop(columns=["operation_name"], inplace=True)
 
     return df_grouped
+
 
 if __name__ == "__main__":
     folder = "."
@@ -177,7 +207,7 @@ if __name__ == "__main__":
     print(f"Merged kernel data saved to '{output_kernels_file}'")
 
     # Save the merged DataFrame to a CSV file
-    merged_df = merged_df.drop(columns=['kernel_type', 'operation_name'])
+    merged_df = merged_df.drop(columns=["kernel_type", "operation_name"])
     output_file = "merged_timings.csv"
     merged_df.to_csv(output_file)
     print(f"Merged data saved to '{output_file}'")

@@ -128,6 +128,8 @@ def parse_arguments():
             write_invcov=False,
             write_rcond=False,
             keep_final_products=True,
+            save_cleaned=True,
+            overwrite_cleaned=True,
         ),
         toast.ops.PixelsHealpix(name="pixels_final", enabled=False),
         toast.ops.BinMap(
@@ -352,6 +354,7 @@ def main():
 
     # display information on GPU data movement when running in debug/verbose mode
     display_datamovement()
+
 
 if __name__ == "__main__":
     world, procs, rank = toast.mpi.get_world()

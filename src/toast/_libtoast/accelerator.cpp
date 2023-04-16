@@ -10,12 +10,228 @@
 #include <utility>
 
 
+OmpPoolResource::OmpPoolResource(int target, size_t size, size_t align) {
+    if (target < 0) {
+        #ifdef HAVE_OPENMP_TARGET
+        target_ = omp_get_num_devices() - 1;
+        #endif
+    } else {
+        target_ = target;
+    }
+    pool_size_ = size;
+    alignment_ = align;
+    alloc();
+}
+
+OmpPoolResource::~OmpPoolResource() {
+    release();
+}
+
+bool OmpPoolResource::verbose() {
+    // Helper function to check the log level once and return a static value.
+    // This is useful to avoid expensive string operations inside deeply nested
+    // functions.
+    static bool called = false;
+    static bool verbose = false;
+    if (!called) {
+        // First time we were called
+        auto & env = toast::Environment::get();
+        std::string logval = env.log_level();
+        if (strncmp(logval.c_str(), "VERBOSE", 7) == 0) {
+            verbose = true;
+        }
+        called = true;
+    }
+    return verbose;
+}
+
+void OmpPoolResource::release() {
+    bool extra = verbose();
+
+    // Reset our block containers and free device memory.
+    blocks_.clear();
+    ptr_to_block_.clear();
+    if (raw_ != nullptr) {
+        if (extra) {
+            std::ostringstream o;
+            auto log = toast::Logger::get();
+            o << "OmpPoolResource:  Free " << pool_size_ << " bytes on device " <<
+                target_;
+            o << " at " << raw_;
+            log.verbose(o.str().c_str());
+        }
+        #ifdef HAVE_OPENMP_TARGET
+        omp_target_free(raw_, target_);
+        #endif
+    }
+    return;
+}
+
+void * OmpPoolResource::allocate(size_t bytes) {
+    bool extra = verbose();
+
+    // Compute the number of aligned bytes needed
+    size_t aligned_bytes = compute_aligned_bytes(bytes, alignment_);
+
+    // Check that we have available space
+    if (pool_used_ + aligned_bytes > pool_size_) {
+        std::ostringstream o;
+        auto log = toast::Logger::get();
+        o << "OmpPoolResource:  request of " << aligned_bytes << " aligned bytes ";
+        o << "would exceed pool size of " << pool_size_ << " bytes";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+
+    // Build a block starting at the end of the existing blocks
+    void * next_start = blocks_.back().end;
+    OmpBlock next_block;
+    next_block.start = next_start;
+    next_block.end = shift_void_pointer(next_start, aligned_bytes);
+    next_block.size = bytes;
+    next_block.aligned_size = aligned_bytes;
+    next_block.is_free = false;
+    if (extra) {
+        std::ostringstream o;
+        auto log = toast::Logger::get();
+        o << "OmpPoolResource:  Append block " << next_block.start << ":";
+        o << next_block.end << " with " << next_block.size << " bytes (";
+        o << aligned_bytes << " aligned)";
+        log.verbose(o.str().c_str());
+    }
+
+    // Store the block and its index
+    size_t bindex = blocks_.size();
+    ptr_to_block_[next_start] = bindex;
+    blocks_.push_back(next_block);
+
+    // Increment the used count
+    pool_used_ += aligned_bytes;
+
+    return next_start;
+}
+
+void OmpPoolResource::deallocate(void * p) {
+    bool extra = verbose();
+
+    // Get the memory block associated with this pointer
+    size_t bindex = block_index(p);
+    OmpBlock & block = blocks_[bindex];
+    if (extra) {
+        std::ostringstream o;
+        auto log = toast::Logger::get();
+        o << "OmpPoolResource:  Delete block " << block.start << ":";
+        o << block.end << " with " << block.size << " bytes (";
+        o << block.aligned_size << " aligned)";
+        log.verbose(o.str().c_str());
+    }
+
+    // Mark block as unused
+    block.is_free = true;
+
+    // Free trailing unused blocks
+    garbage_collection();
+}
+
+void OmpPoolResource::alloc() {
+    bool extra = verbose();
+
+    if (pool_size_ == 0) {
+        // Attempt to guess at the pool size
+        pool_size_ = 1024 * 1024 * 1024;
+        std::ostringstream o;
+        auto log = toast::Logger::get();
+        o << "OmpPoolResource:  Using " << pool_size_;
+        o << " bytes for default pool size";
+        log.warning(o.str().c_str());
+    }
+    #ifdef HAVE_OPENMP_TARGET
+    raw_ = omp_target_alloc(pool_size_, target_);
+    #endif
+    if (extra) {
+        std::ostringstream o;
+        auto log = toast::Logger::get();
+        o << "OmpPoolResource:  Allocated pool of " << pool_size_ << " bytes";
+        o << " on target " << target_;
+        log.verbose(o.str().c_str());
+    }
+
+    // Current bytes used
+    pool_used_ = 0;
+
+    // Large enough for any device?
+    alignment_ = 512;
+
+    // Initialize an empty starting block
+    OmpBlock first_block;
+    first_block.start = raw_;
+    first_block.end = raw_;
+    first_block.size = 0;
+    first_block.aligned_size = 0;
+    first_block.is_free = false;
+    blocks_.push_back(first_block);
+}
+
+size_t OmpPoolResource::block_index(void * ptr) {
+    auto entry = ptr_to_block_.find(ptr);
+    if (entry == ptr_to_block_.end()) {
+        std::ostringstream o;
+        auto log = toast::Logger::get();
+        o << "OmpPoolResource:  Pointer " << ptr << " is not mapped to a block";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    }
+    return entry->second;
+}
+
+// Remove free blocks
+void OmpPoolResource::garbage_collection() {
+    bool extra = verbose();
+    OmpBlock & block = blocks_.back();
+    while (block.is_free) {
+        // Remove pointer from map
+        if (extra) {
+            std::ostringstream o;
+            auto log = toast::Logger::get();
+            o << "OmpPoolResource:  GC block " << block.start << ":";
+            o << block.end << " with " << block.size << " bytes (";
+            o << block.aligned_size << " aligned)";
+            log.verbose(o.str().c_str());
+        }
+        ptr_to_block_.erase(block.start);
+
+        // Shrink the currently used size
+        pool_used_ -= block.aligned_size;
+
+        // Delete block
+        blocks_.pop_back();
+
+        // Get next block
+        block = blocks_.back();
+    }
+}
+
+size_t OmpPoolResource::compute_aligned_bytes(size_t bytes, size_t alignment) {
+    size_t aligned_blocks = (size_t)(bytes / alignment);
+    if (aligned_blocks * alignment != bytes) {
+        aligned_blocks += 1;
+    }
+    return aligned_blocks * alignment;
+}
+
+void * OmpPoolResource::shift_void_pointer(void * ptr, size_t offset_bytes) {
+    uint8_t * bptr = static_cast <uint8_t *> (ptr);
+    void * new_ptr = static_cast <void *> (&(bptr[offset_bytes]));
+    return new_ptr;
+}
+
 OmpManager & OmpManager::get() {
     static OmpManager instance;
     return instance;
 }
 
-void OmpManager::assign_device(int node_procs, int node_rank, bool disabled) {
+void OmpManager::assign_device(int node_procs, int node_rank, float mem_gb,
+                               bool disabled) {
     std::ostringstream o;
     auto log = toast::Logger::get();
     if ((node_procs < 1) || (node_rank < 0)) {
@@ -32,7 +248,6 @@ void OmpManager::assign_device(int node_procs, int node_rank, bool disabled) {
 
     // Clear any existing memory buffers
     clear();
-    free_dummy();
 
     node_procs_ = node_procs;
     node_rank_ = node_rank;
@@ -73,7 +288,16 @@ void OmpManager::assign_device(int node_procs, int node_rank, bool disabled) {
     auto & env = toast::Environment::get();
     env.set_acc(n_target, proc_per_dev, target_dev_);
 
-    allocate_dummy(n_target);
+    // Create a memory pool on the target device
+
+    // if (n_target > 0) {
+    //     double one_gb = 1024.0 * 1024.0 * 1024.0;
+    //     size_t proc_bytes = (size_t)(mem_gb * one_gb / (double)proc_per_dev);
+    //     if (pool_ != nullptr) {
+    //         delete pool_;
+    //     }
+    //     pool_ = new OmpPoolResource(target_dev_, proc_bytes);
+    // }
 
     return;
 }
@@ -126,6 +350,8 @@ void * OmpManager::create(void * buffer, size_t nbytes) {
     log.verbose(o.str().c_str());
     mem_size_[buffer] = nbytes;
     mem_[buffer] = omp_target_alloc(nbytes, target_dev_);
+
+    // mem_[buffer] = pool_->allocate(nbytes);
     if (mem_.at(buffer) == NULL) {
         o.str("");
         o << "OmpManager:  on create, host ptr " << buffer
@@ -200,6 +426,8 @@ void OmpManager::remove(void * buffer, size_t nbytes) {
         throw std::runtime_error(o.str().c_str());
     }
     mem_size_.erase(buffer);
+
+    // pool_->deallocate(mem_.at(buffer));
     omp_target_free(mem_.at(buffer), target_dev_);
     mem_.erase(buffer);
 
@@ -364,59 +592,6 @@ void OmpManager::dump() {
     return;
 }
 
-void OmpManager::allocate_dummy(int n_target) {
-    // Allocate a small dummy device buffer that can be used to represent
-    // a NULL host pointer when passing to device functions with use_device_ptr().
-
-    auto log = toast::Logger::get();
-    std::ostringstream o;
-
-    null = malloc(sizeof(int64_t));
-    dev_null_ = NULL;
-
-    if (n_target > 0) {
-        #ifdef HAVE_OPENMP_TARGET
-        dev_null_ = omp_target_alloc(sizeof(int64_t), target_dev_);
-        if (dev_null_ == NULL) {
-            o.str("");
-            o << "OmpManager:  failed to allocate dummy dev pointer";
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-        }
-        int failed = omp_target_associate_ptr(
-            null, dev_null_, sizeof(int64_t), 0, target_dev_
-        );
-        if (failed != 0) {
-            o.str("");
-            o << "OmpManager:  failed to associate dev null pointer";
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-        }
-        #endif // ifdef HAVE_OPENMP_TARGET
-    }
-}
-
-void OmpManager::free_dummy() {
-    auto log = toast::Logger::get();
-    std::ostringstream o;
-
-    if (dev_null_ != NULL) {
-        #ifdef HAVE_OPENMP_TARGET
-        int failed = omp_target_disassociate_ptr(null, target_dev_);
-        if (failed != 0) {
-            o.str("");
-            o << "OmpManager:  destructor failed to disassociate dev null pointer";
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-        }
-        omp_target_free(dev_null_, target_dev_);
-        #endif // ifdef HAVE_OPENMP_TARGET
-    }
-    if (null != NULL) {
-        free(null);
-    }
-}
-
 OmpManager::OmpManager() : mem_size_(), mem_() {
     auto log = toast::Logger::get();
     std::ostringstream o;
@@ -427,25 +602,28 @@ OmpManager::OmpManager() : mem_size_(), mem_() {
     target_dev_ = -2;
     node_procs_ = -1;
     node_rank_ = -1;
-    null = NULL;
-    dev_null_ = NULL;
+    pool_ = nullptr;
 }
 
 OmpManager::~OmpManager() {
     auto log = toast::Logger::get();
     std::ostringstream o;
     clear();
-    free_dummy();
+    if (pool_ != nullptr) {
+        delete pool_;
+    }
 }
 
 void OmpManager::clear() {
     #ifdef HAVE_OPENMP_TARGET
+    std::vector <void *> to_clear;
     for (auto & p : mem_) {
-        omp_target_free(p.second, target_dev_);
+        to_clear.push_back(p.first);
+    }
+    for (auto & p : to_clear) {
+        remove(p, mem_size_.at(p));
     }
     #endif // ifdef HAVE_OPENMP_TARGET
-    mem_size_.clear();
-    mem_.clear();
 }
 
 void extract_accel_buffer(py::buffer_info const & info, void ** host_ptr,
@@ -457,13 +635,13 @@ void extract_accel_buffer(py::buffer_info const & info, void ** host_ptr,
         // stride " << info.strides[d] << " (itemsize = " << info.itemsize << ") raw = "
         // << (*host_ptr) << std::endl;
         (*n_elem) *= info.shape[d];
-        if (info.strides[d] != info.itemsize) {
-            auto log = toast::Logger::get();
-            std::ostringstream o;
-            o << "Cannot use python buffers with stride != itemsize.";
-            log.error(o.str().c_str());
-            throw std::runtime_error(o.str().c_str());
-        }
+    }
+    if (info.strides[info.ndim - 1] != info.itemsize) {
+        auto log = toast::Logger::get();
+        std::ostringstream o;
+        o << "Cannot use python buffers with stride of final dimension != itemsize.";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
     }
     (*n_bytes) = (*n_elem) * info.itemsize;
     return;
@@ -486,10 +664,11 @@ void init_accelerator(py::module & m) {
         )");
 
     m.def(
-        "accel_assign_device", [](int node_procs, int node_rank, bool disabled)
+        "accel_assign_device",
+        [](int node_procs, int node_rank, float mem_gb, bool disabled)
         {
             auto & omgr = OmpManager::get();
-            omgr.assign_device(node_procs, node_rank, disabled);
+            omgr.assign_device(node_procs, node_rank, mem_gb, disabled);
             return;
         },
         R"(
@@ -599,6 +778,68 @@ void init_accelerator(py::module & m) {
             "data"),
         R"(
         Create device copy of the data.
+
+        Args:
+            data (array):  The host data.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "accel_reset", [](py::buffer data)
+        {
+            auto & log = toast::Logger::get();
+            py::buffer_info info = data.request();
+            void * p_host;
+            size_t n_elem;
+            size_t n_bytes;
+            extract_accel_buffer(info, &p_host, &n_elem, &n_bytes);
+
+            std::ostringstream o;
+            #ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "TOAST not built with OpenMP target support";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+            #endif // ifndef HAVE_OPENMP_TARGET
+
+            auto & omgr = OmpManager::get();
+            int present = omgr.present(p_host, n_bytes);
+            if (present == 0) {
+                o.str("");
+                o << "Data is not present on device, cannot reset.";
+                log.error(o.str().c_str());
+                throw std::runtime_error(o.str().c_str());
+            }
+
+            o.str(
+                "");
+            o << "reset device with host pointer " << p_host << " (" << n_bytes << " bytes)";
+            log.verbose(o.str().c_str());
+
+            uint8_t * p_dev = omgr.device_ptr <uint8_t> (
+                static_cast <uint8_t *> (p_host)
+            );
+            #ifndef HAVE_OPENMP_TARGET
+            #pragma omp target teams distribute parallel for default(shared) \
+            map(to: n_bytes)                    \
+            is_device_ptr(p_dev)
+            for (size_t i = 0; i < n_bytes; ++i) {
+                p_dev[i] = 0;
+            }
+            #endif // ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "reset device with host pointer " << p_host << " DONE";
+            log.verbose(o.str().c_str());
+            return;
+        }, py::arg(
+            "data"),
+        R"(
+        Reset device copy of the data to zero.
+
+        This is done directly on the device, without copying zeros.
 
         Args:
             data (array):  The host data.
@@ -775,9 +1016,10 @@ void init_accelerator(py::module & m) {
             void * dev_raw = omgr.device_ptr(raw);
 
             #ifdef HAVE_OPENMP_TARGET
-            # pragma omp target data device(dev) use_device_ptr(dev_raw)
+            # pragma omp target data device(dev)
             {
-                # pragma omp target teams distribute parallel for collapse(2)
+                # pragma omp target teams distribute parallel for collapse(2) \
+                is_device_ptr(dev_raw)
                 for (int64_t i = 0; i < n_det; i++) {
                     for (int64_t j = 0; j < n_samp; j++) {
                         raw[i * n_samp + j] *= 2.0;
@@ -803,9 +1045,10 @@ void init_accelerator(py::module & m) {
             void * dev_raw = omgr.device_ptr(raw);
 
             #ifdef HAVE_OPENMP_TARGET
-            # pragma omp target data device(dev) use_device_ptr(dev_raw)
+            # pragma omp target data device(dev)
             {
-                # pragma omp target teams distribute parallel for collapse(2)
+                # pragma omp target teams distribute parallel for collapse(2) \
+                is_device_ptr(dev_raw)
                 for (size_t i = 0; i < n_det; i++) {
                     for (size_t j = 0; j < n_samp; j++) {
                         raw[i * n_samp + j] *= 2.0;

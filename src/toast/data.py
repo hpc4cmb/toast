@@ -690,8 +690,9 @@ class Data(MutableMapping):
         for key in names["global"]:
             val = self._internal.get(key, None)
             if isinstance(val, AcceleratorObject):
-                log.verbose(f"Calling Data accel_delete for '{key}'")
-                val.accel_delete()
+                if val.accel_exists():
+                    log.verbose(f"Calling Data accel_delete for '{key}'")
+                    val.accel_delete()
             else:
                 msg = f"Data accel_delete: '{key}' ({type(val)}) "
                 msg += "is not an AcceleratorObject"
@@ -708,7 +709,8 @@ class Data(MutableMapping):
 
         for key, val in self._internal.items():
             if isinstance(val, AcceleratorObject):
-                val.accel_delete()
+                if val.accel_exists():
+                    val.accel_delete()
             else:
                 msg = f"Data accel_clear: '{key}' ({type(val)}) "
                 msg += "is not an AcceleratorObject"

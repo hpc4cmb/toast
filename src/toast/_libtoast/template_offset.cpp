@@ -57,15 +57,16 @@ void init_template_offset(py::module & m) {
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                 double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
 
-                # pragma omp target data \
-                device(dev)              \
-                map(to                   \
-                : n_view,                \
-                n_samp,                  \
-                data_index,              \
-                step_length,             \
-                amp_offset,              \
-                raw_n_amp_views)
+                # pragma omp target data  \
+                device(dev)               \
+                map(to:                   \
+                n_view,                   \
+                n_samp,                   \
+                data_index,               \
+                step_length,              \
+                amp_offset,               \
+                raw_n_amp_views[0:n_view] \
+                )
                 {
                     int64_t offset = amp_offset;
                     # pragma omp target teams distribute firstprivate(offset) \
@@ -74,17 +75,20 @@ void init_template_offset(py::module & m) {
                     dev_det_data,                                             \
                     dev_intervals)
                     for (int64_t iview = 0; iview < n_view; iview++) {
-                        int64_t first_samp = dev_intervals[iview].first;
-                        # pragma omp parallel for default(shared)
-                        for (
-                            int64_t isamp = dev_intervals[iview].first;
-                            isamp <= dev_intervals[iview].last;
-                            isamp++
-                        ) {
-                            int64_t d = data_index * n_samp + isamp;
-                            int64_t amp = offset +
-                                          (int64_t)((isamp - first_samp) / step_length);
-                            dev_det_data[d] += dev_amplitudes[amp];
+                        # pragma omp parallel
+                        {
+                            # pragma omp for default(shared)
+                            for (
+                                int64_t isamp = dev_intervals[iview].first;
+                                isamp <= dev_intervals[iview].last;
+                                isamp++
+                            ) {
+                                int64_t d = data_index * n_samp + isamp;
+                                int64_t amp = offset + (int64_t)(
+                                    (isamp - dev_intervals[iview].first) / step_length
+                                );
+                                dev_det_data[d] += dev_amplitudes[amp];
+                            }
                         }
                         offset += raw_n_amp_views[iview];
                     }
@@ -94,7 +98,6 @@ void init_template_offset(py::module & m) {
             } else {
                 int64_t offset = amp_offset;
                 for (int64_t iview = 0; iview < n_view; iview++) {
-                    int64_t first_samp = raw_intervals[iview].first;
                     #pragma omp parallel for default(shared)
                     for (
                         int64_t isamp = raw_intervals[iview].first;
@@ -102,8 +105,9 @@ void init_template_offset(py::module & m) {
                         isamp++
                     ) {
                         int64_t d = data_index * n_samp + isamp;
-                        int64_t amp = offset +
-                                      (int64_t)((isamp - first_samp) / step_length);
+                        int64_t amp = offset + (int64_t)(
+                            (isamp - raw_intervals[iview].first) / step_length
+                        );
                         raw_det_data[d] += raw_amplitudes[amp];
                     }
                     offset += raw_n_amp_views[iview];
@@ -155,7 +159,7 @@ void init_template_offset(py::module & m) {
 
             // Optionally use flags
             bool use_flags = false;
-            uint8_t * raw_det_flags = (uint8_t *)omgr.null;
+            uint8_t * raw_det_flags = omgr.null_ptr <uint8_t> ();
             if (flag_index >= 0) {
                 raw_det_flags = extract_buffer <uint8_t> (
                     flag_data, "flag_data", 2, temp_shape, {-1, n_samp}
@@ -171,17 +175,18 @@ void init_template_offset(py::module & m) {
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                 double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
 
-                # pragma omp target data \
-                device(dev)              \
-                map(to                   \
-                : n_view,                \
-                n_samp,                  \
-                data_index,              \
-                flag_index,              \
-                step_length,             \
-                amp_offset,              \
-                raw_n_amp_views,         \
-                use_flags)
+                # pragma omp target data   \
+                device(dev)                \
+                map(to:                    \
+                n_view,                    \
+                n_samp,                    \
+                data_index,                \
+                flag_index,                \
+                step_length,               \
+                amp_offset,                \
+                raw_n_amp_views[0:n_view], \
+                use_flags                  \
+                )
                 {
                     int64_t offset = amp_offset;
                     # pragma omp target teams distribute firstprivate(offset) \
@@ -191,28 +196,31 @@ void init_template_offset(py::module & m) {
                     dev_det_flags,                                            \
                     dev_intervals)
                     for (int64_t iview = 0; iview < n_view; iview++) {
-                        int64_t first_samp = dev_intervals[iview].first;
-                        # pragma omp parallel for default(shared)
-                        for (
-                            int64_t isamp = dev_intervals[iview].first;
-                            isamp <= dev_intervals[iview].last;
-                            isamp++
-                        ) {
-                            int64_t d = data_index * n_samp + isamp;
-                            int64_t amp = offset +
-                                          (int64_t)((isamp - first_samp) / step_length);
-                            double contrib = 0.0;
-                            if (use_flags) {
-                                int64_t f = flag_index * n_samp + isamp;
-                                uint8_t check = dev_det_flags[f] & flag_mask;
-                                if (check == 0) {
-                                    contrib = dev_det_data[d];
+                        # pragma omp parallel
+                        {
+                            # pragma omp for default(shared)
+                            for (
+                                int64_t isamp = dev_intervals[iview].first;
+                                isamp <= dev_intervals[iview].last;
+                                isamp++
+                            ) {
+                                int64_t d = data_index * n_samp + isamp;
+                                int64_t amp = offset + (int64_t)(
+                                    (isamp - dev_intervals[iview].first) / step_length
+                                );
+                                double contrib = 0.0;
+                                if (use_flags) {
+                                    int64_t f = flag_index * n_samp + isamp;
+                                    uint8_t check = dev_det_flags[f] & flag_mask;
+                                    if (check == 0) {
+                                        contrib = dev_det_data[d];
+                                    }
+                                } else {
+                                    contrib = raw_det_data[d];
                                 }
-                            } else {
-                                contrib = raw_det_data[d];
+                                # pragma omp atomic update
+                                dev_amplitudes[amp] += contrib;
                             }
-                            # pragma omp atomic
-                            dev_amplitudes[amp] += contrib;
                         }
                         offset += raw_n_amp_views[iview];
                     }
@@ -222,7 +230,6 @@ void init_template_offset(py::module & m) {
             } else {
                 int64_t offset = amp_offset;
                 for (int64_t iview = 0; iview < n_view; iview++) {
-                    int64_t first_samp = raw_intervals[iview].first;
                     #pragma omp parallel for default(shared)
                     for (
                         int64_t isamp = raw_intervals[iview].first;
@@ -230,8 +237,9 @@ void init_template_offset(py::module & m) {
                         isamp++
                     ) {
                         int64_t d = data_index * n_samp + isamp;
-                        int64_t amp = offset +
-                                      (int64_t)((isamp - first_samp) / step_length);
+                        int64_t amp = offset + (int64_t)(
+                            (isamp - raw_intervals[iview].first) / step_length
+                        );
                         double contrib = 0.0;
                         if (use_flags) {
                             int64_t f = flag_index * n_samp + isamp;
@@ -242,7 +250,7 @@ void init_template_offset(py::module & m) {
                         } else {
                             contrib = raw_det_data[d];
                         }
-                        #pragma omp atomic
+                        #pragma omp atomic update
                         raw_amplitudes[amp] += contrib;
                     }
                     offset += raw_n_amp_views[iview];
@@ -296,10 +304,13 @@ void init_template_offset(py::module & m) {
                     dev_amp_out,        \
                     dev_offset_var)
                     {
-                        # pragma omp parallel for default(shared)
-                        for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                            dev_amp_out[iamp] = dev_amp_in[iamp];
-                            dev_amp_out[iamp] *= dev_offset_var[iamp];
+                        # pragma omp parallel
+                        {
+                            # pragma omp for default(shared)
+                            for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+                                dev_amp_out[iamp] = dev_amp_in[iamp];
+                                dev_amp_out[iamp] *= dev_offset_var[iamp];
+                            }
                         }
                     }
                 }
@@ -314,73 +325,6 @@ void init_template_offset(py::module & m) {
             }
             return;
         });
-
-    // m.def(
-    //     "template_offset_add_to_signal", [](int64_t step_length, py::buffer
-    // amplitudes,
-    //                                         py::buffer data) {
-    //         pybuffer_check_1D <double> (amplitudes);
-    //         pybuffer_check_1D <double> (data);
-    //         py::buffer_info info_amplitudes = amplitudes.request();
-    //         py::buffer_info info_data = data.request();
-    //         int64_t n_amp = info_amplitudes.size;
-    //         int64_t n_data = info_data.size;
-    //         double * raw_amplitudes = reinterpret_cast <double *>
-    // (info_amplitudes.ptr);
-    //         double * raw_data = reinterpret_cast <double *> (info_data.ptr);
-    //         toast::template_offset_add_to_signal(step_length, n_amp, raw_amplitudes,
-    //                                              n_data, raw_data);
-    //         return;
-    //     }, py::arg("step_length"), py::arg("amplitudes"), py::arg(
-    //         "data"), R"(
-    //     Accumulate offset amplitudes to timestream data.
-
-    //     Each amplitude value is accumulated to `step_length` number of samples.  The
-    //     final offset will be at least this many samples, but may be more if the step
-    //     size does not evenly divide into the number of samples.
-
-    //     Args:
-    //         step_length (int64):  The minimum number of samples for each offset.
-    //         amplitudes (array):  The float64 amplitude values.
-    //         data (array):  The float64 timestream values to accumulate.
-
-    //     Returns:
-    //         None.
-
-    // )");
-
-    // m.def(
-    //     "template_offset_project_signal", [](int64_t step_length, py::buffer data,
-    //                                          py::buffer amplitudes) {
-    //         pybuffer_check_1D <double> (amplitudes);
-    //         pybuffer_check_1D <double> (data);
-    //         py::buffer_info info_amplitudes = amplitudes.request();
-    //         py::buffer_info info_data = data.request();
-    //         int64_t n_amp = info_amplitudes.size;
-    //         int64_t n_data = info_data.size;
-    //         double * raw_amplitudes = reinterpret_cast <double *>
-    // (info_amplitudes.ptr);
-    //         double * raw_data = reinterpret_cast <double *> (info_data.ptr);
-    //         toast::template_offset_project_signal(step_length, n_data, raw_data,
-    //                                               n_amp, raw_amplitudes);
-    //         return;
-    //     }, py::arg("step_length"), py::arg("data"), py::arg(
-    //         "amplitudes"), R"(
-    //     Accumulate timestream data into offset amplitudes.
-
-    //     Chunks of `step_length` number of samples are accumulated into the offset
-    //     amplitudes.  If step_length does not evenly divide into the total number of
-    //     samples, the final amplitude will be extended to include the remainder.
-
-    //     Args:
-    //         step_length (int64):  The minimum number of samples for each offset.
-    //         data (array):  The float64 timestream values.
-    //         amplitudes (array):  The float64 amplitude values.
-
-    //     Returns:
-    //         None.
-
-    // )");
 
     return;
 }

@@ -315,7 +315,8 @@ def offset_project_signal_jax(
         n_amp_views,
         intervals.first,
         intervals.last,
-        intervals_max_length)
+        intervals_max_length,
+    )
 
 
 @kernel(impl=ImplementationType.JAX, name="offset_apply_diag_precond")
