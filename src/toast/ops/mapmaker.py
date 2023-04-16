@@ -394,7 +394,10 @@ class MapMaker(Operator):
                 timer=timer,
             )
 
-        map_binning.det_data = out_cleaned
+        if out_cleaned is None:
+            map_binning.det_data = self.det_data
+        else:
+            map_binning.det_data = out_cleaned
         if self.write_noiseweighted_map:
             map_binning.noiseweighted = self.noiseweighted_map_name
         map_binning.binned = self.map_name
