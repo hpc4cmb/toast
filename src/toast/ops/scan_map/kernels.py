@@ -63,7 +63,7 @@ def scan_map(
         None.
 
     """
-    return scan_map_compiled(
+    return libtoast_scan_map(
         global2local,
         n_pix_submap,
         mapdata,
@@ -84,10 +84,10 @@ def scan_map(
 
 @kernel(impl=ImplementationType.COMPILED, name="scan_map")
 def scan_map_compiled(*args, use_accel=False):
-    return scan_map_compiled(*args, use_accel)
+    return libtoast_scan_map(*args, use_accel)
 
 
-def scan_map_compiled(
+def libtoast_scan_map(
     global2local,
     n_pix_submap,
     mapdata,
