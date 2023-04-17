@@ -49,8 +49,6 @@ def _setitem(data, key, value):
 
 # compiles the function, recycling the memory
 _setitem_jitted = jax.jit(_setitem, donate_argnums=0, static_argnames='key')
-# time kernel calls
-_setitem_jitted = function_timer(_setitem_jitted)
 
 #------------------------------------------------------------------------------
 # RESHAPE
