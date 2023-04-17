@@ -136,7 +136,7 @@ class TemplateOffsetTest(MPITestCase):
 
         data.accel_create(data_names)
         data.accel_update_device(data_names)
-        amps.accel_create()
+        amps.accel_create("Offset")
         amps.accel_update_device()
 
         # Project.

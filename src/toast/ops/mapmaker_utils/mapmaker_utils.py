@@ -689,12 +689,51 @@ class BuildNoiseWeighted(Operator):
 
         if use_accel:
             if not zmap.accel_exists():
+                # Does not yet exist, create it
                 log.verbose_rank(
-                    f"Operator {self.name} zmap not yet on device, copying in",
+                    f"Operator {self.name} zmap not yet on device, creating",
                     comm=data.comm.comm_group,
                 )
-                zmap.accel_create()
+                zmap.accel_create(f"{self.name}")
+                zmap.accel_used(True)
+                zmap.accel_reset()
+            elif not zmap.accel_in_use():
+                # Device copy not currently in use
+                log.verbose_rank(
+                    f"Operator {self.name} zmap:  copy host to device",
+                    comm=data.comm.comm_group,
+                )
                 zmap.accel_update_device()
+            else:
+                log.verbose_rank(
+                    f"Operator {self.name} zmap:  already in use on device",
+                    comm=data.comm.comm_group,
+                )
+        else:
+            if zmap.accel_in_use():
+                # Device copy in use, but we are running on host.  Update host
+                log.verbose_rank(
+                    f"Operator {self.name} zmap:  update host from device",
+                    comm=data.comm.comm_group,
+                )
+                zmap.accel_update_host()
+
+        # # DEBUGGING
+        # restore_dev = False
+        # prefix="HOST"
+        # if zmap.accel_in_use():
+        #     zmap.accel_update_host()
+        #     restore_dev = True
+        #     prefix="DEVICE"
+        # zmap_min = np.amin(zmap.data)
+        # zmap_max = np.amax(zmap.data)
+        # print(f"{prefix} {self.name} dets {detectors} starting zmap output:  min={zmap_min}, max={zmap_max}", flush=True)
+        # for ism, sm in enumerate(zmap.data):
+        #     for ismpix, smpix in enumerate(sm):
+        #         if np.count_nonzero(smpix) > 0:
+        #             print(f"{prefix} {self.name} ({ism}, {ismpix}) = {smpix}", flush=True)
+        # if restore_dev:
+        #     zmap.accel_update_device()
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -746,13 +785,9 @@ class BuildNoiseWeighted(Operator):
             else:
                 shared_flag_data = np.zeros(1, dtype=np.uint8)
 
-            # uses a separate variable in case the reshaping copies the data
-            zmap_data = zmap.data.reshape(
-                (zmap.distribution.n_local_submap, -1, weight_nnz)
-            )
             build_noise_weighted(
                 zmap.distribution.global_submap_to_local,
-                zmap_data,
+                zmap.data,
                 pix_indx,
                 ob.detdata[self.pixels].data,
                 weight_indx,
@@ -769,18 +804,37 @@ class BuildNoiseWeighted(Operator):
                 impl=implementation,
                 use_accel=use_accel,
             )
-            zmap.data = zmap_data.reshape(zmap.data.shape)
+
+        # # DEBUGGING
+        # restore_dev = False
+        # prefix="HOST"
+        # if zmap.accel_in_use():
+        #     zmap.accel_update_host()
+        #     restore_dev = True
+        #     prefix="DEVICE"
+        # zmap_min = np.amin(zmap.data)
+        # zmap_max = np.amax(zmap.data)
+        # print(f"{prefix} {self.name} dets {detectors} ending zmap output:  min={zmap_min}, max={zmap_max}", flush=True)
+        # for ism, sm in enumerate(zmap.data):
+        #     for ismpix, smpix in enumerate(sm):
+        #         if np.count_nonzero(smpix) > 0:
+        #             print(f"{prefix} {self.name} ({ism}, {ismpix}) = {smpix}", flush=True)
+        # if restore_dev:
+        #     zmap.accel_update_device()
+
         return
 
     def _finalize(self, data, use_accel=None, **kwargs):
         if self.zmap in data:
             log = Logger.get()
             # We have called exec() at least once
-            if use_accel:
+            restore_device = False
+            if data[self.zmap].accel_in_use():
                 log.verbose_rank(
                     f"Operator {self.name} finalize calling zmap update self",
                     comm=data.comm.comm_group,
                 )
+                restore_device = True
                 data[self.zmap].accel_update_host()
             if self.sync_type == "alltoallv":
                 data[self.zmap].sync_alltoallv()
@@ -804,7 +858,7 @@ class BuildNoiseWeighted(Operator):
                     msg += f"    map {m} {zmap_min[m]:1.3e} ... {zmap_max[m]:1.3e}"
                 log.debug(msg)
 
-            if use_accel:
+            if restore_device:
                 log.verbose_rank(
                     f"Operator {self.name} finalize calling zmap update device",
                     comm=data.comm.comm_group,

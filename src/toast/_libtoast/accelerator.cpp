@@ -55,7 +55,7 @@ void OmpPoolResource::release() {
         if (extra) {
             std::ostringstream o;
             auto log = toast::Logger::get();
-            o << "OmpPoolResource:  Free " << pool_size_ << " bytes on device " <<
+            o << "  OmpPoolResource:  Free " << pool_size_ << " bytes on device " <<
                 target_;
             o << " at " << raw_;
             log.verbose(o.str().c_str());
@@ -77,7 +77,7 @@ void * OmpPoolResource::allocate(size_t bytes) {
     if (pool_used_ + aligned_bytes > pool_size_) {
         std::ostringstream o;
         auto log = toast::Logger::get();
-        o << "OmpPoolResource:  request of " << aligned_bytes << " aligned bytes ";
+        o << "  OmpPoolResource:  request of " << aligned_bytes << " aligned bytes ";
         o << "would exceed pool size of " << pool_size_ << " bytes";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
@@ -94,7 +94,7 @@ void * OmpPoolResource::allocate(size_t bytes) {
     if (extra) {
         std::ostringstream o;
         auto log = toast::Logger::get();
-        o << "OmpPoolResource:  Append block " << next_block.start << ":";
+        o << "  OmpPoolResource:  Append block " << next_block.start << ":";
         o << next_block.end << " with " << next_block.size << " bytes (";
         o << aligned_bytes << " aligned)";
         log.verbose(o.str().c_str());
@@ -120,7 +120,7 @@ void OmpPoolResource::deallocate(void * p) {
     if (extra) {
         std::ostringstream o;
         auto log = toast::Logger::get();
-        o << "OmpPoolResource:  Delete block " << block.start << ":";
+        o << "  OmpPoolResource:  Delete block " << block.start << ":";
         o << block.end << " with " << block.size << " bytes (";
         o << block.aligned_size << " aligned)";
         log.verbose(o.str().c_str());
@@ -141,7 +141,7 @@ void OmpPoolResource::alloc() {
         pool_size_ = 1024 * 1024 * 1024;
         std::ostringstream o;
         auto log = toast::Logger::get();
-        o << "OmpPoolResource:  Using " << pool_size_;
+        o << "  OmpPoolResource:  Using " << pool_size_;
         o << " bytes for default pool size";
         log.warning(o.str().c_str());
     }
@@ -151,7 +151,7 @@ void OmpPoolResource::alloc() {
     if (extra) {
         std::ostringstream o;
         auto log = toast::Logger::get();
-        o << "OmpPoolResource:  Allocated pool of " << pool_size_ << " bytes";
+        o << "  OmpPoolResource:  Allocated pool of " << pool_size_ << " bytes";
         o << " on target " << target_;
         log.verbose(o.str().c_str());
     }
@@ -177,7 +177,7 @@ size_t OmpPoolResource::block_index(void * ptr) {
     if (entry == ptr_to_block_.end()) {
         std::ostringstream o;
         auto log = toast::Logger::get();
-        o << "OmpPoolResource:  Pointer " << ptr << " is not mapped to a block";
+        o << "  OmpPoolResource:  Pointer " << ptr << " is not mapped to a block";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
@@ -193,7 +193,7 @@ void OmpPoolResource::garbage_collection() {
         if (extra) {
             std::ostringstream o;
             auto log = toast::Logger::get();
-            o << "OmpPoolResource:  GC block " << block.start << ":";
+            o << "  OmpPoolResource:  GC block " << block.start << ":";
             o << block.end << " with " << block.size << " bytes (";
             o << block.aligned_size << " aligned)";
             log.verbose(o.str().c_str());
@@ -268,9 +268,9 @@ void OmpManager::assign_device(int node_procs, int node_rank, float mem_gb,
     if (n_target == 0) {
         target_dev_ = host_dev_;
         o.str("");
-        o << "OmpManager:  rank " << node_rank << " with " << node_procs
-          <<
-            " processes per node, no target devices available, assigning to host device";
+        o << "  OmpManager:  rank " << node_rank << " with " << node_procs
+          << " processes per node, no target devices available, "
+          << "assigning to host device";
         log.verbose(o.str().c_str());
     } else {
         proc_per_dev = (int)(node_procs / n_target);
@@ -279,7 +279,7 @@ void OmpManager::assign_device(int node_procs, int node_rank, float mem_gb,
         }
         target_dev_ = (int)(node_rank / proc_per_dev);
         o.str("");
-        o << "OmpManager:  rank " << node_rank << " with " << node_procs
+        o << "  OmpManager:  rank " << node_rank << " with " << node_procs
           << " processes per node, using device " << target_dev_ << " ("
           << n_target << " total)";
         log.verbose(o.str().c_str());
@@ -321,7 +321,7 @@ bool OmpManager::device_is_host() {
     }
 }
 
-void * OmpManager::create(void * buffer, size_t nbytes) {
+void * OmpManager::create(void * buffer, size_t nbytes, std::string const & name) {
     size_t n = mem_size_.count(buffer);
     std::ostringstream o;
     auto log = toast::Logger::get();
@@ -335,7 +335,8 @@ void * OmpManager::create(void * buffer, size_t nbytes) {
 
     if (n != 0) {
         o << "OmpManager:  on create, host ptr " << buffer
-          << " with " << nbytes << " bytes is already present "
+          << " with " << nbytes << " bytes (name='" << mem_name_.at(buffer)
+          << "') is already present "
           << "with " << mem_size_.at(buffer) << " bytes on device "
           << target_dev_;
         log.error(o.str().c_str());
@@ -344,28 +345,32 @@ void * OmpManager::create(void * buffer, size_t nbytes) {
 
     // Add to the map
     o.str("");
-    o << "OmpManager:  creating entry for host ptr "
-      << buffer << " with " << nbytes << " bytes on device "
-      << target_dev_;
+    o << "  OmpManager:  creating entry for host ptr "
+      << buffer << " with " << nbytes << " bytes (name='" << name
+      << "') on device " << target_dev_;
     log.verbose(o.str().c_str());
     mem_size_[buffer] = nbytes;
+    mem_name_[buffer] = name;
     mem_[buffer] = omp_target_alloc(nbytes, target_dev_);
 
     // mem_[buffer] = pool_->allocate(nbytes);
     if (mem_.at(buffer) == NULL) {
         o.str("");
         o << "OmpManager:  on create, host ptr " << buffer
-          << " with " << nbytes << " bytes on device "
+          << " with " << nbytes << " bytes (name='" << name
+          << "') on device "
           << target_dev_ << ", allocation failed";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
-    int failed = omp_target_associate_ptr(buffer, mem_.at(buffer), mem_size_.at(
-                                              buffer), 0, target_dev_);
+    int failed = omp_target_associate_ptr(
+        buffer, mem_.at(buffer), mem_size_.at(buffer), 0, target_dev_
+    );
     if (failed != 0) {
         o.str("");
         o << "OmpManager:  on create, host ptr " << buffer
-          << " with " << nbytes << " bytes on device "
+          << " with " << nbytes << " bytes (name='" << name
+          << "') on device "
           << target_dev_ << ", failed to associate device ptr";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
@@ -381,7 +386,7 @@ void * OmpManager::create(void * buffer, size_t nbytes) {
     #endif // ifdef HAVE_OPENMP_TARGET
 }
 
-void OmpManager::remove(void * buffer, size_t nbytes) {
+void OmpManager::remove(void * buffer, size_t nbytes, std::string const & name) {
     size_t n = mem_size_.count(buffer);
     auto log = toast::Logger::get();
     std::ostringstream o;
@@ -396,23 +401,31 @@ void OmpManager::remove(void * buffer, size_t nbytes) {
     if (n == 0) {
         o.str("");
         o << "OmpManager:  host ptr " << buffer
-          << " is not present- cannot delete";
+          << " (name='" << name << "') is not present- cannot delete";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     } else {
         size_t nb = mem_size_.at(buffer);
+        if (name != mem_name_.at(buffer)) {
+            o.str("");
+            o << "OmpManager:  on delete, host ptr " << buffer
+              << " has name '" << mem_name_.at(buffer) << "' in the table, not '"
+              << name << "'";
+            log.warning(o.str().c_str());
+        }
         if (nb != nbytes) {
             o.str("");
-            o << "OmpManager:  on delete, host ptr " << buffer << " has "
+            o << "OmpManager:  on delete, host ptr " << buffer
+              << " (name='" << mem_name_.at(buffer) << "') has "
               << nb << " bytes instead of " << nbytes;
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
     }
     o.str("");
-    o << "OmpManager:  removing entry for host ptr "
-      << buffer << " with " << nbytes << " bytes on device "
-      << target_dev_;
+    o << "  OmpManager:  removing entry for host ptr "
+      << buffer << " (name='" << mem_name_.at(buffer) << "') with "
+      << nbytes << " bytes on device " << target_dev_;
     log.verbose(o.str().c_str());
 
     // First disassociate pointer
@@ -420,12 +433,14 @@ void OmpManager::remove(void * buffer, size_t nbytes) {
     if (failed != 0) {
         o.str("");
         o << "OmpManager:  on removal of host ptr " << buffer
-          << " with " << nbytes << " bytes on device "
+          << " (name='" << mem_name_.at(buffer)
+          << "') with " << nbytes << " bytes on device "
           << target_dev_ << ", failed to disassociate device ptr";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     }
     mem_size_.erase(buffer);
+    mem_name_.erase(buffer);
 
     // pool_->deallocate(mem_.at(buffer));
     omp_target_free(mem_.at(buffer), target_dev_);
@@ -440,7 +455,7 @@ void OmpManager::remove(void * buffer, size_t nbytes) {
     #endif // ifdef HAVE_OPENMP_TARGET
 }
 
-void OmpManager::update_device(void * buffer, size_t nbytes) {
+void OmpManager::update_device(void * buffer, size_t nbytes, std::string const & name) {
     size_t n = mem_size_.count(buffer);
     auto log = toast::Logger::get();
     std::ostringstream o;
@@ -455,14 +470,23 @@ void OmpManager::update_device(void * buffer, size_t nbytes) {
     if (n == 0) {
         o.str("");
         o << "OmpManager:  host ptr " << buffer
-          << " is not present- cannot update device";
+          << " (name='" << name
+          << "') is not present- cannot update device";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     } else {
         size_t nb = mem_size_.at(buffer);
+        if (name != mem_name_.at(buffer)) {
+            o.str("");
+            o << "OmpManager:  on update device, host ptr " << buffer
+              << " has name '" << mem_name_.at(buffer) << "' in the table, not '"
+              << name << "'";
+            log.warning(o.str().c_str());
+        }
         if (nb < nbytes) {
             o.str("");
-            o << "OmpManager:  on update device, host ptr " << buffer << " has "
+            o << "OmpManager:  on update device, host ptr " << buffer
+              << " (name='" << mem_name_.at(buffer) << "') has "
               << nb << " bytes instead of " << nbytes;
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
@@ -470,14 +494,18 @@ void OmpManager::update_device(void * buffer, size_t nbytes) {
     }
     void * dev_buffer = mem_.at(buffer);
     o.str("");
-    o << "OmpManager:  update device ptr " << dev_buffer << " from host ptr "
-      << buffer << " with " << nbytes;
+    o << "  OmpManager:  update device ptr " << dev_buffer
+      << " from host ptr " << buffer << " (name='" << mem_name_.at(buffer)
+      << "') with " << nbytes << " bytes";
+    log.verbose(o.str().c_str());
+
     int failed = omp_target_memcpy(dev_buffer, buffer, nbytes, 0, 0, target_dev_,
                                    host_dev_);
     if (failed != 0) {
         o.str("");
         o << "OmpManager:  copy of host ptr " << buffer
-          << " with " << nbytes << " bytes to device "
+          << " (name='" << mem_name_.at(buffer)
+          << "') with " << nbytes << " bytes to device "
           << target_dev_ << ", failed target memcpy";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
@@ -492,7 +520,7 @@ void OmpManager::update_device(void * buffer, size_t nbytes) {
     #endif // ifdef HAVE_OPENMP_TARGET
 }
 
-void OmpManager::update_host(void * buffer, size_t nbytes) {
+void OmpManager::update_host(void * buffer, size_t nbytes, std::string const & name) {
     size_t n = mem_size_.count(buffer);
     auto log = toast::Logger::get();
     std::ostringstream o;
@@ -507,14 +535,24 @@ void OmpManager::update_host(void * buffer, size_t nbytes) {
     if (n == 0) {
         o.str("");
         o << "OmpManager:  host ptr " << buffer
-          << " is not present- cannot update host";
+          << " (name='" << name
+          << "') is not present- cannot update host";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
     } else {
         size_t nb = mem_size_.at(buffer);
+        if (name != mem_name_.at(buffer)) {
+            o.str("");
+            o << "OmpManager:  on update host, host ptr " << buffer
+              << " has name '" << mem_name_.at(buffer) << "' in the table, not '"
+              << name << "'";
+            log.warning(o.str().c_str());
+        }
         if (nb < nbytes) {
             o.str("");
-            o << "OmpManager:  on update host, host ptr " << buffer << " has "
+            o << "OmpManager:  on update host, host ptr " << buffer
+              << " (name='" << mem_name_.at(buffer)
+              << "') has "
               << nb << " bytes instead of " << nbytes;
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
@@ -522,14 +560,19 @@ void OmpManager::update_host(void * buffer, size_t nbytes) {
     }
     void * dev_buffer = mem_.at(buffer);
     o.str("");
-    o << "OmpManager:  update host ptr " << buffer << " from device ptr "
-      << dev_buffer << " with " << nbytes;
+    o << "  OmpManager:  update host ptr " << buffer
+      << " (name='" << mem_name_.at(buffer)
+      << "') from device ptr "
+      << dev_buffer << " with " << nbytes << " bytes";
+    log.verbose(o.str().c_str());
+
     int failed = omp_target_memcpy(buffer, dev_buffer, nbytes, 0, 0, host_dev_,
                                    target_dev_);
     if (failed != 0) {
         o.str("");
         o << "OmpManager:  copy of dev ptr " << dev_buffer
-          << " with " << nbytes << " bytes from device "
+          << " (name='" << mem_name_.at(buffer)
+          << "') with " << nbytes << " bytes from device "
           << target_dev_ << ", failed target memcpy";
         log.error(o.str().c_str());
         throw std::runtime_error(o.str().c_str());
@@ -544,7 +587,71 @@ void OmpManager::update_host(void * buffer, size_t nbytes) {
     #endif // ifdef HAVE_OPENMP_TARGET
 }
 
-int OmpManager::present(void * buffer, size_t nbytes) {
+void OmpManager::reset(void * buffer, size_t nbytes, std::string const & name) {
+    size_t n = mem_size_.count(buffer);
+    auto log = toast::Logger::get();
+    std::ostringstream o;
+
+    // If the device is the host device, return
+    if (device_is_host()) {
+        return;
+    }
+
+    #ifdef HAVE_OPENMP_TARGET
+
+    if (n == 0) {
+        o.str("");
+        o << "OmpManager:  host ptr " << buffer
+          << " (name='" << name
+          << "') is not present- cannot reset data";
+        log.error(o.str().c_str());
+        throw std::runtime_error(o.str().c_str());
+    } else {
+        size_t nb = mem_size_.at(buffer);
+        if (name != mem_name_.at(buffer)) {
+            o.str("");
+            o << "OmpManager:  on reset, host ptr " << buffer
+              << " has name '" << mem_name_.at(buffer) << "' in the table, not '"
+              << name << "'";
+            log.warning(o.str().c_str());
+        }
+        if (nb < nbytes) {
+            o.str("");
+            o << "OmpManager:  on reset, host ptr " << buffer
+              << " (name='" << mem_name_.at(buffer) << "') has "
+              << nb << " bytes instead of " << nbytes;
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+        }
+    }
+    void * dev_buffer = mem_.at(buffer);
+    o.str("");
+    o << "  OmpManager:  reset device ptr " << dev_buffer
+      << " from host ptr " << buffer << " (name='" << mem_name_.at(buffer)
+      << "') with " << nbytes << " bytes";
+    log.verbose(o.str().c_str());
+
+    # pragma omp target data \
+    device(target_dev_)      \
+    map(to: nbytes)
+    {
+        # pragma omp target teams distribute is_device_ptr(dev_buffer) \
+        parallel for default(shared)
+        for (size_t i = 0; i < nbytes; ++i) {
+            ((uint8_t *)dev_buffer)[i] = 0;
+        }
+    }
+
+    #else // ifdef HAVE_OPENMP_TARGET
+
+    o << "OmpManager:  OpenMP target support disabled";
+    log.error(o.str().c_str());
+    throw std::runtime_error(o.str().c_str());
+
+    #endif // ifdef HAVE_OPENMP_TARGET
+}
+
+int OmpManager::present(void * buffer, size_t nbytes, std::string const & name) {
     auto log = toast::Logger::get();
     std::ostringstream o;
 
@@ -560,9 +667,18 @@ int OmpManager::present(void * buffer, size_t nbytes) {
         return 0;
     } else {
         size_t nb = mem_size_.at(buffer);
+        if (name != mem_name_.at(buffer)) {
+            o.str("");
+            o << "OmpManager:  present, host ptr " << buffer
+              << " has name '" << mem_name_.at(buffer) << "' in the table, not '"
+              << name << "'";
+            log.warning(o.str().c_str());
+        }
         if (nb != nbytes) {
-            o << "OmpManager:  host ptr " << buffer << " is present"
-              << ", but has " << nb << " bytes instead of " << nbytes;
+            o << "OmpManager:  host ptr " << buffer
+              << " (name='" << mem_name_.at(buffer)
+              << "') is present, but has " << nb
+              << " bytes instead of " << nbytes;
             log.error(o.str().c_str());
             throw std::runtime_error(o.str().c_str());
         }
@@ -584,7 +700,8 @@ void OmpManager::dump() {
     #ifdef HAVE_OPENMP_TARGET
     for (auto & p : mem_size_) {
         void * dev = mem_.at(p.first);
-        std::cout << "OmpManager table:  " << p.first << ": "
+        std::cout << "OmpManager table:  " << mem_name_.at(p.first) << ": "
+                  << p.first << " -> "
                   << p.second << " bytes on device " << target_dev_
                   << " at " << dev << std::endl;
     }
@@ -696,7 +813,7 @@ void init_accelerator(py::module & m) {
         )");
 
     m.def(
-        "accel_present", [](py::buffer data)
+        "accel_present", [](py::buffer data, std::string name)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -714,11 +831,7 @@ void init_accelerator(py::module & m) {
             #endif // ifndef HAVE_OPENMP_TARGET
 
             auto & omgr = OmpManager::get();
-            int result = omgr.present(p_host, n_bytes);
-
-            o.str("");
-            o << "host pointer " << p_host << " is_present = " << result;
-            log.verbose(o.str().c_str());
+            int result = omgr.present(p_host, n_bytes, name);
 
             if (result == 0) {
                 return false;
@@ -727,12 +840,14 @@ void init_accelerator(py::module & m) {
             }
         },
         py::arg(
-            "data"),
+            "data"), py::arg(
+            "name"),
         R"(
         Check if the specified array is present on the accelerator device.
 
         Args:
             data (array):  The data array
+            name (str):  The name associated with the data.
 
         Returns:
             (bool):  True if the data is present, else False.
@@ -740,7 +855,7 @@ void init_accelerator(py::module & m) {
     )");
 
     m.def(
-        "accel_create", [](py::buffer data)
+        "accel_create", [](py::buffer data, std::string name)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -758,7 +873,7 @@ void init_accelerator(py::module & m) {
             #endif // ifndef HAVE_OPENMP_TARGET
 
             auto & omgr = OmpManager::get();
-            int present = omgr.present(p_host, n_bytes);
+            int present = omgr.present(p_host, n_bytes, name);
             if (present == 1) {
                 o.str("");
                 o << "Data is already present on device, cannot create.";
@@ -766,21 +881,18 @@ void init_accelerator(py::module & m) {
                 throw std::runtime_error(o.str().c_str());
             }
 
-            o.str(
-                "");
-            o << "create device data with host pointer " << p_host << " (" << n_bytes << " bytes)";
-            log.verbose(o.str().c_str());
-
-            void * dev_mem = omgr.create(p_host, n_bytes);
+            void * dev_mem = omgr.create(p_host, n_bytes, name);
             return;
         },
         py::arg(
-            "data"),
+            "data"), py::arg(
+            "name"),
         R"(
         Create device copy of the data.
 
         Args:
             data (array):  The host data.
+            name (str):  The name associated with the data.
 
         Returns:
             None
@@ -788,7 +900,7 @@ void init_accelerator(py::module & m) {
     )");
 
     m.def(
-        "accel_reset", [](py::buffer data)
+        "accel_reset", [](py::buffer data, std::string name)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -806,7 +918,7 @@ void init_accelerator(py::module & m) {
             #endif // ifndef HAVE_OPENMP_TARGET
 
             auto & omgr = OmpManager::get();
-            int present = omgr.present(p_host, n_bytes);
+            int present = omgr.present(p_host, n_bytes, name);
             if (present == 0) {
                 o.str("");
                 o << "Data is not present on device, cannot reset.";
@@ -814,28 +926,11 @@ void init_accelerator(py::module & m) {
                 throw std::runtime_error(o.str().c_str());
             }
 
-            o.str(
-                "");
-            o << "reset device with host pointer " << p_host << " (" << n_bytes << " bytes)";
-            log.verbose(o.str().c_str());
-
-            uint8_t * p_dev = omgr.device_ptr <uint8_t> (
-                static_cast <uint8_t *> (p_host)
-            );
-            #ifndef HAVE_OPENMP_TARGET
-            # pragma omp target teams distribute parallel for default(shared) \
-            map(to: n_bytes)                                                  \
-            is_device_ptr(p_dev)
-            for (size_t i = 0; i < n_bytes; ++i) {
-                p_dev[i] = 0;
-            }
-            #endif // ifndef HAVE_OPENMP_TARGET
-            o.str("");
-            o << "reset device with host pointer " << p_host << " DONE";
-            log.verbose(o.str().c_str());
+            omgr.reset(p_host, n_bytes, name);
             return;
         }, py::arg(
-            "data"),
+            "data"), py::arg(
+            "name"),
         R"(
         Reset device copy of the data to zero.
 
@@ -843,6 +938,7 @@ void init_accelerator(py::module & m) {
 
         Args:
             data (array):  The host data.
+            name (str):  The name associated with the data.
 
         Returns:
             None
@@ -850,7 +946,7 @@ void init_accelerator(py::module & m) {
     )");
 
     m.def(
-        "accel_update_device", [](py::buffer data)
+        "accel_update_device", [](py::buffer data, std::string name)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -868,7 +964,7 @@ void init_accelerator(py::module & m) {
             #endif // ifndef HAVE_OPENMP_TARGET
 
             auto & omgr = OmpManager::get();
-            int present = omgr.present(p_host, n_bytes);
+            int present = omgr.present(p_host, n_bytes, name);
             if (present == 0) {
                 o.str("");
                 o << "Data is not present on device, cannot update.";
@@ -876,21 +972,18 @@ void init_accelerator(py::module & m) {
                 throw std::runtime_error(o.str().c_str());
             }
 
-            o.str(
-                "");
-            o << "update device with host pointer " << p_host << " (" << n_bytes << " bytes)";
-            log.verbose(o.str().c_str());
-
-            omgr.update_device(p_host, n_bytes);
+            omgr.update_device(p_host, n_bytes, name);
             return;
         },
         py::arg(
-            "data"),
+            "data"), py::arg(
+            "name"),
         R"(
         Update device copy of the data from the host.
 
         Args:
             data (array):  The host data.
+            name (str):  The name associated with the data.
 
         Returns:
             None
@@ -898,7 +991,7 @@ void init_accelerator(py::module & m) {
     )");
 
     m.def(
-        "accel_update_host", [](py::buffer data)
+        "accel_update_host", [](py::buffer data, std::string name)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -916,7 +1009,7 @@ void init_accelerator(py::module & m) {
             #endif // ifndef HAVE_OPENMP_TARGET
 
             auto & omgr = OmpManager::get();
-            int present = omgr.present(p_host, n_bytes);
+            int present = omgr.present(p_host, n_bytes, name);
             if (present == 0) {
                 o.str("");
                 o << "Data is not present on device, cannot update host.";
@@ -924,21 +1017,18 @@ void init_accelerator(py::module & m) {
                 throw std::runtime_error(o.str().c_str());
             }
 
-            o.str("");
-            o << "update host pointer " << p_host << " ("
-              << n_bytes << " bytes) from device";
-            log.verbose(o.str().c_str());
-
-            omgr.update_host(p_host, n_bytes);
+            omgr.update_host(p_host, n_bytes, name);
             return;
         },
         py::arg(
-            "data"),
+            "data"), py::arg(
+            "name"),
         R"(
         Update host copy of the data from the device.
 
         Args:
             data (array):  The host data.
+            name (str):  The name associated with the data.
 
         Returns:
             None
@@ -946,7 +1036,7 @@ void init_accelerator(py::module & m) {
     )");
 
     m.def(
-        "accel_delete", [](py::buffer data)
+        "accel_delete", [](py::buffer data, std::string name)
         {
             auto & log = toast::Logger::get();
             py::buffer_info info = data.request();
@@ -964,7 +1054,7 @@ void init_accelerator(py::module & m) {
             #endif // ifndef HAVE_OPENMP_TARGET
 
             auto & omgr = OmpManager::get();
-            int present = omgr.present(p_host, n_bytes);
+            int present = omgr.present(p_host, n_bytes, name);
             if (present == 0) {
                 o.str("");
                 o << "Data is not present on device, cannot delete.";
@@ -972,21 +1062,18 @@ void init_accelerator(py::module & m) {
                 throw std::runtime_error(o.str().c_str());
             }
 
-            o.str(
-                "");
-            o << "Delete device memory for host pointer " << p_host << " (" << n_bytes << " bytes)";
-            log.verbose(o.str().c_str());
-
-            omgr.remove(p_host, n_bytes);
+            omgr.remove(p_host, n_bytes, name);
             return;
         },
         py::arg(
-            "data"),
+            "data"), py::arg(
+            "name"),
         R"(
         Delete the device copy of the data.
 
         Args:
             data (array):  The host data.
+            name (str):  The name associated with the data.
 
         Returns:
             None

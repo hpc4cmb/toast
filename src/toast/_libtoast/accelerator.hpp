@@ -80,12 +80,20 @@ class OmpManager {
         int get_device();
         bool device_is_host();
 
-        void * create(void * buffer, size_t nbytes);
-        void remove(void * buffer, size_t nbytes);
-        void update_device(void * buffer, size_t nbytes);
-        void update_host(void * buffer, size_t nbytes);
+        void * create(void * buffer, size_t nbytes,
+                      std::string const & name = std::string("NA"));
+        void remove(void * buffer, size_t nbytes,
+                    std::string const & name = std::string("NA"));
+        void update_device(void * buffer, size_t nbytes,
+                           std::string const & name = std::string("NA"));
+        void update_host(void * buffer, size_t nbytes,
+                         std::string const & name = std::string("NA"));
 
-        int present(void * buffer, size_t nbytes);
+        void reset(void * buffer, size_t nbytes,
+                   std::string const & name = std::string("NA"));
+
+        int present(void * buffer, size_t nbytes,
+                    std::string const & name = std::string("NA"));
 
         void dump();
 
@@ -140,6 +148,7 @@ class OmpManager {
 
         std::unordered_map <void *, size_t> mem_size_;
         std::unordered_map <void *, void *> mem_;
+        std::unordered_map <void *, std::string> mem_name_;
         int host_dev_;
         int target_dev_;
         int node_procs_;

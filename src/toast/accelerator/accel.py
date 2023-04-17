@@ -109,7 +109,7 @@ def accel_assign_device(node_procs, node_rank, mem_gb, disabled):
         jax_accel_assign_device(node_procs, node_rank, disabled)
 
 
-def accel_data_present(data):
+def accel_data_present(data, name="None"):
     """Check if data is present on the device.
 
     For OpenMP target offload, this checks if the input data has an entry in the
@@ -118,17 +118,17 @@ def accel_data_present(data):
 
     Args:
         data (array):  The data to test.
+        name (str):  The optional name for tracking the array.
 
     Returns:
         (bool):  True if the data is present on the device.
 
     """
     log = Logger.get()
-    log.verbose("accel_data_present")
     if data is None:
         return False
     elif use_accel_omp:
-        return omp_accel_present(data)
+        return omp_accel_present(data, name)
     elif use_accel_jax:
         return (
             isinstance(data, MutableJaxArray)
@@ -141,7 +141,7 @@ def accel_data_present(data):
 
 
 @function_timer
-def accel_data_create(data):
+def accel_data_create(data, name="None"):
     """Create device buffers.
 
     Using the input data array, create a corresponding device array.  For OpenMP
@@ -150,13 +150,14 @@ def accel_data_create(data):
 
     Args:
         data (array):  The host array.
+        name (str):  The optional name for tracking the array.
 
     Returns:
         (object):  Either the original input (for OpenMP) or a new jax array.
 
     """
     if use_accel_omp:
-        omp_accel_create(data)
+        omp_accel_create(data, name)
         return data
     elif use_accel_jax:
         return MutableJaxArray(data)
@@ -166,7 +167,7 @@ def accel_data_create(data):
 
 
 @function_timer
-def accel_data_reset(data):
+def accel_data_reset(data, name="None"):
     """Reset device buffers.
 
     Using the input data array, reset to zero the corresponding device array.
@@ -176,12 +177,14 @@ def accel_data_reset(data):
 
     Args:
         data (array):  The host array.
+        name (str):  The optional name for tracking the array.
+
     Returns:
         (object):  Either the original input (for OpenMP) or a new jax array.
 
     """
     if use_accel_omp:
-        omp_accel_reset(data)
+        omp_accel_reset(data, name)
     elif use_accel_jax:
         if isinstance(data, MutableJaxArray):
             # inplace modification using the set operator
@@ -196,7 +199,7 @@ def accel_data_reset(data):
 
 
 @function_timer
-def accel_data_update_device(data):
+def accel_data_update_device(data, name="None"):
     """Update device buffers.
 
     Ensure that the input data is updated on the device.  For OpenMP target offload,
@@ -205,13 +208,14 @@ def accel_data_update_device(data):
 
     Args:
         data (array):  The host array.
+        name (str):  The optional name for tracking the array.
 
     Returns:
         (object):  Either the original input (for OpenMP) or a new jax array.
 
     """
     if use_accel_omp:
-        omp_accel_update_device(data)
+        omp_accel_update_device(data, name)
         return data
     elif use_accel_jax:
         return MutableJaxArray(data)
@@ -222,7 +226,7 @@ def accel_data_update_device(data):
 
 
 @function_timer
-def accel_data_update_host(data):
+def accel_data_update_host(data, name="None"):
     """Update host buffers.
 
     Ensure that the input data is updated on the host.  For OpenMP target offload,
@@ -232,23 +236,25 @@ def accel_data_update_host(data):
 
     Args:
         data (array):  The host array.
+        name (str):  The optional name for tracking the array.
 
     Returns:
         (object):  Either the updated input (for OpenMP) or a numpy array.
 
     """
     if use_accel_omp:
-        omp_accel_update_host(data)
+        omp_accel_update_host(data, name)
         return data
     elif use_accel_jax:
         return data.to_host()
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating host")
+        return None
 
 
 @function_timer
-def accel_data_delete(data):
+def accel_data_delete(data, name="None"):
     """Delete device copy of the data.
 
     For OpenMP target offload, this deletes the device allocated memory and removes
@@ -258,13 +264,14 @@ def accel_data_delete(data):
 
     Args:
         data (array):  The host array.
+        name (str):  The optional name for tracking the array.
 
     Returns:
         None
 
     """
     if use_accel_omp:
-        omp_accel_delete(data)
+        omp_accel_delete(data, name)
     elif use_accel_jax:
         # if needed, make sure that data is on host
         if accel_data_present(data):
@@ -292,6 +299,7 @@ class AcceleratorObject(object):
     def __init__(self):
         # Data always starts off on host
         self._accel_used = False
+        self._accel_name = "(blank)"
 
     def _accel_exists(self):
         return False
@@ -340,7 +348,7 @@ class AcceleratorObject(object):
         msg = f"The _accel_create function was not defined for this class."
         raise RuntimeError(msg)
 
-    def accel_create(self):
+    def accel_create(self, name=None):
         """Create a (potentially uninitialized) copy of the data on the accelerator.
 
         Returns:
@@ -353,6 +361,7 @@ class AcceleratorObject(object):
             msg = f"Data already exists on device, cannot create"
             log.error(msg)
             raise RuntimeError(msg)
+        self._accel_name = name
         self._accel_create()
 
     def _accel_update_device(self):
@@ -444,9 +453,9 @@ class AcceleratorObject(object):
         """
         if not accel_enabled():
             return
-        if not self.accel_in_use():
+        if not self.accel_exists():
             log = Logger.get()
-            msg = f"Device data not in use, cannot reset"
+            msg = f"Device data not exist, cannot reset"
             log.error(msg)
             raise RuntimeError(msg)
         self._accel_reset()

@@ -17,17 +17,25 @@ from ..accelerator import (
     accel_data_present,
     accel_data_update_device,
     accel_data_update_host,
+    accel_data_reset,
     accel_enabled,
     kernel,
     use_accel_jax,
     use_accel_omp,
+    AcceleratorObject,
 )
 from ..data import Data
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..traits import Int, Unicode, trait_docs
+from ..utils import dtype_to_aligned
 from ._helpers import close_data, create_comm, create_outdir, create_satellite_data
 from .mpi import MPITestCase
+
+if use_accel_jax:
+    import jax
+
+    from ..jax.mutableArray import MutableJaxArray
 
 
 @trait_docs
@@ -377,3 +385,99 @@ class AcceleratorTest(MPITestCase):
                 )
 
         close_data(data)
+
+    def test_jax_wrap(self):
+        if not use_accel_jax:
+            if self.rank == 0:
+                print("Not running with jax support- skipping wrapper test")
+            return
+
+        class JaxWrapper(AcceleratorObject):
+            def __init__(self, shape, dtype):
+                super().__init__()
+                self.dtype = dtype
+                self.storage_class, self.itemsize = dtype_to_aligned(dtype)
+                self.shape = shape
+                self.fullsize = 1
+                for s in self.shape:
+                    self.fullsize *= s
+                self.flatsize = self.fullsize
+                self.flatshape = (self.flatsize,)
+                self.raw = self.storage_class.zeros(self.fullsize)
+                self._wrap()
+
+            def _wrap(self):
+                if self.accel_exists():
+                    cpu_data = self.raw.host_data
+                    gpu_data = self.raw.gpu_data
+                    self.flat = MutableJaxArray(
+                        cpu_data[: self.flatsize],
+                        gpu_data=gpu_data[: self.flatsize],
+                    )
+                    self.flat.host_data[:] = 0
+                    self.flat.data.at[:].set(0)
+                else:
+                    self.flat = self.raw.array()[: self.flatsize]
+                self.data = self.flat.reshape(self.shape)
+
+            def restrict(self):
+                # Reduce the size of the view
+                new_shape = [self.shape[0] - 1]
+                for s in self.shape[1:]:
+                    new_shape.append(s)
+                new_shape = tuple(new_shape)
+                new_flatsize = 1
+                for s in new_shape:
+                    new_flatsize *= s
+                self.flatsize = new_flatsize
+                self.flatshape = (self.flatsize,)
+                self.shape = new_shape
+                self._wrap()
+
+            def run_tests(self):
+                original = np.arange(self.fullsize)
+                self.data[:] = original.reshape(self.shape)
+                self.accel_create()
+                self.accel_update_device()
+                self.accel_update_host()
+                np.testing.assert_allclose(
+                    self.flat.data,
+                    original,
+                )
+                self.accel_delete()
+                np.testing.assert_allclose(
+                    self.flat.data,
+                    original,
+                )
+                self.accel_create()
+                self.restrict()
+                self.data[:] = original[:-1]
+                self.accel_update_device()
+                self.accel_update_host()
+                np.testing.assert_allclose(
+                    self.flat.data,
+                    original[:-1],
+                )
+
+            def _accel_exists(self):
+                return accel_data_present(self.raw)
+
+            def _accel_create(self):
+                self.raw = accel_data_create(self.raw)
+                self.flat = self.raw.reshape(self.flatshape)
+                self.data = self.flat.reshape(self.shape)
+
+            def _accel_update_device(self):
+                self.raw = accel_data_update_device(self.raw)
+
+            def _accel_update_host(self):
+                self.raw = accel_data_update_host(self.raw)
+
+            def _accel_delete(self):
+                self.raw = accel_data_delete(self.raw)
+
+            def _accel_reset(self):
+                accel_data_reset(self.raw)
+
+        obj = JaxWrapper((5, 5, 5), np.float64)
+        obj.run_tests()

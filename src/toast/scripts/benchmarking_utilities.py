@@ -888,7 +888,7 @@ def compare_output_stats(jobname, args, rank, log, out_hits, out_map):
     comp = get_benchmark_stats(jobname, args.case)
     if rank == 0:
         result = {
-            "totalhits": hit_stats["sum"][0],
+            "totalhits": int(hit_stats["sum"][0]),
             "rms_I": map_stats["rms"][0],
             "mean_Q": map_stats["mean"][1],
             "rms_Q": map_stats["rms"][1],
@@ -904,7 +904,7 @@ def compare_output_stats(jobname, args, rank, log, out_hits, out_map):
         else:
             msg = f"Output statistics for case '{args.case}':\n"
             msg += f"  Total map hits = {result['totalhits']} "
-            msg += f"(expected {comp['totalhits']})\n"
+            msg += f"(expected {int(comp['totalhits'])})\n"
             msg += f"  Intensity map RMS = {result['rms_I']} "
             msg += f"(expected {comp['rms_I']})\n"
             msg += f"  Stokes Q map RMS = {result['rms_Q']} "

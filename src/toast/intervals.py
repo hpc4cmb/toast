@@ -62,6 +62,7 @@ class IntervalList(Sequence, AcceleratorObject):
     """
 
     def __init__(self, timestamps, intervals=None, timespans=None, samplespans=None):
+        super().__init__()
         self.timestamps = timestamps
         if intervals is not None:
             if timespans is not None or samplespans is not None:
@@ -116,8 +117,6 @@ class IntervalList(Sequence, AcceleratorObject):
         else:
             # No data yet
             self.data = np.zeros(0, dtype=interval_dtype).view(np.recarray)
-        # This is for the AcceleratorObject mixin class
-        self._accel_used = False
 
     def _find_indices(self, timespans):
         start_indx = np.searchsorted(
@@ -170,7 +169,7 @@ class IntervalList(Sequence, AcceleratorObject):
             self.timestamps[-1], other.timestamps[-1]
         ):
             return False
-        for s, o in zip(self.data, other):
+        for s, o in zip(self.data, other.data):
             if s.first != o.first:
                 return False
             if s.last != o.last:
@@ -355,10 +354,8 @@ class IntervalList(Sequence, AcceleratorObject):
         )
 
     def _accel_exists(self):
-        log = Logger.get()
-        log.verbose(f"IntervalList _accel_exists")
         if use_accel_omp:
-            return accel_data_present(self.data)
+            return accel_data_present(self.data, self._accel_name)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
             return isinstance(self.data, INTERVALS_JAX)
@@ -366,30 +363,24 @@ class IntervalList(Sequence, AcceleratorObject):
             return False
 
     def _accel_create(self):
-        log = Logger.get()
-        log.verbose(f"IntervalList _accel_create")
         if use_accel_omp:
-            accel_data_create(self.data)
+            self.data = accel_data_create(self.data, self._accel_name)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
             # NOTE: this call is timed at the INTERVALS_JAX level
             self.data = INTERVALS_JAX(self.data)
 
     def _accel_update_device(self):
-        log = Logger.get()
-        log.verbose(f"IntervalList _accel_update_device")
         if use_accel_omp:
-            _ = accel_data_update_device(self.data)
+            self.data = accel_data_update_device(self.data, self._accel_name)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
             # NOTE: this call is timed at the INTERVALS_JAX level
             self.data = INTERVALS_JAX(self.data)
 
     def _accel_update_host(self):
-        log = Logger.get()
-        log.verbose(f"IntervalList _accel_update_host")
         if use_accel_omp:
-            _ = accel_data_update_host(self.data)
+            self.data = accel_data_update_host(self.data, self._accel_name)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
             # this moves the data back into a numpy array
@@ -397,10 +388,8 @@ class IntervalList(Sequence, AcceleratorObject):
             self.data = self.data.to_host()
 
     def _accel_delete(self):
-        log = Logger.get()
-        log.verbose(f"IntervalList _accel_delete")
         if use_accel_omp:
-            accel_data_delete(self.data)
+            self.data = accel_data_delete(self.data, self._accel_name)
         elif use_accel_jax and self._accel_exists():
             # Ensures data has been properly reset
             # if we observe that its type is still a GPU type

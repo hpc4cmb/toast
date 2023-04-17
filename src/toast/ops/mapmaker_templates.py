@@ -232,7 +232,7 @@ class TemplateMatrix(Operator):
                 if use_accel:
                     # We are running on the accelerator, so our output data must exist
                     # on the device and will be used there.
-                    data[self.amplitudes].accel_create()
+                    data[self.amplitudes].accel_create(self.name)
                     data[self.amplitudes].accel_update_device()
 
             for d in all_dets:
@@ -264,6 +264,12 @@ class TemplateMatrix(Operator):
                 )
                 ob.detdata[self.det_data].update_units(self.det_data_units)
 
+                # We need to clear our detector TOD before projecting amplitudes
+                # into timestreams.  Note:  in the accelerator case, the reset call
+                # will clear all detectors, not just the current list.  This is
+                # wasteful if det_data has a very large buffer that has been
+                # restricted to be used for a smaller number of detectors.  We
+                # should deal with that corner case eventually.
                 if use_accel:
                     # We are running on the accelerator, so our output data must exist
                     # on the device and will be used there.

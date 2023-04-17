@@ -209,7 +209,7 @@ class BinMap(Operator):
                 )
                 log.error(msg)
                 raise RuntimeError(msg)
-            data[self.binned].raw[:] = 0
+            data[self.binned].reset()
             data[self.binned].update_units(1.0 / self.det_data_units)
 
         # Noise weighted map.  We output this to the final binned map location,
@@ -280,6 +280,8 @@ class BinMap(Operator):
             req["shared"].append(self.shared_flags)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
+        if self.pre_process is not None:
+            req.update(self.pre_process.requires())
         return req
 
     def _provides(self):

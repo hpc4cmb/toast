@@ -133,6 +133,7 @@ class ScanMap(Operator):
             else:
                 weights = ob.detdata[self.weights].data
                 weight_indx = ob.detdata[self.weights].indices(dets)
+
             scan_map(
                 map_dist.global_submap_to_local,
                 map_dist.n_pix_submap,

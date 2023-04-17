@@ -613,7 +613,6 @@ def reduce_data(job, args, data):
         det_data_keys = [noise_key]
 
     for det_data in det_data_keys:
-
         # Deconvolve a time constant
 
         ops.deconvolve_time_constant.det_data = det_data
