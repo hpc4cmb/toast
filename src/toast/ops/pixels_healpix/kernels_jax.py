@@ -11,7 +11,6 @@ from ...jax.math import healpix, qarray
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
-
 def pixels_healpix_inner(hpix, quats, nest):
     """
     Compute the healpix pixel indices for the detectors.
@@ -24,11 +23,8 @@ def pixels_healpix_inner(hpix, quats, nest):
     Returns:
         pixels (array, int64): The detector pixel indices to store the result.
     """
-    # constants
-    zaxis = jnp.array([0.0, 0.0, 1.0])
-
     # initialize dir
-    dir = qarray.rotate_one_one(quats, zaxis)
+    dir = qarray.rotate_zaxis(quats)
 
     # pixel computation
     (phi, region, z, rtz) = healpix.vec2zphi(dir)
@@ -140,8 +136,6 @@ def pixels_healpix_interval(
     new_hit_submap = jnp.ravel(new_hit_submap_unflattened)
 
     # updates results and returns
-    pixels = jnp.array(pixels)  # TODO
-    hit_submaps = jnp.array(hit_submaps)  # TODO
     hit_submaps = hit_submaps.at[sub_map].set(new_hit_submap)
     pixels = JaxIntervals.set(
         pixels, (pixel_index, intervals), pixels_interval

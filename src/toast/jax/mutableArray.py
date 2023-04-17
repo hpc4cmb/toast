@@ -5,8 +5,69 @@ import jax.numpy as jnp
 import numpy as np
 from pshmem import MPIShared
 
-from ..utils import AlignedF64, AlignedI64
+from ..utils import AlignedF64, AlignedI64, Logger
+from ..timing import function_timer
 
+#------------------------------------------------------------------------------
+# SET ITEM
+
+def convert_to_tuple(obj):
+    """
+    Converts all slices in a key, used to index an array, into tuples.
+    """
+    if isinstance(obj, slice):
+        return ('slice', obj.start, obj.stop, obj.step)
+    elif isinstance(obj, tuple):
+        return tuple(convert_to_tuple(x) for x in obj)
+    else:
+        return obj
+    
+def convert_from_tuple(obj):
+    """
+    Convert slices, in a key used to index an array, back into slices.
+    """
+    if isinstance(obj, tuple):
+        if isinstance(obj[0], str) and (obj[0] == 'slice'):
+            return slice(obj[1], obj[2], obj[3])
+        else:
+            return tuple(convert_from_tuple(x) for x in obj)
+    else:
+        return obj
+
+def _setitem(data, key, value):
+    """
+    data[key] = value
+
+    NOTE: key needs to be preprocessed with `convert_to_tuple` in order to make it hasheable.
+    """
+    # debugging information
+    log = Logger.get()
+    log.debug("MutableJaxArray.__setitem__: jit-compiling.")
+
+    key = convert_from_tuple(key)
+    return data.at[key].set(value)
+
+# compiles the function, recycling the memory
+_setitem_jitted = jax.jit(_setitem, donate_argnums=0, static_argnames='key')
+# time kernel calls
+_setitem_jitted = function_timer(_setitem_jitted)
+
+#------------------------------------------------------------------------------
+# RESHAPE
+
+def _reshape(data, newshape):
+    """reshapes the data"""
+    # debugging information
+    log = Logger.get()
+    log.debug("MutableJaxArray.reshape: jit-compiling.")
+
+    return jnp.reshape(data, newshape=newshape)
+
+# compiles the function, recycling the memory
+_reshape_jitted = jax.jit(_reshape, donate_argnums=0, static_argnames='newshape')
+
+#------------------------------------------------------------------------------
+# MUTABLE ARRAY
 
 class MutableJaxArray:
     """
@@ -31,10 +92,13 @@ class MutableJaxArray:
             self.data = cpu_data.data
         else:
             self.host_data = cpu_data
-            self.data = gpu_data
             if gpu_data is None:
                 data = MutableJaxArray.to_array(cpu_data)
                 self.data = jax.device_put(data)
+
+        # use preset gpu_data if available
+        if gpu_data is not None:
+            self.data = gpu_data
 
         # gets basic information on the data
         self.shape = self.data.shape
@@ -83,11 +147,14 @@ class MutableJaxArray:
         """
         updates the inner array in place
         """
-        if key == slice(None):
+        if (key == slice(None)) and isinstance(value, jax.numpy.ndarray):
             # optimises the [:] case
             self.data = value
         else:
-            self.data = self.data.at[key].set(value)
+            # uses a compiled function that will recycle memory
+            # instead of self.data = self.data.at[key].set(value)
+            hasheable_key = convert_to_tuple(key)
+            self.data = _setitem_jitted(self.data, hasheable_key, value)
 
     def __getitem__(self, key):
         """
@@ -95,6 +162,7 @@ class MutableJaxArray:
         """
         return self.data[key]
 
+    @function_timer
     def reshape(self, shape):
         """
         produces a new mutable array with a different shape
@@ -102,7 +170,8 @@ class MutableJaxArray:
         and a reshape of the cpu data (change might be propagated to the original, depending on numpy's behaviour)
         """
         reshaped_cpu_data = np.reshape(self.host_data, newshape=shape)
-        reshaped_gpu_data = jnp.reshape(self.data, newshape=shape)
+        #reshaped_gpu_data = jnp.reshape(self.data, newshape=shape)
+        reshaped_gpu_data = _reshape_jitted(self.data, newshape=shape)
         return MutableJaxArray(reshaped_cpu_data, reshaped_gpu_data)
 
     def __str__(self):

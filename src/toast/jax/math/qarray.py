@@ -9,6 +9,8 @@ import numpy as np
 
 from ..mutableArray import MutableJaxArray
 
+#----------------------------------------------------------------------------------------
+# ROTATE
 
 def rotate_one_one(q, v_in):
     """
@@ -48,6 +50,44 @@ def rotate_one_one(q, v_in):
 
     return jnp.array([v_out_0, v_out_1, v_out_2])
 
+
+def rotate_zaxis(q):
+    """
+    Rotate the zaxis ([0,0,1]) by a given quaternion.
+
+    Args:
+        q(array, double): quaternion of shape (4)
+
+    Returns:
+        v_out(array, double): vector of size 3
+    """
+    # normalize quaternion
+    q_unit = q / jnp.linalg.norm(q)
+
+    # performs the matrix multiplication
+    x, y, z, w = q_unit
+    return 2 * jnp.array([y*w + x*z, y*z - x*w, 0.5 - x*x - y*y])
+
+
+def rotate_xaxis(q):
+    """
+    Rotate the xaxis ([1,0,0]) by a given quaternion.
+
+    Args:
+        q(array, double): quaternion of shape (4)
+
+    Returns:
+        v_out(array, double): vector of size 3
+    """
+    # normalize quaternion
+    q_unit = q / jnp.linalg.norm(q)
+
+    # performs the matrix multiplication
+    x, y, z, w = q_unit
+    return 2 * jnp.array([0.5 - y*y - z*z, z*w + x*y, x*z - y*w])
+
+#----------------------------------------------------------------------------------------
+# MULT
 
 # def mult_one_one(p, q):
 #    """
