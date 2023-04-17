@@ -172,7 +172,6 @@ class MutableJaxArray:
         and a reshape of the cpu data (change might be propagated to the original, depending on numpy's behaviour)
         """
         reshaped_cpu_data = np.reshape(self.host_data, newshape=shape)
-        #reshaped_gpu_data = jnp.reshape(self.data, newshape=shape)
         reshaped_gpu_data = _reshape_jitted(self.data, newshape=shape)
         return MutableJaxArray(reshaped_cpu_data, reshaped_gpu_data)
 

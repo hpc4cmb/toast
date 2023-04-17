@@ -177,16 +177,24 @@ def accel_data_reset(data):
     Args:
         data (array):  The host array.
     Returns:
-        None
+        (object):  Either the original input (for OpenMP) or a new jax array.
 
     """
     if use_accel_omp:
         omp_accel_reset(data)
     elif use_accel_jax:
-        data.data = jnp.zeroes_like(data.data)
+        if isinstance(data, MutableJaxArray):
+            #data.data = jnp.zeroes_like(data.data)
+            # TODO check whether this runs okay
+            print("DEBUGgggggggggggggggggggggggggggggggGING: this ran fine!")
+            data[:] = 0.0
+        else:
+            # the data is not on GPU anymore, possibly because it was moved to host
+            data = MutableJaxArray(data, gpu_data=jax.numpy.zeros_like(data))
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot reset")
+    return data
 
 
 @function_timer
