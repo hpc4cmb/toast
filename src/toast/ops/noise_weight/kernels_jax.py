@@ -25,7 +25,7 @@ def noise_weight_interval(
     Args:
         det_data (array, float): size ???*n_samp
         det_data_index (array, int): The indexes of the det_data (size n_det)
-        detector_weights (list, double): The weight to be used for each detcetor (size n_det)
+        detector_weights (array, double): The weight to be used for each detcetor (size n_det)
         interval_starts (array, int): size n_view
         interval_ends (array, int): size n_view
         intervals_max_length (int): maximum length of an interval
@@ -36,9 +36,6 @@ def noise_weight_interval(
     # debugging information
     log = Logger.get()
     log.debug(f"noise_weight: jit-compiling.")
-
-    # turns detector_weights into a jax array
-    detector_weights = jnp.array(detector_weights)
 
     # extract interval slice
     intervals = JaxIntervals(
@@ -78,7 +75,7 @@ def noise_weight_jax(det_data, det_data_index, intervals, detector_weights, use_
         det_data (array, float): size ???*n_samp
         det_data_index (array, int): The indexes of the det_data (size n_det)
         intervals (array, Interval): The intervals to modify (size n_view)
-        detector_weights (list, double): The weight to be used for each detector (size n_det)
+        detector_weights (array, double): The weight to be used for each detector (size n_det)
         use_accel (bool): should we use an accelerator
 
     Returns:
