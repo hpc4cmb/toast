@@ -76,8 +76,10 @@ class MutableJaxArray:
     It is NOT designed for computation but, rather, as a container
     """
 
+    host_data: np.Array
     data: jnp.DeviceArray
     shape: Tuple
+    size: int
     dtype: np.dtype
     nbytes: np.int64
 
@@ -184,3 +186,7 @@ class MutableJaxArray:
         raise RuntimeError(
             "MutableJaxArray: tried an equality test on a MutableJaxArray. This container is not designed for computations, you likely have a data movement bug somewhere in your program."
         )
+    
+    def __len__(self):
+        """returns the length of the inner array"""
+        return len(self.data)

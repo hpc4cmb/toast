@@ -1,6 +1,6 @@
 import os
 import sys
-from collections import defaultdict
+from collections import defaultdict, abc
 from functools import wraps
 
 from ..accelerator import accel_data_present
@@ -27,6 +27,14 @@ def bytes_of_data(data):
         return sys.getsizeof(data)
 
 
+def is_buffer(data):
+    """
+    Returns true if the data is a buffer type.
+    The function is needed as `omp_accel_present` will break on scalar types
+    """
+    return hasattr(data, '__len__') or isinstance(data, abc.Sequence)
+
+
 class DataMovementRecord:
     """
     data structure used to track data movement to and from the GPU for a particular function
@@ -46,7 +54,7 @@ class DataMovementRecord:
         # args
         for i, input in enumerate(args):
             bytes = bytes_of_data(input)
-            gpu_data = accel_data_present(input)
+            gpu_data = is_buffer(input) and accel_data_present(input)
             self.input_bytes += bytes
             if not gpu_data:
                 self.input_to_gpu_bytes += bytes
@@ -56,7 +64,7 @@ class DataMovementRecord:
         # kwargs
         for name, input in kwargs.items():
             bytes = bytes_of_data(input)
-            gpu_data = accel_data_present(input)
+            gpu_data = is_buffer(input) and accel_data_present(input)
             self.input_bytes += bytes
             if not gpu_data:
                 self.input_to_gpu_bytes += bytes
