@@ -76,7 +76,7 @@ class MutableJaxArray:
     It is NOT designed for computation but, rather, as a container
     """
 
-    host_data: np.Array
+    host_data: np.array
     data: jnp.DeviceArray
     shape: Tuple
     size: int

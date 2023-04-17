@@ -184,9 +184,7 @@ def accel_data_reset(data):
         omp_accel_reset(data)
     elif use_accel_jax:
         if isinstance(data, MutableJaxArray):
-            #data.data = jnp.zeroes_like(data.data)
-            # TODO check whether this runs okay
-            print("DEBUGgggggggggggggggggggggggggggggggGING: this ran fine!")
+            # inplace modification using the set operator
             data[:] = 0.0
         else:
             # the data is not on GPU anymore, possibly because it was moved to host
