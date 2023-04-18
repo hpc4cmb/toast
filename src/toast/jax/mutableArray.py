@@ -65,6 +65,20 @@ def _reshape(data, newshape):
 _reshape_jitted = jax.jit(_reshape, donate_argnums=0, static_argnames='newshape')
 
 #------------------------------------------------------------------------------
+# ZERO OUT
+
+def _zero_out(data):
+    """fills the data with zero"""
+    # debugging information
+    log = Logger.get()
+    log.debug("MutableJaxArray.zero_out: jit-compiling.")
+
+    return jnp.zeros_like(data)
+
+# compiles the function, recycling the memory
+_zero_out_jitted = jax.jit(_zero_out, donate_argnums=0)
+
+#------------------------------------------------------------------------------
 # MUTABLE ARRAY
 
 class MutableJaxArray:
@@ -172,6 +186,12 @@ class MutableJaxArray:
         reshaped_cpu_data = np.reshape(self.host_data, newshape=shape)
         reshaped_gpu_data = _reshape_jitted(self.data, newshape=shape)
         return MutableJaxArray(reshaped_cpu_data, reshaped_gpu_data)
+
+    def zero_out(self):
+        """
+        fills GPU data with zeros
+        """
+        self.data = _zero_out_jitted(self.data)
 
     def __str__(self):
         """

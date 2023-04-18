@@ -185,7 +185,7 @@ def accel_data_reset(data):
     elif use_accel_jax:
         if isinstance(data, MutableJaxArray):
             # inplace modification using the set operator
-            data[:] = 0.0
+            data.zero_out()
         else:
             # the data is not on GPU anymore, possibly because it was moved to host
             data = MutableJaxArray(data, gpu_data=jax.numpy.zeros_like(data))
