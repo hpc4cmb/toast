@@ -1671,6 +1671,7 @@ def add_scan(
     rising_string = "R" if rising else "S"
     t1 = np.amin(aztimes)
     entries = []
+    obs_time = 0  # Actual integration time
     while t1 < tstop - 1:
         subscan += 1
         if args.operational_days:
@@ -1815,6 +1816,8 @@ def add_scan(
             azmax = azmax % 360
             if azmax < azmin:
                 azmax += 360
+            # Accumulate observing time (will not include gaps)
+            obs_time += t2 - t1
             # Create an entry in the schedule
             if args.verbose_schedule:
                 entry = fout_fmt.format(
@@ -1839,6 +1842,7 @@ def add_scan(
                     0.005 * (moon_phase1 + moon_phase2),
                     -1 - patch.partial_hits if partial_scan else patch.hits,
                     subscan,
+                    (patch.time + obs_time) / 86400,
                 )
             else:
                 entry = fout_fmt.format(
@@ -1871,13 +1875,13 @@ def add_scan(
     if not partial_scan:
         # Only update the patch counters when performing full scans
         patch.hits += 1
-        patch.time += ces_time
+        patch.time += obs_time
         if rising or args.pole_mode:
             patch.rising_hits += 1
-            patch.rising_time += ces_time
+            patch.rising_time += obs_time
         if not rising or args.pole_mode:
             patch.setting_hits += 1
-            patch.setting_time += ces_time
+            patch.setting_time += obs_time
         # The oscillate method will slightly shift the patch to
         # blur the boundaries
         patch.oscillate()
@@ -2155,7 +2159,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
             "{:35} {:>8} {:>8} {:>8} {:>5} "
             "{:>8} {:>8} {:>8} {:>8} "
             "{:>8} {:>8} {:>8} {:>8} {:>5} "
-            "{:>5} {:>3}\n"
+            "{:>5} {:>3} {:>8}\n"
         )
 
         fout_fmt = (
@@ -2163,7 +2167,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
             "{:35} {:8.2f} {:8.2f} {:8.2f} {:5} "
             "{:8.2f} {:8.2f} {:8.2f} {:8.2f} "
             "{:8.2f} {:8.2f} {:8.2f} {:8.2f} {:5.2f} "
-            "{:5} {:3}\n"
+            "{:5} {:3} {:8.3f}\n"
         )
         fout.write(
             fout_fmt0.format(
@@ -2188,6 +2192,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
                 "Phase",
                 "Pass",
                 "Sub",
+                "CTime",
             )
         )
     else:
