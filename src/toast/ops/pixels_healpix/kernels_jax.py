@@ -11,6 +11,7 @@ from ...jax.math import healpix, qarray
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
+
 def pixels_healpix_inner(hpix, quats, nest):
     """
     Compute the healpix pixel indices for the detectors.

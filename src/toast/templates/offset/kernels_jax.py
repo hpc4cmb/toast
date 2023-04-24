@@ -315,13 +315,14 @@ def offset_project_signal_jax(
         n_amp_views,
         intervals.first,
         intervals.last,
-        intervals_max_length)
+        intervals_max_length,
+    )
 
 
 def offset_apply_diag_precond_inner(offset_var, amplitudes_in, amplitudes_out):
     """
     Simple multiplication.
-    
+
     Args:
         offset_var (array, double): size n_amp
         amplitudes_in (array, double): size n_amp
@@ -332,11 +333,13 @@ def offset_apply_diag_precond_inner(offset_var, amplitudes_in, amplitudes_out):
     """
     return amplitudes_in * offset_var
 
+
 # jit compilation
 offset_apply_diag_precond_inner = jax.jit(
     offset_apply_diag_precond_inner,
     donate_argnums=[2],
 )  # donate amplitudes_out
+
 
 @kernel(impl=ImplementationType.JAX, name="offset_apply_diag_precond")
 def offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes_out, use_accel):
@@ -357,7 +360,9 @@ def offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitudes_out, use
     amplitudes_in = MutableJaxArray.to_array(amplitudes_in)
 
     # runs the computation
-    amplitudes_out[:] = offset_apply_diag_precond_inner(offset_var, amplitudes_in, amplitudes_out)
+    amplitudes_out[:] = offset_apply_diag_precond_inner(
+        offset_var, amplitudes_in, amplitudes_out
+    )
 
 
 # To test:

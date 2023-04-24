@@ -410,7 +410,7 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
         oname = "test-{}-{}".format(toastcomm.group, obs)
         oid = obs_per_group * toastcomm.group + obs
         tele = create_space_telescope(
-            toastcomm.group_size, 
+            toastcomm.group_size,
             sample_rate=rate * u.Hz,
             pixel_per_process=4,
         )

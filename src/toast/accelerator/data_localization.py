@@ -32,7 +32,7 @@ def is_buffer(data):
     Returns true if the data is a buffer type.
     The function is needed as `omp_accel_present` will break on scalar types
     """
-    return hasattr(data, '__len__') or isinstance(data, abc.Sequence)
+    return hasattr(data, "__len__") or isinstance(data, abc.Sequence)
 
 
 class DataMovementRecord:

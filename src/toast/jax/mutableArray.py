@@ -8,31 +8,34 @@ from pshmem import MPIShared
 from ..utils import AlignedF64, AlignedI64, Logger
 from ..timing import function_timer
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # SET ITEM
+
 
 def convert_to_tuple(obj):
     """
     Converts all slices in a key, used to index an array, into tuples.
     """
     if isinstance(obj, slice):
-        return ('slice', obj.start, obj.stop, obj.step)
+        return ("slice", obj.start, obj.stop, obj.step)
     elif isinstance(obj, tuple):
         return tuple(convert_to_tuple(x) for x in obj)
     else:
         return obj
-    
+
+
 def convert_from_tuple(obj):
     """
     Convert slices, in a key used to index an array, back into slices.
     """
     if isinstance(obj, tuple):
-        if isinstance(obj[0], str) and (obj[0] == 'slice'):
+        if isinstance(obj[0], str) and (obj[0] == "slice"):
             return slice(obj[1], obj[2], obj[3])
         else:
             return tuple(convert_from_tuple(x) for x in obj)
     else:
         return obj
+
 
 def _setitem(data, key, value):
     """
@@ -47,11 +50,13 @@ def _setitem(data, key, value):
     key = convert_from_tuple(key)
     return data.at[key].set(value)
 
-# compiles the function, recycling the memory
-_setitem_jitted = jax.jit(_setitem, donate_argnums=0, static_argnames='key')
 
-#------------------------------------------------------------------------------
+# compiles the function, recycling the memory
+_setitem_jitted = jax.jit(_setitem, donate_argnums=0, static_argnames="key")
+
+# ------------------------------------------------------------------------------
 # RESHAPE
+
 
 def _reshape(data, newshape):
     """reshapes the data"""
@@ -61,11 +66,13 @@ def _reshape(data, newshape):
 
     return jnp.reshape(data, newshape=newshape)
 
-# compiles the function, recycling the memory
-_reshape_jitted = jax.jit(_reshape, donate_argnums=0, static_argnames='newshape')
 
-#------------------------------------------------------------------------------
+# compiles the function, recycling the memory
+_reshape_jitted = jax.jit(_reshape, donate_argnums=0, static_argnames="newshape")
+
+# ------------------------------------------------------------------------------
 # ZERO OUT
+
 
 def _zero_out(data):
     """fills the data with zero"""
@@ -75,11 +82,13 @@ def _zero_out(data):
 
     return jnp.zeros_like(data)
 
+
 # compiles the function, recycling the memory
 _zero_out_jitted = jax.jit(_zero_out, donate_argnums=0)
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # MUTABLE ARRAY
+
 
 class MutableJaxArray:
     """
@@ -203,7 +212,7 @@ class MutableJaxArray:
         raise RuntimeError(
             "MutableJaxArray: tried an equality test on a MutableJaxArray. This container is not designed for computations, you likely have a data movement bug somewhere in your program."
         )
-    
+
     def __len__(self):
         """returns the length of the inner array"""
         return len(self.data)

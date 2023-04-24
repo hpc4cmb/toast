@@ -40,13 +40,13 @@ class ScanHealpixMap(Operator):
     file = Unicode(
         None,
         allow_none=True,
-        help="Path to healpix FITS file.  Use ';' if providing multiple files"
+        help="Path to healpix FITS file.  Use ';' if providing multiple files",
     )
 
     det_data = Unicode(
         defaults.det_data,
         help="Observation detdata key for accumulating output.  Use ';' if different "
-        "files are applied to different flavors"
+        "files are applied to different flavors",
     )
 
     det_data_units = Unit(
@@ -127,9 +127,9 @@ class ScanHealpixMap(Operator):
             raise RuntimeError("You must set the file trait before calling exec()")
 
         # Split up the file and map names
-        self.file_names = self.file.split(';')
+        self.file_names = self.file.split(";")
         nmap = len(self.file_names)
-        self.det_data_keys = self.det_data.split(';')
+        self.det_data_keys = self.det_data.split(";")
         nkey = len(self.det_data_keys)
         if nkey != 1 and (nmap != nkey):
             msg = "If multiple detdata keys are provided, each must have its own map"
@@ -161,8 +161,8 @@ class ScanHealpixMap(Operator):
             msg = f"Unknown Stokes weights mode '{self.stokes_weights.mode}'"
             raise RuntimeError(msg)
 
-        filenames = self.file.split(';')
-        detdata_keys = self.det_data.split(';')
+        filenames = self.file.split(";")
+        detdata_keys = self.det_data.split(";")
 
         # Create our map(s) to scan named after our own operator name.  Generally the
         # files on disk are stored as float32, but even if not there is no real benefit

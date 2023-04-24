@@ -463,15 +463,15 @@ class MapMaker(Operator):
                     fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
                     if self.mc_mode and not force:
                         if os.path.isfile(fname):
-                            log.info_rank(
-                                f"Skipping existing file: {fname}", comm=comm
-                            )
+                            log.info_rank(f"Skipping existing file: {fname}", comm=comm)
                             continue
                     write_wcs_fits(data[prod_key], fname)
                 else:
                     if self.write_hdf5:
                         # Non-standard HDF5 output
-                        fname = os.path.join(self.output_dir, f"{rootname}_{product}.h5")
+                        fname = os.path.join(
+                            self.output_dir, f"{rootname}_{product}.h5"
+                        )
                         if self.mc_mode and not force:
                             if os.path.isfile(fname):
                                 log.info_rank(
@@ -487,7 +487,9 @@ class MapMaker(Operator):
                         )
                     else:
                         # Standard FITS output
-                        fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
+                        fname = os.path.join(
+                            self.output_dir, f"{rootname}_{product}.fits"
+                        )
                         if self.mc_mode and not force:
                             if os.path.isfile(fname):
                                 log.info_rank(

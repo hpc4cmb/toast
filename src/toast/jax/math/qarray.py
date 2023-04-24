@@ -9,8 +9,9 @@ import numpy as np
 
 from ..mutableArray import MutableJaxArray
 
-#----------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------
 # ROTATE
+
 
 def rotate_one_one(q, v_in):
     """
@@ -66,7 +67,7 @@ def rotate_zaxis(q):
 
     # performs the matrix multiplication
     x, y, z, w = q_unit
-    return 2 * jnp.array([y*w + x*z, y*z - x*w, 0.5 - x*x - y*y])
+    return 2 * jnp.array([y * w + x * z, y * z - x * w, 0.5 - x * x - y * y])
 
 
 def rotate_xaxis(q):
@@ -84,9 +85,10 @@ def rotate_xaxis(q):
 
     # performs the matrix multiplication
     x, y, z, w = q_unit
-    return 2 * jnp.array([0.5 - y*y - z*z, z*w + x*y, x*z - y*w])
+    return 2 * jnp.array([0.5 - y * y - z * z, z * w + x * y, x * z - y * w])
 
-#----------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------
 # MULT
 
 # def mult_one_one(p, q):

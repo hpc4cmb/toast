@@ -14,7 +14,7 @@ OmpPoolResource::OmpPoolResource(int target, size_t size, size_t align) {
     if (target < 0) {
         #ifdef HAVE_OPENMP_TARGET
         target_ = omp_get_num_devices() - 1;
-        #endif
+        #endif // ifdef HAVE_OPENMP_TARGET
     } else {
         target_ = target;
     }
@@ -62,7 +62,7 @@ void OmpPoolResource::release() {
         }
         #ifdef HAVE_OPENMP_TARGET
         omp_target_free(raw_, target_);
-        #endif
+        #endif // ifdef HAVE_OPENMP_TARGET
     }
     return;
 }
@@ -147,7 +147,7 @@ void OmpPoolResource::alloc() {
     }
     #ifdef HAVE_OPENMP_TARGET
     raw_ = omp_target_alloc(pool_size_, target_);
-    #endif
+    #endif // ifdef HAVE_OPENMP_TARGET
     if (extra) {
         std::ostringstream o;
         auto log = toast::Logger::get();
@@ -823,8 +823,8 @@ void init_accelerator(py::module & m) {
                 static_cast <uint8_t *> (p_host)
             );
             #ifndef HAVE_OPENMP_TARGET
-            #pragma omp target teams distribute parallel for default(shared) \
-            map(to: n_bytes)                    \
+            # pragma omp target teams distribute parallel for default(shared) \
+            map(to: n_bytes)                                                  \
             is_device_ptr(p_dev)
             for (size_t i = 0; i < n_bytes; ++i) {
                 p_dev[i] = 0;
