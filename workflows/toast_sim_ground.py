@@ -495,7 +495,9 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
         ops.convolve_time_constant.det_data = det_data
         ops.convolve_time_constant.apply(data)
         log.info_rank(
-            f"  Convolved time constant with {det_data} in", comm=world_comm, timer=timer
+            f"  Convolved time constant with {det_data} in",
+            comm=world_comm,
+            timer=timer,
         )
 
     ops.mem_count.prefix = "After applying time constant"
@@ -616,7 +618,11 @@ def reduce_data(job, args, data):
 
         ops.deconvolve_time_constant.det_data = det_data
         ops.deconvolve_time_constant.apply(data)
-        log.info_rank(f"  Deconvolved time constant in {det_data} in", comm=world_comm, timer=timer)
+        log.info_rank(
+            f"  Deconvolved time constant in {det_data} in",
+            comm=world_comm,
+            timer=timer,
+        )
 
         ops.mem_count.prefix = "After deconvolving time constant"
         ops.mem_count.apply(data)
@@ -628,19 +634,35 @@ def reduce_data(job, args, data):
         log.info_rank("  Filtering signal", comm=world_comm)
         ops.hwpfilter.det_data = det_data
         ops.hwpfilter.apply(data)
-        log.info_rank(f"    Finished hwp-filtering {det_data} in", comm=world_comm, timer=timer)
+        log.info_rank(
+            f"    Finished hwp-filtering {det_data} in", comm=world_comm, timer=timer
+        )
         ops.groundfilter.det_data = det_data
         ops.groundfilter.apply(data)
-        log.info_rank(f"    Finished ground-filtering {det_data} in", comm=world_comm, timer=timer)
+        log.info_rank(
+            f"    Finished ground-filtering {det_data} in", comm=world_comm, timer=timer
+        )
         ops.polyfilter1D.det_data = det_data
         ops.polyfilter1D.apply(data)
-        log.info_rank(f"    Finished 1D-poly-filtering {det_data} in", comm=world_comm, timer=timer)
+        log.info_rank(
+            f"    Finished 1D-poly-filtering {det_data} in",
+            comm=world_comm,
+            timer=timer,
+        )
         ops.polyfilter2D.det_data = det_data
         ops.polyfilter2D.apply(data)
-        log.info_rank(f"    Finished 2D-poly-filtering {det_data} in", comm=world_comm, timer=timer)
+        log.info_rank(
+            f"    Finished 2D-poly-filtering {det_data} in",
+            comm=world_comm,
+            timer=timer,
+        )
         ops.common_mode_filter.det_data = det_data
         ops.common_mode_filter.apply(data)
-        log.info_rank(f"    Finished common-mode-filtering {det_data} in", comm=world_comm, timer=timer)
+        log.info_rank(
+            f"    Finished common-mode-filtering {det_data} in",
+            comm=world_comm,
+            timer=timer,
+        )
         log.info_rank("  Finished filtering in", comm=world_comm, timer=timer_filter)
 
         ops.mem_count.prefix = "After filtering"
@@ -728,7 +750,9 @@ def reduce_data(job, args, data):
             # Additional signal flavors get to re-use pointing information
             ops.mapmaker.reset_pix_dist = False
             ops.filterbin.reset_pix_dist = False
-        log.info_rank(f"  Finished map-making {det_data} in", comm=world_comm, timer=timer_key)
+        log.info_rank(
+            f"  Finished map-making {det_data} in", comm=world_comm, timer=timer_key
+        )
     log.info_rank(f"  Finished map-making in", comm=world_comm, timer=timer)
 
     ops.mem_count.prefix = "After mapmaker"

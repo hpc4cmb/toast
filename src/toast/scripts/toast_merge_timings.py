@@ -9,12 +9,15 @@ The main steps performed by this script are:
 3. Replace row names (index) ending with '_compiled', '_jax', or '_numpy' with '_kernel' in the individual DataFrames.
 4. Merge all DataFrames using the intersection of all row names (Timer column) and keeping only the "Mean Time" columns, which are renamed to the name of each CSV file's containing folder.
 5. Save the merged DataFrame to a new CSV file called merged_timings.csv in the current folder.
+6. Similarly produce a merged_kernels_timing.csv file with the sum of the runtime for each kernel type, keeping only kernels that are GPU or for which more than one implementation was used
 
 To use this script, simply run it in a Python environment with the required dependency (pandas) installed. The script will automatically locate timing.csv files, process them, generate the merged DataFrame and save the merged_timings.csv file.
 """
 import os
+import re
 import glob
 import pandas as pd
+import numpy as np
 
 
 def find_csv_files(folder, file_pattern):
@@ -59,14 +62,14 @@ def process_timer_path(s):
     # Extract operation name
     operation_name = simplified_path.split("|")[-1]
     if kernel_type == "DATA_MOVEMENT":
-        # Name clean-up specific to INTERVALS_JAX data movement operations
+        # Name clean-up specific to Jax data movement operations
         if operation_name == "INTERVALS_JAX.__init__":
             operation_name = "accel_data_update_device"
         elif operation_name == "INTERVALS_JAX.to_host":
             operation_name = "accel_data_update_host"
 
     # Add '_kernel' at the end of simplified_path if it contains '|dispatch|'
-    if "|dispatch|" in simplified_path:
+    if (kernel_type is not None) and (kernel_type != "DATA_MOVEMENT"):
         simplified_path += "_kernel"
 
     return simplified_path, kernel_type, operation_name
@@ -115,9 +118,11 @@ def combine_kernel_types(k1, k2):
     :param k2: The second kernel type (string or None).
     :return: The combined kernel type (string).
     """
-    if k1 is None:
+    if (k1 is None) or (isinstance(k1, float) and np.isnan(k1)):
         return k2
-    if (k2 is None) or (k1 == k2):
+    if (k2 is None) or (isinstance(k2, float) and np.isnan(k2)):
+        return k1
+    if k1 == k2:
         return k1
     return "MULTIPLE"
 
@@ -176,8 +181,9 @@ def merge_kernel_rows(df):
     :param df: Input DataFrame to filter and group.
     :return: A filtered and grouped DataFrame.
     """
-    # Filter DataFrame to keep only rows where kernel_type is 'MULTIPLE' or 'DATA_MOVEMENT'
-    df_filtered = df[df["kernel_type"].isin(["MULTIPLE", "DATA_MOVEMENT"])]
+    # Filter DataFrame to keep only rows where kernel_type has some GPU computation
+    df_filtered = df[df["kernel_type"].isin(["MULTIPLE", "DATA_MOVEMENT", "JAX"])]
+    # df_filtered = df[~df['kernel_type'].isin(['NUMPY', 'DEFAULT', None])] # TODO switch to this version once compiled becomes common
 
     # Drop the kernel_type column
     df_filtered = df_filtered.drop(columns=["kernel_type"])

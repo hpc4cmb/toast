@@ -535,11 +535,7 @@ class DetectorData(AcceleratorObject):
         if use_accel_omp:
             accel_data_reset(self._raw)
         elif use_accel_jax:
-            # NOTE: we create an array of zeroes directly on GPU to avoid
-            # useless data movement
-            self._data = MutableJaxArray(
-                self._data, gpu_data=jax.numpy.zeros_like(self._data)
-            )
+            self._data = accel_data_reset(self._data)
 
 
 class DetDataManager(MutableMapping):

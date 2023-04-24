@@ -174,7 +174,9 @@ class SimAtmTest(MPITestCase):
             plt.savefig(outfile)
             plt.close()
 
-            mapfile = os.path.join(self.outdir, f"{mapmaker.name}_noiseweighted_map.fits")
+            mapfile = os.path.join(
+                self.outdir, f"{mapmaker.name}_noiseweighted_map.fits"
+            )
             mdata = hp.read_map(mapfile, None, nest=False)
             mdata[mdata == 0] = hp.UNSEEN
 

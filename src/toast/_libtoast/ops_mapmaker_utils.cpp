@@ -78,7 +78,7 @@ void build_noise_weighted_inner(
         scaled_data = data[off_d] * det_scale[idet];
 
         for (int64_t iweight = 0; iweight < nnz; iweight++) {
-            # pragma omp atomic update
+            #pragma omp atomic update
             zmap[zoff + iweight] += scaled_data * weights[off_wt + iweight];
         }
     }

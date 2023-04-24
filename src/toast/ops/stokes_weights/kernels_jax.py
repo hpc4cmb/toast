@@ -27,10 +27,8 @@ def stokes_weights_IQU_inner(eps, cal, pin, hwpang):
         weights (array, float64):  The detector weights for the specified mode (size 3)
     """
     # applies quaternion rotations
-    zaxis = jnp.array([0.0, 0.0, 1.0])
-    dir = qarray.rotate_one_one(pin, zaxis)
-    xaxis = jnp.array([1.0, 0.0, 0.0])
-    orient = qarray.rotate_one_one(pin, xaxis)
+    dir = qarray.rotate_zaxis(pin)
+    orient = qarray.rotate_xaxis(pin)
 
     # computes by and bx
     by = orient[0] * dir[1] - orient[1] * dir[0]

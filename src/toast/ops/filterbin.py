@@ -1288,7 +1288,13 @@ class FilterBin(Operator):
         for key, write, keep, force, rootname in [
             (hits_name, self.write_hits and binned, False, False, self.name),
             (rcond_name, self.write_rcond and binned, False, False, self.name),
-            (noiseweighted_map_name, self.write_noiseweighted_map, False, True, mc_root),
+            (
+                noiseweighted_map_name,
+                self.write_noiseweighted_map,
+                False,
+                True,
+                mc_root,
+            ),
             (map_name, self.write_map, False, True, mc_root),
             (invcov_name, self.write_invcov and binned, False, False, self.name),
             (cov_name, self.write_cov and binned, True, False, self.name),
@@ -1316,7 +1322,8 @@ class FilterBin(Operator):
                     else:
                         # Standard FITS output
                         fname = os.path.join(
-                            self.output_dir, f"{rootname}_{product}.fits")
+                            self.output_dir, f"{rootname}_{product}.fits"
+                        )
                         if self.mc_mode and not force:
                             if os.path.isfile(fname):
                                 log.info_rank(

@@ -33,11 +33,11 @@ class HPIX_JAX:
             factor += 1
         self.factor = factor
 
-        self.jr = jnp.array([2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4])
-        self.jq = jnp.array([1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7])
+        self.jr = np.array([2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4])
+        self.jq = np.array([1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7])
 
-        m = jnp.arange(start=0, stop=0x100)
-        self.utab = (
+        m = np.arange(start=0, stop=0x100)
+        self.utab = jnp.array(
             (m & 0x1)
             | ((m & 0x2) << 1)
             | ((m & 0x4) << 2)
@@ -47,7 +47,7 @@ class HPIX_JAX:
             | ((m & 0x40) << 6)
             | ((m & 0x80) << 7)
         )
-        self.ctab = (
+        self.ctab = jnp.array(
             (m & 0x1)
             | ((m & 0x2) << 7)
             | ((m & 0x4) >> 1)
@@ -99,9 +99,8 @@ def zphi2nest(hpix, phi, region, z, rtz):
     tt = phi * TWOINVPI
     tt = jnp.where(phi < 0.0, tt + 4.0, tt)
 
-    # NOTE: this is very slightly faster than a jnp.where here
     # then branch
-    def then_branch(tt, rtz, z):
+    def then_branch(tt, z):
         temp1 = hpix.halfnside + hpix.dnside * tt
         temp2 = hpix.tqnside * z
 
@@ -120,6 +119,8 @@ def zphi2nest(hpix, phi, region, z, rtz):
         x = jm & hpix.nsideminusone
         y = hpix.nsideminusone - (jp & hpix.nsideminusone)
         return (face, x, y)
+
+    (face_then, x_then, y_then) = then_branch(tt, z)
 
     # else branch
     def else_branch(tt, rtz, z):
@@ -140,10 +141,13 @@ def zphi2nest(hpix, phi, region, z, rtz):
         y = jnp.where(z >= 0, hpix.nsideminusone - jp, jm)
         return (face, x, y)
 
+    (face_else, x_else, y_else) = else_branch(tt, rtz, z)
+
     # test
-    (face, x, y) = jax.lax.cond(
-        jnp.abs(region) == 1, then_branch, else_branch, tt, rtz, z
-    )
+    cond = jnp.abs(region) == 1
+    face = jnp.where(cond, face_then, face_else)
+    x = jnp.where(cond, x_then, x_else)
+    y = jnp.where(cond, y_then, y_else)
 
     sipf = hpix.xy2pix(x, y)
     pix = jnp.int64(sipf) + (face << (2 * hpix.factor))
@@ -167,9 +171,8 @@ def zphi2ring(hpix, phi, region, z, rtz):
     tt = phi * TWOINVPI
     tt = jnp.where(phi < 0.0, tt + 4.0, tt)
 
-    # NOTE: this is very slightly faster than a jnp.where here
     # then branch
-    def then_branch(tt, rtz, z):
+    def then_branch(tt, z):
         temp1 = hpix.halfnside + hpix.dnside * tt
         temp2 = hpix.tqnside * z
 
@@ -185,8 +188,10 @@ def zphi2ring(hpix, phi, region, z, rtz):
         pix = hpix.ncap + ((ir - 1) * hpix.fournside + ip)
         return pix
 
+    pix_then = then_branch(tt, z)
+
     # else branch
-    def else_branch(tt, rtz, z):
+    def else_branch(tt, rtz):
         tp = tt - jnp.floor(tt)
 
         temp1 = hpix.dnside * rtz
@@ -203,8 +208,10 @@ def zphi2ring(hpix, phi, region, z, rtz):
         pix = jnp.where(region > 0, pix_pos, pix_neg)
         return pix
 
+    pix_else = else_branch(tt, rtz)
+
     # test
-    pix = jax.lax.cond(jnp.abs(region) == 1, then_branch, else_branch, tt, rtz, z)
+    pix = jnp.where(jnp.abs(region) == 1, pix_then, pix_else)
 
     return pix
 
