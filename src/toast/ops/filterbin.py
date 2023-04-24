@@ -46,6 +46,9 @@ from .pointing import BuildPixelDistribution
 from .scan_map import ScanMap, ScanMask
 
 
+# counter = 0  # DEBUG
+
+
 class SparseTemplates:
     def __init__(self):
         self.starts = []
@@ -892,29 +895,45 @@ class FilterBin(Operator):
         """Add the local (per detector) observation matrix to the full
         matrix
         """
-        # Use scipy sparse implementation
-        # self.obs_matrix += local_obs_matrix * detweight
-        # Use our own compiled kernel
-        n = self.obs_matrix.nnz + local_obs_matrix.nnz
-        data = np.zeros(n, dtype=np.float64)
-        indices = np.zeros(n, dtype=np.int64)
-        indptr = np.zeros(self.npixtot + 1, dtype=np.int64)
-        add_matrix(
-            self.obs_matrix.data,
-            self.obs_matrix.indices,
-            self.obs_matrix.indptr,
-            local_obs_matrix.data * detweight,
-            local_obs_matrix.indices,
-            local_obs_matrix.indptr,
-            data,
-            indices,
-            indptr,
-        )
-        n = indptr[-1]
-        self.obs_matrix = scipy.sparse.csr_matrix(
-            (data[:n], indices[:n], indptr),
-            shape=(self.npixtot, self.npixtot),
-        )
+        log = Logger.get()
+        timer = Timer()
+        timer.start()
+        if True:
+            # Use scipy sparse implementation
+            # DEBUG begin
+            # from scipy.io import mmwrite
+            # global counter
+            # mmwrite(f"matrix{counter:02}.mtx", self.obs_matrix)
+            # counter += 1
+            # mmwrite(f"matrix{counter:02}.mtx", local_obs_matrix * detweight)
+            # counter += 1
+            # DEBUG end
+            self.obs_matrix += local_obs_matrix * detweight
+            log.debug_rank("FilterBin: Add and construct matrix in", comm=self.comm, timer=timer)
+        else:
+            # Use our own compiled kernel
+            n = self.obs_matrix.nnz + local_obs_matrix.nnz
+            data = np.zeros(n, dtype=np.float64)
+            indices = np.zeros(n, dtype=np.int64)
+            indptr = np.zeros(self.npixtot + 1, dtype=np.int64)
+            add_matrix(
+                self.obs_matrix.data,
+                self.obs_matrix.indices,
+                self.obs_matrix.indptr,
+                local_obs_matrix.data * detweight,
+                local_obs_matrix.indices,
+                local_obs_matrix.indptr,
+                data,
+                indices,
+                indptr,
+            )
+            log.debug_rank("FilterBin: Add matrix in", comm=self.comm, timer=timer)
+            n = indptr[-1]
+            self.obs_matrix = scipy.sparse.csr_matrix(
+                (data[:n], indices[:n], indptr),
+                shape=(self.npixtot, self.npixtot),
+            )
+            log.debug_rank("FilterBin: Construct CSR in", comm=self.comm, timer=timer)
         return
 
     def _expand_matrix(self, compressed_matrix, local_to_global):
@@ -922,6 +941,7 @@ class FilterBin(Operator):
         global indexing
         """
         n = compressed_matrix.size
+        values = np.zeros(n, dtype=np.float64)
         indices = np.zeros(n, dtype=np.int64)
         indptr = np.zeros(self.npixtot + 1, dtype=np.int64)
         expand_matrix(
@@ -929,12 +949,14 @@ class FilterBin(Operator):
             local_to_global,
             self.npix,
             self.nnz,
+            values,
             indices,
             indptr,
         )
+        nnz = indptr[-1]
 
         sparse_matrix = scipy.sparse.csr_matrix(
-            (compressed_matrix.ravel(), indices, indptr),
+            (values[:nnz], indices[:nnz], indptr[:nnz]),
             shape=(self.npixtot, self.npixtot),
         )
         return sparse_matrix
