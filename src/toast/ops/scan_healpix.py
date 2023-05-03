@@ -227,7 +227,7 @@ class ScanHealpixMap(Operator):
 
             scanner.det_data = det_data_key
             scanner.map_key = map_name
-            scan_pipe.apply(data, detectors=detectors)
+            scan_pipe.apply(data, detectors=detectors, use_accel=False)
 
             # If we are accumulating on a single key, disable zeroing after first map
             if len(self.det_data_keys) == 1:
