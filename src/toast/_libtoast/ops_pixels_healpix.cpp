@@ -384,7 +384,6 @@ void init_ops_pixels_healpix(py::module & m) {
                 uint64_t * dev_utab = omgr.device_ptr(utab);
 
                 # pragma omp target data  \
-                device(dev)               \
                 map(to:                   \
                 raw_pixel_index[0:n_det], \
                 raw_quat_index[0:n_det],  \

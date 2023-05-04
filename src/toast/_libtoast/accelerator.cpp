@@ -283,6 +283,7 @@ void OmpManager::assign_device(int node_procs, int node_rank, float mem_gb,
           << " processes per node, using device " << target_dev_ << " ("
           << n_target << " total)";
         log.verbose(o.str().c_str());
+        omp_set_default_device(target_dev_);
     }
 
     auto & env = toast::Environment::get();
@@ -632,7 +633,6 @@ void OmpManager::reset(void * buffer, size_t nbytes, std::string const & name) {
     log.verbose(o.str().c_str());
 
     # pragma omp target data \
-    device(target_dev_)      \
     map(to: nbytes)
     {
         # pragma omp target teams distribute is_device_ptr(dev_buffer) \
@@ -1103,7 +1103,7 @@ void init_accelerator(py::module & m) {
             void * dev_raw = omgr.device_ptr(raw);
 
             #ifdef HAVE_OPENMP_TARGET
-            # pragma omp target data device(dev)
+            # pragma omp target data
             {
                 # pragma omp target teams distribute parallel for collapse(2) \
                 is_device_ptr(dev_raw)
@@ -1132,7 +1132,7 @@ void init_accelerator(py::module & m) {
             void * dev_raw = omgr.device_ptr(raw);
 
             #ifdef HAVE_OPENMP_TARGET
-            # pragma omp target data device(dev)
+            # pragma omp target data
             {
                 # pragma omp target teams distribute parallel for collapse(2) \
                 is_device_ptr(dev_raw)

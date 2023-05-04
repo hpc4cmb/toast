@@ -171,7 +171,6 @@ void register_ops_scan_map(py::module & m, char const * name) {
                   T * dev_mapdata = omgr.device_ptr(raw_mapdata);
 
                   # pragma omp target data             \
-                  device(dev)                          \
                   map(to:                              \
                   raw_weight_index[0:n_det],           \
                   raw_pixel_index[0:n_det],            \

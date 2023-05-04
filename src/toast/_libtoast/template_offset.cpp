@@ -64,7 +64,6 @@ void init_template_offset(py::module & m) {
                 double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
 
                 # pragma omp target data \
-                device(dev)              \
                 map(to:                  \
                 n_view,                  \
                 n_samp,                  \
@@ -184,7 +183,6 @@ void init_template_offset(py::module & m) {
                 double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
 
                 # pragma omp target data \
-                device(dev)              \
                 map(to:                  \
                 n_view,                  \
                 n_samp,                  \
@@ -301,7 +299,6 @@ void init_template_offset(py::module & m) {
                 double * dev_offset_var = omgr.device_ptr(raw_offset_var);
 
                 # pragma omp target data \
-                device(dev)              \
                 map(to                   \
                 : n_amp)
                 {
