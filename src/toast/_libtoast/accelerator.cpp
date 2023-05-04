@@ -283,7 +283,9 @@ void OmpManager::assign_device(int node_procs, int node_rank, float mem_gb,
           << " processes per node, using device " << target_dev_ << " ("
           << n_target << " total)";
         log.verbose(o.str().c_str());
+        #ifdef HAVE_OPENMP_TARGET
         omp_set_default_device(target_dev_);
+        #endif // ifdef HAVE_OPENMP_TARGET
     }
 
     auto & env = toast::Environment::get();
