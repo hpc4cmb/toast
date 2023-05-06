@@ -76,7 +76,18 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
         nb_devices = max(1, get_environement_nb_devices())
         device_id = node_rank % nb_devices
         # associate the device to this process
-        jax.distributed.initialize(local_device_ids=[device_id])
+        try:
+            jax.distributed.initialize(local_device_ids=[device_id])
+        except ValueError:
+            # We are not running within slurm or using openmpi.  Explicitly
+            # use localhost
+            log.warning("Cannot initialize jax with defaults, using localhost")
+            jax.distributed.initialize(
+                coordinator_address="127.0.0.1:12345",
+                num_processes=node_procs,
+                process_id=node_rank,
+                local_device_ids=[device_id]
+            )
         # displays information on the device picked
         local_device = jax_accel_get_device()
         log.debug(
