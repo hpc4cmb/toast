@@ -1663,6 +1663,10 @@ def add_scan(
         azmins[i] = unwind_angle(azmins[0], azmins[i])
         azmaxs[i] = unwind_angle(azmaxs[0], azmaxs[i])
         azmaxs[i] = unwind_angle(azmins[i], azmaxs[i])
+    if args.lock_az_range:
+        # Hold the azimuth range fixed across split observations
+        azmins[:] = np.amin(azmins)
+        azmaxs[:] = np.amax(azmaxs)
     # for i in range(azmins.size-1):
     #    if azmins[i+1] - azmins[i] > np.pi:
     #        azmins[i+1], azmaxs[i+1] = azmins[i+1]-2*np.pi, azmaxs[i+1]-2*np.pi
@@ -2458,6 +2462,13 @@ def parse_args(opts=None):
         action="store_true",
         help="Write a 24-field verbose schedule "
         "instead of the concise 11-field schedule",
+    )
+    parser.add_argument(
+        "--lock-az-range",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Use the same azimuth range for all sub scans",
     )
     parser.add_argument(
         "--equalize-area",
