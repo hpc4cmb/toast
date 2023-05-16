@@ -128,6 +128,7 @@ class CommonModeNoise(Operator):
             freqs = noise.freq(noise.keys[0]).to_value(u.Hz)
 
             # Find the unique values of focalplane keys
+            detset = obs.all_detectors
 
             dets_by_key = {}
             if self.focalplane_key is None:
