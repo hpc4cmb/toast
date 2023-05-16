@@ -671,10 +671,10 @@ int OmpManager::present(void * buffer, size_t nbytes, std::string const & name) 
         size_t nb = mem_size_.at(buffer);
         if (name != mem_name_.at(buffer)) {
             o.str("");
-            o << "OmpManager:  present, host ptr " << buffer
+            o << "OmpManager:  present WARNING, host ptr " << buffer
               << " has name '" << mem_name_.at(buffer) << "' in the table, not '"
               << name << "'";
-            log.warning(o.str().c_str());
+            log.verbose(o.str().c_str());
         }
         if (nb != nbytes) {
             o << "OmpManager:  host ptr " << buffer
@@ -1076,6 +1076,30 @@ void init_accelerator(py::module & m) {
         Args:
             data (array):  The host data.
             name (str):  The name associated with the data.
+
+        Returns:
+            None
+
+    )");
+
+    m.def(
+        "accel_dump", []()
+        {
+            auto & log = toast::Logger::get();
+
+            std::ostringstream o;
+            #ifndef HAVE_OPENMP_TARGET
+            o.str("");
+            o << "TOAST not built with OpenMP target support";
+            log.error(o.str().c_str());
+            throw std::runtime_error(o.str().c_str());
+            #endif // ifndef HAVE_OPENMP_TARGET
+
+            auto & omgr = OmpManager::get();
+            omgr.dump();
+            return;
+        }, R"(
+        Dump the current device table.
 
         Returns:
             None

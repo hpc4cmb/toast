@@ -7,13 +7,14 @@ import os
 from .._libtoast import Logger
 from .._libtoast import accel_assign_device as omp_accel_assign_device
 from .._libtoast import accel_create as omp_accel_create
-from .._libtoast import accel_reset as omp_accel_reset
 from .._libtoast import accel_delete as omp_accel_delete
 from .._libtoast import accel_enabled as omp_accel_enabled
 from .._libtoast import accel_get_device as omp_accel_get_device
 from .._libtoast import accel_present as omp_accel_present
+from .._libtoast import accel_reset as omp_accel_reset
 from .._libtoast import accel_update_device as omp_accel_update_device
 from .._libtoast import accel_update_host as omp_accel_update_host
+from .._libtoast import accel_dump as omp_accel_dump
 from ..timing import function_timer
 
 enable_vals = ["1", "yes", "true"]
@@ -286,6 +287,22 @@ def accel_data_delete(data, name="None"):
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot delete device data")
     return data
+
+
+def accel_data_table():
+    """Dump the current device buffer table.
+
+    For OpenMP target offload, this prints the table of device buffers.
+    For jax, this prints a note.
+
+    """
+    log = Logger.get()
+    if use_accel_omp:
+        omp_accel_dump()
+    elif use_accel_jax:
+        log.debug("Using Jax, skipping dump of OpenMP target device table")
+    else:
+        log.warning("Accelerator support not enabled, cannot print device table")
 
 
 class AcceleratorObject(object):

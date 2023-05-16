@@ -29,7 +29,7 @@ from traitlets import (
 )
 
 from .accelerator import ImplementationType, use_accel_jax, use_accel_omp
-from .utils import import_from_name, object_fullname, Logger
+from .utils import Logger, import_from_name, object_fullname
 
 
 def trait_string_to_scalar(val):

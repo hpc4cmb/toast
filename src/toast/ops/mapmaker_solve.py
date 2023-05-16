@@ -380,11 +380,15 @@ class SolverLHS(Operator):
         self.binning.det_data_units = self.det_data_units
 
         self.binning.pre_process = self.template_matrix
+
         self.binning.apply(data, detectors=detectors)
         self.binning.pre_process = None
 
         # nz = data[self.binning.binned].data != 0
-        # print(f"LHS binned:  {self.binning.binned} = {data[self.binning.binned].data[nz]}", flush=True)
+        # print(
+        #     f"LHS binned:  {self.binning.binned} = {data[self.binning.binned].data[nz]}",
+        #     flush=True,
+        # )
 
         log.debug_rank(
             "MapMaker   LHS projection and binning finished in", comm=comm, timer=timer
@@ -624,8 +628,6 @@ def solve(
     lhs_op.template_matrix.amplitudes = result_key
     lhs_op.out = lhs_out_key
     lhs_op.apply(data, detectors=detectors)
-    # print(f"LHS init:  in = {result}", flush=True)
-    # print(f"LHS init:  lhs_out = {lhs_out}", flush=True)
 
     # The initial residual
     # r = b - q
@@ -670,10 +672,6 @@ def solve(
     for iter in range(n_iter_max):
         if not np.isfinite(sqsum):
             raise RuntimeError("Residual is not finite")
-
-        # print(
-        #     f"{iter}: {data.comm.world_rank} amps = {data[proposal_key]['GainTemplate'].local}"
-        # )
 
         # q = A * d
         lhs_op.apply(data, detectors=detectors)

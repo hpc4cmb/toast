@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 from ..timing import function_timer
 
 # TODO we need to clean up the two very similar interval type names

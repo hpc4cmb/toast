@@ -504,6 +504,56 @@ def rhombus_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=
     return dets
 
 
+def boresight_layout(npix, prefix, suffix, pol, center=None, pos_offset=0):
+    """Construct a focalplane with all pixels at the boresight.
+
+    This is designed to aid in testing.  The array of "pol" angles specify the gamma
+    rotation angle clockwise from the Eta axis.  Each output quaternion describes the
+    rotation from the focalplane X / Y / Z coordinate frame into the detector frame
+    with the Z axis along the line of sight and the X axis along the polarization
+    sensitive direction.
+
+    Each pixel is numbered 0...npix-1 and each detector is named by the
+    prefix, the pixel number, and the suffix.
+
+    If the "center" argument is specified, then each quaternion is additionally
+    multiplied by this in order to shift all positions to be relative to a new
+    center.
+
+    Args:
+        npix (int): number of pixels at the boresight.
+        prefix (str): the detector name prefix.
+        suffix (str): the detector name suffix.
+        pol (ndarray): 1D array of detector polarization angles.  These are the
+            "gamma" angle in the xi / eta / gamma coordinate system.
+        center (ndarray): quaternion offset of the center of the layout (or None).
+        pos_offset (int): starting index of position numbers.
+
+    Returns:
+        (dict) A dictionary keyed on detector name, with each value itself a
+            dictionary of detector properties.
+
+    """
+    # number of digits for pixel indexing
+    ndigit = int(np.log10(npix)) + 1
+    nameformat = "{{}}{{:0{}d}}{{}}".format(ndigit)
+
+    # compute positions of all detectors
+    dets = {}
+    for pix in range(npix):
+        dname = nameformat.format(prefix, pix + pos_offset, suffix)
+        xi = 0
+        eta = 0
+        gamma = pol[pix].to_value(u.radian)
+        dprops = {}
+        if center is None:
+            dprops["quat"] = xieta_to_quat(xi, eta, gamma)
+        else:
+            dprops["quat"] = qa.mult(center, xieta_to_quat(xi, eta, gamma))
+        dets[dname] = dprops
+    return dets
+
+
 def fake_hexagon_focalplane(
     n_pix=7,
     width=5.0 * u.degree,
@@ -565,6 +615,13 @@ def fake_hexagon_focalplane(
     quat_A = hex_layout(n_pix, width_flats, "D", "A", pol_A, center=center)
     quat_B = hex_layout(n_pix, width_flats, "D", "B", pol_B, center=center)
 
+    # Map the gamma angles to detector names for later storing in the table
+    dgamma = dict()
+    for i, (k, v) in enumerate(quat_A.items()):
+        dgamma[k] = pol_A[i]
+    for i, (k, v) in enumerate(quat_B.items()):
+        dgamma[k] = pol_B[i]
+
     temp_data = dict(quat_A)
     temp_data.update(quat_B)
 
@@ -577,6 +634,7 @@ def fake_hexagon_focalplane(
 
     nominal_freq = str(int(bandcenter.to_value(u.GHz)))
     det_names = [f"{x}-{nominal_freq}" for x in det_data.keys()]
+    det_gamma = [dgamma[x] for x in det_data.keys()]
 
     det_table = QTable(
         [
@@ -584,6 +642,7 @@ def fake_hexagon_focalplane(
             Column(name="quat", data=[det_data[x]["quat"] for x in det_data.keys()]),
             Column(name="pol_leakage", length=n_det, unit=None),
             Column(name="psi_pol", length=n_det, unit=u.rad),
+            Column(name="gamma", length=n_det, unit=u.rad),
             Column(name="fwhm", length=n_det, unit=u.arcmin),
             Column(name="psd_fmin", length=n_det, unit=u.Hz),
             Column(name="psd_fknee", length=n_det, unit=u.Hz),
@@ -607,6 +666,7 @@ def fake_hexagon_focalplane(
             det_table[idet]["psi_pol"] = 0 * u.rad
         else:
             det_table[idet]["psi_pol"] = np.pi / 2 * u.rad
+        det_table[idet]["gamma"] = det_gamma[idet]
         det_table[idet]["fwhm"] = fwhm * (
             1 + np.random.randn() * fwhm_sigma.to_value(fwhm.unit)
         )
@@ -614,7 +674,7 @@ def fake_hexagon_focalplane(
             1 + np.random.randn() * bandcenter_sigma.to_value(bandcenter.unit)
         )
         det_table[idet]["bandwidth"] = bandwidth * (
-            1 + np.random.randn() * bandcenter_sigma.to_value(bandcenter.unit)
+            1 + np.random.randn() * bandwidth_sigma.to_value(bandcenter.unit)
         )
         det_table[idet]["psd_fmin"] = psd_fmin
         det_table[idet]["psd_fknee"] = psd_fknee
@@ -701,6 +761,14 @@ def fake_rhombihex_focalplane(
             2 * np.pi / 3,
         ),
     ]
+    rhomb_gamma = [
+        0.0,
+        -2 * np.pi / 3,
+        2 * np.pi / 3,
+    ]
+
+    # Map the gamma angles to detector names for later storing in the table
+    dgamma = dict()
 
     full_fp = dict()
     for irhomb, cent in enumerate(centers):
@@ -726,6 +794,10 @@ def fake_rhombihex_focalplane(
         )
         full_fp.update(quat_A)
         full_fp.update(quat_B)
+        for i, (k, v) in enumerate(quat_A.items()):
+            dgamma[k] = pol_A[i] + rhomb_gamma[irhomb] * u.rad
+        for i, (k, v) in enumerate(quat_B.items()):
+            dgamma[k] = pol_B[i] + rhomb_gamma[irhomb] * u.rad
 
     # Sort by detector name so that detector pairs are together
     det_data = {x: full_fp[x] for x in sorted(full_fp.keys())}
@@ -734,6 +806,7 @@ def fake_rhombihex_focalplane(
 
     nominal_freq = str(int(bandcenter.to_value(u.GHz)))
     det_names = [f"{x}-{nominal_freq}" for x in det_data.keys()]
+    det_gamma = [dgamma[x] for x in det_data.keys()]
 
     det_table = QTable(
         [
@@ -741,6 +814,7 @@ def fake_rhombihex_focalplane(
             Column(name="quat", data=[det_data[x]["quat"] for x in det_data.keys()]),
             Column(name="pol_leakage", length=n_det, unit=None),
             Column(name="psi_pol", length=n_det, unit=u.rad),
+            Column(name="gamma", length=n_det, unit=u.rad),
             Column(name="fwhm", length=n_det, unit=u.arcmin),
             Column(name="psd_fmin", length=n_det, unit=u.Hz),
             Column(name="psd_fknee", length=n_det, unit=u.Hz),
@@ -764,6 +838,7 @@ def fake_rhombihex_focalplane(
             det_table[idet]["psi_pol"] = 0 * u.rad
         else:
             det_table[idet]["psi_pol"] = np.pi / 2 * u.rad
+        det_table[idet]["gamma"] = det_gamma[idet]
         det_table[idet]["fwhm"] = fwhm * (
             1 + np.random.randn() * fwhm_sigma.to_value(fwhm.unit)
         )
@@ -771,7 +846,7 @@ def fake_rhombihex_focalplane(
             1 + np.random.randn() * bandcenter_sigma.to_value(bandcenter.unit)
         )
         det_table[idet]["bandwidth"] = bandwidth * (
-            1 + np.random.randn() * bandcenter_sigma.to_value(bandcenter.unit)
+            1 + np.random.randn() * bandwidth_sigma.to_value(bandcenter.unit)
         )
         det_table[idet]["psd_fmin"] = psd_fmin
         det_table[idet]["psd_fknee"] = psd_fknee
@@ -782,6 +857,129 @@ def fake_rhombihex_focalplane(
         detector_data=det_table,
         sample_rate=sample_rate,
         field_of_view=1.1 * (width + 2 * fwhm),
+    )
+
+
+def fake_boresight_focalplane(
+    n_pix=1,
+    sample_rate=1.0 * u.Hz,
+    epsilon=0.0,
+    fwhm=10.0 * u.arcmin,
+    bandcenter=150 * u.GHz,
+    bandwidth=20 * u.GHz,
+    psd_net=0.1 * u.K * np.sqrt(1 * u.second),
+    psd_fmin=0.0 * u.Hz,
+    psd_alpha=1.0,
+    psd_fknee=0.05 * u.Hz,
+    fwhm_sigma=0.0 * u.arcmin,
+    bandcenter_sigma=0 * u.GHz,
+    bandwidth_sigma=0 * u.GHz,
+    random_seed=123456,
+):
+    """Create a focalplane with all detectors at the boresight for testing.
+
+    This function creates a basic focalplane with the specified number of pixels, each
+    with two orthogonal detectors.  All detectors are placed at the boresight.  It is
+    intended for unit tests.  In addition to nominal detector properties, this function
+    adds other simulation-specific parameters to the metadata.
+
+    Args:
+        n_pix (int):  The number of pixels to place at the boresight.
+        sample_rate (Quantity):  The sample rate for all detectors.
+        epsilon (float):  The cross-polar response for all detectors.
+        fwhm (Quantity):  The beam FWHM
+        bandcenter (Quantity):  The detector band center.
+        bandwidth (Quantity):  The detector band width.
+        psd_net (Quantity):  The Noise Equivalent Temperature of each detector.
+        psd_fmin (Quantity):  The frequency below which to roll off the 1/f spectrum.
+        psd_alpha (float):  The spectral slope.
+        psd_fknee (Quantity):  The 1/f knee frequency.
+        fwhm_sigma (Quantity):  Draw random detector FWHM values from a normal
+            distribution with this width.
+        bandcenter_sigma (Quantity):  Draw random bandcenter values from a normal
+            distribution with this width.
+        bandwidth_sigma (Quantity):  Draw random bandwidth values from a normal
+            distribution with this width.
+        random_seed (int):  The seed to use for numpy random.
+
+    Returns:
+        (Focalplane):  The fake focalplane.
+
+    """
+    center = None
+    pol_A = hex_gamma_angles_qu(n_pix, offset=0.0 * u.degree)
+    pol_B = hex_gamma_angles_qu(n_pix, offset=90.0 * u.degree)
+    quat_A = boresight_layout(n_pix, "D", "A", pol_A, center=center)
+    quat_B = boresight_layout(n_pix, "D", "B", pol_B, center=center)
+
+    # Map the gamma angles to detector names for later storing in the table
+    dgamma = dict()
+    for i, (k, v) in enumerate(quat_A.items()):
+        dgamma[k] = pol_A[i]
+    for i, (k, v) in enumerate(quat_B.items()):
+        dgamma[k] = pol_B[i]
+
+    temp_data = dict(quat_A)
+    temp_data.update(quat_B)
+
+    # Sort by detector name so that detector pairs are together
+    det_data = {x: temp_data[x] for x in sorted(temp_data.keys())}
+
+    n_det = len(det_data)
+
+    nominal_freq = str(int(bandcenter.to_value(u.GHz)))
+    det_names = [f"{x}-{nominal_freq}" for x in det_data.keys()]
+    det_gamma = [dgamma[x] for x in det_data.keys()]
+
+    det_table = QTable(
+        [
+            Column(name="name", data=det_names),
+            Column(name="quat", data=[det_data[x]["quat"] for x in det_data.keys()]),
+            Column(name="pol_leakage", length=n_det, unit=None),
+            Column(name="psi_pol", length=n_det, unit=u.rad),
+            Column(name="gamma", length=n_det, unit=u.rad),
+            Column(name="fwhm", length=n_det, unit=u.arcmin),
+            Column(name="psd_fmin", length=n_det, unit=u.Hz),
+            Column(name="psd_fknee", length=n_det, unit=u.Hz),
+            Column(name="psd_alpha", length=n_det, unit=None),
+            Column(name="psd_net", length=n_det, unit=(u.K * np.sqrt(1.0 * u.second))),
+            Column(name="bandcenter", length=n_det, unit=u.GHz),
+            Column(name="bandwidth", length=n_det, unit=u.GHz),
+            Column(
+                name="pixel", data=[x.rstrip("A").rstrip("B") for x in det_data.keys()]
+            ),
+        ]
+    )
+
+    np.random.seed(random_seed)
+
+    for idet, det in enumerate(det_data.keys()):
+        det_table[idet]["pol_leakage"] = epsilon
+        # psi_pol is the rotation from the PXX beam frame to the polarization
+        # sensitive direction.
+        if det.endswith("A"):
+            det_table[idet]["psi_pol"] = 0 * u.rad
+        else:
+            det_table[idet]["psi_pol"] = np.pi / 2 * u.rad
+        det_table[idet]["gamma"] = det_gamma[idet]
+        det_table[idet]["fwhm"] = fwhm * (
+            1 + np.random.randn() * fwhm_sigma.to_value(fwhm.unit)
+        )
+        det_table[idet]["bandcenter"] = bandcenter * (
+            1 + np.random.randn() * bandcenter_sigma.to_value(bandcenter.unit)
+        )
+        det_table[idet]["bandwidth"] = bandwidth * (
+            1 + np.random.randn() * bandwidth_sigma.to_value(bandcenter.unit)
+        )
+        det_table[idet]["psd_fmin"] = psd_fmin
+        det_table[idet]["psd_fknee"] = psd_fknee
+        det_table[idet]["psd_alpha"] = psd_alpha
+        det_table[idet]["psd_net"] = psd_net
+
+    return Focalplane(
+        detector_data=det_table,
+        sample_rate=sample_rate,
+        field_of_view=3 * fwhm,
     )
 
 

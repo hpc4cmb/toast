@@ -649,9 +649,6 @@ class SimAtmTest(MPITestCase):
             freqs=freq_list,
             pixel_per_process=ppp,
         )
-
-        # print(f"full_data has {len(full_data.obs)} observations")
-        # full_data.info()
         self.count_mem(full_data, "After full sim ground")
 
         default_model.apply(full_data)
@@ -677,8 +674,6 @@ class SimAtmTest(MPITestCase):
         split_data = create_ground_data(
             self.comm, freqs=freq_list, pixel_per_process=ppp, split=True
         )
-        # print(f"split_data has {len(split_data.obs)} observations")
-        # split_data.info()
         self.count_mem(split_data, "After split sim ground")
 
         default_model.apply(split_data)

@@ -13,7 +13,7 @@ import numpy as np
 from astropy import units as u
 from astropy.io.misc.hdf5 import read_table_hdf5, write_table_hdf5
 from astropy.table import Column, QTable
-from scipy.constants import h, k, c
+from scipy.constants import c, h, k
 
 try:
     from scipy.integrate import simpson
@@ -481,6 +481,8 @@ class Focalplane(object):
 
         "name":  The detector name.
         "quat":  Each row should be a 4-element numpy array.
+        "gamma":  If using a half wave plate, we need the rotation angle of the
+            detector polarization orientation from the focalplane frame X-axis.
 
     Some columns are optional:
 

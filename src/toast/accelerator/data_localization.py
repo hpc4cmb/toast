@@ -1,6 +1,6 @@
 import os
 import sys
-from collections import defaultdict, abc
+from collections import abc, defaultdict
 from functools import wraps
 
 from ..accelerator import accel_data_present

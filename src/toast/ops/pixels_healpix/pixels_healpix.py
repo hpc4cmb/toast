@@ -52,12 +52,6 @@ class PixelsHealpix(Operator):
         defaults.pixels, help="Observation detdata key for output pixel indices"
     )
 
-    quats = Unicode(
-        None,
-        allow_none=True,
-        help="Observation detdata key for output quaternions",
-    )
-
     create_dist = Unicode(
         None,
         allow_none=True,
@@ -235,7 +229,7 @@ class PixelsHealpix(Operator):
                             self._local_submaps[
                                 ob.detdata[self.pixels][det, vslice][good]
                                 // self._n_pix_submap
-                            ] = True
+                            ] = 1
                     if restore_dev:
                         ob.detdata[self.pixels].accel_update_device()
 
@@ -277,15 +271,6 @@ class PixelsHealpix(Operator):
 
     def _finalize(self, data, use_accel=None, **kwargs):
         if self.create_dist is not None:
-            if use_accel:
-                log = Logger.get()
-                log.verbose_rank(
-                    f"Operator {self.name} finalize local submap update self",
-                    comm=data.comm.comm_group,
-                )
-                # Once self._local_submaps is explicitly staged, copy it
-                # back here (current kernel does copy in/out)
-
             submaps = None
             if self.single_precision:
                 submaps = np.arange(self._n_submap, dtype=np.int32)[
@@ -302,13 +287,6 @@ class PixelsHealpix(Operator):
                 local_submaps=submaps,
                 comm=data.comm.comm_world,
             )
-
-            if use_accel:
-                log = Logger.get()
-                log.verbose_rank(
-                    f"Operator {self.name} finalize local submaps update device",
-                    comm=data.comm.comm_group,
-                )
         return
 
     def _requires(self):
@@ -318,11 +296,16 @@ class PixelsHealpix(Operator):
         return req
 
     def _provides(self):
-        prov = self.detector_pointing.provides()
-        prov["detdata"].append(self.pixels)
+        prov = {
+            "detdata": [self.pixels],
+            "global": list(),
+        }
         if self.create_dist is not None:
             prov["global"].append(self.create_dist)
         return prov
+
+    def _temporary(self):
+        return {"detdata": [self.detector_pointing.quats]}
 
     def _implementations(self):
         return [

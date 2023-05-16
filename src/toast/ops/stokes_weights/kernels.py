@@ -63,7 +63,9 @@ def stokes_weights_IQU(
     hwp,
     intervals,
     epsilon,
+    gamma,
     cal,
+    IAU,
     use_accel=False,
 ):
     """Kernel for computing the I/Q/U Stokes pointing weights.
@@ -77,7 +79,8 @@ def stokes_weights_IQU(
             detector.
         hwp (array):  The array of orientation angles for an ideal half wave plate.
         intervals (array):  The array of sample intervals.
-        epsilon (float):  The cross polar leakage.
+        epsilon (array):  The cross polar leakage for each detector.
+        gamma (array):  The gamma detector orientation angle for each detector.
         cal (float):  Calibration factor to apply to the weights.
         use_accel (bool):  Whether to use the accelerator for this call (if supported).
 
@@ -93,6 +96,8 @@ def stokes_weights_IQU(
         hwp,
         intervals,
         epsilon,
+        gamma,
         cal,
+        IAU,
         use_accel,
     )

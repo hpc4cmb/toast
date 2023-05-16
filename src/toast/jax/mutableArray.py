@@ -5,8 +5,8 @@ import jax.numpy as jnp
 import numpy as np
 from pshmem import MPIShared
 
-from ..utils import AlignedF64, AlignedI64, Logger
 from ..timing import function_timer
+from ..utils import AlignedF64, AlignedI64, Logger
 
 # ------------------------------------------------------------------------------
 # SET ITEM

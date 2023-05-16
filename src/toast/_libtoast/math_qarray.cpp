@@ -708,12 +708,14 @@ void init_math_qarray(py::module & m) {
                 double dir[3];
                 double orient[3];
 
-                // The X/Y cartesian coordinates of the line of nodes
-                double nodes_x;
-                double nodes_y;
-
-                // Angle from original X axis to the line of nodes
+                // Threshold for considering direction to be at one of the poles.
                 double eps = std::numeric_limits <double>::epsilon();
+
+                double vm_x;
+                double vm_y;
+                double vm_z;
+                double psi_x;
+                double psi_y;
 
                 #pragma omp for schedule(static)
                 for (int64_t i = 0; i < n_elem; ++i) {
@@ -728,29 +730,33 @@ void init_math_qarray(py::module & m) {
                     qa_rotate(qtemp, xaxis, orient);
 
                     if (::fabs(::fabs(dir[2]) - 1.0) < eps) {
+                        // We are at one of the poles
                         raw_phi[i] = 0.0;
                         if (dir[2] >= 0.0) {
                             raw_theta[i] = 0.0;
-                            raw_psi[i] = ::atan2(-orient[0], orient[1]) + toast::PI_2;
+                            psi_y = orient[1];
+                            psi_x = orient[0];
                         } else {
                             raw_theta[i] = toast::PI;
-                            raw_psi[i] = ::atan2(orient[0], orient[1]) + toast::PI_2;
+                            psi_y = -orient[1];
+                            psi_x = -orient[0];
                         }
                     } else {
-                        raw_phi[i] = ::atan2(dir[1], dir[0]);
                         raw_theta[i] = toast::PI_2 - ::asin(dir[2]);
-
-                        // psi = atan2((V_nodes x V_orient) . V_dir, V_nodes . V_orient)
-                        // Line of nodes is the rotated Y-axis
-                        nodes_x = ::cos(toast::PI_2 + raw_phi[i]);
-                        nodes_y = ::sin(toast::PI_2 + raw_phi[i]);
-                        raw_psi[i] = ::atan2(
-                            nodes_y * orient[2] * dir[0]
-                            - nodes_x * orient[2] * dir[1]
-                            + (nodes_x * orient[1] - nodes_y * orient[0]) * dir[2],
-                            nodes_x * orient[0] + nodes_y * orient[1]
-                                     ) + toast::PI_2;
+                        raw_phi[i] = ::atan2(dir[1], dir[0]);
+                        vm_x = dir[2] * ::cos(raw_phi[i]);
+                        vm_y = dir[2] * ::sin(raw_phi[i]);
+                        vm_z = -sqrt(1.0 - dir[2] * dir[2]);
+                        psi_y = (
+                            dir[0] * (vm_y * orient[2] - vm_z * orient[1])
+                            - dir[1] * (vm_x * orient[2] - vm_z * orient[0])
+                            + dir[2] * (vm_x * orient[1] - vm_y * orient[0])
+                        );
+                        psi_x = (
+                            vm_x * orient[0] + vm_y * orient[1] + vm_z * orient[2]
+                        );
                     }
+                    raw_psi[i] = ::atan2(psi_y, psi_x);
                     if (raw_psi[i] > toast::PI) {
                         raw_psi[i] -= toast::TWOPI;
                     }

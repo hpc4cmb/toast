@@ -314,18 +314,8 @@ class PointingHealpixTest(MPITestCase):
 
         pipe = ops.Pipeline(operators=[pixels, weights])
 
-        # Move data
-        # data.accel_create(pixels.requires())
-        # data.accel_create(weights.requires())
-        # data.accel_update_device(pixels.requires())
-        # data.accel_update_device(weights.requires())
-
         # Compute
         pipe.apply(data, use_accel=None)
-
-        # Move inputs back
-        data.accel_update_host(pixels.requires())
-        data.accel_update_host(weights.requires())
 
         # Also make a copy using a python codepath
         detpointing.kernel_implementation = ImplementationType.NUMPY

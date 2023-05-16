@@ -509,7 +509,7 @@ class ConfigTest(MPITestCase):
             conf_pipe = op.get_config(input=conf_pipe)
 
         pipe = ops.Pipeline(name="sim_pipe")
-        pipe.operators = [y for x, y in testops.items()]
+        pipe.operators = [y for x, y in testops.items() if x != "det_pointing"]
         conf_pipe = pipe.get_config(input=conf_pipe)
 
         conf_file = os.path.join(self.outdir, "run_conf.toml")
@@ -531,8 +531,10 @@ class ConfigTest(MPITestCase):
         run.operators.sim_satellite.telescope = tele
         run.operators.sim_satellite.schedule = sch
 
+        # Set up detector pointing
         run.operators.pixels.detector_pointing = run.operators.det_pointing
 
+        # Run it
         run.operators.sim_pipe.apply(data)
 
         close_data(data)

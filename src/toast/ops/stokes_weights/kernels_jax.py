@@ -13,7 +13,7 @@ from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
 
-def stokes_weights_IQU_inner(eps, cal, pin, hwpang):
+def stokes_weights_IQU_inner(eps, cal, pin, IAU):
     """
     Compute the Stokes weights for one detector.
 
@@ -21,31 +21,91 @@ def stokes_weights_IQU_inner(eps, cal, pin, hwpang):
         eps (float):  The cross polar response.
         cal (float):  A constant to apply to the pointing weights.
         pin (array, float64):  The array of detector quaternions (size 4).
-        hwpang (float64):  The HWP angle (could be None).
+        IAU (float):  Sign factor for U stokes term.
 
     Returns:
         weights (array, float64):  The detector weights for the specified mode (size 3)
     """
-    # applies quaternion rotations
-    dir = qarray.rotate_zaxis(pin)
-    orient = qarray.rotate_xaxis(pin)
-
-    # computes by and bx
-    by = orient[0] * dir[1] - orient[1] * dir[0]
-    bx = (
-        orient[0] * (-dir[2] * dir[0])
-        + orient[1] * (-dir[2] * dir[1])
-        + orient[2] * (dir[0] * dir[0] + dir[1] * dir[1])
-    )
-
-    # computes detang
-    detang = jnp.arctan2(by, bx)
-    detang = detang + 2.0 * hwpang
-    detang = 2.0 * detang
-
-    # puts values into weights
     eta = (1.0 - eps) / (1.0 + eps)
-    weights = jnp.array([cal, jnp.cos(detang) * eta * cal, jnp.sin(detang) * eta * cal])
+
+    # applies quaternion rotations
+    vd = qarray.rotate_zaxis(pin)
+    vo = qarray.rotate_xaxis(pin)
+
+    # The vector orthogonal to the line of sight that is parallel
+    # to the local meridian.
+    dir_ang = jnp.arctan2(vd[1], vd[0])
+    dir_r = jnp.sqrt(1.0 - vd[2] * vd[2])
+    vm_z = -dir_r
+    vm_x = vd[2] * jnp.cos(dir_ang)
+    vm_y = vd[2] * jnp.sin(dir_ang)
+
+    # Compute the rotation angle from the meridian vector to the
+    # orientation vector.  The direction vector is normal to the plane
+    # containing these two vectors, so the rotation angle is:
+    #
+    # angle = atan2((v_m x v_o) . v_d, v_m . v_o)
+    #
+    alpha_y = (
+        vd[0] * (vm_y * vo[2] - vm_z * vo[1])
+        - vd[1] * (vm_x * vo[2] - vm_z * vo[0])
+        + vd[2] * (vm_x * vo[1] - vm_y * vo[0])
+    )
+    alpha_x = vm_x * vo[0] + vm_y * vo[1] + vm_z * vo[2]
+    alpha = jnp.arctan2(alpha_y, alpha_x)
+    ang = 2.0 * alpha
+    weights = jnp.array(
+        [cal, jnp.cos(ang) * eta * cal, -jnp.sin(ang) * eta * cal * IAU]
+    )
+    return weights
+
+
+def stokes_weights_IQU_inner_hwp(eps, cal, gamma, pin, hwpang, IAU):
+    """
+    Compute the Stokes weights for one detector.
+
+    Args:
+        eps (float):  The cross polar response.
+        cal (float):  A constant to apply to the pointing weights.
+        gamma (float):  Detector polarization angle.
+        pin (array, float64):  The array of detector quaternions (size 4).
+        hwpang (float64):  The HWP angle (could be None).
+        IAU (float):  Sign factor for U stokes term.
+
+    Returns:
+        weights (array, float64):  The detector weights for the specified mode (size 3)
+    """
+    eta = (1.0 - eps) / (1.0 + eps)
+
+    # applies quaternion rotations
+    vd = qarray.rotate_zaxis(pin)
+    vo = qarray.rotate_xaxis(pin)
+
+    # The vector orthogonal to the line of sight that is parallel
+    # to the local meridian.
+    dir_ang = jnp.arctan2(vd[1], vd[0])
+    dir_r = jnp.sqrt(1.0 - vd[2] * vd[2])
+    vm_z = -dir_r
+    vm_x = vd[2] * jnp.cos(dir_ang)
+    vm_y = vd[2] * jnp.sin(dir_ang)
+
+    # Compute the rotation angle from the meridian vector to the
+    # orientation vector.  The direction vector is normal to the plane
+    # containing these two vectors, so the rotation angle is:
+    #
+    # angle = atan2((v_m x v_o) . v_d, v_m . v_o)
+    #
+    alpha_y = (
+        vd[0] * (vm_y * vo[2] - vm_z * vo[1])
+        - vd[1] * (vm_x * vo[2] - vm_z * vo[0])
+        + vd[2] * (vm_x * vo[1] - vm_y * vo[0])
+    )
+    alpha_x = vm_x * vo[0] + vm_y * vo[1] + vm_z * vo[2]
+    alpha = jnp.arctan2(alpha_y, alpha_x)
+    ang = 2.0 * (alpha + 2.0 * (hwpang - gamma))
+    weights = jnp.array(
+        [cal, jnp.cos(ang) * eta * cal, -jnp.sin(ang) * eta * cal * IAU]
+    )
     return weights
 
 
@@ -63,6 +123,7 @@ def stokes_weights_IQU_inner(eps, cal, pin, hwpang):
 # using vmap as the static arguments triggers the following error:
 # "ShardingContext cannot be used with xmap"
 # TODO revisit once this issue is solved [bug with static argnum](https://github.com/google/jax/issues/10741)
+
 stokes_weights_IQU_inner = jax.vmap(
     stokes_weights_IQU_inner, in_axes=[None, None, 0, 0], out_axes=0
 )  # interval_size
@@ -73,6 +134,16 @@ stokes_weights_IQU_inner = jax.vmap(
     stokes_weights_IQU_inner, in_axes=[0, None, 0, None], out_axes=0
 )  # detectors
 
+stokes_weights_IQU_inner_hwp = jax.vmap(
+    stokes_weights_IQU_inner_hwp, in_axes=[None, None, None, 0, 0, None], out_axes=0
+)
+stokes_weights_IQU_inner_hwp = jax.vmap(
+    stokes_weights_IQU_inner_hwp, in_axes=[None, None, None, 0, 0, None], out_axes=0
+)
+stokes_weights_IQU_inner_hwp = jax.vmap(
+    stokes_weights_IQU_inner_hwp, in_axes=[0, None, 0, 0, None, None], out_axes=0
+)
+
 
 def stokes_weights_IQU_interval(
     quat_index,
@@ -81,7 +152,9 @@ def stokes_weights_IQU_interval(
     weights,
     hwp,
     epsilon,
+    gamma,
     cal,
+    IAU,
     interval_starts,
     interval_ends,
     intervals_max_length,
@@ -96,7 +169,9 @@ def stokes_weights_IQU_interval(
         weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp*3)
         hwp (array, float64):  The HWP angles (size n_samp).
         epsilon (array, float):  The cross polar response (size n_det).
+        gamma (array, float):  The polarization orientation angle of each detector.
         cal (float):  A constant to apply to the pointing weights.
+        IAU (bool):  Whether to use IAU convention.
         interval_starts (array, int): size n_view
         interval_ends (array, int): size n_view
         intervals_max_length (int): maximum length of an interval
@@ -116,17 +191,18 @@ def stokes_weights_IQU_interval(
         quats, (quat_index, intervals, ALL)
     )  # quats[quat_index,intervals,:]
 
-    # insures hwp is a non empty array
+    IAU_sign = 1.0 - 2.0 * IAU
+
     if hwp.size == 0:
-        nb_intervals = interval_starts.size
-        hwp_interval = jnp.zeros((nb_intervals, intervals_max_length))
+        # Not using a half wave plate
+        new_weights_interval = stokes_weights_IQU_inner(
+            epsilon, cal, gamma, quats_interval, IAU_sign
+        )
     else:
         hwp_interval = JaxIntervals.get(hwp, intervals)  # hwp[intervals]
-
-    # does the computation
-    new_weights_interval = stokes_weights_IQU_inner(
-        epsilon, cal, quats_interval, hwp_interval
-    )
+        new_weights_interval = stokes_weights_IQU_inner_hwp(
+            epsilon, cal, gamma, quats_interval, hwp_interval, IAU_sign
+        )
 
     # updates results and returns
     # weights[weight_index,intervals,:] = new_weights_interval
@@ -146,7 +222,17 @@ stokes_weights_IQU_interval = jax.jit(
 
 @kernel(impl=ImplementationType.JAX, name="stokes_weights_IQU")
 def stokes_weights_IQU_jax(
-    quat_index, quats, weight_index, weights, hwp, intervals, epsilon, cal, use_accel
+    quat_index,
+    quats,
+    weight_index,
+    weights,
+    hwp,
+    intervals,
+    epsilon,
+    gamma,
+    cal,
+    IAU,
+    use_accel,
 ):
     """
     Compute the Stokes weights for the "IQU" mode.
@@ -159,7 +245,9 @@ def stokes_weights_IQU_jax(
         hwp (array, float64):  The HWP angles (size n_samp).
         intervals (array, Interval): The intervals to modify (size n_view)
         epsilon (array, float):  The cross polar response (size n_det).
+        gamma (array, float):  The polarization orientation angle of each detector.
         cal (float):  A constant to apply to the pointing weights.
+        IAU (bool):  If True, use IAU convention.
         use_accel (bool): should we use the accelerator
 
     Returns:
@@ -173,6 +261,7 @@ def stokes_weights_IQU_jax(
     weights_input = MutableJaxArray.to_array(weights)
     hwp_input = MutableJaxArray.to_array(hwp)
     epsilon_input = MutableJaxArray.to_array(epsilon)
+    gamma_input = MutableJaxArray.to_array(gamma)
 
     # runs computation
     weights[:] = stokes_weights_IQU_interval(
@@ -182,7 +271,9 @@ def stokes_weights_IQU_jax(
         weights_input,
         hwp_input,
         epsilon_input,
+        gamma_input,
         cal,
+        IAU,
         intervals.first,
         intervals.last,
         intervals_max_length,

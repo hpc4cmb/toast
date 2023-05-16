@@ -1,5 +1,7 @@
 import os
+
 import jax
+
 from .._libtoast import Logger
 
 

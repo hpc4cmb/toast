@@ -511,25 +511,31 @@ class Offset(Template):
 
             # # DEBUGGING
             # restore_dev = False
-            # prefix="HOST"
+            # prefix = "HOST"
             # if amplitudes.accel_in_use():
             #     amplitudes.accel_update_host()
             #     restore_dev = True
-            #     prefix="DEVICE"
-            # print(f"{prefix} Add to signal input:  {amp_offset}, {n_amp_views}, {amplitudes.local}", flush=True)
+            #     prefix = "DEVICE"
+            # print(
+            #     f"{prefix} Add to signal input:  {amp_offset}, {n_amp_views}, {amplitudes.local}",
+            #     flush=True,
+            # )
             # if restore_dev:
             #     amplitudes.accel_update_device()
 
             # # DEBUGGING
             # restore_dev = False
-            # prefix="HOST"
+            # prefix = "HOST"
             # if ob.detdata[self.det_data].accel_in_use():
             #     ob.detdata[self.det_data].accel_update_host()
             #     restore_dev = True
-            #     prefix="DEVICE"
+            #     prefix = "DEVICE"
             # tod_min = np.amin(ob.detdata[self.det_data])
             # tod_max = np.amax(ob.detdata[self.det_data])
-            # print(f"{prefix} Add to signal starting TOD output:  {ob.detdata[self.det_data]}, min={tod_min}, max={tod_max}", flush=True)
+            # print(
+            #     f"{prefix} Add to signal starting TOD output:  {ob.detdata[self.det_data]}, min={tod_min}, max={tod_max}",
+            #     flush=True,
+            # )
             # if (np.absolute(tod_min) < 1.0e-15) and (np.absolute(tod_max) < 1.0e-15):
             #     ob.detdata[self.det_data][:] = 0
             # if restore_dev:
@@ -549,12 +555,15 @@ class Offset(Template):
 
             # # DEBUGGING
             # restore_dev = False
-            # prefix="HOST"
+            # prefix = "HOST"
             # if ob.detdata[self.det_data].accel_in_use():
             #     ob.detdata[self.det_data].accel_update_host()
             #     restore_dev = True
-            #     prefix="DEVICE"
-            # print(f"{prefix} Add to signal output:  {ob.detdata[self.det_data]}", flush=True)
+            #     prefix = "DEVICE"
+            # print(
+            #     f"{prefix} Add to signal output:  {ob.detdata[self.det_data]}",
+            #     flush=True,
+            # )
             # if restore_dev:
             #     ob.detdata[self.det_data].accel_update_device()
 

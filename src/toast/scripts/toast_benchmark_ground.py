@@ -19,8 +19,8 @@ from astropy import units as u
 
 import toast
 import toast.ops
-from toast.accelerator.data_localization import display_datamovement
 from toast import spt3g as t3g
+from toast.accelerator.data_localization import display_datamovement
 from toast.schedule_sim_ground import run_scheduler
 from toast.scripts.benchmarking_utilities import (
     compare_output_stats,

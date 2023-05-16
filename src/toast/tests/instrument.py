@@ -277,12 +277,27 @@ class InstrumentTest(MPITestCase):
             self.comm.barrier()
 
     def test_sim_focalplane_hex(self):
+        # For visual checks, set the FWHM to the size of the
+        # close-packed diameter.
+
+        # Number of hex positions
+        n_pix = 7
+
+        # Number of positions across the long axis
+        n_pos_width = 3
+
+        # Overall width of the projection
+        width = 2.0 * u.degree
+
+        # FWHM
+        fwhm = width / n_pos_width
+
         fp = fake_hexagon_focalplane(
-            n_pix=7,
-            width=2.0 * u.degree,
+            n_pix=n_pix,
+            width=width,
             sample_rate=100.0 * u.Hz,
             epsilon=0.05,
-            fwhm=10.0 * u.arcmin,
+            fwhm=fwhm,
             bandcenter=150 * u.Hz,
             bandwidth=20 * u.Hz,
             psd_net=0.05 * u.K * np.sqrt(1 * u.second),
@@ -321,12 +336,25 @@ class InstrumentTest(MPITestCase):
             self.comm.barrier()
 
     def test_sim_focalplane_rhombihex(self):
+        # Number of per-rhombus positions
+        n_pix_rhombus = 4
+
+        # Number of positions across the short axis of one rhombus
+        n_pos_short = 2
+
+        # Overall width of the total focalplane
+        width = 2.0 * u.degree
+
+        # FWHM.  Half of the total width is taken up by the short
+        # axis of one rhombus.
+        fwhm = 0.5 * width / n_pos_short
+
         fp = fake_rhombihex_focalplane(
-            n_pix_rhombus=4,
-            width=2.0 * u.degree,
+            n_pix_rhombus=n_pix_rhombus,
+            width=width,
             sample_rate=100.0 * u.Hz,
             epsilon=0.05,
-            fwhm=10.0 * u.arcmin,
+            fwhm=fwhm,
             bandcenter=150 * u.Hz,
             bandwidth=20 * u.Hz,
             psd_net=0.05 * u.K * np.sqrt(1 * u.second),
