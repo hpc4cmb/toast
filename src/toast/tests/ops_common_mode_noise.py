@@ -154,6 +154,7 @@ class CommonModeNoiseTest(MPITestCase):
             assert np.std(common_mode1 - common_mode2) > 1e-10
 
         return
+
     def test_sim_common(self):
         # Simulate different common modes
         # Create a fake satellite data set for testing
@@ -170,19 +171,19 @@ class CommonModeNoiseTest(MPITestCase):
         sim_noise = ops.SimNoise()
         sim_noise.det_data = "noise_uncorrelated"
         sim_noise.apply(data)
-        ndet=len(data.obs[0] .telescope.focalplane.detectors) 
-        
+        ndet = len(data.obs[0].telescope.focalplane.detectors)
+
         fpdata = data.obs[0].telescope.focalplane.detector_data
-                                   
-        # Add common mode noise 
+
+        # Add common mode noise
         common_mode_model = ops.CommonModeNoise(
-            fmin=fpdata['psd_fmin'] [0],# we simulate correlated noise 
-            fknee=fpdata['psd_fknee'] [0],# with the same specs as the uncorrelated one 
-            alpha=fpdata['psd_alpha'] [0],
-            NET=fpdata['psd_net'][0] ,
+            fmin=fpdata["psd_fmin"][0],  # we simulate correlated noise
+            fknee=fpdata["psd_fknee"][0],  # with the same specs as the uncorrelated one
+            alpha=fpdata["psd_alpha"][0],
+            NET=fpdata["psd_net"][0],
             focalplane_key="pixel",
             coupling_strength_center=0,
-             coupling_strength_width=.5# we make sure this is not 0
+            coupling_strength_width=0.5,  # we make sure this is not 0
         )
         common_mode_model.apply(data)
 
@@ -192,20 +193,30 @@ class CommonModeNoiseTest(MPITestCase):
         sim_noise.apply(data)
         # Compare results
         for ob in data.obs:
-            uncorrelated =[] 
-            correlated =[] 
-            for i in range(ndet) : 
-                uncorrelated.append([
-                    np.correlate(ob.detdata['noise_uncorrelated'][i],
-                                 ob.detdata['noise_uncorrelated'][j] )  
-                    for j in range(i,ndet   )  ])
-                correlated.append([
-                    np.correlate(ob.detdata['noise_correlated'][i],
-                                 ob.detdata['noise_correlated'][j] )  
-                    for j in range(i,ndet   )  ])
-            uncorrelated=np.concatenate(uncorrelated) 
-            correlated=np.concatenate(correlated) 
-            # we assert that the two det-det  correlations are different  
-            assert np.allclose(correlated, uncorrelated) == False 
-            
+            uncorrelated = []
+            correlated = []
+            for i in range(ndet):
+                uncorrelated.append(
+                    [
+                        np.correlate(
+                            ob.detdata["noise_uncorrelated"][i],
+                            ob.detdata["noise_uncorrelated"][j],
+                        )
+                        for j in range(i, ndet)
+                    ]
+                )
+                correlated.append(
+                    [
+                        np.correlate(
+                            ob.detdata["noise_correlated"][i],
+                            ob.detdata["noise_correlated"][j],
+                        )
+                        for j in range(i, ndet)
+                    ]
+                )
+            uncorrelated = np.concatenate(uncorrelated)
+            correlated = np.concatenate(correlated)
+            # we assert that the two det-det  correlations are different
+            assert np.allclose(correlated, uncorrelated) == False
+
         return
