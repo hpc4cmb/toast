@@ -296,7 +296,7 @@ class MapmakerUtilsTest(MPITestCase):
             data.accel_update_device(pixels.requires())
             data.accel_update_device(weights.requires())
             data.accel_update_device(build_zmap.requires())
-            build_zmap.apply(data)
+            build_zmap.apply(data, use_accel=use_accel)
             zmap["gpu"] = data[build_zmap.zmap]
 
         # Manual check
