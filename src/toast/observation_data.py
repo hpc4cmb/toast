@@ -161,27 +161,28 @@ class DetectorData(AcceleratorObject):
         self._fullsize = self._flatshape
         self._memsize = self.itemsize * self._fullsize
 
+        # First delete potential device data
+        create_accel = False
+        on_accel = False
+        if self.accel_exists():
+            # There is a buffer on the accelerator
+            create_accel = True
+            if self.accel_in_use():
+                # The accelerator copy is the one in use
+                on_accel = True
+                msg = (
+                    "Reallocation of DetectorData which is staged to accelerator- "
+                )
+                msg += "Deleting device copy and re-allocating."
+                log.verbose(msg)
+            self.accel_delete()
+
         # Delete existing wrapper and buffer
         if self._data is not None:
             del self._data
         if self._flatdata is not None:
             del self._flatdata
-        create_accel = False
-        on_accel = False
         if self._raw is not None:
-            # This is not a view
-            if self.accel_exists():
-                # There is a buffer on the accelerator
-                create_accel = True
-                if self.accel_in_use():
-                    # The accelerator copy is the one in use
-                    on_accel = True
-                    msg = (
-                        "Reallocation of DetectorData which is staged to accelerator- "
-                    )
-                    msg += "Deleting device copy and re-allocating."
-                    log.verbose(msg)
-                self.accel_delete()
             self._raw.clear()
             del self._raw
 
