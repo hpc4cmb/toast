@@ -27,7 +27,6 @@ from .utils import Logger, dtype_to_aligned
 
 if use_accel_jax:
     import jax
-
     from .jax.mutableArray import MutableJaxArray
 
 
@@ -143,6 +142,7 @@ class DetectorData(AcceleratorObject):
         return (storage_class, itemsize, dt, shp, flatshape)
 
     def _wrap_raw(self):
+        # reinitialize arrays and set the data to 0
         self._flatdata = self._raw.array()[: self._flatshape]
         self._flatdata[:] = 0
         self._data = self._flatdata.reshape(self._shape)
@@ -162,6 +162,7 @@ class DetectorData(AcceleratorObject):
         self._memsize = self.itemsize * self._fullsize
 
         # First delete potential device data
+        # FIXME we might be able to recycle existing buffers to improve performance
         create_accel = False
         on_accel = False
         if self.accel_exists():
@@ -189,14 +190,22 @@ class DetectorData(AcceleratorObject):
         # Allocate new host buffer
         self._raw = self._storage_class.zeros(self._fullsize)
 
+        # Wrap _raw
+        self._flatdata = self._raw.array()[: self._flatshape]
+        self._data = self._flatdata.reshape(self._shape)
+
         # Restore device buffer if needed
         if create_accel:
-            self.accel_create()
+            if use_accel_jax:
+                # creates a device buffer filled with zeroes
+                self._data = MutableJaxArray(cpu_data=self._data, gpu_data=jax.numpy.zeros_like(self._data))
+            else:
+                # creates an uninitialised device buffer
+                self.accel_create()
+                # fills it with zeroes
+                self.accel_reset()
         if on_accel:
             self.accel_used(True)
-
-        # Wrap raw data and set to zero
-        self._wrap_raw()
 
     @property
     def detectors(self):
