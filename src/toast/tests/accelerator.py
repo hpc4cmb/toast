@@ -184,7 +184,6 @@ class AcceleratorTest(MPITestCase):
             self.assertFalse(accel_data_present(buffer))
 
     def test_data_stage(self):
-        return # TODO skipping test for now, to validate other tests
         if not (use_accel_omp or use_accel_jax):
             if self.rank == 0:
                 print("Not running with accelerator support- skipping data stage test")
