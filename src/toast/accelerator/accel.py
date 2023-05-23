@@ -141,7 +141,7 @@ def accel_data_present(data, name="None"):
 
 
 @function_timer
-def accel_data_create(data, name="None"):
+def accel_data_create(data, name="None", zero_out=False):
     """Create device buffers.
 
     Using the input data array, create a corresponding device array.  For OpenMP
@@ -151,6 +151,7 @@ def accel_data_create(data, name="None"):
     Args:
         data (array):  The host array.
         name (str):  The optional name for tracking the array.
+        zero_out (bool):  Should the array be filled with zeroes.
 
     Returns:
         (object):  Either the original input (for OpenMP) or a new jax array.
@@ -158,9 +159,14 @@ def accel_data_create(data, name="None"):
     """
     if use_accel_omp:
         omp_accel_create(data, name)
+        if zero_out: 
+            omp_accel_reset(data, name)
         return data
     elif use_accel_jax:
-        return MutableJaxArray(data)
+        if zero_out:
+            return MutableJaxArray(cpu_data=data, gpu_data=jax.numpy.zeros_like(data))
+        else:
+            return MutableJaxArray(data)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot create")

@@ -181,14 +181,7 @@ class DetectorData(AcceleratorObject):
 
         # Restore device buffer if needed
         if create_accel:
-            if use_accel_jax:
-                # creates a device buffer filled with zeroes
-                self._data = MutableJaxArray(cpu_data=self._data, gpu_data=jax.numpy.zeros_like(self._data))
-            else:
-                # creates an uninitialised device buffer
-                self.accel_create()
-                # fills it with zeroes
-                self.accel_reset()
+            self._accel_create(zero_out=True)
         if on_accel:
             self.accel_used(True)
 
@@ -307,7 +300,7 @@ class DetectorData(AcceleratorObject):
                 if use_accel_jax:
                     # creates a device buffer filled with zeroes
                     # FIXME we have to reallocate due to the change in self._data.shape
-                    self._data = MutableJaxArray(cpu_data=self._data, gpu_data=jax.numpy.zeros_like(self._data))
+                    self._accel_create(zero_out=True)
                 else:
                     # Set device copy to zero
                     self.accel_reset()
@@ -540,11 +533,11 @@ class DetectorData(AcceleratorObject):
             else:
                 return False
 
-    def _accel_create(self):
+    def _accel_create(self, zero_out=False):
         if use_accel_omp:
-            self._raw = accel_data_create(self._raw, self._accel_name)
+            self._raw = accel_data_create(self._raw, self._accel_name, zero_out=zero_out)
         elif use_accel_jax:
-            self._data = accel_data_create(self._data)
+            self._data = accel_data_create(self._data, zero_out=zero_out)
 
     def _accel_update_device(self):
         if use_accel_omp:
