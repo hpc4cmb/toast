@@ -141,21 +141,6 @@ class DetectorData(AcceleratorObject):
         shp = tuple(shp)
         return (storage_class, itemsize, dt, shp, flatshape)
 
-    def _wrap_raw(self):
-        # reinitialize arrays and set the data to 0
-        self._flatdata = self._raw.array()[: self._flatshape]
-        self._flatdata[:] = 0
-        self._data = self._flatdata.reshape(self._shape)
-        if self.accel_exists():
-            # We also have a copy on the device
-            if use_accel_jax:
-                # The jax implementation replaces the high-level _data wrapper.  This
-                # means that we cannot just restrict the view of the underlying buffer.
-                # Instead we have no choice but to create an entirely new buffer.
-                self._data = MutableJaxArray(self._data)
-            # Set device copy to zero
-            self.accel_reset()
-
     def _allocate(self):
         log = Logger.get()
         self._fullsize = self._flatshape
@@ -307,9 +292,26 @@ class DetectorData(AcceleratorObject):
             # We can re-use the existing memory
             self._shape = shp
             self._flatshape = flatshape
-            # Adjust the size of the data wrapper and reset underlying
-            # buffer to zero.
-            self._wrap_raw()
+
+            # Check if we have data on device before touching any buffer
+            does_accel_exist = self.accel_exists()
+
+            # Adjust the size of the data wrapper and reset underlying buffer to zero.
+            self._flatdata = self._raw.array()[: self._flatshape]
+            self._flatdata[:] = 0
+            # this might trash a MutableJaxArray, requiring an allocation and falsifying further accel_exists tests
+            self._data = self._flatdata.reshape(self._shape)
+
+            if does_accel_exist:
+                # We also have a copy on the device
+                if use_accel_jax:
+                    # creates a device buffer filled with zeroes
+                    # FIXME we have to reallocate due to the change in self._data.shape
+                    self._data = MutableJaxArray(cpu_data=self._data, gpu_data=jax.numpy.zeros_like(self._data))
+                else:
+                    # Set device copy to zero
+                    self.accel_reset()
+
             realloced = False
         return realloced
 
