@@ -311,6 +311,14 @@ class DetectorData(AcceleratorObject):
         are no longer being used and you are about to delete the object.
 
         """
+        # first delete potential GPU data
+        if self.accel_exists():
+            log = Logger.get()
+            msg = "clear() of DetectorData which is staged to accelerator- "
+            msg += "Deleting device copy."
+            log.verbose(msg)
+            self.accel_delete()
+        # then apply clear
         if hasattr(self, "_data"):
             del self._data
             self._data = None
@@ -318,16 +326,9 @@ class DetectorData(AcceleratorObject):
             if hasattr(self, "_flatdata"):
                 del self._flatdata
                 self._flatdata = None
-            if hasattr(self, "_raw"):
-                if self.accel_exists():
-                    log = Logger.get()
-                    msg = "clear() of DetectorData which is staged to accelerator- "
-                    msg += "Deleting device copy."
-                    log.verbose(msg)
-                    self.accel_delete()
-                if self._raw is not None:
-                    self._raw.clear()
-                    del self._raw
+            if hasattr(self, "_raw") and not self._raw:
+                self._raw.clear()
+                del self._raw
                 self._raw = None
 
     def __del__(self):

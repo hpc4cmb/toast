@@ -316,7 +316,7 @@ class AcceleratorTest(MPITestCase):
         self.assertEqual(data["test_pix"], check_data["test_pix"])
 
         # Now go and shrink the detector buffers
-
+        
         data.accel_create(dnames)
         data.accel_update_device(dnames)
 
