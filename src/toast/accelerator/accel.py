@@ -159,7 +159,7 @@ def accel_data_create(data, name="None", zero_out=False):
     """
     if use_accel_omp:
         omp_accel_create(data, name)
-        if zero_out: 
+        if zero_out:
             omp_accel_reset(data, name)
         return data
     elif use_accel_jax:
@@ -350,11 +350,11 @@ class AcceleratorObject(object):
             raise RuntimeError(msg)
         self._accel_used = state
 
-    def _accel_create(self):
+    def _accel_create(self, **kwargs):
         msg = f"The _accel_create function was not defined for this class."
         raise RuntimeError(msg)
 
-    def accel_create(self, name=None):
+    def accel_create(self, name=None, **kwargs):
         """Create a (potentially uninitialized) copy of the data on the accelerator.
 
         Returns:
@@ -368,7 +368,7 @@ class AcceleratorObject(object):
             log.error(msg)
             raise RuntimeError(msg)
         self._accel_name = name
-        self._accel_create()
+        self._accel_create(**kwargs)
 
     def _accel_update_device(self):
         msg = f"The _accel_update_device function was not defined for this class."
