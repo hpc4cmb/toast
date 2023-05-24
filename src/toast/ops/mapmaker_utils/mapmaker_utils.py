@@ -694,9 +694,8 @@ class BuildNoiseWeighted(Operator):
                     f"Operator {self.name} zmap not yet on device, creating",
                     comm=data.comm.comm_group,
                 )
-                zmap.accel_create(f"{self.name}")
+                zmap.accel_create(f"{self.name}", zero_out=True)
                 zmap.accel_used(True)
-                zmap.accel_reset()
             elif not zmap.accel_in_use():
                 # Device copy not currently in use
                 log.verbose_rank(

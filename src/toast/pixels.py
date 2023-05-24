@@ -565,13 +565,9 @@ class PixelData(AcceleratorObject):
 
     def reset(self):
         """Set memory to zero"""
-        if hasattr(self.raw, "host_data"):
-            self.raw.host_data[:] = 0
-            self.raw.data.at[:].set(0)
-        else:
-            self.raw[:] = 0
-            if self.accel_exists():
-                self.accel_reset()
+        self.raw[:] = 0
+        if self.accel_exists():
+            self.accel_reset()
 
     @property
     def distribution(self):
@@ -1180,11 +1176,11 @@ class PixelData(AcceleratorObject):
         else:
             return False
 
-    def _accel_create(self):
+    def _accel_create(self, zero_out=False):
         if use_accel_omp:
-            self.raw = accel_data_create(self.raw, self._accel_name)
+            self.raw = accel_data_create(self.raw, self._accel_name, zero_out=zero_out)
         elif use_accel_jax:
-            self.data = accel_data_create(self.data)
+            self.data = accel_data_create(self.data, zero_out=zero_out)
 
     def _accel_update_device(self):
         if use_accel_omp:
