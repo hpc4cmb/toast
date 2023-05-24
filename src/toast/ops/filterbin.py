@@ -46,9 +46,6 @@ from .pointing import BuildPixelDistribution
 from .scan_map import ScanMap, ScanMask
 
 
-# counter = 0  # DEBUG
-
-
 class SparseTemplates:
     def __init__(self):
         self.starts = []
@@ -900,14 +897,6 @@ class FilterBin(Operator):
         timer.start()
         if True:
             # Use scipy sparse implementation
-            # DEBUG begin
-            # from scipy.io import mmwrite
-            # global counter
-            # mmwrite(f"matrix{counter:02}.mtx", self.obs_matrix)
-            # counter += 1
-            # mmwrite(f"matrix{counter:02}.mtx", local_obs_matrix * detweight)
-            # counter += 1
-            # DEBUG end
             self.obs_matrix += local_obs_matrix * detweight
             log.debug_rank("FilterBin: Add and construct matrix in", comm=self.comm, timer=timer)
         else:
