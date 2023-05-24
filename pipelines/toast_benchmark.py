@@ -361,6 +361,7 @@ def job_config(mpicomm, cases):
         outdir = "toast"
         tidas = None
         spt3g = None
+        mapmaker_calibration = False
 
     parser = argparse.ArgumentParser(
         description="Run a TOAST workflow scaled appropriately to the MPI communicator size and available memory.",
