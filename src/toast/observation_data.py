@@ -156,9 +156,7 @@ class DetectorData(AcceleratorObject):
             if self.accel_in_use():
                 # The accelerator copy is the one in use
                 on_accel = True
-                msg = (
-                    "Reallocation of DetectorData which is staged to accelerator- "
-                )
+                msg = "Reallocation of DetectorData which is staged to accelerator- "
                 msg += "Deleting device copy and re-allocating."
                 log.verbose(msg)
             self.accel_delete()
@@ -535,7 +533,9 @@ class DetectorData(AcceleratorObject):
 
     def _accel_create(self, zero_out=False):
         if use_accel_omp:
-            self._raw = accel_data_create(self._raw, self._accel_name, zero_out=zero_out)
+            self._raw = accel_data_create(
+                self._raw, self._accel_name, zero_out=zero_out
+            )
         elif use_accel_jax:
             self._data = accel_data_create(self._data, zero_out=zero_out)
 

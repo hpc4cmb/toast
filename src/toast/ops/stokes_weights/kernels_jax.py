@@ -188,7 +188,15 @@ def stokes_weights_IQU_jax(
         intervals_max_length,
     )
 
-def stokes_weights_I_interval(weight_index, weights, cal, interval_starts, interval_ends, intervals_max_length,):
+
+def stokes_weights_I_interval(
+    weight_index,
+    weights,
+    cal,
+    interval_starts,
+    interval_ends,
+    intervals_max_length,
+):
     """
     Process all the intervals as a block.
 
@@ -214,9 +222,7 @@ def stokes_weights_I_interval(weight_index, weights, cal, interval_starts, inter
 
     # updates results and returns
     # weights[weight_index,intervals] = cal
-    weights = JaxIntervals.set(
-        weights, (weight_index, intervals), cal
-    )
+    weights = JaxIntervals.set(weights, (weight_index, intervals), cal)
     return weights
 
 

@@ -86,7 +86,7 @@ def jax_accel_assign_device(node_procs, node_rank, disabled):
                 coordinator_address="127.0.0.1:12345",
                 num_processes=node_procs,
                 process_id=node_rank,
-                local_device_ids=[device_id]
+                local_device_ids=[device_id],
             )
         # displays information on the device picked
         local_device = jax_accel_get_device()

@@ -316,7 +316,7 @@ class AcceleratorTest(MPITestCase):
         self.assertEqual(data["test_pix"], check_data["test_pix"])
 
         # Now go and shrink the detector buffers
-        
+
         data.accel_create(dnames)
         data.accel_update_device(dnames)
 
@@ -451,7 +451,7 @@ class AcceleratorTest(MPITestCase):
                 )
                 self.accel_create()
                 self.restrict()
-                original_restricted = original[:self.flatsize]
+                original_restricted = original[: self.flatsize]
                 self.data[:] = original_restricted.reshape(self.shape)
                 self.accel_update_device()
                 self.accel_update_host()
