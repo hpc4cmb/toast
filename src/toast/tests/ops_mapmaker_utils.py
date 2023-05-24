@@ -290,13 +290,21 @@ class MapmakerUtilsTest(MPITestCase):
             and build_zmap.supports_accel()
         ):
             use_accel = True
+            # puts all inputs on device
             data.accel_create(pixels.requires())
             data.accel_create(weights.requires())
             data.accel_create(build_zmap.requires())
             data.accel_update_device(pixels.requires())
             data.accel_update_device(weights.requires())
             data.accel_update_device(build_zmap.requires())
-            build_zmap.apply(data)
+            # runs on device
+            build_zmap.apply(data, use_accel=use_accel)
+            # insures everything is back from device
+            data.accel_update_host(build_zmap.provides())
+            data.accel_delete(pixels.requires())
+            data.accel_delete(weights.requires())
+            data.accel_delete(build_zmap.requires())
+            # stores output
             zmap["gpu"] = data[build_zmap.zmap]
 
         # Manual check

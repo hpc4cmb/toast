@@ -489,7 +489,7 @@ class Data(MutableMapping):
             if isinstance(val, AcceleratorObject):
                 if not val.accel_exists():
                     log.verbose(f"Data accel_create: '{key}'")
-                    val.accel_create()
+                    val.accel_create(key)
                 else:
                     log.verbose(f"Data accel_create: '{key}' already on device")
             else:

@@ -129,6 +129,7 @@ class MutableJaxArray:
         self.dtype = self.data.dtype
         self.nbytes = self.data.nbytes
 
+    @staticmethod
     def to_array(input):
         """
         Casts all array types used in TOAST to JAX-compatible array types
@@ -141,8 +142,8 @@ class MutableJaxArray:
         if isinstance(input, MutableJaxArray):
             # those types need to be cast into their inner data
             return input.data
-        elif isinstance(input, AlignedI64) or isinstance(input, AlignedF64):
-            # NOTE: get inner array field, raw numpy conversion is very expensive
+        elif hasattr(input, "array"):
+            # This is a wrapped C++ aligned memory buffer.  Get an array reference.
             return input.array()
         elif isinstance(input, np.ndarray) or isinstance(input, jax.numpy.ndarray):
             # those types can be feed to JAX raw with no error or performance problems
@@ -163,7 +164,11 @@ class MutableJaxArray:
         updates the original host container and returns it
         NOTE: we purposefully do not overload __array__ to avoid accidental conversions
         """
-        self.host_data[:] = self.data
+        try:
+            self.host_data.array()[:] = self.data
+        except AttributeError:
+            # Not a wrapped C++ aligned type
+            self.host_data[:] = self.data
         return self.host_data
 
     def __setitem__(self, key, value):

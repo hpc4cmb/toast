@@ -166,7 +166,6 @@ void init_ops_stokes_weights(py::module & m) {
                 }
 
                 # pragma omp target data   \
-                device(dev)                \
                 map(to:                    \
                 raw_weight_index[0:n_det], \
                 raw_quat_index[0:n_det],   \
@@ -281,7 +280,6 @@ void init_ops_stokes_weights(py::module & m) {
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
 
                 # pragma omp target data   \
-                device(dev)                \
                 map(to:                    \
                 raw_weight_index[0:n_det], \
                 n_view,                    \

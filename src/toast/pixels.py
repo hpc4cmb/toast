@@ -16,6 +16,7 @@ from .accelerator import (
     accel_data_present,
     accel_data_update_device,
     accel_data_update_host,
+    accel_data_reset,
     accel_enabled,
     use_accel_jax,
     use_accel_omp,
@@ -55,6 +56,7 @@ class PixelDistribution(AcceleratorObject):
     """
 
     def __init__(self, n_pix=None, n_submap=1000, local_submaps=None, comm=None):
+        super().__init__()
         self._n_pix = n_pix
         self._n_submap = n_submap
         if self._n_submap > self._n_pix:
@@ -85,8 +87,6 @@ class PixelDistribution(AcceleratorObject):
         self._owned_submaps = None
         self._alltoallv_info = None
         self._all_hit_submaps = None
-
-        super().__init__()
 
     def __eq__(self, other):
         local_eq = True
@@ -404,34 +404,22 @@ class PixelDistribution(AcceleratorObject):
         return self._alltoallv_info
 
     def _accel_exists(self):
-        if use_accel_omp or use_accel_jax:
-            return accel_data_present(self._glob2loc)
-        else:
-            return False
+        return accel_data_present(self._glob2loc, self._accel_name)
 
     def _accel_create(self):
-        if use_accel_omp:
-            accel_data_create(self._glob2loc)
-        elif use_accel_jax:
-            self._glob2loc = accel_data_create(self._glob2loc)
+        self._glob2loc = accel_data_create(self._glob2loc, self._accel_name)
 
     def _accel_update_device(self):
-        if use_accel_omp:
-            _ = accel_data_update_device(self._glob2loc)
-        elif use_accel_jax:
-            self._glob2loc = accel_data_update_device(self._glob2loc)
+        self._glob2loc = accel_data_update_device(self._glob2loc, self._accel_name)
 
     def _accel_update_host(self):
-        if use_accel_omp:
-            _ = accel_data_update_host(self._glob2loc)
-        elif use_accel_jax:
-            self._glob2loc = accel_data_update_host(self._glob2loc)
+        self._glob2loc = accel_data_update_host(self._glob2loc, self._accel_name)
+
+    def _accel_reset(self):
+        accel_data_reset(self._glob2loc, self._accel_name)
 
     def _accel_delete(self):
-        if use_accel_omp:
-            accel_data_delete(self._glob2loc)
-        elif use_accel_jax:
-            self._glob2loc = accel_data_delete(self._glob2loc)
+        self._glob2loc = accel_data_delete(self._glob2loc, self._accel_name)
 
 
 class PixelData(AcceleratorObject):
@@ -457,6 +445,7 @@ class PixelData(AcceleratorObject):
     """
 
     def __init__(self, dist, dtype, n_value=1, units=u.dimensionless_unscaled):
+        super().__init__()
         log = Logger.get()
 
         self._dist = dist
@@ -533,8 +522,6 @@ class PixelData(AcceleratorObject):
         self.reduce_buf = None
         self._reduce_buf_raw = None
 
-        super().__init__()
-
     def clear(self):
         """Delete the underlying memory.
 
@@ -549,7 +536,8 @@ class PixelData(AcceleratorObject):
         if hasattr(self, "raw"):
             if self.accel_exists():
                 self.accel_delete()
-            self.raw.clear()
+            if self.raw is not None:
+                self.raw.clear()
             del self.raw
         if hasattr(self, "receive"):
             del self.receive
@@ -577,13 +565,9 @@ class PixelData(AcceleratorObject):
 
     def reset(self):
         """Set memory to zero"""
-        restore = False
-        if self.accel_in_use():
-            restore = True
-            self.accel_update_host()
         self.raw[:] = 0
-        if restore:
-            self.accel_update_device()
+        if self.accel_exists():
+            self.accel_reset()
 
     @property
     def distribution(self):
@@ -640,7 +624,7 @@ class PixelData(AcceleratorObject):
             return False
         if self.n_value != other.n_value:
             return False
-        if not np.allclose(self.raw, other.raw):
+        if not np.allclose(self.data, other.data):
             return False
         return True
 
@@ -658,7 +642,7 @@ class PixelData(AcceleratorObject):
         dup = PixelData(
             self.distribution, self.dtype, n_value=self.n_value, units=self._units
         )
-        dup.raw[:] = self.raw
+        dup.data[:] = self.data
         return dup
 
     def comm_nsubmap(self, bytes):
@@ -716,6 +700,11 @@ class PixelData(AcceleratorObject):
             None.
 
         """
+        if self.accel_in_use():
+            msg = f"PixelData {self._accel_name} currently on accelerator"
+            msg += " cannot do MPI communication"
+            raise RuntimeError(msg)
+
         if self._dist.comm is None:
             return
 
@@ -786,6 +775,10 @@ class PixelData(AcceleratorObject):
     def setup_alltoallv(self):
         """Check that alltoallv buffers exist and create them if needed."""
         if self._send_counts is None:
+            if self.accel_in_use():
+                msg = f"PixelData {self._accel_name} currently on accelerator"
+                msg += " cannot do MPI communication"
+                raise RuntimeError(msg)
             log = Logger.get()
             # Get the parameters in terms of submaps.
             (
@@ -831,7 +824,7 @@ class PixelData(AcceleratorObject):
                     # For this case, point the receive member to the original data.
                     # This will allow codes processing locally owned submaps to work
                     # transparently in the serial case.
-                    self.receive = self.data.reshape((-1))
+                    self.receive = self.data.reshape((-1,))
                 else:
                     # Check that our send and receive buffers do not exceed 32bit
                     # indices required by MPI
@@ -876,6 +869,11 @@ class PixelData(AcceleratorObject):
             None.
 
         """
+        if self.accel_in_use():
+            msg = f"PixelData {self._accel_name} currently on accelerator"
+            msg += " cannot do MPI communication"
+            raise RuntimeError(msg)
+
         log = Logger.get()
         gt = GlobalTimers.get()
         self.setup_alltoallv()
@@ -901,6 +899,11 @@ class PixelData(AcceleratorObject):
             None.
 
         """
+        if self.accel_in_use():
+            msg = f"PixelData {self._accel_name} currently on accelerator"
+            msg += " cannot do MPI communication"
+            raise RuntimeError(msg)
+
         gt = GlobalTimers.get()
         if self._dist.comm is None:
             # No communication needed
@@ -963,6 +966,10 @@ class PixelData(AcceleratorObject):
             (dict):  The computed properties on rank zero, None on other ranks.
 
         """
+        if self.accel_in_use():
+            msg = f"PixelData {self._accel_name} currently on accelerator"
+            msg += " cannot do MPI communication"
+            raise RuntimeError(msg)
         dist = self._dist
         nsub = dist.n_submap
 
@@ -1058,8 +1065,8 @@ class PixelData(AcceleratorObject):
 
         if dist.comm.rank == 0:
             return {
-                "sum": [accum_sum[x] for x in range(self._n_value)],
-                "mean": [accum_mean[x] for x in range(self._n_value)],
+                "sum": [float(accum_sum[x]) for x in range(self._n_value)],
+                "mean": [float(accum_mean[x]) for x in range(self._n_value)],
                 "rms": [
                     np.sqrt(accum_var[x] / (accum_count[x] - 1))
                     for x in range(self._n_value)
@@ -1084,6 +1091,10 @@ class PixelData(AcceleratorObject):
             None
 
         """
+        if self.accel_in_use():
+            msg = f"PixelData {self._accel_name} currently on accelerator"
+            msg += " cannot do MPI communication"
+            raise RuntimeError(msg)
         rank = 0
         if self._dist.comm is not None:
             rank = self._dist.comm.rank
@@ -1159,32 +1170,38 @@ class PixelData(AcceleratorObject):
 
     def _accel_exists(self):
         if use_accel_omp:
-            return accel_data_present(self.raw)
+            return accel_data_present(self.raw, self._accel_name)
         elif use_accel_jax:
             return accel_data_present(self.data)
         else:
             return False
 
-    def _accel_create(self):
+    def _accel_create(self, zero_out=False):
         if use_accel_omp:
-            accel_data_create(self.raw)
+            self.raw = accel_data_create(self.raw, self._accel_name, zero_out=zero_out)
         elif use_accel_jax:
-            self.data = accel_data_create(self.data)
+            self.data = accel_data_create(self.data, zero_out=zero_out)
 
     def _accel_update_device(self):
         if use_accel_omp:
-            _ = accel_data_update_device(self.raw)
+            self.raw = accel_data_update_device(self.raw, self._accel_name)
         elif use_accel_jax:
             self.data = accel_data_update_device(self.data)
 
     def _accel_update_host(self):
         if use_accel_omp:
-            _ = accel_data_update_host(self.raw)
+            self.raw = accel_data_update_host(self.raw, self._accel_name)
         elif use_accel_jax:
             self.data = accel_data_update_host(self.data)
 
+    def _accel_reset(self):
+        if use_accel_omp:
+            accel_data_reset(self.raw, self._accel_name)
+        elif use_accel_jax:
+            accel_data_reset(self.data)
+
     def _accel_delete(self):
         if use_accel_omp:
-            accel_data_delete(self.raw)
+            self.raw = accel_data_delete(self.raw, self._accel_name)
         elif use_accel_jax:
             self.data = accel_data_delete(self.data)

@@ -51,7 +51,6 @@ void init_ops_noise_weight(py::module & m) {
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
 
                 # pragma omp target data  \
-                device(dev)               \
                 map(to:                   \
                 raw_data_index[0:n_det],  \
                 raw_det_weights[0:n_det], \

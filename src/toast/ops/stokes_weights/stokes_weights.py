@@ -227,10 +227,6 @@ class StokesWeights(Operator):
                     log.verbose(msg)
                 continue
 
-            if use_accel:
-                if not ob.detdata.accel_exists(self.weights):
-                    ob.detdata.accel_create(self.weights)
-
             # FIXME:  temporary hack until instrument classes are also pre-staged
             # to GPU
             focalplane = ob.telescope.focalplane

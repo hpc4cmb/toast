@@ -115,7 +115,9 @@ class BuildPixelDistribution(Operator):
         pixel_dist_pipe.operators = [
             self.pixel_pointing,
         ]
-        pipe_out = pixel_dist_pipe.apply(data, detectors=detectors)
+        # FIXME: Disable accelerator use for now, since it is a small amount of
+        # calculation for a huge data volume.
+        pipe_out = pixel_dist_pipe.apply(data, detectors=detectors, use_accel=False)
 
         # Turn pixel distribution creation off again
         self.pixel_pointing.create_dist = None

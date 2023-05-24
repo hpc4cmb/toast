@@ -223,6 +223,12 @@ class PixelsHealpix(Operator):
                 # Yes...
                 if self.create_dist is not None:
                     # but the caller wants the pixel distribution
+                    restore_dev = False
+                    if ob.detdata[self.pixels].accel_in_use():
+                        # The data is on the accelerator- copy back to host for
+                        # this calculation.  This could eventually be a kernel.
+                        ob.detdata[self.pixels].accel_update_host()
+                        restore_dev = True
                     for det in ob.select_local_detectors(detectors):
                         for vslice in view_slices:
                             good = ob.detdata[self.pixels][det, vslice] >= 0
@@ -230,6 +236,8 @@ class PixelsHealpix(Operator):
                                 ob.detdata[self.pixels][det, vslice][good]
                                 // self._n_pix_submap
                             ] = True
+                    if restore_dev:
+                        ob.detdata[self.pixels].accel_update_device()
 
                 if data.comm.group_rank == 0:
                     msg = (
@@ -238,10 +246,6 @@ class PixelsHealpix(Operator):
                     )
                     log.verbose(msg)
                 continue
-
-            if use_accel:
-                if not ob.detdata.accel_exists(self.pixels):
-                    ob.detdata.accel_create(self.pixels)
 
             # Get the flags if needed.  Use the same flags as
             # detector pointing.
@@ -305,7 +309,6 @@ class PixelsHealpix(Operator):
                     f"Operator {self.name} finalize local submaps update device",
                     comm=data.comm.comm_group,
                 )
-                # Copy back here once it is being staged
         return
 
     def _requires(self):

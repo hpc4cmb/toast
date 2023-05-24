@@ -89,8 +89,9 @@ class Pipeline(Operator):
             )
             return
 
-        # If the calling code passed use_accel=True, we assume that it will move the data for us
-        # otherwise, if possible / allowed, use the accelerator and deal with data movement ourselves
+        # If the calling code passed use_accel=True, we assume that it will move
+        # the data for us.  Otherwise, if possible / allowed, use the accelerator and
+        # deal with data movement ourselves.
         self._staged_data = None
         self._unstaged_data = None
         if (use_accel is None) and accel_enabled():
@@ -172,7 +173,8 @@ class Pipeline(Operator):
         """Runs an operator, dealing with data movement to/from device if needed."""
         # displays some debugging information
         log = Logger.get()
-        msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} calling operator '{op.name}' exec()"
+        msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
+        msg += f"calling operator '{op.name}' exec(use_accel={use_accel})"
         if detectors is None:
             msg += " with ALL dets"
         log.verbose(msg)

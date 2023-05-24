@@ -509,6 +509,32 @@ class Offset(Template):
             # The number of amplitudes in each view
             n_amp_views = self._obs_views[iob]
 
+            # # DEBUGGING
+            # restore_dev = False
+            # prefix="HOST"
+            # if amplitudes.accel_in_use():
+            #     amplitudes.accel_update_host()
+            #     restore_dev = True
+            #     prefix="DEVICE"
+            # print(f"{prefix} Add to signal input:  {amp_offset}, {n_amp_views}, {amplitudes.local}", flush=True)
+            # if restore_dev:
+            #     amplitudes.accel_update_device()
+
+            # # DEBUGGING
+            # restore_dev = False
+            # prefix="HOST"
+            # if ob.detdata[self.det_data].accel_in_use():
+            #     ob.detdata[self.det_data].accel_update_host()
+            #     restore_dev = True
+            #     prefix="DEVICE"
+            # tod_min = np.amin(ob.detdata[self.det_data])
+            # tod_max = np.amax(ob.detdata[self.det_data])
+            # print(f"{prefix} Add to signal starting TOD output:  {ob.detdata[self.det_data]}, min={tod_min}, max={tod_max}", flush=True)
+            # if (np.absolute(tod_min) < 1.0e-15) and (np.absolute(tod_max) < 1.0e-15):
+            #     ob.detdata[self.det_data][:] = 0
+            # if restore_dev:
+            #     ob.detdata[self.det_data].accel_update_device()
+
             offset_add_to_signal(
                 step_length,
                 amp_offset,
@@ -520,6 +546,17 @@ class Offset(Template):
                 impl=implementation,
                 use_accel=use_accel,
             )
+
+            # # DEBUGGING
+            # restore_dev = False
+            # prefix="HOST"
+            # if ob.detdata[self.det_data].accel_in_use():
+            #     ob.detdata[self.det_data].accel_update_host()
+            #     restore_dev = True
+            #     prefix="DEVICE"
+            # print(f"{prefix} Add to signal output:  {ob.detdata[self.det_data]}", flush=True)
+            # if restore_dev:
+            #     ob.detdata[self.det_data].accel_update_device()
 
             amp_offset += np.sum(n_amp_views)
 
@@ -549,6 +586,17 @@ class Offset(Template):
             # The number of amplitudes in each view
             n_amp_views = self._obs_views[iob]
 
+            # # DEBUGGING
+            # restore_dev = False
+            # prefix="HOST"
+            # if ob.detdata[self.det_data].accel_in_use():
+            #     ob.detdata[self.det_data].accel_update_host()
+            #     restore_dev = True
+            #     prefix="DEVICE"
+            # print(f"{prefix} Project signal input:  {ob.detdata[self.det_data]}", flush=True)
+            # if restore_dev:
+            #     ob.detdata[self.det_data].accel_update_device()
+
             offset_project_signal(
                 det_indx[0],
                 ob.detdata[self.det_data].data,
@@ -563,6 +611,16 @@ class Offset(Template):
                 impl=implementation,
                 use_accel=use_accel,
             )
+
+            # restore_dev = False
+            # prefix="HOST"
+            # if amplitudes.accel_in_use():
+            #     amplitudes.accel_update_host()
+            #     restore_dev = True
+            #     prefix="DEVICE"
+            # print(f"{prefix} Project signal output:  {amp_offset}, {n_amp_views}, {amplitudes.local}", flush=True)
+            # if restore_dev:
+            #     amplitudes.accel_update_device()
 
             amp_offset += np.sum(n_amp_views)
 

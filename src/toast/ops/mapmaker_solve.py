@@ -359,6 +359,8 @@ class SolverLHS(Operator):
             if self.det_temp in ob.detdata:
                 ob.detdata[self.det_temp][:] = 0
                 ob.detdata[self.det_temp].update_units(self.det_data_units)
+                if ob.detdata[self.det_temp].accel_exists():
+                    ob.detdata[self.det_temp].accel_reset()
 
         # Pointing operator used in the binning
         pixels = self.binning.pixel_pointing
@@ -380,6 +382,9 @@ class SolverLHS(Operator):
         self.binning.pre_process = self.template_matrix
         self.binning.apply(data, detectors=detectors)
         self.binning.pre_process = None
+
+        # nz = data[self.binning.binned].data != 0
+        # print(f"LHS binned:  {self.binning.binned} = {data[self.binning.binned].data[nz]}", flush=True)
 
         log.debug_rank(
             "MapMaker   LHS projection and binning finished in", comm=comm, timer=timer
@@ -407,6 +412,13 @@ class SolverLHS(Operator):
         log.debug_rank(
             "MapMaker   LHS begin scan map and accumulate amplitudes", comm=comm
         )
+
+        # Clear temp detector data
+        for ob in data.obs:
+            ob.detdata[self.det_temp][:] = 0
+            ob.detdata[self.det_temp].update_units(self.det_data_units)
+            if ob.detdata[self.det_temp].accel_exists():
+                ob.detdata[self.det_temp].accel_reset()
 
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
@@ -437,6 +449,8 @@ class SolverLHS(Operator):
         for ob in data.obs:
             ob.detdata[self.det_temp][:] = 0
             ob.detdata[self.det_temp].update_units(self.det_data_units)
+            if ob.detdata[self.det_temp].accel_exists():
+                ob.detdata[self.det_temp].accel_reset()
 
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.
@@ -610,6 +624,8 @@ def solve(
     lhs_op.template_matrix.amplitudes = result_key
     lhs_op.out = lhs_out_key
     lhs_op.apply(data, detectors=detectors)
+    # print(f"LHS init:  in = {result}", flush=True)
+    # print(f"LHS init:  lhs_out = {lhs_out}", flush=True)
 
     # The initial residual
     # r = b - q
@@ -661,9 +677,13 @@ def solve(
 
         # q = A * d
         lhs_op.apply(data, detectors=detectors)
+        # print(f"LHS {iter}:  proposal = {proposal}", flush=True)
+        # print(f"LHS {iter}:  lhs_out = {lhs_out}", flush=True)
 
         # alpha = delta_new / (d^T * q)
         alpha = delta / proposal.dot(lhs_out)
+        # print(f"LHS {iter}:  delta = {delta}", flush=True)
+        # print(f"LHS {iter}:  alpha = {alpha}", flush=True)
 
         # Update the result
         # x += alpha * d
@@ -672,6 +692,7 @@ def solve(
             v.local[:] = proposal[k].local
         temp *= alpha
         result += temp
+        # print(f"LHS {iter}:  new result = {result}", flush=True)
 
         # Update the residual
         # r -= alpha * q
@@ -680,9 +701,11 @@ def solve(
             v.local[:] = lhs_out[k].local
         temp *= alpha
         residual -= temp
+        # print(f"LHS {iter}:  new residual = {residual}", flush=True)
 
         # Epsilon
         sqsum = residual.dot(residual)
+        # print(f"LHS {iter}:  sqsum = {sqsum}", flush=True)
 
         if comm is not None:
             comm.barrier()

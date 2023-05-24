@@ -65,6 +65,10 @@ def build_noise_weighted_interval(
     use_det_flags = det_flags.shape[1] == n_samp
     use_shared_flags = shared_flags.size == n_samp
 
+    # deals with the nnz=1 case (happens in tests)
+    if weights.ndim == 2:
+        weights = weights[:, :, jnp.newaxis]
+
     # extract interval slices
     intervals = JaxIntervals(
         interval_starts, interval_ends + 1, intervals_max_length

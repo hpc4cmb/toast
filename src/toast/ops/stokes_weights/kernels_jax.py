@@ -139,7 +139,7 @@ def stokes_weights_IQU_interval(
 # jit compiling
 stokes_weights_IQU_interval = jax.jit(
     stokes_weights_IQU_interval,
-    static_argnames=["cal", "intervals_max_length"],
+    static_argnames=["intervals_max_length"],
     donate_argnums=[3],
 )  # donates weights
 
@@ -189,11 +189,55 @@ def stokes_weights_IQU_jax(
     )
 
 
+def stokes_weights_I_interval(
+    weight_index,
+    weights,
+    cal,
+    interval_starts,
+    interval_ends,
+    intervals_max_length,
+):
+    """
+    Process all the intervals as a block.
+
+    Args:
+        weight_index (array, int): The indexes of the weights (size n_det)
+        weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp)
+        cal (float):  A constant to apply to the pointing weights.
+        interval_starts (array, int): size n_view
+        interval_ends (array, int): size n_view
+        intervals_max_length (int): maximum length of an interval
+
+    Returns:
+        weights (array, float64)
+    """
+    # debugging information
+    log = Logger.get()
+    log.debug(f"stokes_weights_I: jit-compiling.")
+
+    # extract interval slices
+    intervals = JaxIntervals(
+        interval_starts, interval_ends + 1, intervals_max_length
+    )  # end+1 as the interval is inclusive
+
+    # updates results and returns
+    # weights[weight_index,intervals] = cal
+    weights = JaxIntervals.set(weights, (weight_index, intervals), cal)
+    return weights
+
+
+# jit compiling
+stokes_weights_I_interval = jax.jit(
+    stokes_weights_I_interval,
+    static_argnames=["intervals_max_length"],
+    donate_argnums=[1],
+)  # donates weights
+
+
 @kernel(impl=ImplementationType.JAX, name="stokes_weights_I")
 def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
     """
     Compute the Stokes weights for the "I" mode.
-    NOTE this does not use JAX as there is too little computation
 
     Args:
         weight_index (array, int): The indexes of the weights (size n_det)
@@ -205,11 +249,20 @@ def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
     Returns:
         None (the result is put in weights).
     """
-    # iterate on the intervals
-    for interval in intervals:
-        interval_start = interval.first
-        interval_end = interval.last + 1
-        weights[weight_index, interval_start:interval_end] = cal
+    # prepares inputs
+    intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
+    weight_index_input = MutableJaxArray.to_array(weight_index)
+    weights_input = MutableJaxArray.to_array(weights)
+
+    # runs computation
+    weights[:] = stokes_weights_I_interval(
+        weight_index_input,
+        weights_input,
+        cal,
+        intervals.first,
+        intervals.last,
+        intervals_max_length,
+    )
 
 
 # To test:

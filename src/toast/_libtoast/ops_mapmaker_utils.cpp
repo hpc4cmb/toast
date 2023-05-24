@@ -208,7 +208,6 @@ void init_ops_mapmaker_utils(py::module & m) {
                 uint8_t * dev_det_flags = omgr.device_ptr(raw_det_flags);
 
                 # pragma omp target data             \
-                device(dev)                          \
                 map(to:                              \
                 raw_weight_index[0:n_det],           \
                 raw_pixel_index[0:n_det],            \

@@ -27,7 +27,6 @@ from .utils import Logger, dtype_to_aligned
 
 if use_accel_jax:
     import jax
-
     from .jax.mutableArray import MutableJaxArray
 
 
@@ -78,6 +77,7 @@ class DetectorData(AcceleratorObject):
         self, detectors, shape, dtype, units=u.dimensionless_unscaled, view_data=None
     ):
         log = Logger.get()
+        super().__init__()
 
         self._set_detectors(detectors)
         self._units = units
@@ -93,6 +93,8 @@ class DetectorData(AcceleratorObject):
         self._fullsize = 0
         self._memsize = 0
         self._raw = None
+        self._flatdata = None
+        self._data = None
 
         if view_data is None:
             # Allocate the data
@@ -110,7 +112,6 @@ class DetectorData(AcceleratorObject):
                 raise RuntimeError(msg)
             self._data = view_data
             self._is_view = True
-        super().__init__()
 
     def _set_detectors(self, detectors):
         log = Logger.get()
@@ -144,20 +145,43 @@ class DetectorData(AcceleratorObject):
         log = Logger.get()
         self._fullsize = self._flatshape
         self._memsize = self.itemsize * self._fullsize
-        recreate = False
-        if self._raw is not None:
-            if self.accel_exists():
+
+        # First delete potential device data
+        # FIXME we might be able to recycle existing buffers to improve performance
+        create_accel = False
+        on_accel = False
+        if self.accel_exists():
+            # There is a buffer on the accelerator
+            create_accel = True
+            if self.accel_in_use():
+                # The accelerator copy is the one in use
+                on_accel = True
                 msg = "Reallocation of DetectorData which is staged to accelerator- "
                 msg += "Deleting device copy and re-allocating."
                 log.verbose(msg)
-                self.accel_delete()
-                recreate = True
+            self.accel_delete()
+
+        # Delete existing wrapper and buffer
+        if self._data is not None:
+            del self._data
+        if self._flatdata is not None:
+            del self._flatdata
+        if self._raw is not None:
+            self._raw.clear()
             del self._raw
+
+        # Allocate new host buffer
         self._raw = self._storage_class.zeros(self._fullsize)
+
+        # Wrap _raw
         self._flatdata = self._raw.array()[: self._flatshape]
         self._data = self._flatdata.reshape(self._shape)
-        if recreate:
-            self.accel_create()
+
+        # Restore device buffer if needed
+        if create_accel:
+            self._accel_create(zero_out=True)
+        if on_accel:
+            self.accel_used(True)
 
     @property
     def detectors(self):
@@ -199,12 +223,14 @@ class DetectorData(AcceleratorObject):
 
     @property
     def data(self):
-        if not hasattr(self, "_data"):
+        if (not hasattr(self, "_data")) or self._data is None:
             raise RuntimeError("Cannot use DetectorData object after clearing memory")
         return self._data
 
     @property
     def flatdata(self):
+        if (not hasattr(self, "_flatdata")) or self._flatdata is None:
+            raise RuntimeError("Cannot use DetectorData object after clearing memory")
         return self._flatdata
 
     def update_units(self, new_units):
@@ -257,14 +283,26 @@ class DetectorData(AcceleratorObject):
             # We can re-use the existing memory
             self._shape = shp
             self._flatshape = flatshape
-            # reinitialise _data
-            should_update_GPU = self.accel_exists()
+
+            # Check if we have data on device before touching any buffer
+            does_accel_exist = self.accel_exists()
+
+            # Adjust the size of the data wrapper and reset underlying buffer to zero.
             self._flatdata = self._raw.array()[: self._flatshape]
             self._flatdata[:] = 0
+            # this might trash a MutableJaxArray, requiring an allocation and falsifying further accel_exists tests
             self._data = self._flatdata.reshape(self._shape)
-            # move things to GPU if needed
-            if should_update_GPU:
-                self.accel_reset()
+
+            if does_accel_exist:
+                # We also have a copy on the device
+                if use_accel_jax:
+                    # creates a device buffer filled with zeroes
+                    # FIXME we have to reallocate due to the change in self._data.shape
+                    self._accel_create(zero_out=True)
+                else:
+                    # Set device copy to zero
+                    self.accel_reset()
+
             realloced = False
         return realloced
 
@@ -276,24 +314,23 @@ class DetectorData(AcceleratorObject):
         are no longer being used and you are about to delete the object.
 
         """
+        # first delete potential GPU data
+        if self.accel_exists():
+            log = Logger.get()
+            msg = "clear() of DetectorData which is staged to accelerator- "
+            msg += "Deleting device copy."
+            log.verbose(msg)
+            self.accel_delete()
+        # then apply clear
         if hasattr(self, "_data"):
             del self._data
             self._data = None
         if hasattr(self, "_is_view") and not self._is_view:
             if hasattr(self, "_flatdata"):
                 del self._flatdata
-            if hasattr(self, "_raw"):
-                if self.accel_exists():
-                    log = Logger.get()
-                    msg = "clear() of DetectorData which is staged to accelerator- "
-                    msg += "Deleting device copy."
-                    log.verbose(msg)
-                    # We delete this directly rather than calling self.accel_delete,
-                    # since that function also manipulates self._raw.
-                    if use_accel_omp:
-                        accel_data_delete(self._raw)
-                if self._raw is not None:
-                    self._raw.clear()
+                self._flatdata = None
+            if hasattr(self, "_raw") and not self._raw:
+                self._raw.clear()
                 del self._raw
                 self._raw = None
 
@@ -314,10 +351,7 @@ class DetectorData(AcceleratorObject):
             # Assume that our key is at least iterable
             try:
                 test = iter(key)
-                view = list()
-                for k in key:
-                    view.append(self._name2idx[k])
-                view = tuple(view)
+                view = tuple([self._name2idx[k] for k in key])
             except TypeError:
                 log = Logger.get()
                 msg = "Detector indexing supports slice, int, string or "
@@ -484,56 +518,48 @@ class DetectorData(AcceleratorObject):
         return not self.__eq__(other)
 
     def _accel_exists(self):
-        log = Logger.get()
-        log.verbose(f"DetectorData _accel_exists")
         if self._raw is None:
-            # We have a view
+            # We have a view.
+            # FIXME: eventually we could check the state of the underlying
+            # object and use that.
             return False
         else:
             if use_accel_omp:
-                return accel_data_present(self._raw)
+                return accel_data_present(self._raw, self._accel_name)
             elif use_accel_jax:
                 return accel_data_present(self._data)
             else:
                 return False
 
-    def _accel_create(self):
-        log = Logger.get()
-        log.verbose(f"DetectorData _accel_create")
+    def _accel_create(self, zero_out=False):
         if use_accel_omp:
-            accel_data_create(self._raw)
+            self._raw = accel_data_create(
+                self._raw, self._accel_name, zero_out=zero_out
+            )
         elif use_accel_jax:
-            self._data = accel_data_create(self._data)
+            self._data = accel_data_create(self._data, zero_out=zero_out)
 
     def _accel_update_device(self):
-        log = Logger.get()
-        log.verbose(f"DetectorData _accel_update_device")
         if use_accel_omp:
-            _ = accel_data_update_device(self._raw)
+            self._raw = accel_data_update_device(self._raw, self._accel_name)
         elif use_accel_jax:
             self._data = accel_data_update_device(self._data)
 
     def _accel_update_host(self):
-        log = Logger.get()
-        log.verbose(f"DetectorData _accel_update_host")
         if use_accel_omp:
-            _ = accel_data_update_host(self._raw)
+            self._raw = accel_data_update_host(self._raw, self._accel_name)
         elif use_accel_jax:
             self._data = accel_data_update_host(self._data)
 
     def _accel_delete(self):
-        log = Logger.get()
-        log.verbose(f"DetectorData _accel_delete")
         if use_accel_omp:
-            accel_data_delete(self._raw)
+            self._raw = accel_data_delete(self._raw, self._accel_name)
         elif use_accel_jax:
             self._data = accel_data_delete(self._data)
 
     def _accel_reset(self):
-        log = Logger.get()
-        log.verbose(f"DetectorData _accel_reset")
         if use_accel_omp:
-            accel_data_reset(self._raw)
+            accel_data_reset(self._raw, self._accel_name)
         elif use_accel_jax:
             self._data = accel_data_reset(self._data)
 
@@ -708,6 +734,7 @@ class DetDataManager(MutableMapping):
         data_shape = self._data_shape(sample_shape)
 
         existing = True
+        changed = False
 
         if name in self._internal:
             # The object already exists.  Check properties.
@@ -731,7 +758,8 @@ class DetDataManager(MutableMapping):
                     # At least one detector is not included.  In this case we change
                     # detectors and set the units.
                     existing = False
-                    realloced = self._internal[name].change_detectors(detectors)
+                    changed = True
+                    _ = self._internal[name].change_detectors(detectors)
                     self._internal[name].update_units(create_units)
                     break
         else:
@@ -748,36 +776,37 @@ class DetDataManager(MutableMapping):
             # The data object exists with correct detectors
             if accel:
                 # We want the data on the device
-                if self.accel_exists(name):
-                    # Device buffer in place
-                    if not self.accel_in_use(name):
-                        # Copy to device
-                        existing = False
-                        self.accel_update_device(name)
-                else:
-                    # Create and copy
+                if not self.accel_in_use(name):
+                    # The device copy needs to be updated
                     existing = False
-                    self.accel_create(name)
+                    if not self.accel_exists(name):
+                        # The device buffer does not exist, create it
+                        self.accel_create(name)
+                    # Update device copy
                     self.accel_update_device(name)
             else:
                 # We want the data on the host
                 if self.accel_in_use(name):
-                    # Copy to host
+                    # The host copy needs to be updated
                     existing = False
                     self.accel_update_host(name)
         else:
+            # The data was either created or the existing object was re-used with
+            # the detector list changed.  In either case the host copy is in-use
+            # and has already been zero-ed.
             if accel:
                 # We want the data on the device.  Note that if the change_detectors
-                # call above reallocated memory, it would have also realloced the
-                # device memory.
-                if self.accel_exists(name):
-                    # Device buffer in place, set it to in-use
-                    self.accel_used(name, True)
-                else:
-                    # Create it and set to in-use
+                # call above was run, then the host and device memory were already
+                # set to zero.
+                existing = False
+                if not self.accel_exists(name):
+                    # Create the buffer
                     self.accel_create(name)
-                    self.accel_used(name, True)
-
+                # Mark buffer as in-use
+                self.accel_used(name, True)
+                if not changed:
+                    # Reset to zero
+                    self.accel_reset(name)
         return existing
 
     def accel_exists(self, key):
@@ -841,7 +870,7 @@ class DetDataManager(MutableMapping):
             return
         log = Logger.get()
         log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_create")
-        self._internal[key].accel_create()
+        self._internal[key].accel_create(key)
 
     def accel_update_device(self, key):
         """Copy the named detector data to the accelerator.
@@ -899,6 +928,27 @@ class DetDataManager(MutableMapping):
             raise RuntimeError(msg)
         log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_delete")
         self._internal[key].accel_delete()
+
+    def accel_reset(self, key):
+        """Reset the named detector data from the accelerator.
+
+        Args:
+            key (str):  The object name.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if not accel_enabled():
+            return
+        if not self._internal[key].accel_exists():
+            msg = f"Detector data '{key}' type = {type(self._internal[key])} "
+            msg += f"is not present on device, cannot reset"
+            log.error(msg)
+            raise RuntimeError(msg)
+        log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_reset")
+        self._internal[key].accel_reset()
 
     def accel_clear(self):
         """Clear all data from accelerators
@@ -1437,7 +1487,7 @@ class SharedDataManager(MutableMapping):
             raise RuntimeError(msg)
 
         if use_accel_omp:
-            result = accel_data_present(self._internal[key].shdata._flat)
+            result = accel_data_present(self._internal[key].shdata._flat, key)
         elif use_accel_jax:
             result = accel_data_present(self._internal[key].shdata.data)
         else:
@@ -1504,7 +1554,7 @@ class SharedDataManager(MutableMapping):
 
         log.verbose(f"SharedDataMgr {key} accel_create")
         if use_accel_omp:
-            accel_data_create(self._internal[key].shdata._flat)
+            _ = accel_data_create(self._internal[key].shdata._flat, key)
         elif use_accel_jax:
             self._internal[key].shdata.data = MutableJaxArray(
                 self._internal[key].shdata.data
@@ -1540,7 +1590,7 @@ class SharedDataManager(MutableMapping):
 
         log.verbose(f"SharedDataMgr {key} accel_update_device")
         if use_accel_omp:
-            _ = accel_data_update_device(self._internal[key].shdata._flat)
+            _ = accel_data_update_device(self._internal[key].shdata._flat, key)
         elif use_accel_jax:
             self._internal[key].shdata.data = MutableJaxArray(
                 self._internal[key].shdata.data
@@ -1578,7 +1628,7 @@ class SharedDataManager(MutableMapping):
 
         log.verbose(f"SharedDataMgr {key} accel_update_host")
         if use_accel_omp:
-            _ = accel_data_update_host(self._internal[key].shdata._flat)
+            _ = accel_data_update_host(self._internal[key].shdata._flat, key)
         elif use_accel_jax:
             self._internal[key].shdata.data = accel_data_update_host(
                 self._internal[key].shdata.data
@@ -1610,7 +1660,7 @@ class SharedDataManager(MutableMapping):
 
         log.verbose(f"SharedDataMgr {key} accel_delete")
         if use_accel_omp:
-            accel_data_delete(self._internal[key].shdata._flat)
+            _ = accel_data_delete(self._internal[key].shdata._flat, key)
         elif use_accel_jax:
             self._internal[key].shdata.data = accel_data_delete(
                 self._internal[key].shdata.data
@@ -1632,7 +1682,7 @@ class SharedDataManager(MutableMapping):
             if self.accel_exists(key):
                 log.verbose(f"SharedDataMgr {key} accel_delete")
                 if use_accel_omp:
-                    accel_data_delete(self._internal[key].shdata._flat)
+                    _ = accel_data_delete(self._internal[key].shdata._flat, key)
                 elif use_accel_jax:
                     self._internal[key].shdata.data = accel_data_delete(
                         self._internal[key].shdata.data
@@ -2131,7 +2181,11 @@ class IntervalsManager(MutableMapping):
             return
         log = Logger.get()
         log.verbose(f"IntervalsManager {key} accel_create")
-        self[key].accel_create()
+        if key is None:
+            # This is the special interval list of the full range
+            self[key].accel_create("None")
+        else:
+            self[key].accel_create(key)
 
     def accel_update_device(self, key):
         """Copy the named interval list to the accelerator.

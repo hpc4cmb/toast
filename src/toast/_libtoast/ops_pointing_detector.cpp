@@ -137,7 +137,6 @@ void init_ops_pointing_detector(py::module & m) {
                 uint8_t * dev_flags = omgr.device_ptr(raw_flags);
 
                 # pragma omp target data   \
-                device(dev)                \
                 map(to:                    \
                 raw_focalplane[0:4*n_det], \
                 raw_quat_index[0:n_det],   \
