@@ -156,7 +156,7 @@ def crosscov_psd(
     extended_signal1 = np.zeros(nsamp + nextend, dtype=np.float64)
     if signal2 is not None:
         extended_signal2 = np.zeros(nsamp + nextend, dtype=np.float64)
-    extended_flags = np.zeros(nsamp + nextend, dtype=np.bool)
+    extended_flags = np.zeros(nsamp + nextend, dtype=bool)
     extended_times = np.zeros(nsamp + nextend, dtype=times.dtype)
 
     extended_signal1[:nsamp] = signal1

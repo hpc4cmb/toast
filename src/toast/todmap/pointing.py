@@ -94,7 +94,7 @@ class OpPointingHpix(Operator):
         self._nside_submap = min(nside, nside_submap)
         self._npix_submap = 12 * self._nside_submap ** 2
         self._nsubmap = (self._nside // self._nside_submap) ** 2
-        self._hit_submaps = np.zeros(self._nsubmap, dtype=np.bool)
+        self._hit_submaps = np.zeros(self._nsubmap, dtype=bool)
 
         # initialize the healpix pixels object
         self.hpix = HealpixPixels(self._nside)
@@ -372,7 +372,7 @@ class OpMuellerPointingHpix(Operator):
         self._nside_submap = min(nside, nside_submap)
         self._npix_submap = 12 * self._nside_submap ** 2
         self._nsubmap = (self._nside // self._nside_submap) ** 2
-        self._hit_submaps = np.zeros(self._nsubmap, dtype=np.bool)
+        self._hit_submaps = np.zeros(self._nsubmap, dtype=bool)
         self._hwp_parameters_set = hwp_parameters_set
         # initialize the healpix pixels object
         self.hpix = HealpixPixels(self._nside)

@@ -1172,7 +1172,7 @@ def scan_patch(
     # and now track when all corners are past the elevation
     tstop = t
     tstep = 60
-    to_cross = np.ones(len(patch.corners), dtype=np.bool)
+    to_cross = np.ones(len(patch.corners), dtype=bool)
     scan_started = False
     while True:
         if tstop > stop_timestamp or tstop - t > 86400:
