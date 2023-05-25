@@ -27,7 +27,7 @@ from .utils import Logger, dtype_to_aligned
 
 if use_accel_jax:
     import jax
-    from .jax.mutableArray import MutableJaxArray
+    from .jax.mutableArray import MutableJaxArray, _zero_out_jitted
 
 
 class DetectorData(AcceleratorObject):
@@ -286,19 +286,24 @@ class DetectorData(AcceleratorObject):
 
             # Check if we have data on device before touching any buffer
             does_accel_exist = self.accel_exists()
+            if does_accel_exist and use_accel_jax: 
+                # set aside the JAX device array for later recycling
+                previous_device_data = self._data.data
 
             # Adjust the size of the data wrapper and reset underlying buffer to zero.
             self._flatdata = self._raw.array()[: self._flatshape]
             self._flatdata[:] = 0
-            # this might trash a MutableJaxArray, requiring an allocation and falsifying further accel_exists tests
+            # this might trash a MutableJaxArray falsifying further self.accel_exists() tests
             self._data = self._flatdata.reshape(self._shape)
 
             if does_accel_exist:
                 # We also have a copy on the device
                 if use_accel_jax:
                     # creates a device buffer filled with zeroes
-                    # FIXME we have to reallocate due to the change in self._data.shape
-                    self._accel_create(zero_out=True)
+                    # we call _zero_out_jitted with the previous device buffer and a new shape into order to recycle the memory
+                    # accel_reset cannot be used as there is a change in shape
+                    device_data = _zero_out_jitted(previous_device_data, output_shape=self._shape)
+                    self._data = MutableJaxArray(cpu_data=self._data, gpu_data=device_data)
                 else:
                     # Set device copy to zero
                     self.accel_reset()

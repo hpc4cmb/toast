@@ -74,17 +74,20 @@ _reshape_jitted = jax.jit(_reshape, donate_argnums=0, static_argnames="newshape"
 # ZERO OUT
 
 
-def _zero_out(data):
-    """fills the data with zero"""
+def _zero_out(data, output_shape=None):
+    """Fills the data with zero."""
     # debugging information
     log = Logger.get()
     log.debug("MutableJaxArray.zero_out: jit-compiling.")
 
-    return jnp.zeros_like(data)
+    if output_shape is None:
+        return jnp.zeros_like(data)
+    else:
+        return jnp.zeros(shape=output_shape, dtype=data.dtype)        
 
 
 # compiles the function, recycling the memory
-_zero_out_jitted = jax.jit(_zero_out, donate_argnums=0)
+_zero_out_jitted = jax.jit(_zero_out, donate_argnums=0, static_argnames='output_shape')
 
 # ------------------------------------------------------------------------------
 # MUTABLE ARRAY
