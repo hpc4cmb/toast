@@ -156,7 +156,7 @@ class PSDTest(MPITestCase):
                 autocovs = autocov_psd(
                     np.arange(ntod) / self.rate,
                     noisetod,
-                    np.zeros(ntod, dtype=np.bool),
+                    np.zeros(ntod, dtype=bool),
                     lagmax,
                     ntod,
                     self.rate,

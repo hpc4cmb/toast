@@ -295,7 +295,7 @@ class OpPolyFilter2D(Operator):
                     nsample = istop - istart
 
                     templates = np.zeros([ndet, nmode])
-                    masks = np.zeros([ndet, nsample], dtype=np.bool)
+                    masks = np.zeros([ndet, nsample], dtype=bool)
                     proj = np.zeros([nmode, nsample])
                     norms = np.zeros(nmode)
 

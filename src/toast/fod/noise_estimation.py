@@ -438,7 +438,7 @@ class OpNoiseEstim:
 
                 psdvalues = np.array([x[col] for x in all_psds])
                 smooth_values = scipy.signal.medfilt(psdvalues, 11)
-                good = np.ones(psdvalues.size, dtype=np.bool)
+                good = np.ones(psdvalues.size, dtype=bool)
                 good[psdvalues == 0] = False
 
                 for i in range(10):
