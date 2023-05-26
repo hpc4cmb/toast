@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2022 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -14,7 +14,7 @@ from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Int, Quantity, Unicode, List, trait_docs
 from ..utils import Environment, Logger, name_UID
 from .operator import Operator
 
@@ -47,6 +47,12 @@ class CommonModeNoise(Operator):
         None,
         allow_none=True,
         help="Detectors sharing the focalplane key will have the same common mode",
+    )
+
+    detset = List(
+        [],
+        help="List of detectors to add the common mode to.  "
+        "Only used if `focalplane_key` is None",
     )
 
     fmin = Quantity(
@@ -117,10 +123,8 @@ class CommonModeNoise(Operator):
 
             # Check that the noise model exists
             if self.noise_model not in obs:
-                msg = (
-                    "Noise model {self.noise_model} does not exist in "
-                    "observation {obs.name}"
-                )
+                msg = f"Noise model {self.noise_model} does not exist in "
+                msg += f"observation {obs.name}"
                 raise RuntimeError(msg)
 
             noise = obs[self.noise_model]
@@ -133,7 +137,7 @@ class CommonModeNoise(Operator):
             if self.focalplane_key is None:
                 dets_by_key[None] = []
                 for det in obs.all_detectors:
-                    if detset is not None and det not in detset:
+                    if len(self.detset) != 0 and det not in self.detset:
                         continue
                     dets_by_key[None].append(det)
             else:
