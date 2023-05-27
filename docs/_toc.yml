@@ -7,6 +7,7 @@ chapters:
   - file: install_user
   - file: install_dev
   - file: install_nersc
+  - file: install_test
 - file: interactive
 # - file: quickstart
 - file: data_model

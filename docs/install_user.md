@@ -11,8 +11,8 @@ If you want to use a pre-installed version of TOAST at NERSC,
 
 ## Pip Binary Wheels
 
-If you already have a newer Python3 (\>= 3.7), then you can install pre-built TOAST
-packages from PyPI.  You should always use virtualenv or similar tools to manage your
+If you already have a newer Python3 (\>= 3.8), then you can install pre-built TOAST
+packages from PyPI.  You should **always** use virtualenv or similar tools to manage your
 python environments rather than pip-installing packages as root.
 
 On Debian / Ubuntu Linux, you should install these minimal packages:
@@ -33,7 +33,7 @@ scl enable rh-python38 bash
 ```
 
 On MacOS, you can use homebrew or macports to install a recent python3.
-Now verify that your python is at least 3.7:
+Now verify that your python is at least 3.8:
 
 ```{code-block} bash
 python3 --version
@@ -64,36 +64,13 @@ Next, use pip to install toast and its requirements:
 pip install toast
 ```
 
-(install:user:mpi)=
-### Enabling MPI Support
-
-At this point you have toast installed and you can use it from serial scripts and
-notebooks.  If you want to enable effective parallelism with toast (useful if your
-computer has many cores), then you need to install the `mpi4py` package.  This package
-requires MPI compilers (usually MPICH or OpenMPI).  Your system may already have some
-MPI compilers installed- try this:
-
-```{code-block} bash
-which mpicc
-mpicc -show
-```
-
-If the mpicc command is not found, you should use your OS package manager to install the
-development packages for MPICH or OpenMPI.  Now you can install mpi4py:
-
-```{code-block} bash
-pip install mpi4py
-```
-
-For more details about custom installation options for mpi4py, read the [documentation
-for that package](https://mpi4py.readthedocs.io/en/stable/install.html).  After
-installation, [you should run the unit tests](install:test)
-
 (install:user:conda)=
 ## Conda Packages
 
-If you already use (or would like to use) the conda python stack, then you can install
-TOAST and all of its optional dependencies with the conda package manager.  The
+The conda package manager and conda-forge ecosystem provides thousands of high quality software packages (both python and compiled tools) that are built with a consistent set of compilers and provide a way of managing python environments independent from the operating system environment.
+
+You can install
+TOAST and many of its optional dependencies with the conda package manager.  The
 conda-forge ecosystem allows us to create packages that are built consistently with all
 their dependencies.  When we talk about the `base` conda environment (previously called
 the "root" environment), this is the initial environment loaded when the conda shell
@@ -103,7 +80,7 @@ across all the different projects you might be working on.  It also creates a
 maintenance nightmare when you need to update packages.  In this section we walk through
 creating a conda *environment* to use for TOAST / CMB analysis work.
 
-By keeping a minimal base and using environments for all other work, it is trivial to
+By keeping a minimal base and using other environments for all other work, it is trivial to
 update the conda tool itself and the other essential packages in base.  If one of your
 working environments becomes horribly out of date or broken, just delete it and make a
 new one.
@@ -189,6 +166,34 @@ conda deactivate
 ```
 
 As always, after installation, [you should run the unit tests](install:test).
+
+
+
+(install:user:mpi)=
+### Enabling MPI Support
+
+At this point you have toast installed and you can use it from serial scripts and
+notebooks.  If you want to enable effective parallelism with toast (useful if your
+computer has many cores), then you need to install the `mpi4py` package.  This package
+requires MPI compilers (usually MPICH or OpenMPI).  Your system may already have some
+MPI compilers installed- try this:
+
+```{code-block} bash
+which mpicc
+mpicc -show
+```
+
+If the mpicc command is not found, you should use your OS package manager to install the
+development packages for MPICH or OpenMPI.  Now you can install mpi4py:
+
+```{code-block} bash
+pip install mpi4py
+```
+
+For more details about custom installation options for mpi4py, read the [documentation
+for that package](https://mpi4py.readthedocs.io/en/stable/install.html).  After
+installation, [you should run the unit tests](install:test)
+
 
 
 ## Something Else

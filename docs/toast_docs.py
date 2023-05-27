@@ -195,9 +195,6 @@ def fake_ground_observing_smallpatch(
 
     # Create a schedule.
 
-    # FIXME: change this once the ground scheduler supports in-memory creation of the
-    # schedule.
-
     schedule = None
 
     if mpicomm is None or mpicomm.rank == 0:
@@ -221,9 +218,9 @@ def fake_ground_observing_smallpatch(
                 "--patch",
                 "small_patch,1,40,-40,44,-44",
                 "--start",
-                "2020-01-01 00:00:00",
+                "2025-01-01 00:00:00",
                 "--stop",
-                "2020-01-01 06:00:00",
+                "2025-01-01 06:00:00",
                 "--out",
                 sch_file,
             ]
@@ -472,11 +469,6 @@ def simulate_ground_data(data, fig=None):
     toast.ops.Combine(first="noise", second="signal", result="signal", op="add").apply(data)
     toast.ops.Combine(first="atmosphere", second="signal", result="signal", op="add").apply(data)
     toast.ops.Combine(first="DC", second="signal", result="signal", op="add").apply(data)
-
-    # FIXME: this is a hack- we should have the scan map operator use units and
-    # set the units when we create the detdata above.
-    for ob in data.obs:
-        ob.detdata["signal"]._units = u.K
 
     # Delete data objects used in the simulation.
     del data[build_dist.pixel_dist]
