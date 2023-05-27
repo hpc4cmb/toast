@@ -945,7 +945,7 @@ class FilterBin(Operator):
         nnz = indptr[-1]
 
         sparse_matrix = scipy.sparse.csr_matrix(
-            (values[:nnz], indices[:nnz], indptr[:nnz]),
+            (values[:nnz], indices[:nnz], indptr),
             shape=(self.npixtot, self.npixtot),
         )
         return sparse_matrix
