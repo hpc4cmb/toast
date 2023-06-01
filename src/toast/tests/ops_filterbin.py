@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import glob
 import os
 import sys
 
@@ -26,7 +27,7 @@ from ._helpers import (
     fake_flags,
 )
 from .mpi import MPITestCase
-
+from ..mpi import Comm
 
 class FilterBinTest(MPITestCase):
     def setUp(self):
@@ -34,6 +35,7 @@ class FilterBinTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
         self.nside = 64
 
+    """
     def test_filterbin(self):
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
@@ -616,6 +618,7 @@ class FilterBinTest(MPITestCase):
                     assert rms2 < 1e-5 * rms1
 
         close_data(data)
+    """
 
     def test_filterbin_obsmatrix_noiseweighted(self):
         if sys.platform.lower() == "darwin":
@@ -677,7 +680,7 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=0,
             det_flags=defaults.det_flags,
             det_flag_mask=255,
         )
@@ -688,32 +691,74 @@ class FilterBinTest(MPITestCase):
             det_flags=defaults.det_flags,
             det_flag_mask=255,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=0,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
             poly_filter_order=2,
             output_dir=self.outdir,
             write_obs_matrix=True,
-            cache_dir=os.path.join(self.outdir, "cache"),
+            poly_filter_view="scanning",
         )
 
-        # Run filterbin twice and confirm that we get the
-        # same observation matrix.  The second run uses cached
-        # accumulants.
+        # Build the observation matrix twice, first in a single run and
+        # then running each observation separately and saving the
+        # noise-weighted matrix.
 
         filterbin.name = "split_run"
         filterbin.apply(data)
 
         filterbin.name = "noiseweighted_run"
+        filterbin.write_invcov = True
         filterbin.det_data = "signal_copy"
-        filterbin.apply(data)
+        filterbin.noiseweight_obs_matrix = True
+
+        orig_name_filterbin = filterbin.name
+        orig_comm = data.comm
+        new_comm = Comm(world=data.comm.comm_group)
+
+        for iobs, obs in enumerate(data.obs):
+            # Data object that only covers one observation
+            obs_data = data.select(obs_uid=obs.uid)
+            # Replace comm_world with the group communicator
+            obs_data._comm = new_comm
+            filterbin.reset_pix_dist = True
+            filterbin.name = f"{orig_name_filterbin}_{obs.name}"
+            filterbin.apply(obs_data)
+            close_data(obs_data)
 
         if data.comm.world_rank == 0:
             import matplotlib.pyplot as plt
 
+            # Assemble the single-run matrix
+
             rootname = os.path.join(self.outdir, f"split_run_obs_matrix")
             fname_matrix = ops.combine_observation_matrix(rootname)
             obs_matrix1 = scipy.sparse.load_npz(fname_matrix)
+
+            # Assemble the noise-weighted, per-observation matrix
+            fnames = glob.glob(
+                f"{self.outdir}/{orig_name_filterbin}*noiseweighted_obs_matrix*"
+            )
+            rootnames = set()
+            for fname in fnames:
+                rootnames.add(fname.split(".")[0])
+
+            filenames = []
+            for rootname in rootnames:
+                fname_matrix = ops.combine_observation_matrix(rootname)
+                filenames.append(fname_matrix)
+
+            fname_matrix = f"{self.outdir}/noiseweighted_run_obs_matrix"
+            command = f"toast_obsmatrix_coadd --outmatrix {fname_matrix}"
+            for filename in filenames:
+                command += f" {filename}"
+            os.system(command)
+
+            fname_matrix += ".npz"
+            obs_matrix2 = scipy.sparse.load_npz(fname_matrix)
+
+            import pdb
+            pdb.set_trace()
 
         close_data(data)

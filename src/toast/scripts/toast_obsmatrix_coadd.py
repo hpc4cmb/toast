@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2023-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-"""This script converts HEALPiX maps between FITS and HDF5
+"""This script co-adds noise-weighted observation matrices and
+de-weights the result
 """
 
 import argparse
@@ -100,13 +101,13 @@ def main():
         dtype = np.float32
 
     if len(args.inmatrix) == 1:
-        # Only one file provided, try interpreting it is a text file with a list
+        # Only one file provided, try interpreting it as a text file with a list
         try:
             with open(args.inmatrix[0], "r") as listfile:
                 infiles = listfile.readlines()
             log.info_rank(f"Loaded {args.inmatrix[0]} in", timer=timer1, comm=comm)
         except UnicodeDecodeError:
-            # Didn't work. Assume that user supplied a single map file
+            # Didn't work. Assume that user supplied a single matrix file
             infiles = args.inmatrix
     else:
         infiles = args.inmatrix
@@ -138,7 +139,8 @@ def main():
         elif os.path.isfile(infile_invcov + ".h5"):
             infile_invcov += ".h5"
         else:
-            msg = "Cannot find an inverse covariance matrix to go with '{infile_matrix}'"
+            msg = f"Cannot find an inverse covariance matrix to go with '{infile_matrix}'"
+            raise RuntimeError(msg)
         log.info(f"{prefix}Loading {infile_invcov}")
         invcov = read_healpix(
             infile_invcov, None, nest=True, dtype=float, verbose=False

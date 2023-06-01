@@ -118,7 +118,7 @@ def main():
     invcov_sum = None
     nnz, nnz2, npix = None, None, None
     if len(args.inmap) == 1:
-        # Only one file provided, try interpreting it is a text file with a list
+        # Only one file provided, try interpreting it as a text file with a list
         try:
             with open(args.inmap[0], "r") as listfile:
                 infiles = listfile.readlines()
