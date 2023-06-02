@@ -883,6 +883,12 @@ class FilterBin(Operator):
 
     @function_timer
     def _compress_pixels(self, pixels):
+        if any(pixels < 0):
+            msg = f"Unflagged samples have {np.sum(pixels < 0)} negative pixel numbers"
+            raise RuntimeError(msg)
+        if any(pixels >= self.npix):
+            msg = f"Unflagged samples have {np.sum(pixels >= self.npix)} pixels >= {self.npix}"
+            raise RuntimeError(msg)
         local_to_global = np.sort(list(set(pixels)))
         compressed_pixels = np.searchsorted(local_to_global, pixels)
         return compressed_pixels, local_to_global.size, local_to_global
