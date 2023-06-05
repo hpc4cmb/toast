@@ -323,6 +323,8 @@ class GroundSchedule(object):
                 for line in f:
                     if line.startswith("#"):
                         continue
+                    if "SPECIAL" in line:
+                        continue
                     if read_header:
                         (
                             site_name,
