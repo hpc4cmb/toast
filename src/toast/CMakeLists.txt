@@ -45,7 +45,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/todmap_scanning.cpp
     _libtoast/map_cov.cpp
     _libtoast/pixels.cpp
-    _libtoast/todmap_mapmaker.cpp
+    _libtoast/ops_filterbin.cpp
     _libtoast/atm.cpp
     _libtoast/template_offset.cpp
     _libtoast/accelerator.cpp
