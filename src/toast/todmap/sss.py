@@ -201,7 +201,7 @@ class OpSimScanSynchronousSignal(Operator):
                 )
                 sssmap /= np.std(sssmap)
                 lon, lat = hp.pix2ang(
-                    self._nside, np.arange(npix, dtype=np.int), lonlat=True
+                    self._nside, np.arange(npix, dtype=np.int64), lonlat=True
                 )
                 scale = self._scale * (np.abs(lat) / 90 + 0.5) ** self._power
                 sssmap *= scale

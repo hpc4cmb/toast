@@ -847,7 +847,7 @@ def check_sso(observer, az1, az2, el, sso, angle, tstart, tstop):
     """
     if az2 < az1:
         az2 += 360
-    naz = max(3, np.int(0.25 * (az2 - az1) * np.cos(np.radians(el))))
+    naz = max(3, np.int64(0.25 * (az2 - az1) * np.cos(np.radians(el))))
     quats = []
     for az in np.linspace(az1, az2, naz):
         quats.append(from_angles(az % 360, el))
@@ -1447,7 +1447,7 @@ def add_scan(
     log = Logger.get()
     ces_time = tstop - tstart
     if ces_time > args.ces_max_time_s:  # and not args.pole_mode:
-        nsub = np.int(np.ceil(ces_time / args.ces_max_time_s))
+        nsub = np.int64(np.ceil(ces_time / args.ces_max_time_s))
         ces_time /= nsub
     aztimes = np.array(aztimes)
     azmins = np.array(azmins)
@@ -2114,7 +2114,7 @@ def parse_args(opts=None):
         "--ra-period",
         required=False,
         default=10,
-        type=np.int,
+        type=np.int64,
         help="Period of patch position oscillations in RA [visits]",
     )
     parser.add_argument(
@@ -2128,7 +2128,7 @@ def parse_args(opts=None):
         "--dec-period",
         required=False,
         default=10,
-        type=np.int,
+        type=np.int64,
         help="Period of patch position oscillations in DEC [visits]",
     )
     parser.add_argument(
@@ -2277,13 +2277,13 @@ def parse_args(opts=None):
     parser.add_argument(
         "--operational-days",
         required=False,
-        type=np.int,
+        type=np.int64,
         help="Number of operational days to schedule (empty days do not count)",
     )
     parser.add_argument(
         "--timezone",
         required=False,
-        type=np.int,
+        type=np.int64,
         default=0,
         help="Offset to apply to MJD to separate operational days [hours]",
     )
@@ -2761,8 +2761,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         moon_avoidance_color = "gray"
         alpha = 0.5
         avoidance_alpha = 0.01
-        sun_step = np.int(86400 * 1)
-        moon_step = np.int(86400 * 0.1)
+        sun_step = np.int64(86400 * 1)
+        moon_step = np.int64(86400 * 0.1)
         for iplot, coord in enumerate("CEG"):
             scoord = {"C": "Equatorial", "E": "Ecliptic", "G": "Galactic"}[coord]
             title = scoord  # + ' patch locations'
@@ -2812,7 +2812,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                     moon_lw,
                 ),
             ]:
-                for t in range(np.int(start_timestamp), np.int(stop_timestamp), step):
+                for t in range(np.int64(start_timestamp), np.int64(stop_timestamp), step):
                     observer.date = to_DJD(t)
                     sso.compute(observer)
                     lon.append(sso.a_ra / degree)

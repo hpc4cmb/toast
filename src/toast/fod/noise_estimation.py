@@ -162,9 +162,9 @@ class OpNoiseEstim:
             # Extend the gap between intervals to prevent sample pairs
             # that cross the gap.
 
-            gap_min = np.int(self._lagmax) + 1
+            gap_min = np.int64(self._lagmax) + 1
             # Downsampled data requires longer gaps
-            gap_min_nsum = np.int(self._lagmax * self._nsum) + 1
+            gap_min_nsum = np.int64(self._lagmax * self._nsum) + 1
             offset, nsamp = tod.local_samples
             gapflags = np.zeros_like(commonflags)
             gapflags_nsum = np.zeros_like(commonflags)

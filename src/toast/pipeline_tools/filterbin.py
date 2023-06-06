@@ -34,7 +34,7 @@ def add_filterbin_args(parser):
     parser.add_argument(
         "--filterbin-ground-order",
         required=False,
-        type=np.int,
+        type=np.int64,
         help="Ground filter order",
         dest="filterbin_ground_order",
     )
@@ -56,7 +56,7 @@ def add_filterbin_args(parser):
     parser.add_argument(
         "--filterbin-poly-order",
         required=False,
-        type=np.int,
+        type=np.int64,
         help="Polynomial filter order",
         dest="filterbin_poly_order",
     )
@@ -165,7 +165,7 @@ def add_filterbin_args(parser):
     # `nside` may already be added
     try:
         parser.add_argument(
-            "--nside", required=False, default=512, type=np.int, help="Healpix NSIDE"
+            "--nside", required=False, default=512, type=np.int64, help="Healpix NSIDE"
         )
     except argparse.ArgumentError:
         pass

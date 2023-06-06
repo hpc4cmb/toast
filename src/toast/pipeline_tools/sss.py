@@ -23,7 +23,7 @@ def add_sss_args(parser):
         "--ground-nside",
         required=False,
         default=128,
-        type=np.int,
+        type=np.int64,
         help="Ground template resolution",
     )
     parser.add_argument(
@@ -37,7 +37,7 @@ def add_sss_args(parser):
         "--ground-lmax",
         required=False,
         default=256,
-        type=np.int,
+        type=np.int64,
         help="Ground template expansion order",
     )
     parser.add_argument(

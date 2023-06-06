@@ -43,7 +43,7 @@ def log_bin(data, nbin=100):
 
     locs = np.digitize(ind, bins)
 
-    hits = np.zeros(nbin + 2, dtype=np.int)
+    hits = np.zeros(nbin + 2, dtype=np.int64)
     binned = np.zeros(nbin + 2, dtype=data.dtype)
 
     for i, ibin in enumerate(locs):

@@ -79,7 +79,7 @@ def add_polyfilter2D_args(parser):
         "--poly-order2D",
         required=False,
         default=0,
-        type=np.int,
+        type=np.int64,
         help="Polynomial order for the 2D polyfilter",
     )
     # Common flag mask may already be added
@@ -119,7 +119,7 @@ def add_polyfilter_args(parser):
         "--poly-order",
         required=False,
         default=0,
-        type=np.int,
+        type=np.int64,
         help="Polynomial order for the polyfilter",
     )
     # Common flag mask may already be added
@@ -232,7 +232,7 @@ def add_groundfilter_args(parser):
         "--ground-order",
         required=False,
         default=0,
-        type=np.int,
+        type=np.int64,
         help="Ground template order",
     )
     # Common flag mask may already be added

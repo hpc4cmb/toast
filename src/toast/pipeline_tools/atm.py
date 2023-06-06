@@ -86,7 +86,7 @@ def add_atmosphere_args(parser):
         "--atm-verbosity",
         required=False,
         default=0,
-        type=np.int,
+        type=np.int64,
         help="Atmospheric sim verbosity level",
     )
     parser.add_argument(
@@ -170,7 +170,7 @@ def add_atmosphere_args(parser):
         "--atm-nelem-sim-max",
         required=False,
         default=10000,
-        type=np.int,
+        type=np.int64,
         help="controls the size of the simulation slices",
     )
     parser.add_argument(

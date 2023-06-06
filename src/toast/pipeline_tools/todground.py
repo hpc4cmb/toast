@@ -265,7 +265,7 @@ def add_todground_args(parser):
     parser.add_argument(
         "--timezone",
         required=False,
-        type=np.int,
+        type=np.int64,
         default=0,
         help="Offset to apply to MJD to separate days [hours]",
     )
@@ -603,8 +603,8 @@ def load_schedule(args, comm):
         isplit, nsplit = None, None
         if args.split_schedule is not None:
             isplit, nsplit = args.split_schedule.split(",")
-            isplit = np.int(isplit)
-            nsplit = np.int(nsplit)
+            isplit = np.int64(isplit)
+            nsplit = np.int64(nsplit)
             scan_counters = {}
         for fn in args.schedule.split(","):
             if not os.path.isfile(fn):

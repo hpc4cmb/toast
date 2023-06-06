@@ -94,7 +94,7 @@ def add_binner_args(parser):
     # `nside` may already be added
     try:
         parser.add_argument(
-            "--nside", required=False, default=512, type=np.int, help="Healpix NSIDE"
+            "--nside", required=False, default=512, type=np.int64, help="Healpix NSIDE"
         )
     except argparse.ArgumentError:
         pass
