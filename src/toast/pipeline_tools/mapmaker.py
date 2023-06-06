@@ -57,7 +57,7 @@ def add_mapmaker_args(parser):
         "--mapmaker-baseline-length",
         required=False,
         default=10000.0,
-        type=np.float,
+        type=np.float64,
         help="Destriping baseline length (seconds)",
         dest="mapmaker_baseline_length",
     )

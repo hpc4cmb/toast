@@ -15,7 +15,7 @@ if "TOAST_STARTUP_DELAY" in os.environ:
     import numpy as np
     import time
 
-    delay = np.float(os.environ["TOAST_STARTUP_DELAY"])
+    delay = np.float64(os.environ["TOAST_STARTUP_DELAY"])
     wait = np.random.rand() * delay
     # print('Sleeping for {} seconds before importing TOAST'.format(wait),
     #      flush=True)

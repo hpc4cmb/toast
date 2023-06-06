@@ -57,7 +57,7 @@ def add_madam_args(parser):
         "--madam-baseline-length",
         required=False,
         default=10000.0,
-        type=np.float,
+        type=np.float64,
         help="Destriping baseline length (seconds)",
         dest="mapmaker_baseline_length",
     )
@@ -264,7 +264,7 @@ def add_madam_args(parser):
             "--sample-rate",
             required=False,
             default=100.0,
-            type=np.float,
+            type=np.float64,
             help="Detector sample rate (Hz)",
         )
     except argparse.ArgumentError:

@@ -82,7 +82,7 @@ def add_todsatellite_args(parser):
         parser.add_argument(
             "--hwp-rpm",
             required=False,
-            type=np.float,
+            type=np.float64,
             help="The rate (in RPM) of the HWP rotation",
         )
     except argparse.ArgumentError:
@@ -91,7 +91,7 @@ def add_todsatellite_args(parser):
         parser.add_argument(
             "--hwp-step-deg",
             required=False,
-            type=np.float,
+            type=np.float64,
             help="For stepped HWP, the angle in degrees of each step",
         )
     except argparse.ArgumentError:
@@ -100,7 +100,7 @@ def add_todsatellite_args(parser):
         parser.add_argument(
             "--hwp-step-time-s",
             required=False,
-            type=np.float,
+            type=np.float64,
             help="For stepped HWP, the time in seconds between steps",
         )
     except argparse.ArgumentError:

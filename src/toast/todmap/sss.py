@@ -195,7 +195,7 @@ class OpSimScanSynchronousSignal(Operator):
                     counter=(counter1, counter2),
                     sampler="gaussian",
                 )
-                sssmap = np.array(sssmap, dtype=np.float)
+                sssmap = np.array(sssmap, dtype=np.float64)
                 sssmap = hp.smoothing(
                     sssmap, fwhm=np.radians(self._fwhm), lmax=self._lmax
                 )

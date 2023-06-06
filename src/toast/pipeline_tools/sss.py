@@ -30,7 +30,7 @@ def add_sss_args(parser):
         "--ground-fwhm-deg",
         required=False,
         default=10,
-        type=np.float,
+        type=np.float64,
         help="Ground template smoothing in degrees",
     )
     parser.add_argument(
@@ -44,14 +44,14 @@ def add_sss_args(parser):
         "--ground-scale",
         required=False,
         default=1e-3,
-        type=np.float,
+        type=np.float64,
         help="Ground template RMS at el=45 deg",
     )
     parser.add_argument(
         "--ground-power",
         required=False,
         default=-1,
-        type=np.float,
+        type=np.float64,
         help="Exponential for suppressing ground pick-up at "
         "higher observing elevation",
     )

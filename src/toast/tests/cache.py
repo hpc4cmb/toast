@@ -184,9 +184,9 @@ class CacheTest(MPITestCase):
 
     def test_create_none(self):
         try:
-            ref = self.cache.create(None, np.float, (1, 10))
+            ref = self.cache.create(None, np.float64, (1, 10))
             del ref
-            ref = self.pycache.create(None, np.float, (1, 10))
+            ref = self.pycache.create(None, np.float64, (1, 10))
             del ref
             raise RuntimeError("Creating object with None key succeeded")
         except ValueError:
@@ -198,9 +198,9 @@ class CacheTest(MPITestCase):
 
     def test_put_none(self):
         try:
-            ref = self.cache.put(None, np.float, np.arange(10))
+            ref = self.cache.put(None, np.float64, np.arange(10))
             del ref
-            ref = self.pycache.put(None, np.float, np.arange(10))
+            ref = self.pycache.put(None, np.float64, np.arange(10))
             del ref
             raise RuntimeError("Putting an object with None key succeeded")
         except ValueError:

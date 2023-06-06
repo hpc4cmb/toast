@@ -158,7 +158,7 @@ def add_conviqt_args(parser):
     parser.add_argument(
         "--conviqt-fwhm",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Sky fwhm [arcmin] to deconvolve",
     )
     parser.add_argument(

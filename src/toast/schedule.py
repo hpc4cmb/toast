@@ -250,7 +250,7 @@ class Patch(object):
             az2 = unwind_angle(az1, azs[j])
             el2 = els[j]
             azmean = 0.5 * (az1 + az2)
-            az0 = unwind_angle(azmean, np.float(obj.az), np.pi)
+            az0 = unwind_angle(azmean, np.float64(obj.az), np.pi)
             if (az1 - az0) * (az2 - az0) > 0:
                 # the constant meridian is not between the two corners
                 continue
@@ -279,7 +279,7 @@ class Patch(object):
                 els_cross[:i] += 2 * np.pi
                 els_cross = np.sort(els_cross)
         el_mean = np.mean(els_cross)
-        el0 = unwind_angle(el_mean, np.float(obj.alt))
+        el0 = unwind_angle(el_mean, np.float64(obj.alt))
 
         ncross = np.sum(els_cross > el0)
 
@@ -1875,7 +1875,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         el_min = 90
         el_max = 0
         for el in args.elevations_deg.split(","):
-            el = np.float(el)
+            el = np.float64(el)
             el_min = min(el * 0.9, el_min)
             el_max = max(el * 1.1, el_max)
     el_min *= degree
@@ -2099,14 +2099,14 @@ def parse_args(opts=None):
         "--site-alt",
         required=False,
         default=100,
-        type=np.float,
+        type=np.float64,
         help="Observing site altitude [meters]",
     )
     parser.add_argument(
         "--scan-margin",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Random fractional margin [0..1] added to the "
         "scans to smooth out edge effects",
     )
@@ -2121,7 +2121,7 @@ def parse_args(opts=None):
         "--ra-amplitude-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Amplitude of patch position oscillations in RA [deg]",
     )
     parser.add_argument(
@@ -2135,21 +2135,21 @@ def parse_args(opts=None):
         "--dec-amplitude-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Amplitude of patch position oscillations in DEC [deg]",
     )
     parser.add_argument(
         "--elevation-penalty-limit",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Assign a penalty to observing elevations below this limit [degrees]",
     )
     parser.add_argument(
         "--elevation-penalty-power",
         required=False,
         default=2,
-        type=np.float,
+        type=np.float64,
         help="Power in the elevation penalty function [> 0] ",
     )
     parser.add_argument(
@@ -2192,21 +2192,21 @@ def parse_args(opts=None):
         "--el-min-deg",
         required=False,
         default=30,
-        type=np.float,
+        type=np.float64,
         help="Minimum elevation for a CES",
     )
     parser.add_argument(
         "--el-max-deg",
         required=False,
         default=80,
-        type=np.float,
+        type=np.float64,
         help="Maximum elevation for a CES",
     )
     parser.add_argument(
         "--el-step-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Optional step to apply to minimum elevation",
     )
     parser.add_argument(
@@ -2220,42 +2220,42 @@ def parse_args(opts=None):
         "--fp-radius-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Focal plane radius [deg]",
     )
     parser.add_argument(
         "--sun-avoidance-angle-deg",
         required=False,
         default=30,
-        type=np.float,
+        type=np.float64,
         help="Minimum distance between the Sun and the bore sight [deg]",
     )
     parser.add_argument(
         "--moon-avoidance-angle-deg",
         required=False,
         default=20,
-        type=np.float,
+        type=np.float64,
         help="Minimum distance between the Moon and the bore sight [deg]",
     )
     parser.add_argument(
         "--sun-el-max-deg",
         required=False,
         default=90,
-        type=np.float,
+        type=np.float64,
         help="Maximum allowed sun elevation [deg]",
     )
     parser.add_argument(
         "--boresight-angle-step-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Boresight rotation step size [deg]",
     )
     parser.add_argument(
         "--boresight-angle-time-min",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Boresight rotation step interval [minutes]",
     )
     parser.add_argument(
@@ -2291,21 +2291,21 @@ def parse_args(opts=None):
         "--gap-s",
         required=False,
         default=100,
-        type=np.float,
+        type=np.float64,
         help="Gap between CES:es [seconds]",
     )
     parser.add_argument(
         "--gap-small-s",
         required=False,
         default=10,
-        type=np.float,
+        type=np.float64,
         help="Gap between split CES:es [seconds]",
     )
     parser.add_argument(
         "--time-step-s",
         required=False,
         default=600,
-        type=np.float,
+        type=np.float64,
         help="Time step after failed target acquisition [seconds]",
     )
     parser.add_argument(
@@ -2319,7 +2319,7 @@ def parse_args(opts=None):
         "--ces-max-time-s",
         required=False,
         default=900,
-        type=np.float,
+        type=np.float64,
         help="Maximum length of a CES [seconds]",
     )
     parser.add_argument(
@@ -2337,13 +2337,13 @@ def parse_args(opts=None):
     parser.add_argument(
         "--pol-min",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Lower plotting range for polarization map",
     )
     parser.add_argument(
         "--pol-max",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Upper plotting range for polarization map",
     )
     parser.add_argument(
@@ -2364,14 +2364,14 @@ def parse_args(opts=None):
         "--pole-el-step-deg",
         required=False,
         default=0.25,
-        type=np.float,
+        type=np.float64,
         help="Elevation step in pole scheduling mode [deg]",
     )
     parser.add_argument(
         "--pole-ces-time-s",
         required=False,
         default=3000,
-        type=np.float,
+        type=np.float64,
         help="Time to scan at constant elevation in pole mode",
     )
     parser.add_argument(
@@ -2381,7 +2381,7 @@ def parse_args(opts=None):
         "--boresight-offset-el-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Optional offset added to every observing elevation, "
         "measured with boresight at horizon level.",
     )
@@ -2389,7 +2389,7 @@ def parse_args(opts=None):
         "--boresight-offset-az-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Optional offset added to every observing azimuth, "
         "measured with boresight at horizon level.",
     )

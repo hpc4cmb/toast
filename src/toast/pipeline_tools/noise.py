@@ -50,7 +50,7 @@ def add_noise_args(parser):
             "--sample-rate",
             required=False,
             default=100.0,
-            type=np.float,
+            type=np.float64,
             help="Detector sample rate (Hz)",
         )
     except argparse.ArgumentError:

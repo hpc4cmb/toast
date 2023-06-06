@@ -35,7 +35,7 @@ def add_gainscrambler_args(parser):
         "--gain-sigma",
         required=False,
         default=0.01,
-        type=np.float,
+        type=np.float64,
         help="Simulated gain fluctuation amplitude",
     )
     return
