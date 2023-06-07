@@ -268,11 +268,6 @@ class SimTotalconvolveTest(MPITestCase):
                         rtol=1e-3,
                         atol=1e-3,
                     ):
-                        import pdb
-
-                        import matplotlib.pyplot as plt
-
-                        pdb.set_trace()
                         fail = True
                         break
                 if fail:
