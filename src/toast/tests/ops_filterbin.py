@@ -755,8 +755,12 @@ class FilterBinTest(MPITestCase):
                 filenames.append(fname_matrix)
 
             fname_matrix = f"{self.outdir}/noiseweighted_run_obs_matrix"
+            if MPI is None:
+                comm_self = None
+            else:
+                comm_self = MPI.COMM_SELF
             fname_matrix = ops.coadd_observation_matrix(
-                filenames, fname_matrix, double_precision=True, comm=MPI.COMM_SELF
+                filenames, fname_matrix, double_precision=True, comm=comm_self
             )
             obs_matrix2 = scipy.sparse.load_npz(fname_matrix)
             obs_matrix2.sort_indices()
