@@ -27,7 +27,8 @@ from ._helpers import (
     fake_flags,
 )
 from .mpi import MPITestCase
-from ..mpi import Comm
+from ..mpi import Comm, MPI
+
 
 class FilterBinTest(MPITestCase):
     def setUp(self):
@@ -726,18 +727,19 @@ class FilterBinTest(MPITestCase):
             filterbin.apply(obs_data)
             close_data(obs_data)
 
+        if data.comm.comm_world is not None:
+            # Make sure all observations are processed before proceeding
+            data.comm.comm_world.Barrier()
+
         if data.comm.world_rank == 0:
             import matplotlib.pyplot as plt
 
             # Assemble the single-run matrix
 
             rootname = os.path.join(self.outdir, f"split_run_obs_matrix")
-            #try:
             fname_matrix = ops.combine_observation_matrix(rootname)
             obs_matrix1 = scipy.sparse.load_npz(fname_matrix)
             obs_matrix1.sort_indices()
-            #except:
-            #    obs_matrix1 = None
 
             # Assemble the noise-weighted, per-observation matrix
             fnames = glob.glob(
@@ -753,16 +755,14 @@ class FilterBinTest(MPITestCase):
                 filenames.append(fname_matrix)
 
             fname_matrix = f"{self.outdir}/noiseweighted_run_obs_matrix"
-            command = f"toast_obsmatrix_coadd --outmatrix {fname_matrix}"
-            for filename in filenames:
-                command += f" {filename}"
-            os.system(command)
-
-            fname_matrix += ".npz"
+            fname_matrix = ops.coadd_observation_matrix(
+                filenames, fname_matrix, double_precision=True, comm=MPI.COMM_SELF
+            )
             obs_matrix2 = scipy.sparse.load_npz(fname_matrix)
             obs_matrix2.sort_indices()
 
-            # Compare the values that are not tiny. Some of the tiny values may be missing in one matrix
+            # Compare the values that are not tiny. Some of the tiny
+            # values may be missing in one matrix
 
             values1 = obs_matrix1.data[np.abs(obs_matrix1.data) > 1e-10]
             values2 = obs_matrix2.data[np.abs(obs_matrix2.data) > 1e-10]
