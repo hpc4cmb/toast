@@ -69,12 +69,6 @@ class HWPFilterTest(MPITestCase):
                 old_signal = ob.detdata["signal_copy"][det]
                 new_signal = ob.detdata[defaults.det_data][det]
                 # Check that the filtered signal is cleaner than the input signal
-                if np.std(new_signal[good]) > np.std(old_signal[good]):
-                    import pdb
-
-                    import matplotlib.pyplot as plt
-
-                    pdb.set_trace()
                 self.assertTrue(np.std(new_signal[good]) < np.std(old_signal[good]))
                 # Check that the flagged samples were also cleaned and not,
                 # for example, set to zero. Use np.diff() to remove any

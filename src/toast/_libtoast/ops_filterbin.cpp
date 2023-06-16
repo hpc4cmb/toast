@@ -1,5 +1,5 @@
 
-// Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
@@ -88,21 +88,142 @@ void project_signal_offsets(py::array_t <double> ref, py::list todslices,
     }
 }
 
+void add_matrix(
+                py::array_t <double, py::array::c_style | py::array::forcecast> data1,
+                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indices1,
+                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indptr1,
+                py::array_t <double, py::array::c_style | py::array::forcecast> data2,
+                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indices2,
+                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indptr2,
+                py::array_t <double, py::array::c_style | py::array::forcecast> data3,
+                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indices3,
+                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indptr3
+) {
+  /* Compiled kernel to add two CSR matrices
+   */
+    auto fast_data1 = data1.unchecked <1>();
+    auto fast_indices1 = indices1.unchecked <1>();
+    auto fast_indptr1 = indptr1.unchecked <1>();
+    auto fast_data2 = data2.unchecked <1>();
+    auto fast_indices2 = indices2.unchecked <1>();
+    auto fast_indptr2 = indptr2.unchecked <1>();
+    auto fast_data3 = data3.mutable_unchecked <1>();
+    auto fast_indices3 = indices3.mutable_unchecked <1>();
+    auto fast_indptr3 = indptr3.mutable_unchecked <1>();
+
+    const size_t n1 = fast_data1.shape(0);
+    const size_t n2 = fast_data2.shape(0);
+    const size_t n3 = fast_data3.shape(0);
+    if (indptr1.shape(0) != indptr2.shape(0) ||
+        indptr1.shape(0) != indptr3.shape(0)) {
+        throw std::length_error("Input and output sizes do not agree");
+    }
+    const size_t nrow = indptr1.shape(0) - 1;
+
+    // Collect each row's data into vectors
+    std::vector <std::vector<double> > row_data(nrow);
+    std::vector <std::vector<int64_t> > row_indices(nrow);
+
+    #pragma omp parallel for schedule(static, 4)
+    for (size_t row=0; row < nrow; ++row) {
+        const size_t start1 = fast_indptr1[row];
+        const size_t stop1 = fast_indptr1[row + 1];
+        const size_t start2 = fast_indptr2[row];
+        const size_t stop2 = fast_indptr2[row + 1];
+        if (start1 == stop1 && start2 == stop2) continue;
+        size_t n;
+        if (start2 == stop2) {
+            // Only first matrix has entries
+            n = stop1 - start1;
+            row_indices[row].resize(n);
+            memcpy(row_indices[row].data(),
+                   &fast_indices1[start1],
+                   n * sizeof(int64_t));
+            row_data[row].resize(n);
+            memcpy(row_data[row].data(),
+                   &fast_data1[start1],
+                   n * sizeof(double));
+        } else if (start1 == stop1) {
+            // Only second matrix has entries
+            n = stop2 - start2;
+            row_indices[row].resize(n);
+            memcpy(row_indices[row].data(),
+                   &fast_indices2[start2],
+                   n * sizeof(int64_t));
+            row_data[row].resize(n);
+            memcpy(row_data[row].data(),
+                   &fast_data2[start2],
+                   n * sizeof(double));
+        } else {
+            // Both matrices have entries
+            std::map <size_t, double> datamap;
+            for (size_t ind1 = start1; ind1 < stop1; ++ind1) {
+                const size_t col1 = fast_indices1[ind1];
+                const double value1 = fast_data1[ind1];
+                datamap[col1] = value1;
+            }
+            for (size_t ind2 = start2; ind2 < stop2; ++ind2) {
+                const size_t col2 = fast_indices2[ind2];
+                const double value2 = fast_data2[ind2];
+                const auto &match = datamap.find(col2);
+                if (match == datamap.end()) {
+                  datamap[col2] = value2;
+                } else {
+                  match->second += value2;
+                }
+            }
+            n = datamap.size();
+            row_indices[row].resize(n);
+            row_data[row].resize(n);
+            size_t offset = 0;
+            for (const auto &item : datamap) {
+                row_indices[row][offset] = item.first;
+                row_data[row][offset] = item.second;
+                ++offset;
+            }
+        }
+        // Store the number of nonzeros in the index pointer array.
+        // We take a cumulative sum later
+        fast_indptr3[row + 1] = n;
+    }
+
+    // Cumulative sum of the nonzeros is the offset
+    for (size_t row = 2; row < nrow + 1; ++row) {
+        fast_indptr3[row] += fast_indptr3[row - 1];
+    }
+
+    // Pack the row vectors into the output arrays
+    #pragma omp parallel for schedule(static, 4)
+    for (size_t row = 0; row < nrow; ++row) {
+        size_t n = row_data[row].size();
+        if (n == 0) continue;
+        size_t offset = fast_indptr3[row];
+        memcpy(&fast_indices3[offset],
+               row_indices[row].data(),
+               n * sizeof(int64_t));
+        memcpy(&fast_data3[offset],
+               row_data[row].data(),
+               n * sizeof(double));
+    }
+}
+
 void expand_matrix(py::array_t <double> compressed_matrix,
                    py::array_t <int64_t> local_to_global,
                    int64_t npix,
                    int64_t nnz,
+                   py::array_t <double> values,
                    py::array_t <int64_t> indices,
                    py::array_t <int64_t> indptr
 ) {
     auto fast_matrix = compressed_matrix.unchecked <2>();
     auto fast_local_to_global = local_to_global.unchecked <1>();
+    auto fast_values = values.mutable_unchecked <1>();
     auto fast_indices = indices.mutable_unchecked <1>();
     auto fast_indptr = indptr.mutable_unchecked <1>();
 
     size_t nlocal = fast_local_to_global.shape(0);
     size_t nlocal_tot = fast_matrix.shape(0);
-    std::vector <int64_t> col_indices;
+    std::vector <size_t> col_indices;
 
     size_t offset = 0;
     for (size_t inz = 0; inz < nnz; ++inz) {
@@ -118,19 +239,28 @@ void expand_matrix(py::array_t <double> compressed_matrix,
     for (size_t inz = 0; inz < nnz; ++inz) {
         size_t global_pixel = 0;
         for (size_t ilocal = 0; ilocal < nlocal; ++ilocal) {
+            size_t local_row = ilocal + inz * nlocal;
             size_t iglobal = fast_local_to_global[ilocal];
+            // Skip empty rows before the current pixel index
             while (global_pixel < iglobal) {
                 fast_indptr[global_row + 1] = offset;
                 global_row++;
                 global_pixel++;
             }
-            for (auto ind : col_indices) {
-                fast_indices[offset++] = ind;
+            // Copy a row of the dense matrix into the sparse one
+            for (size_t local_col=0; local_col < col_indices.size(); ++local_col) {
+                size_t ind = col_indices[local_col];
+                double value = fast_matrix(local_row, local_col);
+                if (value != 0) {
+                    fast_values[offset] = value;
+                    fast_indices[offset++] = ind;
+                }
             }
             fast_indptr[global_row + 1] = offset;
-            global_pixel++;
             global_row++;
+            global_pixel++;
         }
+        // Skip empty rows trailing the last pixel in the dense matrix
         while (global_pixel < npix) {
             fast_indptr[global_row + 1] = offset;
             global_row++;
@@ -324,5 +454,6 @@ void init_todmap_mapmaker(py::module & m) {
     m.def("apply_flags_to_pixels", &apply_flags_to_pixels);
     m.def("accumulate_observation_matrix", &accumulate_observation_matrix);
     m.def("expand_matrix", &expand_matrix);
+    m.def("add_matrix", &add_matrix);
     m.def("build_template_covariance", &build_template_covariance);
 }

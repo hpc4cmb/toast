@@ -17,15 +17,18 @@ from .._libtoast import (
     accumulate_observation_matrix,
     build_template_covariance,
     expand_matrix,
+    add_matrix,
     fourier,
     legendre,
 )
-from ..mpi import MPI
+from ..covariance import covariance_apply, covariance_invert
+from ..mpi import MPI, get_world
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import (
     filename_is_fits,
     filename_is_hdf5,
+    read_healpix,
     read_healpix_fits,
     read_healpix_hdf5,
     write_healpix_fits,
@@ -200,6 +203,209 @@ def combine_observation_matrix(rootname):
     return f"{rootname}.npz"
 
 
+def coadd_observation_matrix(
+        inmatrix,
+        outmatrix,
+        file_invcov=None,
+        file_cov=None,
+        nside_submap=16,
+        rcond_limit=1e-3,
+        double_precision=False,
+        comm=None,
+):
+    """ Co-add noise-weighted or unweighted observation matrices
+
+    Args:
+        inmatrix(iterable) : One or more noise-weighted observation matrix files
+        outmatrix(string) : Name of output file
+        file_invcov(string) : Name of output inverse covariance file
+        file_cov(string) : Name of output covariance file
+        nside_submap(int) : Submap size is 12 * nside_submap ** 2.
+            Number of submaps is (nside / nside_submap) ** 2
+        rcond_limit(float) : "Reciprocal condition number limit
+        double_precision(bool) : Output in double precision
+    """
+
+    log = Logger.get()
+    if comm is None:
+        comm, ntask, rank = get_world()
+    else:
+        ntask = comm.size
+        rank = comm.rank
+    timer0 = Timer()
+    timer1 = Timer()
+    timer0.start()
+    timer1.start()
+
+    if double_precision:
+        dtype = np.float64
+    else:
+        dtype = np.float32
+
+    if len(inmatrix) == 1:
+        # Only one file provided, try interpreting it as a text file with a list
+        try:
+            with open(inmatrix[0], "r") as listfile:
+                infiles = listfile.readlines()
+            log.info_rank(f"Loaded {inmatrix[0]} in", timer=timer1, comm=comm)
+        except UnicodeDecodeError:
+            # Didn't work. Assume that user supplied a single matrix file
+            infiles = inmatrix
+    else:
+        infiles = inmatrix
+
+    obs_matrix_sum = None
+    invcov_sum = None
+    nnz = None
+    npix = None
+
+    for ifine, infile_matrix in enumerate(infiles):
+        infile_matrix = infile_matrix.strip()
+        if "noiseweighted" not in infile_matrix:
+            msg = f"Observation matrix does not seem to be " \
+                  f"noise-weighted: '{infile_matrix}'"
+            raise RuntimeError(msg)
+        prefix = ""
+        log.info(f"{prefix}Loading {infile_matrix}")
+        obs_matrix = scipy.sparse.load_npz(infile_matrix)
+        if obs_matrix_sum is None:
+            obs_matrix_sum = obs_matrix
+        else:
+            obs_matrix_sum += obs_matrix
+        log.info_rank(f"{prefix}Loaded {infile_matrix} in", timer=timer1, comm=None)
+
+        # We'll need the white noise covariance as well
+        infile_invcov = infile_matrix.replace("noiseweighted_obs_matrix.npz", "invcov")
+        if os.path.isfile(infile_invcov + ".fits"):
+            infile_invcov += ".fits"
+        elif os.path.isfile(infile_invcov + ".h5"):
+            infile_invcov += ".h5"
+        else:
+            msg = f"Cannot find an inverse covariance matrix to go " \
+                "with '{infile_matrix}'"
+            raise RuntimeError(msg)
+        log.info(f"{prefix}Loading {infile_invcov}")
+        invcov = read_healpix(
+            infile_invcov, None, nest=True, dtype=float, verbose=False
+        )
+        if invcov_sum is None:
+            invcov_sum = invcov
+            nnzcov, npix = invcov.shape
+            nnz = 1
+            while (nnz * (nnz + 1)) // 2 != nnzcov:
+                nnz += 1
+            npixtot = npix * nnz
+        else:
+            invcov_sum += invcov
+        log.info_rank(f"{prefix}Loaded {infile_invcov} in", timer=timer1, comm=None)
+
+    # Put the inverse white noise covariance in a TOAST pixel object
+
+    npix_submap = 12 * nside_submap**2
+    nsubmap = npix // npix_submap
+    local_submaps = [submap for submap in range(nsubmap) if submap % ntask == rank]
+    dist = PixelDistribution(
+        n_pix=npix, n_submap=nsubmap, local_submaps=local_submaps, comm=comm
+    )
+    dist_cov = PixelData(dist, float, n_value=nnzcov)
+    for local_submap, global_submap in enumerate(local_submaps):
+        pix_start = global_submap * npix_submap
+        pix_stop = pix_start + npix_submap
+        dist_cov.data[local_submap] = invcov_sum[:, pix_start:pix_stop].T
+    del invcov_sum
+
+    # Optionally write out the inverse white noise covariance
+
+    if file_invcov is not None:
+        log.info_rank(f"Writing {file_invcov}", comm=comm)
+        if filename_is_fits(file_invcov):
+            write_healpix_fits(
+                dist_cov,
+                file_invcov,
+                nest=True,
+                single_precision=not double_precision,
+            )
+        else:
+            write_healpix_hdf5(
+                dist_cov,
+                file_invcov,
+                nest=True,
+                single_precision=not double_precision,
+                force_serial=True,
+            )
+        log.info_rank(f"Wrote {file_invcov}", timer=timer1, comm=comm)
+
+    # Invert the white noise covariance
+
+    log.info_rank("Inverting white noise matrices", comm=comm)
+    dist_rcond = PixelData(dist, float, n_value=1)
+    covariance_invert(dist_cov, rcond_limit, rcond=dist_rcond, use_alltoallv=True)
+    log.info_rank(f"Inverted white noise matrices in", timer=timer1, comm=comm)
+
+    # Optionally write out the white noise covariance
+
+    if file_cov is not None:
+        log.info_rank(f"Writing {file_cov}", comm=comm)
+        if filename_is_fits(file_cov):
+            write_healpix_fits(
+                dist_cov,
+                file_cov,
+                nest=True,
+                single_precision=not double_precision,
+            )
+        else:
+            write_healpix_hdf5(
+                dist_cov,
+                file_cov,
+                nest=True,
+                single_precision=not double_precision,
+                force_serial=True,
+            )
+        log.info_rank(f"Wrote {file_cov} in", timer=timer1, comm=comm)
+
+    # De-weight the observation matrix
+
+    log.info_rank(f"De-weighting obs matrix", comm=comm)
+    cc = scipy.sparse.dok_matrix((npixtot, npixtot), dtype=np.float64)
+    nsubmap = dist_cov.distribution.n_submap
+    npix_submap = dist_cov.distribution.n_pix_submap
+    for isubmap_local, isubmap_global in enumerate(
+        dist_cov.distribution.local_submaps
+    ):
+        submap = dist_cov.data[isubmap_local]
+        offset = isubmap_global * npix_submap
+        for pix_local in range(npix_submap):
+            if np.all(submap[pix_local] == 0):
+                continue
+            pix = pix_local + offset
+            icov = 0
+            for inz in range(nnz):
+                for jnz in range(inz, nnz):
+                    cc[pix + inz * npix, pix + jnz * npix] = submap[
+                        pix_local, icov
+                    ]
+                    if inz != jnz:
+                        cc[pix + jnz * npix, pix + inz * npix] = submap[
+                            pix_local, icov
+                        ]
+                    icov += 1
+    cc = cc.tocsr()
+    obs_matrix_sum = cc.dot(obs_matrix_sum)
+    log.info_rank(f"De-weighted obs matrix in", timer=timer1, comm=comm)
+
+    # Write out the co-added and de-weighted matrix
+
+    log.info_rank(f"Writing {outmatrix}", comm=comm)
+    scipy.sparse.save_npz(outmatrix, obs_matrix_sum.astype(dtype))
+    log.info_rank(f"Wrote {outmatrix}.npz in", timer=timer1, comm=comm)
+
+    log.info_rank(
+        f"Co-added and de-weighted obs matrix in", timer=timer0, comm=comm
+    )
+
+    return outmatrix + ".npz"
+
+
 @trait_docs
 class FilterBin(Operator):
     """FilterBin buids a template matrix and projects out
@@ -312,6 +518,10 @@ class FilterBin(Operator):
     )
 
     write_obs_matrix = Bool(False, help="Write the observation matrix")
+
+    noiseweight_obs_matrix = Bool(
+        False, help="If True, observation matrix should match noise-weighted maps"
+    )
 
     output_dir = Unicode(
         ".",
@@ -658,15 +868,16 @@ class FilterBin(Operator):
         memreport.apply(data)
 
         if self.write_obs_matrix:
-            log.debug_rank(
-                "FilterBin: Noise-weighting observation matrix", comm=self.comm
-            )
-            self._noiseweight_obs_matrix(data)
-            log.debug_rank(
-                "FilterBin: Noise-weighted observation_matrix in",
-                comm=self.comm,
-                timer=timer2,
-            )
+            if not self.noiseweight_obs_matrix:
+                log.debug_rank(
+                    "FilterBin: De-weighting observation matrix", comm=self.comm
+                )
+                self._deweight_obs_matrix(data)
+                log.debug_rank(
+                    "FilterBin: De-weighted observation_matrix in",
+                    comm=self.comm,
+                    timer=timer2,
+                )
 
             log.info_rank("FilterBin: Collecting observation matrix", comm=self.comm)
             self._collect_obs_matrix()
@@ -877,16 +1088,72 @@ class FilterBin(Operator):
 
     @function_timer
     def _compress_pixels(self, pixels):
+        if any(pixels < 0):
+            msg = f"Unflagged samples have {np.sum(pixels < 0)} negative pixel numbers"
+            raise RuntimeError(msg)
+        if any(pixels >= self.npix):
+            msg = f"Unflagged samples have {np.sum(pixels >= self.npix)} pixels >= {self.npix}"
+            raise RuntimeError(msg)
         local_to_global = np.sort(list(set(pixels)))
         compressed_pixels = np.searchsorted(local_to_global, pixels)
         return compressed_pixels, local_to_global.size, local_to_global
 
     @function_timer
+    def _add_matrix(self, local_obs_matrix, detweight):
+        """Add the local (per detector) observation matrix to the full
+        matrix
+        """
+        log = Logger.get()
+        t1 = time()
+        if False:
+            # Use scipy sparse implementation
+            self.obs_matrix += local_obs_matrix * detweight
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin: Add and construct matrix "
+                    f"in {time() - t1:.2f} s",
+                )
+        else:
+            # Use our own compiled kernel
+            n = self.obs_matrix.nnz + local_obs_matrix.nnz
+            data = np.zeros(n, dtype=np.float64)
+            indices = np.zeros(n, dtype=np.int64)
+            indptr = np.zeros(self.npixtot + 1, dtype=np.int64)
+            add_matrix(
+                self.obs_matrix.data,
+                self.obs_matrix.indices,
+                self.obs_matrix.indptr,
+                local_obs_matrix.data * detweight,
+                local_obs_matrix.indices,
+                local_obs_matrix.indptr,
+                data,
+                indices,
+                indptr,
+            )
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin: Add matrix "
+                    f"in {time() - t1:.2f} s",
+                )
+            t1 = time()
+            n = indptr[-1]
+            self.obs_matrix = scipy.sparse.csr_matrix(
+                (data[:n], indices[:n], indptr),
+                shape=(self.npixtot, self.npixtot),
+            )
+            if self.grank == 0:
+                log.debug(
+                    f"{self.group:4} : FilterBin: construct CSR matrix "
+                    f"in {time() - t1:.2f} s",
+                )
+        return
+
     def _expand_matrix(self, compressed_matrix, local_to_global):
         """Expands a dense, compressed matrix into a sparse matrix with
         global indexing
         """
         n = compressed_matrix.size
+        values = np.zeros(n, dtype=np.float64)
         indices = np.zeros(n, dtype=np.int64)
         indptr = np.zeros(self.npixtot + 1, dtype=np.int64)
         expand_matrix(
@@ -894,12 +1161,14 @@ class FilterBin(Operator):
             local_to_global,
             self.npix,
             self.nnz,
+            values,
             indices,
             indptr,
         )
+        nnz = indptr[-1]
 
         sparse_matrix = scipy.sparse.csr_matrix(
-            (compressed_matrix.ravel(), indices, indptr),
+            (values[:nnz], indices[:nnz], indptr),
             shape=(self.npixtot, self.npixtot),
         )
         return sparse_matrix
@@ -1022,7 +1291,7 @@ class FilterBin(Operator):
         if self.grank == 0:
             log.debug(f"{self.group:4} : FilterBin:     Adding to global")
         detweight = obs[self.binning.noise_model].detector_weight(det)
-        self.obs_matrix += local_obs_matrix * detweight
+        self._add_matrix(local_obs_matrix, detweight)
         if self.grank == 0:
             log.debug(
                 f"{self.group:4} : FilterBin:     Added in {time() - t1:.2f} s",
@@ -1076,7 +1345,7 @@ class FilterBin(Operator):
         return
 
     @function_timer
-    def _noiseweight_obs_matrix(self, data):
+    def _deweight_obs_matrix(self, data):
         """Apply (P^T N^-1 P)^-1 to the cumulative part of the
         observation matrix, P^T N^-1 Z P.
         """
@@ -1202,7 +1471,12 @@ class FilterBin(Operator):
                 factor *= 2
 
             # Write out the observation matrix
-            fname = os.path.join(self.output_dir, f"{self.name}_obs_matrix")
+            if self.noiseweight_obs_matrix:
+                fname = os.path.join(
+                    self.output_dir, f"{self.name}_noiseweighted_obs_matrix"
+                )
+            else:
+                fname = os.path.join(self.output_dir, f"{self.name}_obs_matrix")
             fname += f".{row_start:012}.{row_stop:012}.{nrow_tot:012}"
             log.debug_rank(
                 f"FilterBin: Writing observation matrix to {fname}.npz",

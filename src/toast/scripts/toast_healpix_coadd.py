@@ -118,7 +118,7 @@ def main():
     invcov_sum = None
     nnz, nnz2, npix = None, None, None
     if len(args.inmap) == 1:
-        # Only one file provided, try interpreting it is a text file with a list
+        # Only one file provided, try interpreting it as a text file with a list
         try:
             with open(args.inmap[0], "r") as listfile:
                 infiles = listfile.readlines()
@@ -138,7 +138,7 @@ def main():
         if ifile % ntask != rank:
             continue
         log.info(f"{prefix}Loading file {ifile + 1} / {nfile} : {infile_map}")
-        inmap = read_healpix(infile_map, None, nest=True, dtype=float)
+        inmap = read_healpix(infile_map, None, nest=True, dtype=float, verbose=False)
         log.info_rank(f"{prefix}Loaded {infile_map} in", timer=timer1, comm=None)
         if nnz is None:
             nnz, npix = inmap.shape
@@ -165,7 +165,9 @@ def main():
         infile_invcov = infile_map.replace(mapstring, "invcov")
         if os.path.isfile(infile_invcov):
             log.info(f"{prefix}Loading {infile_invcov}")
-            invcov = read_healpix(infile_invcov, None, nest=True, dtype=float)
+            invcov = read_healpix(
+                infile_invcov, None, nest=True, dtype=float, verbose=False
+            )
             log.info_rank(f"{prefix}Loaded {infile_invcov} in", timer=timer1, comm=None)
         else:
             # Inverse covariance does not exist. Load and invert the
@@ -177,7 +179,7 @@ def main():
                 )
                 raise RuntimeError(msg)
             log.info(f"{prefix}Loading {infile_cov}")
-            cov = read_healpix(infile_cov, None, nest=True, dtype=float)
+            cov = read_healpix(infile_cov, None, nest=True, dtype=float, verbose=False)
             log.info_rank(f"{prefix}Loaded {infile_cov} in", timer=timer1, comm=None)
             nsubmap = npix
             npix_submap = 1

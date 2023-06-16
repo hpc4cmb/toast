@@ -15,6 +15,7 @@ set(ENTRY_POINTS
     toast_hdf5_to_spt3g.py
     toast_mini.py
     toast_obsmatrix_combine.py
+    toast_obsmatrix_coadd.py
     toast_config_verify.py
     toast_merge_timings.py
 )

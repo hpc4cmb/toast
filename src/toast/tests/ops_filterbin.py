@@ -1,7 +1,8 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import glob
 import os
 import sys
 
@@ -26,6 +27,7 @@ from ._helpers import (
     fake_flags,
 )
 from .mpi import MPITestCase
+from ..mpi import Comm, MPI
 
 
 class FilterBinTest(MPITestCase):
@@ -193,7 +195,7 @@ class FilterBinTest(MPITestCase):
                 )
                 if pixels.nest:
                     input_map = hp.reorder(input_map, r2n=True)
-                hp.write_map(input_map_file, input_map, nest=pixels.nest)
+                hp.write_map(input_map_file, input_map, nest=pixels.nest, column_units="K")
 
         if data.comm.comm_world is not None:
             data.comm.comm_world.Barrier()
@@ -327,7 +329,7 @@ class FilterBinTest(MPITestCase):
             input_map = hp.synfast(cls, self.nside, lmax=lmax, fwhm=fwhm, verbose=False)
             if pixels.nest:
                 input_map = hp.reorder(input_map, r2n=True)
-            hp.write_map(input_map_file, input_map, nest=pixels.nest)
+            hp.write_map(input_map_file, input_map, nest=pixels.nest, column_units="K")
 
         # Scan map into timestreams
         scan_hpix = ops.ScanHealpixMap(
@@ -478,7 +480,7 @@ class FilterBinTest(MPITestCase):
             input_map = hp.synfast(cls, self.nside, lmax=lmax, fwhm=fwhm, verbose=False)
             if pixels.nest:
                 input_map = hp.reorder(input_map, r2n=True)
-            hp.write_map(input_map_file, input_map, nest=pixels.nest)
+            hp.write_map(input_map_file, input_map, nest=pixels.nest, column_units="K")
 
         # Scan map into timestreams
         scan_hpix = ops.ScanHealpixMap(
@@ -614,5 +616,161 @@ class FilterBinTest(MPITestCase):
                     if rms2 > 1e-5 * rms1:
                         print(f"rms2 = {rms2}, rms1 = {rms1}")
                     assert rms2 < 1e-5 * rms1
+
+        close_data(data)
+
+    def test_filterbin_obsmatrix_noiseweighted(self):
+        if sys.platform.lower() == "darwin":
+            print(f"WARNING:  Skipping test_filterbin_obsmatrix_noiseweighted on MacOS")
+            return
+
+        # Create a fake ground data set for testing
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
+
+        # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple(shared_flag_mask=0)
+        pixels = ops.PixelsHealpix(
+            nside=self.nside,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+            # view="scanning",
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        input_map_file = os.path.join(self.outdir, "input_map4.fits")
+        if data.comm.world_rank == 0:
+            lmax = 3 * self.nside
+            cls = np.ones(4 * (lmax + 1)).reshape(4, -1)
+            fwhm = np.radians(10)
+            input_map = hp.synfast(cls, self.nside, lmax=lmax, fwhm=fwhm, verbose=False)
+            if pixels.nest:
+                input_map = hp.reorder(input_map, r2n=True)
+            hp.write_map(input_map_file, input_map, nest=pixels.nest, column_units="K")
+
+        # Scan map into timestreams
+        scan_hpix = ops.ScanHealpixMap(
+            file=input_map_file,
+            det_data=defaults.det_data,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+        )
+        scan_hpix.apply(data)
+
+        # Copy the signal
+        ops.Copy(detdata=[(defaults.det_data, "signal_copy")]).apply(data)
+
+        # Configure and apply the filterbin operator
+        binning = ops.BinMap(
+            pixel_dist="pixel_dist",
+            covariance="covariance",
+            det_data=defaults.det_data,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+            sync_type="allreduce",
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=detpointing.shared_flag_mask,
+            det_flags=defaults.det_flags,
+            det_flag_mask=255,
+        )
+
+        filterbin = ops.FilterBin(
+            name="filterbin",
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
+            det_flag_mask=255,
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=detpointing.shared_flag_mask,
+            binning=binning,
+            ground_filter_order=5,
+            split_ground_template=True,
+            poly_filter_order=2,
+            output_dir=self.outdir,
+            write_invcov=True,
+            write_obs_matrix=True,
+            poly_filter_view="scanning",
+        )
+
+        # Build the observation matrix twice, first in a single run and
+        # then running each observation separately and saving the
+        # noise-weighted matrix.
+
+        filterbin.name = "split_run"
+        filterbin.apply(data)
+
+        filterbin.name = "noiseweighted_run"
+        filterbin.write_invcov = True
+        filterbin.det_data = "signal_copy"
+        filterbin.noiseweight_obs_matrix = True
+
+        orig_name_filterbin = filterbin.name
+        orig_comm = data.comm
+        new_comm = Comm(world=data.comm.comm_group)
+
+        for iobs, obs in enumerate(data.obs):
+            # Data object that only covers one observation
+            obs_data = data.select(obs_uid=obs.uid)
+            # Replace comm_world with the group communicator
+            obs_data._comm = new_comm
+            filterbin.reset_pix_dist = True
+            filterbin.name = f"{orig_name_filterbin}_{obs.name}"
+            filterbin.apply(obs_data)
+            close_data(obs_data)
+
+        if data.comm.comm_world is not None:
+            # Make sure all observations are processed before proceeding
+            data.comm.comm_world.Barrier()
+
+        if data.comm.world_rank == 0:
+            import matplotlib.pyplot as plt
+
+            # Assemble the single-run matrix
+
+            rootname = os.path.join(self.outdir, f"split_run_obs_matrix")
+            fname_matrix = ops.combine_observation_matrix(rootname)
+            obs_matrix1 = scipy.sparse.load_npz(fname_matrix)
+            obs_matrix1.sort_indices()
+
+            # Assemble the noise-weighted, per-observation matrix
+            fnames = glob.glob(
+                f"{self.outdir}/{orig_name_filterbin}*noiseweighted_obs_matrix*"
+            )
+            rootnames = set()
+            for fname in fnames:
+                rootnames.add(fname.split(".")[0])
+
+            filenames = []
+            for rootname in rootnames:
+                fname_matrix = ops.combine_observation_matrix(rootname)
+                filenames.append(fname_matrix)
+
+            fname_matrix = f"{self.outdir}/noiseweighted_run_obs_matrix"
+            if MPI is None:
+                comm_self = None
+            else:
+                comm_self = MPI.COMM_SELF
+            fname_matrix = ops.coadd_observation_matrix(
+                filenames, fname_matrix, double_precision=True, comm=comm_self
+            )
+            obs_matrix2 = scipy.sparse.load_npz(fname_matrix)
+            obs_matrix2.sort_indices()
+
+            # Compare the values that are not tiny. Some of the tiny
+            # values may be missing in one matrix
+
+            values1 = obs_matrix1.data[np.abs(obs_matrix1.data) > 1e-10]
+            values2 = obs_matrix2.data[np.abs(obs_matrix2.data) > 1e-10]
+
+            assert np.allclose(values1, values2)
 
         close_data(data)

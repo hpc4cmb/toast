@@ -13,7 +13,9 @@ from .crosslinking import CrossLinking
 from .delete import Delete
 from .demodulation import Demodulate, StokesWeightsDemod
 from .elevation_noise import ElevationNoise
-from .filterbin import FilterBin, combine_observation_matrix
+from .filterbin import (
+    FilterBin, combine_observation_matrix, coadd_observation_matrix
+)
 from .flag_intervals import FlagIntervals
 from .flag_sso import FlagSSO
 from .gainscrambler import GainScrambler
