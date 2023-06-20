@@ -8,13 +8,13 @@ from .._libtoast import Logger
 from .._libtoast import accel_assign_device as omp_accel_assign_device
 from .._libtoast import accel_create as omp_accel_create
 from .._libtoast import accel_delete as omp_accel_delete
+from .._libtoast import accel_dump as omp_accel_dump
 from .._libtoast import accel_enabled as omp_accel_enabled
 from .._libtoast import accel_get_device as omp_accel_get_device
 from .._libtoast import accel_present as omp_accel_present
 from .._libtoast import accel_reset as omp_accel_reset
 from .._libtoast import accel_update_device as omp_accel_update_device
 from .._libtoast import accel_update_host as omp_accel_update_host
-from .._libtoast import accel_dump as omp_accel_dump
 from ..timing import function_timer
 
 enable_vals = ["1", "yes", "true"]

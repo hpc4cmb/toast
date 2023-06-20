@@ -10,7 +10,6 @@ from ..accelerator import (
     AcceleratorObject,
     accel_data_create,
     accel_data_delete,
-    accel_data_reset,
     accel_data_present,
     accel_data_reset,
     accel_data_update_device,

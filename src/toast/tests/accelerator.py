@@ -11,18 +11,18 @@ import numpy.testing as nt
 from .. import ops
 from .._libtoast import test_accel_op_array, test_accel_op_buffer
 from ..accelerator import (
+    AcceleratorObject,
     ImplementationType,
     accel_data_create,
     accel_data_delete,
     accel_data_present,
+    accel_data_reset,
     accel_data_update_device,
     accel_data_update_host,
-    accel_data_reset,
     accel_enabled,
     kernel,
     use_accel_jax,
     use_accel_omp,
-    AcceleratorObject,
 )
 from ..data import Data
 from ..observation import default_values as defaults

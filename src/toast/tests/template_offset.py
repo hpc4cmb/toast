@@ -9,7 +9,7 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops
-from ..accelerator import ImplementationType, accel_enabled, accel_data_table
+from ..accelerator import ImplementationType, accel_data_table, accel_enabled
 from ..observation import default_values as defaults
 from ..templates import AmplitudesMap, Offset
 from ..utils import rate_from_times

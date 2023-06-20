@@ -27,6 +27,7 @@ from .utils import Logger, dtype_to_aligned
 
 if use_accel_jax:
     import jax
+
     from .jax.mutableArray import MutableJaxArray, _zero_out_jitted
 
 

@@ -83,11 +83,11 @@ def _zero_out(data, output_shape=None):
     if output_shape is None:
         return jnp.zeros_like(data)
     else:
-        return jnp.zeros(shape=output_shape, dtype=data.dtype)        
+        return jnp.zeros(shape=output_shape, dtype=data.dtype)
 
 
 # compiles the function, recycling the memory
-_zero_out_jitted = jax.jit(_zero_out, donate_argnums=0, static_argnames='output_shape')
+_zero_out_jitted = jax.jit(_zero_out, donate_argnums=0, static_argnames="output_shape")
 
 # ------------------------------------------------------------------------------
 # MUTABLE ARRAY

@@ -14,6 +14,7 @@ from astropy import units as u
 from astropy.table import Column
 
 from .. import ops as ops
+from ..mpi import MPI, Comm
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
@@ -27,7 +28,6 @@ from ._helpers import (
     fake_flags,
 )
 from .mpi import MPITestCase
-from ..mpi import Comm, MPI
 
 
 class FilterBinTest(MPITestCase):
@@ -195,7 +195,9 @@ class FilterBinTest(MPITestCase):
                 )
                 if pixels.nest:
                     input_map = hp.reorder(input_map, r2n=True)
-                hp.write_map(input_map_file, input_map, nest=pixels.nest, column_units="K")
+                hp.write_map(
+                    input_map_file, input_map, nest=pixels.nest, column_units="K"
+                )
 
         if data.comm.comm_world is not None:
             data.comm.comm_world.Barrier()
