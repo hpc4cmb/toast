@@ -17,7 +17,7 @@ from .. import ops as ops
 from .. import qarray as qa
 from ..data import Data
 from ..instrument import Focalplane, GroundSite, SpaceSite, Telescope
-from ..instrument_sim import fake_hexagon_focalplane
+from ..instrument_sim import fake_boresight_focalplane, fake_hexagon_focalplane
 from ..mpi import Comm
 from ..observation import DetectorData, Observation
 from ..observation import default_values as defaults
@@ -109,53 +109,22 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proces
         psd_net=0.05 * u.K * np.sqrt(1 * u.second),
         psd_fknee=(sample_rate / 2000.0),
     )
-
     site = SpaceSite("L2")
     return Telescope("test", focalplane=fp, site=site)
 
 
-def create_boresight_telescope(group_size, sample_rate=10.0 * u.Hz):
-    """Create a fake telescope with one boresight detector per process."""
-    nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
-    n_det = group_size
-    det_names = [f"d{x:03d}" for x in range(n_det)]
-    pol_ang = np.array([(2 * np.pi * x / n_det) for x in range(n_det)])
-
-    det_table = QTable(
-        [
-            Column(name="name", data=det_names),
-            Column(name="quat", data=[nullquat for x in range(n_det)]),
-            Column(name="pol_leakage", length=n_det, unit=None),
-            Column(name="psi_pol", data=pol_ang, unit=u.rad),
-            Column(name="fwhm", length=n_det, unit=u.arcmin),
-            Column(name="psd_fmin", length=n_det, unit=u.Hz),
-            Column(name="psd_fknee", length=n_det, unit=u.Hz),
-            Column(name="psd_alpha", length=n_det, unit=None),
-            Column(name="psd_net", length=n_det, unit=(u.K * np.sqrt(1.0 * u.second))),
-            Column(name="bandcenter", length=n_det, unit=u.GHz),
-            Column(name="bandwidth", length=n_det, unit=u.GHz),
-            Column(name="pixel", data=[0 for x in range(n_det)]),
-        ]
-    )
-
-    fwhm = 5.0 * u.arcmin
-
-    for idet in range(len(det_table)):
-        det_table[idet]["pol_leakage"] = 0.0
-        det_table[idet]["fwhm"] = fwhm
-        det_table[idet]["bandcenter"] = 150.0 * u.GHz
-        det_table[idet]["bandwidth"] = 20.0 * u.GHz
-        det_table[idet]["psd_fmin"] = 1.0e-5 * u.Hz
-        det_table[idet]["psd_fknee"] = 0.05 * u.Hz
-        det_table[idet]["psd_alpha"] = 1.0
-        det_table[idet]["psd_net"] = 0.001 * (u.K * np.sqrt(1.0 * u.second))
-
-    fp = Focalplane(
-        detector_data=det_table,
+def create_boresight_telescope(
+    group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1
+):
+    """Create a fake telescope with one boresight pixel per process."""
+    fp = fake_boresight_focalplane(
+        n_pix=group_size * pixel_per_process,
         sample_rate=sample_rate,
-        field_of_view=1.1 * (2 * fwhm),
+        fwhm=1.0 * u.degree,
+        psd_fmin=1.0e-5 * u.Hz,
+        psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+        psd_fknee=(sample_rate / 2000.0),
     )
-
     site = SpaceSite("L2")
     return Telescope("test", focalplane=fp, site=site)
 
@@ -382,7 +351,9 @@ def create_satellite_data_big(
     return data
 
 
-def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
+def create_healpix_ring_satellite(
+    mpicomm, obs_per_group=1, pix_per_process=4, nside=64
+):
     """Create data with boresight samples centered on healpix pixels.
 
     Use the specified MPI communicator to attempt to create 2 process groups,
@@ -395,6 +366,7 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
     Args:
         mpicomm (MPI.Comm): the MPI communicator (or None).
         obs_per_group (int): the number of observations assigned to each group.
+        pix_per_process (int): number of boresight pixels per process.
         nside (int): The NSIDE value to use.
 
     Returns:
@@ -409,17 +381,11 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
     for obs in range(obs_per_group):
         oname = "test-{}-{}".format(toastcomm.group, obs)
         oid = obs_per_group * toastcomm.group + obs
-        tele = create_space_telescope(
+        tele = create_boresight_telescope(
             toastcomm.group_size,
             sample_rate=rate * u.Hz,
-            pixel_per_process=4,
+            pixel_per_process=pix_per_process,
         )
-
-        # Move all detectors to the boresight
-        for row in tele.focalplane.detector_data:
-            row["quat"] = np.array([0, 0, 0, 1], dtype=np.float64)
-            row["psd_net"] = 1.0 * (u.K * np.sqrt(1.0 * u.second))
-            row["psd_fknee"] = 0.0 * u.Hz
 
         # FIXME: for full testing we should set detranks as approximately the sqrt
         # of the grid size so that we test the row / col communicators.
@@ -451,16 +417,23 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
             shape=(ob.n_local_samples, 4),
             dtype=np.float64,
         )
+        ob.shared.create_column(
+            defaults.hwp_angle,
+            shape=(ob.n_local_samples,),
+            dtype=np.float64,
+        )
         ob.detdata.create(defaults.det_data, dtype=np.float64, units=u.K)
         ob.detdata[defaults.det_data][:] = 0
         ob.detdata.create(defaults.det_flags, dtype=np.uint8)
         ob.detdata[defaults.det_flags][:] = 0
+
         # Rank zero of each grid column creates the data
         stamps = None
         position = None
         velocity = None
         boresight = None
         flags = None
+        hwp_angle = None
         if ob.comm_col_rank == 0:
             start_time = 0.0 + float(ob.local_index_offset) / rate
             stop_time = start_time + float(ob.n_local_samples - 1) / rate
@@ -477,40 +450,37 @@ def create_healpix_ring_satellite(mpicomm, obs_per_group=1, nside=64):
 
             pix = np.arange(nsamp, dtype=np.int64)
 
+            # Cartesian coordinates of each pixel center on the unit sphere
             x, y, z = hp.pix2vec(nside, pix, nest=False)
 
-            # z axis is obviously normalized
-            zaxis = np.array([0, 0, 1], dtype=np.float64)
-            ztiled = np.tile(zaxis, x.shape[0]).reshape((-1, 3))
+            # The focalplane orientation (X-axis) is defined to point to the
+            # South.  To get this, we first rotate about the coordinate Z axis,
+            # Then rotate about the Y axis.
 
-            # ... so dir is already normalized
-            dir = np.ravel(np.column_stack((x, y, z))).reshape((-1, 3))
+            # The angle in the X/Y plane to the pixel direction
+            phi = np.arctan2(y, x)
 
-            # get the rotation axis
-            v = np.cross(ztiled, dir)
-            v = v / np.sqrt(np.sum(v * v, axis=1)).reshape((-1, 1))
+            # The angle to rotate about the Y axis from the pole down to the
+            # pixel direction
+            theta = np.arccos(z)
 
-            # this is the vector-wise dot product
-            zdot = np.sum(ztiled * dir, axis=1).reshape((-1, 1))
-            ang = 0.5 * np.arccos(zdot)
+            # Focalplane orientation is to the south already
+            psi = np.zeros_like(theta)
 
-            # angle element
-            s = np.cos(ang)
-
-            # axis
-            v *= np.sin(ang)
-
-            # build the normalized quaternion
-            boresight = qa.norm(np.concatenate((v, s), axis=1))
+            boresight = qa.from_iso_angles(theta, phi, psi)
 
             # no flags
             flags = np.zeros(nsamp, dtype=np.uint8)
+
+            # Set HWP angle to all zeros for later modification
+            hwp_angle = np.zeros(nsamp, dtype=np.float64)
 
         ob.shared[defaults.times].set(stamps, offset=(0,), fromrank=0)
         ob.shared[defaults.position].set(position, offset=(0, 0), fromrank=0)
         ob.shared[defaults.velocity].set(velocity, offset=(0, 0), fromrank=0)
         ob.shared[defaults.boresight_radec].set(boresight, offset=(0, 0), fromrank=0)
         ob.shared[defaults.shared_flags].set(flags, offset=(0,), fromrank=0)
+        ob.shared[defaults.hwp_angle].set(hwp_angle, offset=(0,), fromrank=0)
 
         data.obs.append(ob)
     return data

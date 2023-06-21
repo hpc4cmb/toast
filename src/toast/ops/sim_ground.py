@@ -1106,7 +1106,7 @@ class SimGround(Operator):
         return dict()
 
     def _provides(self):
-        return {
+        prov = {
             "shared": [
                 self.times,
                 self.shared_flags,
@@ -1117,5 +1117,11 @@ class SimGround(Operator):
                 self.hwp_angle,
                 self.position,
                 self.velocity,
-            ]
+            ],
+            "detdata": list(),
         }
+        if self.det_data is not None:
+            prov["detdata"].append(self.det_data)
+        if self.det_flags is not None:
+            prov["detdata"].append(self.det_flags)
+        return prov

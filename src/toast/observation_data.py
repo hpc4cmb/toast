@@ -12,9 +12,9 @@ from pshmem import MPIShared
 from .accelerator import (
     AcceleratorObject,
     accel_data_create,
-    accel_data_reset,
     accel_data_delete,
     accel_data_present,
+    accel_data_reset,
     accel_data_update_device,
     accel_data_update_host,
     accel_enabled,
@@ -27,6 +27,7 @@ from .utils import Logger, dtype_to_aligned
 
 if use_accel_jax:
     import jax
+
     from .jax.mutableArray import MutableJaxArray, _zero_out_jitted
 
 
@@ -286,7 +287,7 @@ class DetectorData(AcceleratorObject):
 
             # Check if we have data on device before touching any buffer
             does_accel_exist = self.accel_exists()
-            if does_accel_exist and use_accel_jax: 
+            if does_accel_exist and use_accel_jax:
                 # set aside the JAX device array for later recycling
                 previous_device_data = self._data.data
 
@@ -302,8 +303,12 @@ class DetectorData(AcceleratorObject):
                     # creates a device buffer filled with zeroes
                     # we call _zero_out_jitted with the previous device buffer and a new shape into order to recycle the memory
                     # accel_reset cannot be used as there is a change in shape
-                    device_data = _zero_out_jitted(previous_device_data, output_shape=self._shape)
-                    self._data = MutableJaxArray(cpu_data=self._data, gpu_data=device_data)
+                    device_data = _zero_out_jitted(
+                        previous_device_data, output_shape=self._shape
+                    )
+                    self._data = MutableJaxArray(
+                        cpu_data=self._data, gpu_data=device_data
+                    )
                 else:
                     # Set device copy to zero
                     self.accel_reset()
@@ -338,6 +343,28 @@ class DetectorData(AcceleratorObject):
                 self._raw.clear()
                 del self._raw
                 self._raw = None
+
+    def reset(self, dets=None):
+        """Zero the current memory.
+
+        The data buffer currently in use on either the host or accelerator is set
+        to zero.
+
+        Args:
+            dets (list):  Only zero the data for these detectors.
+
+        Returns:
+            None
+
+        """
+        if self.accel_in_use():
+            self.accel_reset()
+        elif dets is None:
+            # Zero the whole thing
+            self.data[:] = 0
+        else:
+            for d in dets:
+                self[d, :] = 0
 
     def __del__(self):
         self.clear()
@@ -739,7 +766,6 @@ class DetDataManager(MutableMapping):
         data_shape = self._data_shape(sample_shape)
 
         existing = True
-        changed = False
 
         if name in self._internal:
             # The object already exists.  Check properties.
@@ -761,14 +787,14 @@ class DetDataManager(MutableMapping):
             for test_det in detectors:
                 if test_det not in internal_dets:
                     # At least one detector is not included.  In this case we change
-                    # detectors and set the units.
+                    # detectors and set the units.  The change_detectors() method
+                    # Resets memory to zero.
                     existing = False
-                    changed = True
                     _ = self._internal[name].change_detectors(detectors)
                     self._internal[name].update_units(create_units)
                     break
         else:
-            # Create the data object
+            # Create the data object.  This zeros the memory.
             existing = False
             self.create(
                 name,
@@ -778,12 +804,13 @@ class DetDataManager(MutableMapping):
                 units=create_units,
             )
         if existing:
-            # The data object exists with correct detectors
+            # The data object exists with correct detectors, however if
+            # we need to move data then we set existing to False so that
+            # calling code knows it needs to generate the data.
             if accel:
                 # We want the data on the device
                 if not self.accel_in_use(name):
                     # The device copy needs to be updated
-                    existing = False
                     if not self.accel_exists(name):
                         # The device buffer does not exist, create it
                         self.accel_create(name)
@@ -793,25 +820,35 @@ class DetDataManager(MutableMapping):
                 # We want the data on the host
                 if self.accel_in_use(name):
                     # The host copy needs to be updated
-                    existing = False
                     self.accel_update_host(name)
         else:
             # The data was either created or the existing object was re-used with
-            # the detector list changed.  In either case the host copy is in-use
-            # and has already been zero-ed.
+            # the detector list changed.  In either case, both host and device copies
+            # (if they exist) have been zeroed out.  However, if changed_detectors
+            # was called to re-use memory, the host/device in use flag is intentionally
+            # not changed.
             if accel:
-                # We want the data on the device.  Note that if the change_detectors
-                # call above was run, then the host and device memory were already
-                # set to zero.
-                existing = False
-                if not self.accel_exists(name):
-                    # Create the buffer
-                    self.accel_create(name)
-                # Mark buffer as in-use
-                self.accel_used(name, True)
-                if not changed:
-                    # Reset to zero
-                    self.accel_reset(name)
+                # We want the data on the device.  If the data already exists, then
+                # it was already zeroed out.
+                if not self.accel_in_use(name):
+                    if not self.accel_exists(name):
+                        # Create the buffer and zero
+                        self.accel_create(name, zero_out=True)
+                    # Mark buffer as in-use
+                    self.accel_used(name, True)
+            else:
+                # We want the data on the host.  The host buffer was already zeroed,
+                # we just need to mark that as the one in use.
+                if self.accel_in_use(name):
+                    if use_accel_omp:
+                        self.accel_used(name, False)
+                    elif use_accel_jax:
+                        # We need to convert jax array back to numpy
+                        self.accel_update_host(name)
+                    else:
+                        msg = f"Should never get here: newly created detdata "
+                        msg += "using neither openmp nor jax"
+                        raise RuntimeError(msg)
         return existing
 
     def accel_exists(self, key):
@@ -861,7 +898,7 @@ class DetDataManager(MutableMapping):
         """
         self._internal[key].accel_used(state)
 
-    def accel_create(self, key):
+    def accel_create(self, key, zero_out=False):
         """Create the named detector data on the accelerator.
 
         Args:
@@ -875,7 +912,7 @@ class DetDataManager(MutableMapping):
             return
         log = Logger.get()
         log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_create")
-        self._internal[key].accel_create(key)
+        self._internal[key].accel_create(key, zero_out=zero_out)
 
     def accel_update_device(self, key):
         """Copy the named detector data to the accelerator.

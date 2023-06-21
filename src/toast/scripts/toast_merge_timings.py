@@ -13,11 +13,12 @@ The main steps performed by this script are:
 
 To use this script, simply run it in a Python environment with the required dependency (pandas) installed. The script will automatically locate timing.csv files, process them, generate the merged DataFrame and save the merged_timings.csv file.
 """
+import glob
 import os
 import re
-import glob
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 
 def find_csv_files(folder, file_pattern):

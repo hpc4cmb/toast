@@ -273,6 +273,8 @@ class BinMap(Operator):
     def _requires(self):
         req = self.pixel_pointing.requires()
         req.update(self.stokes_weights.requires())
+        if self.pre_process is not None:
+            req.update(self.pre_process.requires())
         req["global"].extend([self.pixel_dist, self.covariance])
         req["meta"].extend([self.noise_model])
         req["detdata"].extend([self.det_data])

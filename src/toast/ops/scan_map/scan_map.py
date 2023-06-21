@@ -110,7 +110,7 @@ class ScanMap(Operator):
                     raise RuntimeError(msg)
 
             # If our output detector data does not yet exist, create it
-            ob.detdata.ensure(
+            _ = ob.detdata.ensure(
                 self.det_data,
                 detectors=dets,
                 create_units=self.det_data_units,

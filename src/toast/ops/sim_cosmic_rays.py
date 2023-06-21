@@ -285,7 +285,7 @@ class InjectCosmicRays(Operator):
             "shared": [
                 self.boresight,
             ],
-            "detdata": list(),
+            "detdata": [self.det_data],
             "intervals": list(),
         }
         if self.view is not None:

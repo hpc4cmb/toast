@@ -89,12 +89,6 @@ class PixelsWCS(Operator):
 
     pixels = Unicode("pixels", help="Observation detdata key for output pixel indices")
 
-    quats = Unicode(
-        None,
-        allow_none=True,
-        help="Observation detdata key for output quaternions",
-    )
-
     submaps = Int(10, help="Number of submaps to use")
 
     create_dist = Unicode(
@@ -381,21 +375,15 @@ class PixelsWCS(Operator):
             self._local_submaps = np.zeros(self.submaps, dtype=np.uint8)
 
         # Expand detector pointing
-        if self.quats is not None:
-            quats_name = self.quats
-        else:
-            if self.detector_pointing.quats is not None:
-                quats_name = self.detector_pointing.quats
-            else:
-                quats_name = defaults.quats
+        quats_name = self.detector_pointing.quats
 
         view = self.view
         if view is None:
             # Use the same data view as detector pointing
             view = self.detector_pointing.view
 
-        self.detector_pointing.quats = quats_name
-        self.detector_pointing.apply(data, detectors=detectors)
+        # Once this supports accelerator, pass that instead of False
+        self.detector_pointing.apply(data, detectors=detectors, use_accel=False)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -403,6 +391,23 @@ class PixelsWCS(Operator):
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
+
+            # Check that our view is fully covered by detector pointing.  If the
+            # detector_pointing view is None, then it has all samples.  If our own
+            # view was None, then it would have been set to the detector_pointing
+            # view above.
+            if (view is not None) and (self.detector_pointing.view is not None):
+                if ob.intervals[view] != ob.intervals[self.detector_pointing.view]:
+                    # We need to check intersection
+                    intervals = ob.intervals[self.view]
+                    detector_intervals = ob.intervals[self.detector_pointing.view]
+                    intersection = detector_intervals & intervals
+                    if intersection != intervals:
+                        msg = (
+                            f"view {self.view} is not fully covered by valid "
+                            "detector pointing"
+                        )
+                        raise RuntimeError(msg)
 
             # Create (or re-use) output data for the pixels, weights and optionally the
             # detector quaternions.
@@ -423,6 +428,12 @@ class PixelsWCS(Operator):
                 # Yes...
                 if self.create_dist is not None:
                     # but the caller wants the pixel distribution
+                    restore_dev = False
+                    if ob.detdata[self.pixels].accel_in_use():
+                        # The data is on the accelerator- copy back to host for
+                        # this calculation.  This could eventually be a kernel.
+                        ob.detdata[self.pixels].accel_update_host()
+                        restore_dev = True
                     for det in ob.select_local_detectors(detectors):
                         for vslice in view_slices:
                             good = ob.detdata[self.pixels][det, vslice] >= 0
@@ -430,6 +441,8 @@ class PixelsWCS(Operator):
                                 ob.detdata[self.pixels][det, vslice][good]
                                 // self._n_pix_submap
                             ] = 1
+                    if restore_dev:
+                        ob.detdata[self.pixels].accel_update_device()
 
                 if data.comm.group_rank == 0:
                     msg = (
@@ -446,11 +459,8 @@ class PixelsWCS(Operator):
             # detector pointing.
             flags = None
             if self.detector_pointing.shared_flags is not None:
-                flags = np.array(ob.shared[self.detector_pointing.shared_flags])
-                fvals, fcounts = np.unique(flags, return_counts=True)
+                flags = ob.shared[self.detector_pointing.shared_flags].data
                 flags &= self.detector_pointing.shared_flag_mask
-                n_good = np.sum(flags == 0)
-                n_bad = np.sum(flags != 0)
 
             center_lonlat = None
             if self.center_offset is not None:
@@ -615,6 +625,10 @@ class PixelsWCS(Operator):
 
     def _requires(self):
         req = self.detector_pointing.requires()
+        req = self.detector_pointing.requires()
+        if "detdata" not in req:
+            req["detdata"] = list()
+        req["detdata"].append(self.pixels)
         if self.view is not None:
             req["intervals"].append(self.view)
         return req

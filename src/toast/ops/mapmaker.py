@@ -641,7 +641,7 @@ class Calibrate(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
         timer = Timer()
         log_prefix = "Calibrate"
@@ -651,7 +651,7 @@ class Calibrate(Operator):
             memreport.enabled = False
 
         memreport.prefix = "Start of calibration"
-        memreport.apply(data)
+        memreport.apply(data, use_accel=use_accel)
 
         # The global communicator we are using (or None)
         comm = data.comm.comm_world
@@ -676,7 +676,12 @@ class Calibrate(Operator):
             reset_pix_dist=self.reset_pix_dist,
             report_memory=self.report_memory,
         )
-        amplitudes_solve.apply(data)
+        amplitudes_solve.apply(data, use_accel=use_accel)
+
+        print(
+            f"Solved amplitudes, {data[amplitudes_solve.amplitudes]}, on accel = {data[amplitudes_solve.amplitudes].accel_in_use()}",
+            flush=True,
+        )
 
         log.info_rank(
             f"{log_prefix}  finished template amplitude solve in",
@@ -698,7 +703,9 @@ class Calibrate(Operator):
             # timestreams if they do not exist.  We do this by copying the inputs,
             # since the application of the amplitudes below will zero these
             out_calib = self.result
-            Copy(detdata=[(self.det_data, self.result)]).apply(data)
+            Copy(detdata=[(self.det_data, self.result)]).apply(
+                data, use_accel=use_accel
+            )
 
         amplitudes_apply = ApplyAmplitudes(
             op="divide",
@@ -707,7 +714,7 @@ class Calibrate(Operator):
             template_matrix=self.template_matrix,
             output=out_calib,
         )
-        amplitudes_apply.apply(data)
+        amplitudes_apply.apply(data, use_accel=use_accel)
 
         log.info_rank(
             f"{log_prefix}  finished apply template amplitudes in",
@@ -716,7 +723,7 @@ class Calibrate(Operator):
         )
 
         memreport.prefix = "After calibration"
-        memreport.apply(data)
+        memreport.apply(data, use_accel=use_accel)
 
         return
 
@@ -733,10 +740,7 @@ class Calibrate(Operator):
 
     def _provides(self):
         prov = dict()
-        if self.map_binning is not None:
-            prov["global"] = [self.map_binning.binned]
-        else:
-            prov["global"] = [self.binning.binned]
+        prov["global"] = [self.binning.binned]
         if self.result is not None:
             prov["detdata"] = [self.result]
         return prov

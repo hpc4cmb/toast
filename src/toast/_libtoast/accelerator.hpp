@@ -105,7 +105,8 @@ class OmpManager {
             if (!present(static_cast <void *> (&instance), sizeof(T))) {
                 // Create device copy on demand
                 void * dummy = create(
-                    static_cast <void *> (&instance), sizeof(T)
+                    static_cast <void *> (&instance), sizeof(T),
+                    std::string("NULL")
                 );
             }
             return &instance;

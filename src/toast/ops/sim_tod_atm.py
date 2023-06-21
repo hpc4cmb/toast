@@ -609,7 +609,7 @@ class SimAtmosphere(Operator):
             "shared": [
                 self.boresight,
             ],
-            "detdata": list(),
+            "detdata": [self.detdata],
             "intervals": list(),
         }
         if self.view is not None:

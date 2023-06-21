@@ -278,15 +278,15 @@ class QarrayTest(MPITestCase):
                     ang += 2 * np.pi
         if not np.allclose(check_theta, theta, rtol=1.0e-7, atol=1.0e-6):
             print(f"ISO theta check failed:")
-            print(f"{np.transpose((check_theta, theta))}")
+            print(f"{np.transpose((check_theta, theta))}", flush=True)
             raise ValueError("ISO theta values not equal")
         if not np.allclose(check_phi, phi, rtol=1.0e-7, atol=1.0e-6):
             print(f"ISO phi check failed:")
-            print(f"{np.transpose((check_phi, phi))}")
+            print(f"{np.transpose((check_phi, phi))}", flush=True)
             raise ValueError("ISO phi values not equal")
         if not np.allclose(check_psi, psi, rtol=1.0e-7, atol=1.0e-6):
             print(f"ISO psi check failed:")
-            print(f"{np.transpose((check_psi, psi))}")
+            print(f"{np.transpose((check_psi, psi))}", flush=True)
             raise ValueError("ISO psi values not equal")
 
     def check_zx(self, actual, desired):
@@ -297,11 +297,11 @@ class QarrayTest(MPITestCase):
         x = np.array(desired[1])
         if not np.allclose(check_z, z, rtol=1.0e-7, atol=1.0e-6):
             print(f"Z check failed:")
-            print(f"{np.transpose((check_z, z))}")
+            print(f"{np.transpose((check_z, z))}", flush=True)
             raise ValueError("Z values not equal")
         if not np.allclose(check_x, x, rtol=1.0e-7, atol=1.0e-6):
             print(f"X check failed:")
-            print(f"{np.transpose((check_x, x))}")
+            print(f"{np.transpose((check_x, x))}", flush=True)
             raise ValueError("X values not equal")
 
     def test_angles(self):

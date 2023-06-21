@@ -89,18 +89,18 @@ void project_signal_offsets(py::array_t <double> ref, py::list todslices,
 }
 
 void add_matrix(
-                py::array_t <double, py::array::c_style | py::array::forcecast> data1,
-                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indices1,
-                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indptr1,
-                py::array_t <double, py::array::c_style | py::array::forcecast> data2,
-                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indices2,
-                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indptr2,
-                py::array_t <double, py::array::c_style | py::array::forcecast> data3,
-                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indices3,
-                py::array_t <int64_t, py::array::c_style | py::array::forcecast> indptr3
+    py::array_t <double, py::array::c_style | py::array::forcecast> data1,
+    py::array_t <int64_t, py::array::c_style | py::array::forcecast> indices1,
+    py::array_t <int64_t, py::array::c_style | py::array::forcecast> indptr1,
+    py::array_t <double, py::array::c_style | py::array::forcecast> data2,
+    py::array_t <int64_t, py::array::c_style | py::array::forcecast> indices2,
+    py::array_t <int64_t, py::array::c_style | py::array::forcecast> indptr2,
+    py::array_t <double, py::array::c_style | py::array::forcecast> data3,
+    py::array_t <int64_t, py::array::c_style | py::array::forcecast> indices3,
+    py::array_t <int64_t, py::array::c_style | py::array::forcecast> indptr3
 ) {
-  /* Compiled kernel to add two CSR matrices
-   */
+    /* Compiled kernel to add two CSR matrices
+     */
     auto fast_data1 = data1.unchecked <1>();
     auto fast_indices1 = indices1.unchecked <1>();
     auto fast_indptr1 = indptr1.unchecked <1>();
@@ -114,23 +114,23 @@ void add_matrix(
     const size_t n1 = fast_data1.shape(0);
     const size_t n2 = fast_data2.shape(0);
     const size_t n3 = fast_data3.shape(0);
-    if (indptr1.shape(0) != indptr2.shape(0) ||
-        indptr1.shape(0) != indptr3.shape(0)) {
+    if ((indptr1.shape(0) != indptr2.shape(0)) ||
+        (indptr1.shape(0) != indptr3.shape(0))) {
         throw std::length_error("Input and output sizes do not agree");
     }
     const size_t nrow = indptr1.shape(0) - 1;
 
     // Collect each row's data into vectors
-    std::vector <std::vector<double> > row_data(nrow);
-    std::vector <std::vector<int64_t> > row_indices(nrow);
+    std::vector <std::vector <double> > row_data(nrow);
+    std::vector <std::vector <int64_t> > row_indices(nrow);
 
     #pragma omp parallel for schedule(static, 4)
-    for (size_t row=0; row < nrow; ++row) {
+    for (size_t row = 0; row < nrow; ++row) {
         const size_t start1 = fast_indptr1[row];
         const size_t stop1 = fast_indptr1[row + 1];
         const size_t start2 = fast_indptr2[row];
         const size_t stop2 = fast_indptr2[row + 1];
-        if (start1 == stop1 && start2 == stop2) continue;
+        if ((start1 == stop1) && (start2 == stop2)) continue;
         size_t n;
         if (start2 == stop2) {
             // Only first matrix has entries
@@ -165,23 +165,24 @@ void add_matrix(
             for (size_t ind2 = start2; ind2 < stop2; ++ind2) {
                 const size_t col2 = fast_indices2[ind2];
                 const double value2 = fast_data2[ind2];
-                const auto &match = datamap.find(col2);
+                const auto & match = datamap.find(col2);
                 if (match == datamap.end()) {
-                  datamap[col2] = value2;
+                    datamap[col2] = value2;
                 } else {
-                  match->second += value2;
+                    match->second += value2;
                 }
             }
             n = datamap.size();
             row_indices[row].resize(n);
             row_data[row].resize(n);
             size_t offset = 0;
-            for (const auto &item : datamap) {
+            for (const auto & item : datamap) {
                 row_indices[row][offset] = item.first;
                 row_data[row][offset] = item.second;
                 ++offset;
             }
         }
+
         // Store the number of nonzeros in the index pointer array.
         // We take a cumulative sum later
         fast_indptr3[row + 1] = n;
@@ -241,14 +242,16 @@ void expand_matrix(py::array_t <double> compressed_matrix,
         for (size_t ilocal = 0; ilocal < nlocal; ++ilocal) {
             size_t local_row = ilocal + inz * nlocal;
             size_t iglobal = fast_local_to_global[ilocal];
+
             // Skip empty rows before the current pixel index
             while (global_pixel < iglobal) {
                 fast_indptr[global_row + 1] = offset;
                 global_row++;
                 global_pixel++;
             }
+
             // Copy a row of the dense matrix into the sparse one
-            for (size_t local_col=0; local_col < col_indices.size(); ++local_col) {
+            for (size_t local_col = 0; local_col < col_indices.size(); ++local_col) {
                 size_t ind = col_indices[local_col];
                 double value = fast_matrix(local_row, local_col);
                 if (value != 0) {
@@ -260,6 +263,7 @@ void expand_matrix(py::array_t <double> compressed_matrix,
             global_row++;
             global_pixel++;
         }
+
         // Skip empty rows trailing the last pixel in the dense matrix
         while (global_pixel < npix) {
             fast_indptr[global_row + 1] = offset;

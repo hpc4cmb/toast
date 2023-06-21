@@ -84,6 +84,8 @@ class CrossLinking(Operator):
 
     save_pointing = Bool(False, help="If True, do not clear pixel numbers after use")
 
+    # FIXME: these should be made into traits and also placed in _provides().
+
     signal = "dummy_signal"
     weights = "crosslinking_weights"
     crosslinking_map = "crosslinking_map"

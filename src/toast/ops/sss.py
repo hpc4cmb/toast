@@ -227,7 +227,7 @@ class SimScanSynchronousSignal(Operator):
         req = {
             "meta": list(),
             "shared": list(),
-            "detdata": list(),
+            "detdata": [self.det_data],
             "intervals": list(),
         }
         return req

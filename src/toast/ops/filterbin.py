@@ -15,9 +15,9 @@ import traitlets
 
 from .._libtoast import (
     accumulate_observation_matrix,
+    add_matrix,
     build_template_covariance,
     expand_matrix,
-    add_matrix,
     fourier,
     legendre,
 )
@@ -204,16 +204,16 @@ def combine_observation_matrix(rootname):
 
 
 def coadd_observation_matrix(
-        inmatrix,
-        outmatrix,
-        file_invcov=None,
-        file_cov=None,
-        nside_submap=16,
-        rcond_limit=1e-3,
-        double_precision=False,
-        comm=None,
+    inmatrix,
+    outmatrix,
+    file_invcov=None,
+    file_cov=None,
+    nside_submap=16,
+    rcond_limit=1e-3,
+    double_precision=False,
+    comm=None,
 ):
-    """ Co-add noise-weighted or unweighted observation matrices
+    """Co-add noise-weighted or unweighted observation matrices
 
     Args:
         inmatrix(iterable) : One or more noise-weighted observation matrix files
@@ -262,8 +262,10 @@ def coadd_observation_matrix(
     for ifine, infile_matrix in enumerate(infiles):
         infile_matrix = infile_matrix.strip()
         if "noiseweighted" not in infile_matrix:
-            msg = f"Observation matrix does not seem to be " \
-                  f"noise-weighted: '{infile_matrix}'"
+            msg = (
+                f"Observation matrix does not seem to be "
+                f"noise-weighted: '{infile_matrix}'"
+            )
             raise RuntimeError(msg)
         prefix = ""
         log.info(f"{prefix}Loading {infile_matrix}")
@@ -281,8 +283,10 @@ def coadd_observation_matrix(
         elif os.path.isfile(infile_invcov + ".h5"):
             infile_invcov += ".h5"
         else:
-            msg = f"Cannot find an inverse covariance matrix to go " \
+            msg = (
+                f"Cannot find an inverse covariance matrix to go "
                 "with '{infile_matrix}'"
+            )
             raise RuntimeError(msg)
         log.info(f"{prefix}Loading {infile_invcov}")
         invcov = read_healpix(
@@ -369,9 +373,7 @@ def coadd_observation_matrix(
     cc = scipy.sparse.dok_matrix((npixtot, npixtot), dtype=np.float64)
     nsubmap = dist_cov.distribution.n_submap
     npix_submap = dist_cov.distribution.n_pix_submap
-    for isubmap_local, isubmap_global in enumerate(
-        dist_cov.distribution.local_submaps
-    ):
+    for isubmap_local, isubmap_global in enumerate(dist_cov.distribution.local_submaps):
         submap = dist_cov.data[isubmap_local]
         offset = isubmap_global * npix_submap
         for pix_local in range(npix_submap):
@@ -381,13 +383,9 @@ def coadd_observation_matrix(
             icov = 0
             for inz in range(nnz):
                 for jnz in range(inz, nnz):
-                    cc[pix + inz * npix, pix + jnz * npix] = submap[
-                        pix_local, icov
-                    ]
+                    cc[pix + inz * npix, pix + jnz * npix] = submap[pix_local, icov]
                     if inz != jnz:
-                        cc[pix + jnz * npix, pix + inz * npix] = submap[
-                            pix_local, icov
-                        ]
+                        cc[pix + jnz * npix, pix + inz * npix] = submap[pix_local, icov]
                     icov += 1
     cc = cc.tocsr()
     obs_matrix_sum = cc.dot(obs_matrix_sum)
@@ -399,9 +397,7 @@ def coadd_observation_matrix(
     scipy.sparse.save_npz(outmatrix, obs_matrix_sum.astype(dtype))
     log.info_rank(f"Wrote {outmatrix}.npz in", timer=timer1, comm=comm)
 
-    log.info_rank(
-        f"Co-added and de-weighted obs matrix in", timer=timer0, comm=comm
-    )
+    log.info_rank(f"Co-added and de-weighted obs matrix in", timer=timer0, comm=comm)
 
     return outmatrix + ".npz"
 

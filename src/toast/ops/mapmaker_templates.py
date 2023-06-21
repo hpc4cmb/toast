@@ -185,6 +185,14 @@ class TemplateMatrix(Operator):
             )
             return
 
+        # Check that accelerator switch makes sense for this operator
+        if use_accel is None:
+            use_accel = False
+        if use_accel and not self.supports_accel():
+            msg = "Template matrix called with use_accel=True, "
+            msg += "but does not support accelerators"
+            raise RuntimeError(msg)
+
         # On the first call, we initialize all templates using the Data instance and
         # the fixed options for view, flagging, etc.
         if not self._initialized:
@@ -232,12 +240,19 @@ class TemplateMatrix(Operator):
                 if use_accel:
                     # We are running on the accelerator, so our output data must exist
                     # on the device and will be used there.
-                    data[self.amplitudes].accel_create(self.name)
-                    data[self.amplitudes].accel_update_device()
+                    data[self.amplitudes].accel_create(self.name, zero_out=True)
+                    data[self.amplitudes].accel_used(True)
+            elif use_accel and not data[self.amplitudes].accel_exists():
+                # The output template amplitudes exist on host, but are not yet
+                # staged to the accelerator.
+                data[self.amplitudes].accel_create(self.name)
+                data[self.amplitudes].accel_update_device()
 
             for d in all_dets:
                 for tmpl in self.templates:
-                    log.verbose(f"TemplateMatrix {d} project_signal {tmpl.name}")
+                    log.verbose(
+                        f"TemplateMatrix {d} project_signal {tmpl.name} (use_accel={use_accel})"
+                    )
                     tmpl.project_signal(
                         d,
                         data[self.amplitudes][tmpl.name],
@@ -249,6 +264,7 @@ class TemplateMatrix(Operator):
                 msg = f"Template amplitudes '{self.amplitudes}' do not exist in data"
                 log.error(msg)
                 raise RuntimeError(msg)
+
             # Ensure that our output detector data exists in each observation
             for ob in data.obs:
                 # Get the detectors we are using for this observation
@@ -262,25 +278,23 @@ class TemplateMatrix(Operator):
                     accel=use_accel,
                     create_units=self.det_data_units,
                 )
-                ob.detdata[self.det_data].update_units(self.det_data_units)
+                if exists:
+                    # We need to clear our detector TOD before projecting amplitudes
+                    # into timestreams.  Note:  in the accelerator case, the reset call
+                    # will clear all detectors, not just the current list.  This is
+                    # wasteful if det_data has a very large buffer that has been
+                    # restricted to be used for a smaller number of detectors.  We
+                    # should deal with that corner case eventually.  If the data was
+                    # created, then it was already zeroed out.
+                    ob.detdata[self.det_data].reset(dets=dets)
 
-                # We need to clear our detector TOD before projecting amplitudes
-                # into timestreams.  Note:  in the accelerator case, the reset call
-                # will clear all detectors, not just the current list.  This is
-                # wasteful if det_data has a very large buffer that has been
-                # restricted to be used for a smaller number of detectors.  We
-                # should deal with that corner case eventually.
-                if use_accel:
-                    # We are running on the accelerator, so our output data must exist
-                    # on the device and will be used there.
-                    ob.detdata[self.det_data].accel_reset()
-                else:
-                    for d in dets:
-                        ob.detdata[self.det_data][d, :] = 0
+                ob.detdata[self.det_data].update_units(self.det_data_units)
 
             for d in all_dets:
                 for tmpl in self.templates:
-                    log.verbose(f"TemplateMatrix {d} add to signal {tmpl.name}")
+                    log.verbose(
+                        f"TemplateMatrix {d} add to signal {tmpl.name} (use_accel={use_accel})"
+                    )
                     tmpl.add_to_signal(
                         d,
                         data[self.amplitudes][tmpl.name],
@@ -305,17 +319,15 @@ class TemplateMatrix(Operator):
         return
 
     def _requires(self):
-        req = {
-            "global": [self.amplitudes],
-            "meta": list(),
-            "shared": list(),
-            "detdata": [self.det_data],
-            "intervals": list(),
-        }
+        req = dict()
+        req["detdata"] = [self.det_data]
         if self.view is not None:
             req["intervals"].append(self.view)
-        if self.transpose and (self.det_flags is not None):
-            req["detdata"].append(self.det_flags)
+        if self.transpose:
+            if self.det_flags is not None:
+                req["detdata"].append(self.det_flags)
+        else:
+            req["global"] = [self.amplitudes]
         return req
 
     def _provides(self):

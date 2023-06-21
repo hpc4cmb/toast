@@ -10,8 +10,8 @@ from ..accelerator import (
     AcceleratorObject,
     accel_data_create,
     accel_data_delete,
-    accel_data_reset,
     accel_data_present,
+    accel_data_reset,
     accel_data_update_device,
     accel_data_update_host,
     accel_enabled,
@@ -284,11 +284,19 @@ class Amplitudes(AcceleratorObject):
             dtype=self._dtype,
             use_group=self._use_group,
         )
-        ret.local[:] = self.local
-        ret.local_flags[:] = self.local_flags
         if self.accel_exists():
             ret.accel_create(self._accel_name)
+        restore = False
         if self.accel_in_use():
+            # We have no good way to copy between device buffers,
+            # so do this on the host.  The duplicate() method is
+            # not used inside the solver loop.
+            self.accel_update_host()
+            restore = True
+        ret.local[:] = self.local
+        ret.local_flags[:] = self.local_flags
+        if restore:
+            self.accel_update_device()
             ret.accel_update_device()
         return ret
 
@@ -674,8 +682,8 @@ class Amplitudes(AcceleratorObject):
     def _accel_exists(self):
         if use_accel_omp:
             return accel_data_present(
-                self._raw, self._accel_name
-            ) and accel_data_present(self._raw_flags, self._accel_name)
+                self._raw, name=self._accel_name
+            ) and accel_data_present(self._raw_flags, name=self._accel_name)
         elif use_accel_jax:
             return accel_data_present(self.local) and accel_data_present(
                 self.local_flags
@@ -683,49 +691,53 @@ class Amplitudes(AcceleratorObject):
         else:
             return False
 
-    def _accel_create(self):
+    def _accel_create(self, zero_out=False):
         if use_accel_omp:
-            self._raw = accel_data_create(self._raw, self._accel_name)
-            self._raw_flags = accel_data_create(self._raw_flags, self._accel_name)
+            _ = accel_data_create(self._raw, name=self._accel_name, zero_out=zero_out)
+            _ = accel_data_create(
+                self._raw_flags, name=self._accel_name, zero_out=zero_out
+            )
         elif use_accel_jax:
-            self.local = accel_data_create(self.local)
-            self.local_flags = accel_data_create(self.local_flags)
+            self.local = accel_data_create(self.local, zero_out=zero_out)
+            self.local_flags = accel_data_create(self.local_flags, zero_out=zero_out)
 
     def _accel_update_device(self):
         if use_accel_omp:
-            self._raw = accel_data_update_device(self._raw, self._accel_name)
-            self._raw_flags = accel_data_update_device(
-                self._raw_flags, self._accel_name
-            )
+            _ = accel_data_update_device(self._raw, name=self._accel_name)
+            _ = accel_data_update_device(self._raw_flags, name=self._accel_name)
         elif use_accel_jax:
             self.local = accel_data_update_device(self.local)
             self.local_flags = accel_data_update_device(self.local_flags)
 
     def _accel_update_host(self):
         if use_accel_omp:
-            self._raw = accel_data_update_host(self._raw, self._accel_name)
-            self._raw_flags = accel_data_update_host(self._raw_flags, self._accel_name)
+            _ = accel_data_update_host(self._raw, name=self._accel_name)
+            _ = accel_data_update_host(self._raw_flags, name=self._accel_name)
         elif use_accel_jax:
             self.local = accel_data_update_host(self.local)
             self.local_flags = accel_data_update_host(self.local_flags)
 
     def _accel_delete(self):
         if use_accel_omp:
-            self._raw = accel_data_delete(self._raw, self._accel_name)
-            self._raw_flags = accel_data_delete(self._raw_flags, self._accel_name)
+            _ = accel_data_delete(self._raw, name=self._accel_name)
+            _ = accel_data_delete(self._raw_flags, name=self._accel_name)
         elif use_accel_jax:
             self.local = accel_data_delete(self.local)
             self.local_flags = accel_data_delete(self.local_flags)
 
     def _accel_reset_local(self):
+        # if not self.accel_in_use():
+        #     return
         if use_accel_omp:
-            accel_data_reset(self._raw, self._accel_name)
+            accel_data_reset(self._raw, name=self._accel_name)
         elif use_accel_jax:
             accel_data_reset(self.local)
 
     def _accel_reset_local_flags(self):
+        # if not self.accel_in_use():
+        #     return
         if use_accel_omp:
-            accel_data_reset(self._raw_flags, self._accel_name)
+            accel_data_reset(self._raw_flags, name=self._accel_name)
         elif use_accel_jax:
             accel_data_reset(self.local_flags)
 
@@ -903,6 +915,11 @@ class AmplitudesMap(MutableMapping, AcceleratorObject):
             result += v.dot(other[k])
         return result
 
+    def accel_used(self, state):
+        super().accel_used(state)
+        for k, v in self._internal.items():
+            v.accel_used(state)
+
     def _accel_exists(self):
         if not accel_enabled():
             return False
@@ -919,11 +936,11 @@ class AmplitudesMap(MutableMapping, AcceleratorObject):
             raise RuntimeError(msg)
         return True
 
-    def _accel_create(self):
+    def _accel_create(self, zero_out=False):
         if not accel_enabled():
             return
         for k, v in self._internal.items():
-            v.accel_create(f"{self._accel_name}_{k}")
+            v.accel_create(f"{self._accel_name}_{k}", zero_out=zero_out)
 
     def _accel_update_device(self):
         if not accel_enabled():
@@ -942,3 +959,9 @@ class AmplitudesMap(MutableMapping, AcceleratorObject):
             return
         for k, v in self._internal.items():
             v.accel_delete()
+
+    def _accel_reset(self):
+        if not accel_enabled():
+            return
+        for k, v in self._internal.items():
+            v.accel_reset()

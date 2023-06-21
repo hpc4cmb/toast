@@ -4,6 +4,7 @@
 
 import numpy as np
 import traitlets
+from astropy import units as u
 
 from ...accelerator import ImplementationType
 from ...observation import default_values as defaults
@@ -24,33 +25,31 @@ class StokesWeights(Operator):
     aligned with the polarization sensitive direction.  An optional dictionary of
     pointing weight calibration factors may be specified for each observation.
 
-    For each observation, the cross-polar response for every detector is obtained from
-    the Focalplane, and if a HWP angle timestream exists, then a perfect HWP Mueller
-    matrix is included in the response.
+    If the hwp_angle field is specified, then an ideal HWP Mueller matrix is inserted
+    in the optics chain before the linear polarizer.  In this case, the fp_gamma key
+    name must be specified and each detector must have a value in the focalplane
+    table.
 
-    The timestream model is then (see Jones, et al, 2006):
-
-    .. math::
-        d = cal \\left[\\frac{(1+eps)}{2} I + \\frac{(1-eps)}{2} \\left[Q \\cos{2a} + U \\sin{2a}\\right]\\right]
-
-    Or, if a HWP is included in the response with time varying angle "w", then
-    the total response is:
+    The timestream model without a HWP in COSMO convention is:
 
     .. math::
-        d = cal \\left[\\frac{(1+eps)}{2} I + \\frac{(1-eps)}{2} \\left[Q \\cos{2a+4w} + U \\sin{2a+4w}\\right]\\right]
+        d = cal \\left[I + \\frac{1 - \\epsilon}{1 + \\epsilon} \\left[Q \\cos\\left(2\\alpha\\right) - U \\sin\\left(2\\alpha\\right) \\right] \\right]
 
-    The angle "a" in the above formalism is the angle (at each sample) between the
-    transformed X-axis of the detector frame and the local meridian of the coordinate
-    system.  This is computed by rotating the Z and X coordinate axes by the detector
-    pointing quaternion and then computing the rotation angle from meridian to this
-    polarization sensitive direction.  This means that "a" is positive in a
-    right-handed sense, since the rotated Z-axis points in the detector line of sight:
+    When a HWP is present, we have:
 
     .. math::
-        v_m = vector parallel to local meridian
-        v_o = orientation vector (transformed x-axis)
-        v_d = direction vector (transformed z-axis)
-        a = atan2((v_m X v_o) \\dot v_d, v_m \\dot v_o)
+        d = cal \\left[I + \\frac{1 - \\epsilon}{1 + \\epsilon} \\left[Q \\cos\\left(2(\\alpha - 2\\omega) \\right) + U \\sin\\left(2(\\alpha - 2\\omega) \\right) \\right] \\right]
+
+    The detector orientation angle "alpha" in COSMO convention is measured in a
+    right-handed sense from the local meridian and the HWP angle "omega" is also
+    measured from the local meridian.  The omega value can be described in terms of
+    alpha, a fixed per-detector offset gamma, and the time varying HWP angle measured
+    from the focalplane coordinate frame X-axis:
+
+    .. math::
+        \\omega = \\alpha + {\\gamma}_{HWP}(t) - {\\gamma}_{DET}
+
+    See documentation for a full treatment of this math.
 
     By default, this operator uses the "COSMO" convention for Q/U.  If the "IAU" trait
     is set to True, then resulting weights will differ by the sign of the U Stokes
@@ -80,6 +79,10 @@ class StokesWeights(Operator):
 
     hwp_angle = Unicode(
         None, allow_none=True, help="Observation shared key for HWP angle"
+    )
+
+    fp_gamma = Unicode(
+        "gamma", allow_none=True, help="Focalplane key for detector gamma offset angle"
     )
 
     weights = Unicode(
@@ -148,6 +151,10 @@ class StokesWeights(Operator):
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
+
+        if ("QU" in self.mode) and self.hwp_angle is not None:
+            if self.fp_gamma is None:
+                raise RuntimeError("If using HWP, you must specify the fp_gamma key")
 
         # Expand detector pointing
         if self.quats is not None:
@@ -238,10 +245,13 @@ class StokesWeights(Operator):
                     det_epsilon[idet] = focalplane[d]["pol_leakage"]
 
             if self.mode == "IQU":
+                det_gamma = np.zeros(len(dets), dtype=np.float64)
                 if self.hwp_angle is None:
                     hwp_data = np.zeros(1, dtype=np.float64)
                 else:
                     hwp_data = ob.shared[self.hwp_angle].data
+                    for idet, d in enumerate(dets):
+                        det_gamma[idet] = focalplane[d]["gamma"].to_value(u.rad)
                 stokes_weights_IQU(
                     quat_indx,
                     ob.detdata[quats_name].data,
@@ -250,7 +260,9 @@ class StokesWeights(Operator):
                     hwp_data,
                     ob.intervals[self.view].data,
                     det_epsilon,
+                    det_gamma,
                     cal,
+                    bool(self.IAU),
                     impl=implementation,
                     use_accel=use_accel,
                 )
@@ -270,6 +282,9 @@ class StokesWeights(Operator):
 
     def _requires(self):
         req = self.detector_pointing.requires()
+        if "detdata" not in req:
+            req["detdata"] = list()
+        req["detdata"].append(self.weights)
         if self.cal is not None:
             req["meta"].append(self.cal)
         if self.hwp_angle is not None:
@@ -279,7 +294,8 @@ class StokesWeights(Operator):
         return req
 
     def _provides(self):
-        prov = {"detdata": [self.weights]}
+        prov = self.detector_pointing.provides()
+        prov["detdata"].append(self.weights)
         return prov
 
     def _implementations(self):

@@ -572,10 +572,54 @@ class SimConviqtTest(MPITestCase):
 
         fail = False
         if self.rank == 0:
+            import matplotlib.pyplot as plt
+
             mapfile = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
             mdata = hp.read_map(mapfile, field=range(3))
             mapfile = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
             mdataw = hp.read_map(mapfile, field=range(3))
+
+            bl_in = hp.gauss_beam(
+                self.fwhm_sky.to_value(u.radian), lmax=self.lmax, pol=True
+            ).T
+            bl_out = hp.gauss_beam(
+                self.fwhm_beam.to_value(u.radian), lmax=self.lmax, pol=True
+            ).T
+            slm = self.slm.copy()
+            bl_in[bl_in == 0] = 1
+            bl_out[bl_out == 0] = 1
+            for i in range(3):
+                slm[i] = hp.almxfl(slm[i], bl_out[i] / bl_in[i])
+            reference = hp.alm2map(slm, self.nside, lmax=self.lmax, pixwin=True)
+
+            for m in mdata, mdataw:
+                m[m == 0] = hp.UNSEEN
+            reference[m == hp.UNSEEN] = hp.UNSEEN
+
+            args = {"rot": [156, 11], "xsize": 1200, "reso": 3, "cmap": "bwr"}
+            nrow, ncol = 3, 3
+            fig = plt.figure(figsize=[18, 12])
+            for col, stokes in enumerate("IQU"):
+                hp.gnomview(
+                    mdata[col],
+                    **args,
+                    sub=[nrow, ncol, 1 + col],
+                    title=f"{stokes} SimConviqt",
+                )
+                hp.gnomview(
+                    mdataw[col],
+                    **args,
+                    sub=[nrow, ncol, 4 + col],
+                    title=f"{stokes} SimTEBConviqt",
+                )
+                hp.gnomview(
+                    reference[col],
+                    **args,
+                    sub=[nrow, ncol, 7 + col],
+                    title=f"{stokes} Reference",
+                )
+            fname = os.path.join(self.outdir, "map_comparison_TEB.png")
+            fig.savefig(fname)
 
             cl_out = hp.anafast(mdata, lmax=self.lmax)
             cl_outw = hp.anafast(mdataw, lmax=self.lmax)

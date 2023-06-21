@@ -7,7 +7,7 @@ import traitlets
 from ..accelerator import ImplementationType, accel_enabled, use_hybrid_pipelines
 from ..data import Data
 from ..timing import function_timer
-from ..traits import Int, List, Bool, trait_docs
+from ..traits import Bool, Int, List, trait_docs
 from ..utils import Logger, SetDict
 from .operator import Operator
 
@@ -94,34 +94,28 @@ class Pipeline(Operator):
         # deal with data movement ourselves.
         self._staged_data = None
         self._unstaged_data = None
-        if (use_accel is None) and accel_enabled():
-            # only allows hybrid pipelines if the environement variable and pipeline agree to it
-            # (they both default to True)
-            use_hybrid = self.use_hybrid and use_hybrid_pipelines
-            # can we run this pipelines on accelerator
-            supports_accel = (
-                self._supports_accel_partial() if use_hybrid else self._supports_accel()
+        pipe_accel = self._pipe_accel(use_accel)
+
+        if pipe_accel:
+            # some of our operators support using the accelerator
+            msg = f"{self} supports accelerators."
+            log.verbose_rank(msg, comm=data.comm.comm_world)
+            use_accel = True
+            # keeps track of the data that is on device
+            self._staged_data = SetDict(
+                {
+                    key: set()
+                    for key in ["global", "meta", "detdata", "shared", "intervals"]
+                }
             )
-            if supports_accel:
-                # some of our operators support using the accelerator
-                msg = f"{self} supports accelerators."
-                log.verbose_rank(msg, comm=data.comm.comm_world)
-                use_accel = True
-                # keeps track of the data that is on device
-                self._staged_data = SetDict(
-                    {
-                        key: set()
-                        for key in ["global", "meta", "detdata", "shared", "intervals"]
-                    }
-                )
-                # keep track of the data that had to move back from device
-                # (for display / debugging purposes)
-                self._unstaged_data = SetDict(
-                    {
-                        key: set()
-                        for key in ["global", "meta", "detdata", "shared", "intervals"]
-                    }
-                )
+            # keep track of the data that had to move back from device
+            # (for display / debugging purposes)
+            self._unstaged_data = SetDict(
+                {
+                    key: set()
+                    for key in ["global", "meta", "detdata", "shared", "intervals"]
+                }
+            )
 
         if len(data.obs) == 0:
             # No observations for this group
@@ -131,7 +125,12 @@ class Pipeline(Operator):
         if len(self.detector_sets) == 1 and self.detector_sets[0] == "ALL":
             # Run the operators with all detectors at once
             for op in self.operators:
-                self._exec_operator(op, data, detectors=None, use_accel=use_accel)
+                self._exec_operator(
+                    op,
+                    data,
+                    detectors=None,
+                    pipe_accel=pipe_accel,
+                )
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
             # Get superset of detectors across all observations
             all_local_dets = data.all_local_detectors(selection=detectors)
@@ -140,7 +139,12 @@ class Pipeline(Operator):
                 msg = f"{pstr} {self} SINGLE detector {det}"
                 log.verbose(msg)
                 for op in self.operators:
-                    self._exec_operator(op, data, detectors=[det], use_accel=use_accel)
+                    self._exec_operator(
+                        op,
+                        data,
+                        detectors=[det],
+                        pipe_accel=pipe_accel,
+                    )
         else:
             # We have explicit detector sets
             det_check = set(detectors)
@@ -158,7 +162,10 @@ class Pipeline(Operator):
                 log.verbose(msg)
                 for op in self.operators:
                     self._exec_operator(
-                        op, data, detectors=selected_set, use_accel=use_accel
+                        op,
+                        data,
+                        detectors=selected_set,
+                        pipe_accel=pipe_accel,
                     )
 
         # notify user of device->host data movements introduced by CPU operators
@@ -169,38 +176,62 @@ class Pipeline(Operator):
             )
 
     @function_timer
-    def _exec_operator(self, op, data, detectors, use_accel):
+    def _exec_operator(self, op, data, detectors, pipe_accel):
         """Runs an operator, dealing with data movement to/from device if needed."""
-        # displays some debugging information
+        # For this operator, we run on the accelerator if the pipeline has some
+        # operators enabled and if this operator supports it.
+        run_accel = pipe_accel and op.supports_accel()
+
         log = Logger.get()
         msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
-        msg += f"calling operator '{op.name}' exec(use_accel={use_accel})"
+        msg += f"calling operator '{op.name}' exec(accelerator={run_accel})"
         if detectors is None:
             msg += " with ALL dets"
         log.verbose(msg)
-        # insures data is where it should be for this operator
+
+        # Ensures data is where it should be for this operator
         if self._staged_data is not None:
             requires = SetDict(op.requires())
-            if op.supports_accel():
-                # get inputs not already on device
+            if run_accel:
+                # This operator will use the accelerator, stage data
+                msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
+                msg += f"BEFORE staged = {self._staged_data}, unstaged = {self._unstaged_data}"
+                log.verbose(msg)
                 requires -= self._staged_data
+                msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
+                msg += f"Staging objects {requires}"
+                log.verbose(msg)
                 data.accel_create(requires)
                 data.accel_update_device(requires)
-                # updates our record of data on device
+                # Update our record of data on device
+                self._unstaged_data -= requires
                 self._staged_data |= requires
                 self._staged_data |= op.provides()
+                self._unstaged_data -= op.provides()
+                msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
+                msg += f"AFTER staged = {self._staged_data}, unstaged = {self._unstaged_data}"
+                log.verbose(msg)
             else:
-                # get inputs not already on host
+                # This operator is running on the host, unstage data
+                msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
+                msg += f"BEFORE staged = {self._staged_data}, unstaged = {self._unstaged_data}"
+                log.verbose(msg)
                 requires &= self._staged_data  # intersection
+                msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
+                msg += f"Un-staging objects {requires}"
+                log.verbose(msg)
                 data.accel_update_host(requires)
-                # updates our record of data that had to come back from device
-                self._unstaged_data |= requires  # union
-                # updates our record of data on device
+                # Update our record of data on the device
                 self._staged_data -= requires
+                self._unstaged_data |= requires  # union
+                self._unstaged_data |= op.provides()
                 # lets operator decide if it wants to move data and operate on device by itself
-                use_accel = None
+                run_accel = None
+                msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
+                msg += f"AFTER staged = {self._staged_data}, unstaged = {self._unstaged_data}"
+                log.verbose(msg)
         # runs operator
-        op.exec(data, detectors=detectors, use_accel=use_accel)
+        op.exec(data, detectors=detectors, use_accel=run_accel)
 
     @function_timer
     def _finalize(self, data, use_accel=None, **kwargs):
@@ -214,16 +245,16 @@ class Pipeline(Operator):
         msg = f"{pstr} {self} finalize"
         log.verbose(msg)
 
-        # did we set use_accel to True when running?
-        use_accel = use_accel or (self._staged_data is not None)
+        # Are we running on the accelerator?
+        pipe_accel = self._pipe_accel(use_accel)
 
         # run finalize on all the operators in the pipeline
         # NOTE: this might produce some output products
         result = list()
         if self.operators is not None:
             for op in self.operators:
-                # did we set use_accel to true when running with this operator
-                use_accel_op = use_accel and op.supports_accel()
+                # Did we set use_accel to true when running with this operator
+                use_accel_op = pipe_accel and op.supports_accel()
                 result.append(op.finalize(data, use_accel=use_accel_op, **kwargs))
 
         # get outputs back and clean up data
@@ -241,6 +272,19 @@ class Pipeline(Operator):
             self._unstaged_data = None
 
         return result
+
+    def _pipe_accel(self, use_accel):
+        if (use_accel is None) and accel_enabled():
+            # Only allows hybrid pipelines if the environement variable and pipeline agree to it
+            # (they both default to True)
+            use_hybrid = self.use_hybrid and use_hybrid_pipelines
+            # can we run this pipelines on accelerator
+            supports_accel = (
+                self._supports_accel_partial() if use_hybrid else self._supports_accel()
+            )
+            return supports_accel
+        else:
+            return use_accel
 
     def _requires(self):
         """

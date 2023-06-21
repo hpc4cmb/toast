@@ -8,8 +8,8 @@ import hashlib
 import importlib
 import os
 import warnings
-from tempfile import TemporaryDirectory
 from collections import UserDict
+from tempfile import TemporaryDirectory
 
 import astropy.io.misc.hdf5 as aspy5
 import h5py
