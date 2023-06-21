@@ -43,9 +43,7 @@ def stokes_weights_IQU_inner(eps, cal, pin, IAU):
     # Compute the rotation angle from the meridian vector to the
     # orientation vector.  The direction vector is normal to the plane
     # containing these two vectors, so the rotation angle is:
-    #
     # angle = atan2((v_m x v_o) . v_d, v_m . v_o)
-    #
     alpha_y = (
         vd[0] * (vm_y * vo[2] - vm_z * vo[1])
         - vd[1] * (vm_x * vo[2] - vm_z * vo[0])
@@ -69,7 +67,7 @@ def stokes_weights_IQU_inner_hwp(eps, cal, gamma, pin, hwpang, IAU):
         cal (float):  A constant to apply to the pointing weights.
         gamma (float):  Detector polarization angle.
         pin (array, float64):  The array of detector quaternions (size 4).
-        hwpang (float64):  The HWP angle (could be None).
+        hwpang (float64):  The HWP angle.
         IAU (float):  Sign factor for U stokes term.
 
     Returns:
@@ -92,9 +90,7 @@ def stokes_weights_IQU_inner_hwp(eps, cal, gamma, pin, hwpang, IAU):
     # Compute the rotation angle from the meridian vector to the
     # orientation vector.  The direction vector is normal to the plane
     # containing these two vectors, so the rotation angle is:
-    #
     # angle = atan2((v_m x v_o) . v_d, v_m . v_o)
-    #
     alpha_y = (
         vd[0] * (vm_y * vo[2] - vm_z * vo[1])
         - vd[1] * (vm_x * vo[2] - vm_z * vo[0])
