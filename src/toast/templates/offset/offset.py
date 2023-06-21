@@ -2,8 +2,10 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import json
 from collections import OrderedDict
 
+import h5py
 import numpy as np
 import scipy
 import scipy.signal
@@ -16,6 +18,7 @@ from ...observation import default_values as defaults
 from ...timing import function_timer
 from ...traits import Bool, Float, Int, Quantity, Unicode, UseEnum, trait_docs
 from ...utils import AlignedF64, Logger, rate_from_times
+from ...vis import set_matplotlib_backend
 from ..amplitudes import Amplitudes
 from ..template import Template
 from .kernels import (
@@ -735,3 +738,205 @@ class Offset(Template):
 
     def _supports_accel(self):
         return True
+
+    @function_timer
+    def write(self, amplitudes, out):
+        """Write out amplitude values.
+
+        This stores the amplitudes to files for debugging / plotting.  Since the
+        Offset amplitudes are unique on each process, we open one file per process
+        group and each process in the group communicates their amplitudes to one
+        writer.
+
+        Since this function is used mainly for debugging, we are a bit wasteful
+        and duplicate the amplitudes in order to make things easier.
+
+        Args:
+            amplitudes (Amplitudes):  The amplitude data.
+            out (str):  The output file root.
+
+        Returns:
+            None
+
+        """
+
+        # Copy of the amplitudes, organized by observation and detector
+        obs_det_amps = dict()
+
+        for det in self._all_dets:
+            amp_offset = self._det_start[det]
+            for iob, ob in enumerate(self.data.obs):
+                if det not in ob.local_detectors:
+                    continue
+                if ob.comm_row_size != 1:
+                    raise NotImplementedError(
+                        "Only observations distributed by detector are supported"
+                    )
+                # The step length for this observation
+                step_length = self._step_length(
+                    self.step_time.to_value(u.second), self._obs_rate[iob]
+                )
+
+                if ob.name not in obs_det_amps:
+                    # First time with this observation, store info about
+                    # the offset spans
+                    obs_det_amps[ob.name] = dict()
+                    props = dict()
+                    props["step_length"] = step_length
+                    amp_first = list()
+                    amp_last = list()
+                    amp_start = list()
+                    amp_stop = list()
+                    for ivw, vw in enumerate(ob.intervals[self.view]):
+                        n_amp_view = self._obs_views[iob][ivw]
+                        for istep in range(n_amp_view):
+                            amp_first.append(vw.first + istep * step_length)
+                            if istep == n_amp_view - 1:
+                                amp_last.append(vw.last)
+                            else:
+                                amp_last.append(vw.first + (istep + 1) * step_length)
+                            amp_start.append(ob.shared[self.times].data[amp_first[-1]])
+                            amp_stop.append(ob.shared[self.times].data[amp_last[-1]])
+                    props["amp_first"] = np.array(amp_first, dtype=np.int64)
+                    props["amp_last"] = np.array(amp_last, dtype=np.int64)
+                    props["amp_start"] = np.array(amp_start, dtype=np.float64)
+                    props["amp_stop"] = np.array(amp_stop, dtype=np.float64)
+                    obs_det_amps[ob.name]["bounds"] = props
+
+                # Loop over views and extract per-detector amplitudes and flags
+                det_amps = list()
+                det_flags = list()
+                views = ob.view[self.view]
+                for ivw, vw in enumerate(views):
+                    n_amp_view = self._obs_views[iob][ivw]
+                    amp_slice = slice(amp_offset, amp_offset + n_amp_view, 1)
+                    det_amps.append(amplitudes.local[amp_slice])
+                    det_flags.append(amplitudes.local_flags[amp_slice])
+                    amp_offset += n_amp_view
+                det_amps = np.concatenate(det_amps, dtype=np.float64)
+                det_flags = np.concatenate(det_flags, dtype=np.uint8)
+                obs_det_amps[ob.name][det] = {
+                    "amps": det_amps,
+                    "flags": det_flags,
+                }
+
+        # Each group writes out its amplitudes.
+
+        # NOTE:  If/when we want to support arbitrary data distributions when
+        # writing, we would need to take the data from each process and align
+        # them in time rather than just extracting detector data and writing
+        # to the datasets.
+
+        for iob, ob in enumerate(self.data.obs):
+            obs_local_amps = obs_det_amps[ob.name]
+            if self.data.comm.group_size == 0:
+                all_obs_amps = [obs_local_amps]
+            else:
+                all_obs_amps = self.data.comm.comm_group.gather(obs_local_amps, root=0)
+
+            if self.data.comm.group_rank == 0:
+                out_file = f"{out}_{ob.name}.h5"
+                det_names = set()
+                for pdata in all_obs_amps:
+                    for k in pdata.keys():
+                        if k != "bounds":
+                            det_names.add(k)
+                det_names = list(sorted(det_names))
+                n_det = len(det_names)
+                amp_first = all_obs_amps[0]["bounds"]["amp_first"]
+                amp_last = all_obs_amps[0]["bounds"]["amp_last"]
+                amp_start = all_obs_amps[0]["bounds"]["amp_start"]
+                amp_stop = all_obs_amps[0]["bounds"]["amp_stop"]
+                n_amp = len(amp_first)
+                det_to_row = {y: x for x, y in enumerate(det_names)}
+                with h5py.File(out_file, "w") as hf:
+                    hf.attrs["step_length"] = all_obs_amps[0]["bounds"]["step_length"]
+                    hf.attrs["detectors"] = json.dumps(det_names)
+                    hamp_first = hf.create_dataset("amp_first", data=amp_first)
+                    hamp_last = hf.create_dataset("amp_last", data=amp_last)
+                    hamp_start = hf.create_dataset("amp_start", data=amp_start)
+                    hamp_stop = hf.create_dataset("amp_stop", data=amp_stop)
+                    hamps = hf.create_dataset(
+                        "amplitudes",
+                        (n_det, n_amp),
+                        dtype=np.float64,
+                    )
+                    hflags = hf.create_dataset(
+                        "flags",
+                        (n_det, n_amp),
+                        dtype=np.uint8,
+                    )
+                    for pdata in all_obs_amps:
+                        for k, v in pdata.items():
+                            if k == "bounds":
+                                continue
+                            row = det_to_row[k]
+                            hslice = (slice(row, row + 1, 1), slice(0, n_amp, 1))
+                            dslice = (slice(0, n_amp, 1),)
+                            hamps.write_direct(v["amps"], dslice, hslice)
+                            hflags.write_direct(v["flags"], dslice, hslice)
+
+
+def plot(amp_file, compare=dict(), out=None):
+    """Plot an amplitude dump file.
+
+    This loads an amplitude file and makes a set of plots.
+
+    Args:
+        amp_file (str):  The path to the input file of observation amplitudes.
+        compare (dict):  If specified, dictionary of per-detector timestreams
+            to plot for comparison.
+        out (str):  The output file.
+
+    Returns:
+        None
+
+    """
+
+    if out is not None:
+        set_matplotlib_backend(backend="pdf")
+
+    import matplotlib.pyplot as plt
+
+    figdpi = 100
+
+    with h5py.File(amp_file, "r") as hf:
+        step_length = hf.attrs["step_length"]
+        det_list = json.loads(hf.attrs["detectors"])
+        n_det = len(det_list)
+        amp_first = hf["amp_first"]
+        amp_last = hf["amp_last"]
+        amp_start = hf["amp_start"]
+        amp_stop = hf["amp_stop"]
+        hamps = hf["amplitudes"]
+        hflags = hf["flags"]
+        n_amp = len(amp_first)
+
+        fig_width = 8
+        fig_height = 4
+        fig_dpi = 100
+
+        x_samples = np.arange(amp_first[0], amp_last[-1] + 1, 1)
+
+        for idet, det in enumerate(det_list):
+            outfile = f"{out}_{det}.pdf"
+            fig = plt.figure(dpi=fig_dpi, figsize=(fig_width, fig_height))
+            ax = fig.add_subplot(1, 1, 1)
+            if det in compare:
+                ax.plot(x_samples, compare[det], color="black", label=f"{det} Data")
+            ax.step(
+                amp_first[:],
+                hamps[idet],
+                where="post",
+                color="red",
+                label=f"{det} Offset Amplitudes",
+            )
+            ax.set_xlabel("Sample Index")
+            ax.set_ylabel("Amplitude")
+            ax.legend(loc="best")
+            if out is None:
+                # Interactive
+                plt.show()
+            else:
+                plt.savefig(outfile, dpi=figdpi, bbox_inches="tight", format="pdf")
+                plt.close()

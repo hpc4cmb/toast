@@ -95,9 +95,11 @@ def _ephem_transform(site, t):
     quat = qa.norm(np.array([b, c, d, a]))
     return quat
 
+
 def _qpoint_transform(site, t, quats_azel):
     """Get the Az/El -> Ra/Dec conversion quaternion for boresight."""
     import qpoint
+
     qp = qpoint.QPoint(
         accuracy="high",
         fast_math=True,

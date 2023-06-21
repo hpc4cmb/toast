@@ -26,7 +26,7 @@ from ..io.compression_flac import (
 from ..mpi import Comm
 from ..observation import default_values as defaults
 from ..observation_data import DetectorData
-from ..ops import SaveHDF5, LoadHDF5
+from ..ops import LoadHDF5, SaveHDF5
 from ..timing import Timer
 from ..utils import AlignedI32, AlignedU8
 from ._helpers import close_data, create_ground_data, create_outdir
@@ -311,7 +311,9 @@ class IoCompressionTest(MPITestCase):
             new_detdata_quanta = decompress_detdata(*comp_data_quanta)
 
             rms_float32 = np.std(ob.detdata[key].data - new_detdata_float32.data)
-            rms_precision = np.std(new_detdata_float32.data - new_detdata_precision.data)
+            rms_precision = np.std(
+                new_detdata_float32.data - new_detdata_precision.data
+            )
             rms_quanta = np.std(new_detdata_float32.data - new_detdata_quanta.data)
 
             # print(f"RMS (in) = {rms_in}")
@@ -320,7 +322,7 @@ class IoCompressionTest(MPITestCase):
             # print(f"RMS (quanta) = {rms_quanta} abs, {rms_quanta / rms_in} rel")
 
             check = np.allclose(
-                new_detdata_precision[:], new_detdata_quanta[:], rtol=10**(-precision)
+                new_detdata_precision[:], new_detdata_quanta[:], rtol=10 ** (-precision)
             )
             if not check:
                 print(f"RMS (in) = {rms_in}")
@@ -329,8 +331,10 @@ class IoCompressionTest(MPITestCase):
                 print(f"Quanta = {quanta}:  {new_detdata_quanta}")
                 self.assertTrue(False)
 
-            if rms_in / rms_precision < .9 * 10**precision:
-                print(f"RMS(in) / RMS(precision) = {rms_in / rms_precision} but precision = {precision}")
+            if rms_in / rms_precision < 0.9 * 10**precision:
+                print(
+                    f"RMS(in) / RMS(precision) = {rms_in / rms_precision} but precision = {precision}"
+                )
                 self.assertTrue(False)
 
         close_data(data)

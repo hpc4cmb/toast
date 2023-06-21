@@ -176,7 +176,7 @@ class SaveHDF5(Operator):
     detdata_in_place = Bool(
         False,
         help="If True, all compressed detector data will be decompressed and written "
-        "over the input data."
+        "over the input data.",
     )
 
     compress_detdata = Bool(False, help="If True, use FLAC to compress detector signal")
@@ -244,11 +244,14 @@ class SaveHDF5(Operator):
                         detdata_fields[ifield] = (field, {"type": "gzip"})
                     else:
                         # Everything else is FLAC-compressed
-                        detdata_fields[ifield] = (field, {
-                            "type": "flac",
-                            "level": 5,
-                            "precision": self.compress_precision,
-                        })
+                        detdata_fields[ifield] = (
+                            field,
+                            {
+                                "type": "flac",
+                                "level": 5,
+                                "precision": self.compress_precision,
+                            },
+                        )
 
             outpath = save_hdf5(
                 ob,

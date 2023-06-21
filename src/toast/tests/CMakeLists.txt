@@ -45,6 +45,7 @@ install(FILES
     ops_scan_wcs.py
     ops_madam.py
     ops_gainscrambler.py
+    template_periodic.py
     template_amplitudes.py
     template_offset.py
     template_fourier2d.py

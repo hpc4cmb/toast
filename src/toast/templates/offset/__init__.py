@@ -4,4 +4,4 @@
 
 # Namespace imports
 
-from .offset import Offset
+from .offset import Offset, plot

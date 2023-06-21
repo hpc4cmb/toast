@@ -783,6 +783,8 @@ class CommonModeFilter(Operator):
             for value in values:
                 local_dets = []
                 for idet, det in enumerate(temp_ob.local_detectors):
+                    if temp_ob.local_detector_flags[det] & self.det_flag_mask:
+                        continue
                     if pat.match(det) is None:
                         continue
                     if (
