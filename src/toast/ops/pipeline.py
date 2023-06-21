@@ -225,7 +225,6 @@ class Pipeline(Operator):
                 self._staged_data -= requires
                 self._unstaged_data |= requires  # union
                 self._unstaged_data |= op.provides()
-                self._staged_data -= op.provides()
                 # lets operator decide if it wants to move data and operate on device by itself
                 run_accel = None
                 msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
@@ -269,10 +268,6 @@ class Pipeline(Operator):
             # deleting all data on device
             log.verbose(f"{pstr} {self} deleting accel data: {self._staged_data}")
             data.accel_delete(self._staged_data)
-            # Delete any temporary objects
-            tmp = SetDict(self.temporary())
-            log.verbose(f"{pstr} {self} deleting temporary accel data: {tmp}")
-            data.accel_delete(tmp)
             self._staged_data = None
             self._unstaged_data = None
 
@@ -325,16 +320,6 @@ class Pipeline(Operator):
         # converts into a dictionary of lists
         prov = {k: list(v) for (k, v) in prov.items()}
         return prov
-
-    def _temporary(self):
-        """Get the superset of all temporary objects created."""
-        tmp = SetDict(
-            {key: set() for key in ["global", "meta", "detdata", "shared", "intervals"]}
-        )
-        for op in self.operators:
-            tmp |= op.temporary()
-        tmp = {k: list(v) for (k, v) in tmp.items()}
-        return tmp
 
     def _implementations(self):
         """

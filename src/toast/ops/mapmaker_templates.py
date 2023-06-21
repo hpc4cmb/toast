@@ -320,10 +320,10 @@ class TemplateMatrix(Operator):
 
     def _requires(self):
         req = dict()
+        req["detdata"] = [self.det_data]
         if self.view is not None:
             req["intervals"].append(self.view)
         if self.transpose:
-            req["detdata"] = [self.det_data]
             if self.det_flags is not None:
                 req["detdata"].append(self.det_flags)
         else:

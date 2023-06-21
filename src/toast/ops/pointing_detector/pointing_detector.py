@@ -182,7 +182,7 @@ class PointingDetectorSimple(Operator):
         req = {
             "meta": list(),
             "shared": [self.boresight],
-            "detdata": list(),
+            "detdata": [self.quats],
             "intervals": list(),
         }
         if self.shared_flags is not None:

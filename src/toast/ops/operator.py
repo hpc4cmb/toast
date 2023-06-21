@@ -162,31 +162,6 @@ class Operator(TraitConfig):
                 prov[key] = list()
         return prov
 
-    def _temporary(self):
-        """Optional function that defaults to empty."""
-        return dict()
-
-    def temporary(self):
-        """Dictionary of temporary data objects created by this Operator.
-
-        This dictionary should have 5 keys, each containing a list of "global",
-        "metadata", "detdata", "shared", and "intervals" fields.  Global keys are
-        contained in the top-level data object.  Metadata keys are those contained
-        in the primary observation dictionary.  Detdata, shared, and intervals keys are
-        those contained in the "detdata", "shared", and "intervals" observation
-        attributes.
-
-        Returns:
-            (dict):  The names of temporary objects.
-
-        """
-        # Ensure that all keys exist
-        tmp = self._temporary()
-        for key in ["global", "meta", "detdata", "shared", "intervals"]:
-            if key not in tmp:
-                tmp[key] = list()
-        return tmp
-
     @classmethod
     def get_class_config_path(cls):
         return "/operators/{}".format(cls.__qualname__)

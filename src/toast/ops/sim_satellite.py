@@ -576,7 +576,7 @@ class SimSatellite(Operator):
         return dict()
 
     def _provides(self):
-        return {
+        prov = {
             "shared": [
                 self.times,
                 self.shared_flags,
@@ -586,3 +586,8 @@ class SimSatellite(Operator):
                 self.velocity,
             ]
         }
+        if self.det_data is not None:
+            prov["detdata"].append(self.det_data)
+        if self.det_flags is not None:
+            prov["detdata"].append(self.det_flags)
+        return prov

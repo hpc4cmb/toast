@@ -282,6 +282,9 @@ class StokesWeights(Operator):
 
     def _requires(self):
         req = self.detector_pointing.requires()
+        if "detdata" not in req:
+            req["detdata"] = list()
+        req["detdata"].append(self.weights)
         if self.cal is not None:
             req["meta"].append(self.cal)
         if self.hwp_angle is not None:
@@ -291,11 +294,9 @@ class StokesWeights(Operator):
         return req
 
     def _provides(self):
-        prov = {"detdata": [self.weights]}
+        prov = self.detector_pointing.provides()
+        prov["detdata"].append(self.weights)
         return prov
-
-    def _temporary(self):
-        return {"detdata": [self.detector_pointing.quats]}
 
     def _implementations(self):
         return [

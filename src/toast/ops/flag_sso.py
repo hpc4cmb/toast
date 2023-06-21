@@ -209,7 +209,7 @@ class FlagSSO(Operator):
         req = {
             "meta": list(),
             "shared": list(),
-            "detdata": list(),
+            "detdata": [self.det_flags],
             "intervals": [self.view],
         }
         return req

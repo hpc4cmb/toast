@@ -136,6 +136,9 @@ class Combine(Operator):
 
     def _requires(self):
         req = {"detdata": [self.first, self.second]}
+        if self.result is not None:
+            if (self.result != self.first) and (self.result != self.second):
+                req["detdata"].append(self.result)
         return req
 
     def _provides(self):

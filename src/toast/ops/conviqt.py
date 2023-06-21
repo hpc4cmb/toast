@@ -638,6 +638,9 @@ class SimConviqt(Operator):
         req["global"].extend([self.pixel_dist, self.covariance])
         req["meta"].extend([self.noise_model])
         req["shared"] = [self.boresight]
+        if "detdata" not in req:
+            req["detdata"] = list()
+        req["detdata"].append(self.det_data)
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)
         if self.det_flags is not None:

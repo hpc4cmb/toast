@@ -417,6 +417,9 @@ class SimNoise(Operator):
             "shared": [
                 self.times,
             ],
+            "detdata": [
+                self.det_data,
+            ],
         }
 
     def _provides(self):
