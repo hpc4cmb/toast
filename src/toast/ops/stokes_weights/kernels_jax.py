@@ -136,13 +136,13 @@ stokes_weights_IQU_inner = jax.vmap(
 
 stokes_weights_IQU_inner_hwp = jax.vmap(
     stokes_weights_IQU_inner_hwp, in_axes=[None, None, None, 0, 0, None], out_axes=0
-)
+)  # interval_size
 stokes_weights_IQU_inner_hwp = jax.vmap(
     stokes_weights_IQU_inner_hwp, in_axes=[None, None, None, 0, 0, None], out_axes=0
-)
+)  # intervals
 stokes_weights_IQU_inner_hwp = jax.vmap(
     stokes_weights_IQU_inner_hwp, in_axes=[0, None, 0, 0, None, None], out_axes=0
-)
+)  # detectors
 
 
 def stokes_weights_IQU_interval(
@@ -191,12 +191,12 @@ def stokes_weights_IQU_interval(
         quats, (quat_index, intervals, ALL)
     )  # quats[quat_index,intervals,:]
 
-    IAU_sign = 1.0 - 2.0 * IAU
+    IAU_sign = -1 if IAU else 1
 
     if hwp.size == 0:
         # Not using a half wave plate
         new_weights_interval = stokes_weights_IQU_inner(
-            epsilon, cal, gamma, quats_interval, IAU_sign
+            epsilon, cal, quats_interval, IAU_sign
         )
     else:
         hwp_interval = JaxIntervals.get(hwp, intervals)  # hwp[intervals]
@@ -215,7 +215,7 @@ def stokes_weights_IQU_interval(
 # jit compiling
 stokes_weights_IQU_interval = jax.jit(
     stokes_weights_IQU_interval,
-    static_argnames=["intervals_max_length"],
+    static_argnames=["intervals_max_length", "IAU"],
     donate_argnums=[3],
 )  # donates weights
 
