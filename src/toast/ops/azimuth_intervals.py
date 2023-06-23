@@ -15,7 +15,7 @@ from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Int, Unicode, trait_docs, Float
+from ..traits import Bool, Float, Int, Unicode, trait_docs
 from ..utils import Environment, Logger, Timer, rate_from_times
 from ..vis import set_matplotlib_backend
 from .operator import Operator
@@ -41,36 +41,44 @@ class AzimuthIntervals(Operator):
 
     azimuth = Unicode(defaults.azimuth, help="Observation shared key for Azimuth")
 
-    scanning_interval = Unicode("scanning", help="Interval name for scanning")
+    scanning_interval = Unicode(
+        defaults.scanning_interval, help="Interval name for scanning"
+    )
 
-    turnaround_interval = Unicode("turnaround", help="Interval name for turnarounds")
+    turnaround_interval = Unicode(
+        defaults.turnaround_interval, help="Interval name for turnarounds"
+    )
 
     throw_leftright_interval = Unicode(
-        "throw_leftright", help="Interval name for left to right scans + turnarounds"
+        defaults.throw_leftright_interval,
+        help="Interval name for left to right scans + turnarounds",
     )
 
     throw_rightleft_interval = Unicode(
-        "throw_rightleft", help="Interval name for right to left scans + turnarounds"
+        defaults.throw_rightleft_interval,
+        help="Interval name for right to left scans + turnarounds",
     )
 
     throw_interval = Unicode(
-        "throw", help="Interval name for scan + turnaround intervals"
+        defaults.throw_interval, help="Interval name for scan + turnaround intervals"
     )
 
     scan_leftright_interval = Unicode(
-        "scan_leftright", help="Interval name for left to right scans"
+        defaults.scan_leftright_interval, help="Interval name for left to right scans"
     )
 
     turn_leftright_interval = Unicode(
-        "turn_leftright", help="Interval name for turnarounds after left to right scans"
+        defaults.turn_leftright_interval,
+        help="Interval name for turnarounds after left to right scans",
     )
 
     scan_rightleft_interval = Unicode(
-        "scan_rightleft", help="Interval name for right to left scans"
+        defaults.scan_rightleft_interval, help="Interval name for right to left scans"
     )
 
     turn_rightleft_interval = Unicode(
-        "turn_rightleft", help="Interval name for turnarounds after right to left scans"
+        defaults.turn_rightleft_interval,
+        help="Interval name for turnarounds after right to left scans",
     )
 
     shared_flags = Unicode(

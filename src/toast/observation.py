@@ -82,6 +82,21 @@ def set_default_values(values=None):
         "sun_close": 64,
         "elnod": 1 + 2 + 4,
         #
+        # ground-specific interval names
+        #
+        "scanning_interval": "scanning",
+        "turnaround_interval": "turnaround",
+        "throw_leftright_interval": "throw_leftright",
+        "throw_rightleft_interval": "throw_rightleft",
+        "throw_interval": "throw",
+        "scan_leftright_interval": "scan_leftright",
+        "scan_rightleft_interval": "scan_rightleft",
+        "turn_leftright_interval": "turn_leftright",
+        "turn_rightleft_interval": "turn_rightleft",
+        "elnod_interval": "elnod",
+        "sun_up_interval": "sun_up",
+        "sun_close_interval": "sun_close",
+        #
         # Units
         #
         "det_data_units": u.Kelvin,
@@ -223,7 +238,7 @@ class Observation(MutableMapping):
         self.intervals = IntervalsManager(self.dist, n_samples)
 
         # Set up local per-detector cutting
-        self._detflags = {x: 0 for x in self.dist.dets[self.dist.comm.group_rank]}
+        self._detflags = {x: int(0) for x in self.dist.dets[self.dist.comm.group_rank]}
 
     # Fully clear the observation
 
@@ -356,7 +371,7 @@ class Observation(MutableMapping):
                 msg = f"Cannot update per-detector flag for '{k}', which is"
                 msg += " not a local detector"
                 raise RuntimeError(msg)
-            self._detflags[k] |= v
+            self._detflags[k] |= int(v)
 
     def set_local_detector_flags(self, vals):
         """Set the per-detector flagging.
@@ -376,7 +391,7 @@ class Observation(MutableMapping):
                 msg = f"Cannot set per-detector flag for '{k}', which is"
                 msg += " not a local detector"
                 raise RuntimeError(msg)
-            self._detflags[k] = v
+            self._detflags[k] = int(v)
 
     def select_local_detectors(
         self,

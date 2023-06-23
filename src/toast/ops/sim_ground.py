@@ -224,46 +224,55 @@ class SimGround(Operator):
 
     elnod_every_scan = Bool(False, help="Perform el nods every scan")
 
-    scanning_interval = Unicode("scanning", help="Interval name for scanning")
+    scanning_interval = Unicode(
+        defaults.scanning_interval, help="Interval name for scanning"
+    )
 
-    turnaround_interval = Unicode("turnaround", help="Interval name for turnarounds")
+    turnaround_interval = Unicode(
+        defaults.turnaround_interval, help="Interval name for turnarounds"
+    )
 
     throw_leftright_interval = Unicode(
-        "throw_leftright", help="Interval name for left to right scans + turnarounds"
+        defaults.throw_leftright_interval,
+        help="Interval name for left to right scans + turnarounds",
     )
 
     throw_rightleft_interval = Unicode(
-        "throw_rightleft", help="Interval name for right to left scans + turnarounds"
+        defaults.throw_rightleft_interval,
+        help="Interval name for right to left scans + turnarounds",
     )
 
     throw_interval = Unicode(
-        "throw", help="Interval name for scan + turnaround intervals"
+        defaults.throw_interval, help="Interval name for scan + turnaround intervals"
     )
 
     scan_leftright_interval = Unicode(
-        "scan_leftright", help="Interval name for left to right scans"
+        defaults.scan_leftright_interval, help="Interval name for left to right scans"
     )
 
     turn_leftright_interval = Unicode(
-        "turn_leftright", help="Interval name for turnarounds after left to right scans"
+        defaults.turn_leftright_interval,
+        help="Interval name for turnarounds after left to right scans",
     )
 
     scan_rightleft_interval = Unicode(
-        "scan_rightleft", help="Interval name for right to left scans"
+        defaults.scan_rightleft_interval, help="Interval name for right to left scans"
     )
 
     turn_rightleft_interval = Unicode(
-        "turn_rightleft", help="Interval name for turnarounds after right to left scans"
+        defaults.turn_rightleft_interval,
+        help="Interval name for turnarounds after right to left scans",
     )
 
-    elnod_interval = Unicode("elnod", help="Interval name for elnods")
+    elnod_interval = Unicode(defaults.elnod_interval, help="Interval name for elnods")
 
     sun_up_interval = Unicode(
-        "sun_up", help="Interval name for times when the sun is up"
+        defaults.sun_up_interval, help="Interval name for times when the sun is up"
     )
 
     sun_close_interval = Unicode(
-        "sun_close", help="Interval name for times when the sun is close"
+        defaults.sun_close_interval,
+        help="Interval name for times when the sun is close",
     )
 
     sun_close_distance = Quantity(45.0 * u.degree, help="'Sun close' flagging distance")

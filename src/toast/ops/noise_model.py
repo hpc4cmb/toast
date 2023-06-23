@@ -348,17 +348,6 @@ class FitNoiseModel(Operator):
         fknee = x[0]
         alpha = x[1]
         current = self._evaluate_log_model(freqs, fmin, net, fknee, alpha)
-
-        # Weight the difference so that low frequencies do not impact the fit.  This is
-        # basically a high-pass butterworth.
-        # n_freq = len(freqs)
-        # hp = np.arange(n_freq, dtype=np.float64)
-        # hp *= 2.0 / n_freq
-        # weights = 0.1 + 2.0 / np.sqrt(1.0 + np.power(hp, -4))
-        # resid = np.multiply(weights, current - logdata)
-        # print(
-        #     f"      current-data = {current - logdata}, weights = {weights}, resid = {resid}"
-        # )
         resid = current - logdata
         return resid
 
