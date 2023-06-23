@@ -38,7 +38,7 @@ class FilterBinTest(MPITestCase):
 
     def test_filterbin(self):
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, turnarounds_invalid=True)
 
         nside = 256
 

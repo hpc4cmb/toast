@@ -16,6 +16,7 @@ from ..atm import available_atm
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..observation_dist import global_interval_times
+from ..pointing_utils import scan_range_lonlat
 from ..timing import GlobalTimers, function_timer
 from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger, Timer
@@ -299,7 +300,19 @@ class GenerateAtmosphere(Operator):
         elmin = None
         elmax = None
         for ob in sdata.obs:
-            ob_azmin, ob_azmax, ob_elmin, ob_elmax = self._get_scan_range(ob)
+            ob_azmin, ob_azmax, ob_elmin, ob_elmax = scan_range_lonlat(
+                ob,
+                self.boresight,
+                self.shared_flags,
+                self.shared_flag_mask,
+                field_of_view=self.field_of_view,
+                is_azimuth=True,
+            )
+            ob_azmin = ob_azmin.to_value(u.rad)
+            ob_azmax = ob_azmax.to_value(u.rad)
+            ob_elmin = ob_elmin.to_value(u.rad)
+            ob_elmax = ob_elmax.to_value(u.rad)
+
             if azmin is None:
                 azmin = ob_azmin
                 azmax = ob_azmax
@@ -474,73 +487,6 @@ class GenerateAtmosphere(Operator):
                     else:
                         break
         return cachedir
-
-    @function_timer
-    def _get_scan_range(self, obs):
-        if self.field_of_view is not None:
-            fov = self.field_of_view
-        else:
-            fov = obs.telescope.focalplane.field_of_view
-        fp_radius = 0.5 * fov.to_value(u.radian)
-
-        # Work in parallel across each process column, which have the same
-        # slice of time/samples
-
-        if obs.comm_col is None:
-            rank = 0
-            ntask = 1
-        else:
-            rank = obs.comm_col_rank
-            ntask = obs.comm_col_size
-
-        # Create a fake focalplane of detectors in a circle around the boresight
-
-        xaxis, yaxis, zaxis = np.eye(3)
-        ndet = 64
-        phidet = np.linspace(0, 2 * np.pi, ndet, endpoint=False)
-        detquats = []
-        thetarot = qa.rotation(yaxis, fp_radius)
-        for phi in phidet:
-            phirot = qa.rotation(zaxis, phi)
-            detquat = qa.mult(phirot, thetarot)
-            detquats.append(detquat)
-
-        # Get fake detector pointing
-
-        az = []
-        el = []
-        quats = obs.shared[self.boresight][rank::ntask].copy()
-        for detquat in detquats:
-            vecs = qa.rotate(qa.mult(quats, detquat), zaxis)
-            theta, phi = hp.vec2ang(vecs)
-            az.append(2 * np.pi - phi)
-            el.append(np.pi / 2 - theta)
-        az = np.unwrap(np.hstack(az))
-        el = np.hstack(el)
-
-        # find the extremes
-
-        azmin = np.amin(az)
-        azmax = np.amax(az)
-        elmin = np.amin(el)
-        elmax = np.amax(el)
-
-        if azmin < -2 * np.pi:
-            azmin += 2 * np.pi
-            azmax += 2 * np.pi
-        elif azmax > 2 * np.pi:
-            azmin -= 2 * np.pi
-            azmax -= 2 * np.pi
-
-        # Combine results across all processes in the group
-
-        if obs.comm.comm_group is not None:
-            azmin = obs.comm.comm_group.allreduce(azmin, op=MPI.MIN)
-            azmax = obs.comm.comm_group.allreduce(azmax, op=MPI.MAX)
-            elmin = obs.comm.comm_group.allreduce(elmin, op=MPI.MIN)
-            elmax = obs.comm.comm_group.allreduce(elmax, op=MPI.MAX)
-
-        return azmin, azmax, elmin, elmax
 
     @function_timer
     def _get_time_range(self, tmin, istart, times, tmax_tot, obs, weather):

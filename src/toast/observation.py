@@ -82,6 +82,21 @@ def set_default_values(values=None):
         "sun_close": 64,
         "elnod": 1 + 2 + 4,
         #
+        # ground-specific interval names
+        #
+        "scanning_interval": "scanning",
+        "turnaround_interval": "turnaround",
+        "throw_leftright_interval": "throw_leftright",
+        "throw_rightleft_interval": "throw_rightleft",
+        "throw_interval": "throw",
+        "scan_leftright_interval": "scan_leftright",
+        "scan_rightleft_interval": "scan_rightleft",
+        "turn_leftright_interval": "turn_leftright",
+        "turn_rightleft_interval": "turn_rightleft",
+        "elnod_interval": "elnod",
+        "sun_up_interval": "sun_up",
+        "sun_close_interval": "sun_close",
+        #
         # Units
         #
         "det_data_units": u.Kelvin,
@@ -222,6 +237,9 @@ class Observation(MutableMapping):
         self.shared = SharedDataManager(self.dist)
         self.intervals = IntervalsManager(self.dist, n_samples)
 
+        # Set up local per-detector cutting
+        self._detflags = {x: int(0) for x in self.dist.dets[self.dist.comm.group_rank]}
+
     # Fully clear the observation
 
     def clear(self):
@@ -330,19 +348,92 @@ class Observation(MutableMapping):
         """
         return self.dist.dets[self.dist.comm.group_rank]
 
-    def select_local_detectors(self, selection=None):
+    @property
+    def local_detector_flags(self):
+        """(dict): The local per-detector flags"""
+        return self._detflags
+
+    def update_local_detector_flags(self, vals):
+        """Update the per-detector flagging.
+
+        This does a bitwise OR with the existing flag values.
+
+        Args:
+            vals (dict):  The flag values for one or more detectors.
+
+        Returns:
+            None
+
         """
-        (list): The detectors assigned to this process, optionally pruned.
+        ldets = set(self.local_detectors)
+        for k, v in vals.items():
+            if k not in ldets:
+                msg = f"Cannot update per-detector flag for '{k}', which is"
+                msg += " not a local detector"
+                raise RuntimeError(msg)
+            self._detflags[k] |= int(v)
+
+    def set_local_detector_flags(self, vals):
+        """Set the per-detector flagging.
+
+        This resets the per-detector flags to the specified values.
+
+        Args:
+            vals (dict):  The flag values for one or more detectors.
+
+        Returns:
+            None
+
         """
-        if selection is None:
-            return self.local_detectors
+        ldets = set(self.local_detectors)
+        for k, v in vals.items():
+            if k not in ldets:
+                msg = f"Cannot set per-detector flag for '{k}', which is"
+                msg += " not a local detector"
+                raise RuntimeError(msg)
+            self._detflags[k] = int(v)
+
+    def select_local_detectors(
+        self,
+        selection=None,
+        flagmask=(default_values.det_mask_invalid | default_values.det_mask_processing),
+    ):
+        """Get the local detectors assigned to this process.
+
+        This takes the full list of local detectors and optionally prunes them
+        by the specified selection and / or applies per-detector flags with
+        the given mask.
+
+        Args:
+            selection (list):  Only return detectors in this set.
+            flagmask (uint8):  Apply this mask to per-detector flags and only
+                include detectors with a result of zero (good).
+
+        Returns:
+            (list):  The selected detectors.
+
+        """
+        if flagmask is None:
+            good = set(self.local_detectors)
         else:
-            dets = list()
+            good = set(
+                [
+                    x
+                    for x in self.local_detectors
+                    if (self.local_detector_flags[x] & flagmask) == 0
+                ]
+            )
+        dets = list()
+        if selection is None:
+            for det in self.local_detectors:
+                if det in good:
+                    dets.append(det)
+        else:
             sel_set = set(selection)
             for det in self.local_detectors:
-                if det in sel_set:
+                if (det in sel_set) and (det in good):
                     dets.append(det)
-            return dets
+        return dets
 
     # Detector set distribution
 
@@ -656,6 +747,18 @@ class Observation(MutableMapping):
         else:
             detector_sets = override_detector_sets
 
+        # Get the total set of per-detector flags
+        if self.comm_col_size == 1:
+            all_det_flags = self.local_detector_flags
+        else:
+            pdflags = self.comm_col.gather(self.local_detector_flags, root=0)
+            all_det_flags = None
+            if self.comm_col_rank == 0:
+                all_det_flags = dict()
+                for pf in pdflags:
+                    all_det_flags.update(pf)
+            all_det_flags = self.comm_col.bcast(all_det_flags, root=0)
+
         # Create the new distribution
         new_dist = DistDetSamp(
             self.dist.samples,
@@ -697,6 +800,11 @@ class Observation(MutableMapping):
         self.intervals.clear()
         del self.intervals
         self.intervals = new_intervals_manager
+
+        # Restore detector flags for our new local detectors
+        self.set_local_detector_flags(
+            {x: all_det_flags[x] for x in self.local_detectors}
+        )
 
     # Accelerator use
 

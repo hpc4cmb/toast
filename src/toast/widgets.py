@@ -130,7 +130,10 @@ class ObservationWidget(object):
     def _interval_select_widget(self):
         """Create a widget that selects intervals."""
         inames = [self.not_selected]
-        inames.extend(self.obs.intervals.keys())
+        for k in self.obs.intervals.keys():
+            if k == self.obs.intervals.all_name:
+                continue
+            inames.append(k)
         w_intr = widgets.SelectMultiple(
             options=inames,
             value=[inames[0]],
@@ -145,11 +148,7 @@ class ObservationWidget(object):
             # Ignore the fake click when the button is created.
             return
         current = self.app.children
-        try:
-            # Pre v8 this was private.
-            current_titles = {int(x): y for x, y in self.app._titles.items()}
-        except:
-            current_titles = {int(x): y for x, y in self.app.titles}
+        current_titles = {x: y for x, y in enumerate(self.app.titles)}
         new_children = list()
         new_titles = dict()
         for tb in range(0, tabindex):
@@ -164,8 +163,7 @@ class ObservationWidget(object):
             if self.close_buttons[k] > tabindex:
                 self.close_buttons[k] -= 1
         self.app.children = new_children
-        for tb in range(len(self.app.children)):
-            self.app.set_title(tb, new_titles[tb])
+        self.app.titles = [new_titles[tb] for tb in range(len(self.app.children))]
 
     def _detdata_display(self, name):
         """Create a detector data display widget."""
@@ -408,6 +406,8 @@ class ObservationWidget(object):
 
         intr_info = dict()
         for k in self.obs.intervals.keys():
+            if k == self.obs.intervals.all_name:
+                continue
             idata = self.obs.intervals[k]
             nintr = len(idata)
             intr_info[k] = f"{nintr} spans"

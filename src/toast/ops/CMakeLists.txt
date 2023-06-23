@@ -57,6 +57,7 @@ install(FILES
     noise_estimation.py
     noise_estimation_utils.py
     yield_cut.py
+    azimuth_intervals.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
 

@@ -13,6 +13,7 @@ from .. import qarray as qa
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelDistribution
+from ..pointing_utils import scan_range_lonlat
 from ..timing import function_timer
 from ..traits import Bool, Instance, Int, Tuple, Unicode, trait_docs
 from ..utils import Environment, Logger
@@ -341,7 +342,14 @@ class PixelsWCS(Operator):
             latmin = (np.pi / 2) * u.radian
             for ob in data.obs:
                 # The scan range is computed collectively among the group.
-                lnmin, lnmax, ltmin, ltmax = self._get_scan_range(ob)
+                lnmin, lnmax, ltmin, ltmax = scan_range_lonlat(
+                    ob,
+                    self.detector_pointing.boresight,
+                    flags=self.detector_pointing.shared_flags,
+                    flag_mask=self.detector_pointing.shared_flag_mask,
+                    field_of_view=None,
+                    center_offset=self.center_offset,
+                )
                 lonmin = min(lonmin, lnmin)
                 lonmax = max(lonmax, lnmax)
                 latmin = min(latmin, ltmin)
@@ -498,6 +506,8 @@ class PixelsWCS(Operator):
                     ob.detdata[self.pixels][det, vslice] = (
                         rdpix[:, 0] * self.pix_dec + rdpix[:, 1]
                     )
+                    bad_pointing = ob.detdata[self.pixels][det, vslice] >= self._n_pix
+                    (ob.detdata[self.pixels][det, vslice])[bad_pointing] = -1
 
                     if self.create_dist is not None:
                         good = ob.detdata[self.pixels][det][vslice] >= 0
@@ -505,100 +515,6 @@ class PixelsWCS(Operator):
                             (ob.detdata[self.pixels][det, vslice])[good]
                             // self._n_pix_submap
                         ] = 1
-
-    @function_timer
-    def _get_scan_range(self, obs):
-        # FIXME: mostly copied from the atmosphere simulation code- we should
-        # extract this into a more general helper routine somewhere.
-        fov = obs.telescope.focalplane.field_of_view
-        fp_radius = 0.5 * fov.to_value(u.radian)
-
-        # Get the flags if needed.  Use the same flags as
-        # detector pointing.
-        flags = None
-        if self.detector_pointing.shared_flags is not None:
-            flags = np.array(obs.shared[self.detector_pointing.shared_flags])
-            flags &= self.detector_pointing.shared_flag_mask
-
-        # work in parallel
-        rank = obs.comm.group_rank
-        ntask = obs.comm.group_size
-
-        # Create a fake focalplane of detectors in a circle around the boresight
-        xaxis, yaxis, zaxis = np.eye(3)
-        ndet = 64
-        phidet = np.linspace(0, 2 * np.pi, ndet, endpoint=False)
-        detquats = []
-        thetarot = qa.rotation(yaxis, fp_radius)
-        for phi in phidet:
-            phirot = qa.rotation(zaxis, phi)
-            detquat = qa.mult(phirot, thetarot)
-            detquats.append(detquat)
-
-        # Get fake detector pointing
-
-        center_lonlat = None
-        if self.center_offset is not None:
-            center_lonlat = np.array(obs.shared[self.center_offset].data)
-            center_lonlat[:, :] *= np.pi / 180.0
-
-        lon = []
-        lat = []
-        quats = obs.shared[self.detector_pointing.boresight][rank::ntask].copy()
-        rank_good = slice(None)
-        if self.detector_pointing.shared_flags is not None:
-            rank_good = flags[rank::ntask] == 0
-
-        for idet, detquat in enumerate(detquats):
-            theta, phi, _ = qa.to_iso_angles(qa.mult(quats, detquat))
-            if center_lonlat is None:
-                lon.append(phi[rank_good])
-                lat.append(np.pi / 2 - theta[rank_good])
-            else:
-                lon.append(phi[rank_good] - center_lonlat[rank::ntask, 0][rank_good])
-                lat.append(
-                    (np.pi / 2 - theta[rank_good])
-                    - center_lonlat[rank::ntask, 1][rank_good]
-                )
-        lon = np.unwrap(np.hstack(lon))
-        lat = np.hstack(lat)
-
-        # find the extremes
-        lonmin = np.amin(lon)
-        lonmax = np.amax(lon)
-        latmin = np.amin(lat)
-        latmax = np.amax(lat)
-
-        if lonmin < -2 * np.pi:
-            lonmin += 2 * np.pi
-            lonmax += 2 * np.pi
-        elif lonmax > 2 * np.pi:
-            lonmin -= 2 * np.pi
-            lonmax -= 2 * np.pi
-
-        # Combine results
-        if obs.comm.comm_group is not None:
-            lonlatmin = np.zeros(2, dtype=np.float64)
-            lonlatmax = np.zeros(2, dtype=np.float64)
-            lonlatmin[0] = lonmin
-            lonlatmin[1] = latmin
-            lonlatmax[0] = lonmax
-            lonlatmax[1] = latmax
-            all_lonlatmin = np.zeros(2, dtype=np.float64)
-            all_lonlatmax = np.zeros(2, dtype=np.float64)
-            obs.comm.comm_group.Allreduce(lonlatmin, all_lonlatmin, op=MPI.MIN)
-            obs.comm.comm_group.Allreduce(lonlatmax, all_lonlatmax, op=MPI.MAX)
-            lonmin = all_lonlatmin[0]
-            latmin = all_lonlatmin[1]
-            lonmax = all_lonlatmax[0]
-            latmax = all_lonlatmax[1]
-
-        return (
-            lonmin * u.radian,
-            lonmax * u.radian,
-            latmin * u.radian,
-            latmax * u.radian,
-        )
 
     def _finalize(self, data, **kwargs):
         if self.create_dist is not None:

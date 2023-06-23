@@ -7,11 +7,13 @@ import shutil
 import tempfile
 from datetime import datetime
 
+import astropy.io.fits as af
 import healpy as hp
 import numpy as np
 from astropy import units as u
 from astropy.table import Column, QTable, Table
 from astropy.table import vstack as table_vstack
+from astropy.wcs import WCS
 
 from .. import ops as ops
 from .. import qarray as qa
@@ -59,7 +61,7 @@ def create_outdir(mpicomm, subdir=None):
     return retdir
 
 
-def create_comm(mpicomm):
+def create_comm(mpicomm, single_group=False):
     """Create a toast communicator.
 
     Use the specified MPI communicator to attempt to create 2 process groups.
@@ -67,6 +69,7 @@ def create_comm(mpicomm):
 
     Args:
         mpicomm (MPI.Comm): the MPI communicator (or None).
+        single_group (bool):  If True, always use a single process group.
 
     Returns:
         toast.Comm: the 2-level toast communicator.
@@ -79,7 +82,10 @@ def create_comm(mpicomm):
         worldsize = mpicomm.size
         groupsize = 1
         if worldsize >= 2:
-            groupsize = worldsize // 2
+            if single_group:
+                groupsize = worldsize
+            else:
+                groupsize = worldsize // 2
         toastcomm = Comm(world=mpicomm, groupsize=groupsize)
     return toastcomm
 
@@ -493,9 +499,9 @@ def create_fake_sky(data, dist_key, map_key):
     # Just replicate the fake data across all local submaps
     off = 0
     for submap in range(dist.n_submap):
-        I_data = 0.1 * np.random.normal(size=dist.n_pix_submap)
-        Q_data = 0.01 * np.random.normal(size=dist.n_pix_submap)
-        U_data = 0.01 * np.random.normal(size=dist.n_pix_submap)
+        I_data = 0.3 * np.random.normal(size=dist.n_pix_submap)
+        Q_data = 0.03 * np.random.normal(size=dist.n_pix_submap)
+        U_data = 0.03 * np.random.normal(size=dist.n_pix_submap)
         if submap in dist.local_submaps:
             pix_data.data[off, :, 0] = I_data
             pix_data.data[off, :, 1] = Q_data
@@ -700,6 +706,8 @@ def create_ground_data(
     fknee=None,
     freqs=None,
     split=False,
+    turnarounds_invalid=False,
+    single_group=False,
 ):
     """Create a data object with a simple ground sim.
 
@@ -716,7 +724,7 @@ def create_ground_data(
         toast.Data: the distributed data with named observations.
 
     """
-    toastcomm = create_comm(mpicomm)
+    toastcomm = create_comm(mpicomm, single_group=single_group)
     data = Data(toastcomm)
 
     tele = create_ground_telescope(
@@ -787,6 +795,10 @@ def create_ground_data(
         elnods=el_nods,
         scan_accel_az=3 * u.degree / u.second**2,
     )
+    if turnarounds_invalid:
+        sim_ground.turnaround_mask = 1 + 2
+    else:
+        sim_ground.turnaround_mask = 2
     sim_ground.apply(data)
 
     return data
@@ -915,3 +927,119 @@ def plot_projected_quats(outfile, qbore=None, qdet=None, valid=slice(None), scal
 
     plt.savefig(outfile)
     plt.close()
+
+
+def plot_wcs_maps(
+    hitfile=None, mapfile=None, range_I=None, range_Q=None, range_U=None, truth=None
+):
+    """Plot WCS projected output maps.
+
+    This is a helper function to plot typical outputs of the mapmaker.
+
+    Args:
+        hitfile (str):  Path to the hits file.
+        mapfile (str):  Path to the map file.
+        range_I (tuple):  The min / max values of the Intensity map to plot.
+        range_Q (tuple):  The min / max values of the Q map to plot.
+        range_U (tuple):  The min / max values of the U map to plot.
+        truth (str):  Path to the input truth map in the case of simulations.
+
+    """
+    set_matplotlib_backend()
+
+    import matplotlib.pyplot as plt
+
+    figsize = (12, 6)
+    figdpi = 100
+
+    def plot_single(wcs, hdata, hindx, vmin, vmax, out):
+        fig = plt.figure(figsize=figsize, dpi=figdpi)
+        ax = fig.add_subplot(projection=wcs, slices=("x", "y", hindx))
+        im = ax.imshow(
+            np.transpose(hdu.data[hindx, :, :]), cmap="jet", vmin=vmin, vmax=vmax
+        )
+        ax.grid(color="white", ls="solid")
+        ax.set_xlabel("Longitude")
+        ax.set_ylabel("Latitude")
+        plt.colorbar(im, orientation="vertical")
+        plt.savefig(out, format="pdf")
+        plt.close()
+
+    def map_range(hdata):
+        minval = np.amin(hdata)
+        maxval = np.amax(hdata)
+        margin = 0.05 * (maxval - minval)
+        if margin == 0:
+            margin = -1
+        minval -= margin
+        maxval += margin
+        return minval, maxval
+
+    def sym_range(hdata):
+        minval, maxval = map_range(hdata)
+        ext = max(np.absolute(minval), np.absolute(maxval))
+        return -ext, ext
+
+    def sub_mono(hitdata, mdata):
+        if hitdata is None:
+            return
+        goodpix = np.logical_and((hitdata > 0), (mdata != 0))
+        mono = np.mean(mdata[goodpix])
+        print(f"Monopole = {mono}")
+        mdata[goodpix] -= mono
+        mdata[np.logical_not(goodpix)] = 0
+
+    hitdata = None
+    if hitfile is not None:
+        hdulist = af.open(hitfile)
+        hdu = hdulist[0]
+        hitdata = np.array(hdu.data[0, :, :])
+        wcs = WCS(hdu.header)
+        maxhits = np.amax(hdu.data[0, :, :])
+        plot_single(wcs, hdu, 0, 0, maxhits, f"{hitfile}.pdf")
+        del hdu
+        hdulist.close()
+
+    if mapfile is not None:
+        hdulist = af.open(mapfile)
+        hdu = hdulist[0]
+        wcs = WCS(hdu.header)
+
+        if truth is not None:
+            thdulist = af.open(truth)
+            thdu = thdulist[0]
+
+        sub_mono(hitdata, hdu.data[0, :, :])
+        mmin, mmax = sym_range(hdu.data[0, :, :])
+        if range_I is not None:
+            mmin, mmax = range_I
+        plot_single(wcs, hdu, 0, mmin, mmax, f"{mapfile}_I.pdf")
+        if truth is not None:
+            tmin, tmax = sym_range(thdu.data[0, :, :])
+            hdu.data[0, :, :] -= thdu.data[0, :, :]
+            plot_single(wcs, hdu, 0, tmin, tmax, f"{mapfile}_resid_I.pdf")
+
+        if hdu.data.shape[0] > 1:
+            mmin, mmax = sym_range(hdu.data[1, :, :])
+            if range_Q is not None:
+                mmin, mmax = range_Q
+            plot_single(wcs, hdu, 1, mmin, mmax, f"{mapfile}_Q.pdf")
+            if truth is not None:
+                tmin, tmax = sym_range(thdu.data[1, :, :])
+                hdu.data[1, :, :] -= thdu.data[1, :, :]
+                plot_single(wcs, hdu, 1, tmin, tmax, f"{mapfile}_resid_Q.pdf")
+
+            mmin, mmax = sym_range(hdu.data[2, :, :])
+            if range_U is not None:
+                mmin, mmax = range_U
+            plot_single(wcs, hdu, 2, mmin, mmax, f"{mapfile}_U.pdf")
+            if truth is not None:
+                tmin, tmax = sym_range(thdu.data[2, :, :])
+                hdu.data[2, :, :] -= thdu.data[2, :, :]
+                plot_single(wcs, hdu, 2, tmin, tmax, f"{mapfile}_resid_U.pdf")
+
+        if truth is not None:
+            del thdu
+            thdulist.close()
+        del hdu
+        hdulist.close()

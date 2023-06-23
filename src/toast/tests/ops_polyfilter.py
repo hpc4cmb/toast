@@ -37,7 +37,7 @@ class PolyFilterTest(MPITestCase):
 
     def test_polyfilter(self):
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, turnarounds_invalid=True)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -127,7 +127,7 @@ class PolyFilterTest(MPITestCase):
 
     def test_polyfilter_trend(self):
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, turnarounds_invalid=True)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()

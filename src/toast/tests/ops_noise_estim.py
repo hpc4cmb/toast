@@ -309,7 +309,8 @@ class NoiseEstimTest(MPITestCase):
             fitter = ops.FitNoiseModel()
 
             for case, (input_freq, input_psd) in enumerate(zip(test_freq, test_psd)):
-                fit_data, result = fitter._fit_log_psd(input_freq, input_psd)
+                fit = fitter._fit_log_psd(input_freq, input_psd)
+                result = fit["fit_result"]
                 print(f"result solution = {result.x}")
                 print(f"result cost = {result.cost}")
                 print(f"result fun = {result.fun}")
@@ -319,6 +320,13 @@ class NoiseEstimTest(MPITestCase):
                 print(f"result message = {result.message}")
                 print(f"result status = {result.status}")
                 print(f"result active_mask = {result.active_mask}")
+                fit_data = fitter._evaluate_model(
+                    input_freq,
+                    fit["fmin"],
+                    fit["NET"],
+                    fit["fknee"],
+                    fit["alpha"],
+                )
 
                 fig = plt.figure(figsize=[12, 8])
                 ax = fig.add_subplot(1, 1, 1)
