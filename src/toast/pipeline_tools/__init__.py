@@ -65,14 +65,14 @@ def add_mc_args(parser):
         "--MC-start",
         required=False,
         default=0,
-        type=np.int,
+        type=np.int64,
         help="First Monte Carlo noise realization",
     )
     parser.add_argument(
         "--MC-count",
         required=False,
         default=1,
-        type=np.int,
+        type=np.int64,
         help="Number of Monte Carlo noise realizations",
     )
     return

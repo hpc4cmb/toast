@@ -79,7 +79,7 @@ def main():
         "--samplerate",
         required=False,
         default=100.0,
-        type=np.float,
+        type=np.float64,
         help="Detector sample rate (Hz)",
     )
 

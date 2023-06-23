@@ -128,7 +128,7 @@ def main():
     parser.add_argument(
         "--random_seed",
         required=False,
-        type=np.int,
+        type=np.int64,
         default=123456,
         help="Random number generator seed for randomized " "detector parameters",
     )

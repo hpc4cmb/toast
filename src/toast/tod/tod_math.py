@@ -256,7 +256,7 @@ def sim_noise_timestream(
             fftlen, sampler="gaussian", key=(key1, key2), counter=(counter1, counter2)
         ).array()
 
-        fdata = np.zeros(npsd, dtype=np.complex)
+        fdata = np.zeros(npsd, dtype=np.complex128)
 
         # Set the DC and Nyquist frequency imaginary part to zero
         fdata[0] = rngdata[0] + 0.0j

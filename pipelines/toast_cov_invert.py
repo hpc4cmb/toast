@@ -62,7 +62,7 @@ def main():
         "--threshold",
         required=False,
         default=1e-3,
-        type=np.float,
+        type=np.float64,
         help="Reciprocal condition number threshold",
     )
 

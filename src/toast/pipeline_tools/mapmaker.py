@@ -41,7 +41,7 @@ def add_mapmaker_args(parser):
         "--mapmaker-iter-max",
         required=False,
         default=1000,
-        type=np.int,
+        type=np.int64,
         help="Maximum number of CG iterations",
         dest="mapmaker_iter_max",
     )
@@ -49,7 +49,7 @@ def add_mapmaker_args(parser):
         "--mapmaker-precond-width",
         required=False,
         default=100,
-        type=np.int,
+        type=np.int64,
         help="Width of the Madam band preconditioner",
         dest="mapmaker_precond_width",
     )
@@ -57,21 +57,21 @@ def add_mapmaker_args(parser):
         "--mapmaker-baseline-length",
         required=False,
         default=10000.0,
-        type=np.float,
+        type=np.float64,
         help="Destriping baseline length (seconds)",
         dest="mapmaker_baseline_length",
     )
     parser.add_argument(
         "--mapmaker-prefilter-order",
         required=False,
-        type=np.int,
+        type=np.int64,
         help="Polynomial prefiltering for mapmaker",
         dest="mapmaker_prefilter_order",
     )
     parser.add_argument(
         "--mapmaker-fourier2D-order",
         required=False,
-        type=np.int,
+        type=np.int64,
         help="Per sample 2D Fourier template order",
         dest="mapmaker_fourier2D_order",
     )
@@ -94,7 +94,7 @@ def add_mapmaker_args(parser):
         required=False,
         help="Fit gain template with Legendre Polynomials",
         dest="mapmaker_gain_poly_order",
-        type=np.int,
+        type=np.int64,
     )
     parser.add_argument(
         "--mapmaker-calibration",
@@ -218,7 +218,7 @@ def add_mapmaker_args(parser):
     # `nside` may already be added
     try:
         parser.add_argument(
-            "--nside", required=False, default=512, type=np.int, help="Healpix NSIDE"
+            "--nside", required=False, default=512, type=np.int64, help="Healpix NSIDE"
         )
     except argparse.ArgumentError:
         pass

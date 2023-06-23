@@ -23,35 +23,35 @@ def add_sss_args(parser):
         "--ground-nside",
         required=False,
         default=128,
-        type=np.int,
+        type=np.int64,
         help="Ground template resolution",
     )
     parser.add_argument(
         "--ground-fwhm-deg",
         required=False,
         default=10,
-        type=np.float,
+        type=np.float64,
         help="Ground template smoothing in degrees",
     )
     parser.add_argument(
         "--ground-lmax",
         required=False,
         default=256,
-        type=np.int,
+        type=np.int64,
         help="Ground template expansion order",
     )
     parser.add_argument(
         "--ground-scale",
         required=False,
         default=1e-3,
-        type=np.float,
+        type=np.float64,
         help="Ground template RMS at el=45 deg",
     )
     parser.add_argument(
         "--ground-power",
         required=False,
         default=-1,
-        type=np.float,
+        type=np.float64,
         help="Exponential for suppressing ground pick-up at "
         "higher observing elevation",
     )

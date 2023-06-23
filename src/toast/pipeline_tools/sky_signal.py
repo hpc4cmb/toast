@@ -64,7 +64,7 @@ def add_sky_map_args(parser):
     # The nside may already be added
     try:
         parser.add_argument(
-            "--nside", required=False, default=512, type=np.int, help="Healpix NSIDE"
+            "--nside", required=False, default=512, type=np.int64, help="Healpix NSIDE"
         )
     except argparse.ArgumentError:
         pass
@@ -124,7 +124,7 @@ def add_pysm_args(parser):
     # The nside may already be added
     try:
         parser.add_argument(
-            "--nside", required=False, default=512, type=np.int, help="Healpix NSIDE"
+            "--nside", required=False, default=512, type=np.int64, help="Healpix NSIDE"
         )
     except argparse.ArgumentError:
         pass
@@ -152,13 +152,13 @@ def add_conviqt_args(parser):
     parser.add_argument(
         "--conviqt-lmax",
         required=False,
-        type=np.int,
+        type=np.int64,
         help="Simulation lmax.  May not exceed the expansion order in conviqt-sky-file",
     )
     parser.add_argument(
         "--conviqt-fwhm",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Sky fwhm [arcmin] to deconvolve",
     )
     parser.add_argument(
@@ -170,7 +170,7 @@ def add_conviqt_args(parser):
     parser.add_argument(
         "--conviqt-beam-mmax",
         required=False,
-        type=np.int,
+        type=np.int64,
         help="Beam mmax.  May not exceed the expansion order in conviqt-beam-file",
     )
     parser.add_argument(
@@ -189,7 +189,7 @@ def add_conviqt_args(parser):
     )
     parser.set_defaults(conviqt_dxx=True)
     parser.add_argument(
-        "--conviqt-order", default=11, type=np.int, help="Iteration order"
+        "--conviqt-order", default=11, type=np.int64, help="Iteration order"
     )
     parser.add_argument(
         "--conviqt-normalize-beam",

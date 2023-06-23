@@ -114,7 +114,7 @@ def add_todground_args(parser):
         "--el-mod-step-deg",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="If non-zero, scanning elevation will be stepped "
         "after each scan pair (upon returning to starting "
         "azimuth). [degrees]",
@@ -123,7 +123,7 @@ def add_todground_args(parser):
         "--el-mod-rate-hz",
         required=False,
         default=0,
-        type=np.float,
+        type=np.float64,
         help="If non-zero, observing elevation will be "
         "continuously modulated during the science scan. [Hz]",
     )
@@ -131,7 +131,7 @@ def add_todground_args(parser):
         "--el-mod-amplitude-deg",
         required=False,
         default=1,
-        type=np.float,
+        type=np.float64,
         help="Range of elevation modulation when "
         "`el_mod_rate` is non-zero. [degrees]",
     )
@@ -204,26 +204,26 @@ def add_todground_args(parser):
         "--scan-rate",
         required=False,
         default=1.0,
-        type=np.float,
+        type=np.float64,
         help="Azimuthal on-sky scanning rate [deg / s]",
     )
     parser.add_argument(
         "--scan-rate-el",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Elevation scanning rate [deg / s]",
     )
     parser.add_argument(
         "--scan-accel",
         required=False,
         default=1.0,
-        type=np.float,
+        type=np.float64,
         help="Mount azimuthal scanning rate change [deg / s^2]",
     )
     parser.add_argument(
         "--scan-accel-el",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Mount elevation scanning rate change [deg / s^2]",
     )
     parser.add_argument(
@@ -246,7 +246,7 @@ def add_todground_args(parser):
         "--sun-angle-min",
         required=False,
         default=30.0,
-        type=np.float,
+        type=np.float64,
         help="Minimum azimuthal distance between the Sun and the bore sight [deg]",
     )
     parser.add_argument(
@@ -265,7 +265,7 @@ def add_todground_args(parser):
     parser.add_argument(
         "--timezone",
         required=False,
-        type=np.int,
+        type=np.int64,
         default=0,
         help="Offset to apply to MJD to separate days [hours]",
     )
@@ -278,7 +278,7 @@ def add_todground_args(parser):
             "--sample-rate",
             required=False,
             default=100.0,
-            type=np.float,
+            type=np.float64,
             help="Detector sample rate (Hz)",
         )
     except argparse.ArgumentError:
@@ -321,7 +321,7 @@ def add_todground_args(parser):
         parser.add_argument(
             "--hwp-rpm",
             required=False,
-            type=np.float,
+            type=np.float64,
             help="The rate (in RPM) of the HWP rotation",
         )
     except argparse.ArgumentError:
@@ -330,7 +330,7 @@ def add_todground_args(parser):
         parser.add_argument(
             "--hwp-step-deg",
             required=False,
-            type=np.float,
+            type=np.float64,
             help="For stepped HWP, the angle in degrees of each step",
         )
     except argparse.ArgumentError:
@@ -339,7 +339,7 @@ def add_todground_args(parser):
         parser.add_argument(
             "--hwp-step-time-s",
             required=False,
-            type=np.float,
+            type=np.float64,
             help="For stepped HWP, the time in seconds between steps",
         )
     except argparse.ArgumentError:
@@ -348,13 +348,13 @@ def add_todground_args(parser):
     parser.add_argument(
         "--elevation-noise-a",
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Evaluate noise PSD as (a / sin(el) + b) ** 2 * fsample * 1e-12",
     )
     parser.add_argument(
         "--elevation-noise-b",
         default=0,
-        type=np.float,
+        type=np.float64,
         help="Evaluate noise PSD as (a / sin(el) + b) ** 2 * fsample * 1e-12",
     )
 
@@ -536,12 +536,12 @@ def _parse_line(line):
     # useful metadata
     mindist_sun = min_sso_dist(
         *np.array([el, azmin, azmax, sun_el1, sun_az1, sun_el2, sun_az2]).astype(
-            np.float
+            np.float64
         )
     )
     mindist_moon = min_sso_dist(
         *np.array([el, azmin, azmax, moon_el1, moon_az1, moon_el2, moon_az2]).astype(
-            np.float
+            np.float64
         )
     )
     el_sun = max(float(sun_el1), float(sun_el2))
@@ -603,8 +603,8 @@ def load_schedule(args, comm):
         isplit, nsplit = None, None
         if args.split_schedule is not None:
             isplit, nsplit = args.split_schedule.split(",")
-            isplit = np.int(isplit)
-            nsplit = np.int(nsplit)
+            isplit = np.int64(isplit)
+            nsplit = np.int64(nsplit)
             scan_counters = {}
         for fn in args.schedule.split(","):
             if not os.path.isfile(fn):

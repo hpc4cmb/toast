@@ -78,7 +78,7 @@ def add_atmosphere_args(parser):
     parser.add_argument(
         "--focalplane-radius-deg",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Override focal plane radius [deg]",
     )
 
@@ -86,126 +86,126 @@ def add_atmosphere_args(parser):
         "--atm-verbosity",
         required=False,
         default=0,
-        type=np.int,
+        type=np.int64,
         help="Atmospheric sim verbosity level",
     )
     parser.add_argument(
         "--atm-lmin-center",
         required=False,
         default=0.01,
-        type=np.float,
+        type=np.float64,
         help="Kolmogorov turbulence dissipation scale center",
     )
     parser.add_argument(
         "--atm-lmin-sigma",
         required=False,
         default=0.001,
-        type=np.float,
+        type=np.float64,
         help="Kolmogorov turbulence dissipation scale sigma",
     )
     parser.add_argument(
         "--atm-lmax-center",
         required=False,
         default=10.0,
-        type=np.float,
+        type=np.float64,
         help="Kolmogorov turbulence injection scale center",
     )
     parser.add_argument(
         "--atm-lmax-sigma",
         required=False,
         default=10.0,
-        type=np.float,
+        type=np.float64,
         help="Kolmogorov turbulence injection scale sigma",
     )
     parser.add_argument(
         "--atm-gain",
         required=False,
         default=2e-5,
-        type=np.float,
+        type=np.float64,
         help="Atmospheric gain factor.",
     )
     parser.add_argument(
         "--atm-gain-coarse",
         required=False,
         default=8e-5,
-        type=np.float,
+        type=np.float64,
         help="Coarse atmospheric gain factor.",
     )
     parser.add_argument(
         "--atm-zatm",
         required=False,
         default=40000.0,
-        type=np.float,
+        type=np.float64,
         help="atmosphere extent for temperature profile",
     )
     parser.add_argument(
         "--atm-zmax",
         required=False,
         default=200.0,
-        type=np.float,
+        type=np.float64,
         help="atmosphere extent for water vapor integration",
     )
     parser.add_argument(
         "--atm-xstep",
         required=False,
         default=10.0,
-        type=np.float,
+        type=np.float64,
         help="size of volume elements in X direction",
     )
     parser.add_argument(
         "--atm-ystep",
         required=False,
         default=10.0,
-        type=np.float,
+        type=np.float64,
         help="size of volume elements in Y direction",
     )
     parser.add_argument(
         "--atm-zstep",
         required=False,
         default=10.0,
-        type=np.float,
+        type=np.float64,
         help="size of volume elements in Z direction",
     )
     parser.add_argument(
         "--atm-nelem-sim-max",
         required=False,
         default=10000,
-        type=np.int,
+        type=np.int64,
         help="controls the size of the simulation slices",
     )
     parser.add_argument(
         "--atm-wind-dist",
         required=False,
         default=3000.0,
-        type=np.float,
+        type=np.float64,
         help="Maximum wind drift to simulate without discontinuity",
     )
     parser.add_argument(
         "--atm-z0-center",
         required=False,
         default=2000.0,
-        type=np.float,
+        type=np.float64,
         help="central value of the water vapor distribution",
     )
     parser.add_argument(
         "--atm-z0-sigma",
         required=False,
         default=0.0,
-        type=np.float,
+        type=np.float64,
         help="sigma of the water vapor distribution",
     )
     parser.add_argument(
         "--atm-T0-center",
         required=False,
         default=280.0,
-        type=np.float,
+        type=np.float64,
         help="central value of the temperature distribution",
     )
     parser.add_argument(
         "--atm-T0-sigma",
         required=False,
         default=10.0,
-        type=np.float,
+        type=np.float64,
         help="sigma of the temperature distribution",
     )
     parser.add_argument(
@@ -223,31 +223,31 @@ def add_atmosphere_args(parser):
     parser.add_argument(
         "--weather-pwv",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Override randomized PWV [mm]",
     )
     parser.add_argument(
         "--weather-temperature",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Override randomized air temperature [K]",
     )
     parser.add_argument(
         "--weather-pressure",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Override randomized surface pressure [Pa]",
     )
     parser.add_argument(
         "--weather-west-wind",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Override randomized West wind [m/s]",
     )
     parser.add_argument(
         "--weather-south-wind",
         required=False,
-        type=np.float,
+        type=np.float64,
         help="Override randomized South wind [m/s]",
     )
     # Common flag mask may already be added

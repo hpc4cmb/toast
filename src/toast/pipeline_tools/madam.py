@@ -29,7 +29,7 @@ def add_madam_args(parser):
         "--madam-iter-max",
         required=False,
         default=1000,
-        type=np.int,
+        type=np.int64,
         help="Maximum number of CG iterations in Madam",
         dest="mapmaker_iter_max",
     )
@@ -37,27 +37,27 @@ def add_madam_args(parser):
         "--madam-precond-width",
         required=False,
         default=100,
-        type=np.int,
+        type=np.int64,
         help="Width of the Madam band preconditioner",
         dest="mapmaker_precond_width",
     )
     parser.add_argument(
         "--madam-precond-width-min",
         required=False,
-        type=np.int,
+        type=np.int64,
         help="Minimum width of the Madam band preconditioner",
     )
     parser.add_argument(
         "--madam-precond-width-max",
         required=False,
-        type=np.int,
+        type=np.int64,
         help="Maximum width of the Madam band preconditioner",
     )
     parser.add_argument(
         "--madam-baseline-length",
         required=False,
         default=10000.0,
-        type=np.float,
+        type=np.float64,
         help="Destriping baseline length (seconds)",
         dest="mapmaker_baseline_length",
     )
@@ -65,7 +65,7 @@ def add_madam_args(parser):
         "--madam-baseline-order",
         required=False,
         default=0,
-        type=np.int,
+        type=np.int64,
         help="Destriping baseline polynomial order",
     )
     parser.add_argument(
@@ -232,7 +232,7 @@ def add_madam_args(parser):
     # `nside` may already be added
     try:
         parser.add_argument(
-            "--nside", required=False, default=512, type=np.int, help="Healpix NSIDE"
+            "--nside", required=False, default=512, type=np.int64, help="Healpix NSIDE"
         )
     except argparse.ArgumentError:
         pass
@@ -242,7 +242,7 @@ def add_madam_args(parser):
             "--nside_submap",
             required=False,
             default=16,
-            type=np.int,
+            type=np.int64,
             help="Number of submaps is 12 * nside_submap ** 2",
         )
     except argparse.ArgumentError:
@@ -264,7 +264,7 @@ def add_madam_args(parser):
             "--sample-rate",
             required=False,
             default=100.0,
-            type=np.float,
+            type=np.float64,
             help="Detector sample rate (Hz)",
         )
     except argparse.ArgumentError:

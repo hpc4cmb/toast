@@ -304,7 +304,7 @@ class MapSampler:
                 print("Smoothing the map to {} arcmin".format(fwhm), flush=True)
 
         if lmax is None:
-            lmax = min(np.int(fwhm / 60 * 512), 2 * self.nside)
+            lmax = min(np.int64(fwhm / 60 * 512), 2 * self.nside)
 
         # If the map is in node-shared memory, only the root process on each
         # node does the smoothing.

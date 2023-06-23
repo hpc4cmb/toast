@@ -17,7 +17,7 @@ def add_dist_args(parser):
     parser.add_argument(
         "--group-size",
         required=False,
-        type=np.int,
+        type=np.int64,
         help="Size of a process group assigned to an observation",
     )
     try:

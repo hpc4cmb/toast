@@ -195,13 +195,13 @@ class OpSimScanSynchronousSignal(Operator):
                     counter=(counter1, counter2),
                     sampler="gaussian",
                 )
-                sssmap = np.array(sssmap, dtype=np.float)
+                sssmap = np.array(sssmap, dtype=np.float64)
                 sssmap = hp.smoothing(
                     sssmap, fwhm=np.radians(self._fwhm), lmax=self._lmax
                 )
                 sssmap /= np.std(sssmap)
                 lon, lat = hp.pix2ang(
-                    self._nside, np.arange(npix, dtype=np.int), lonlat=True
+                    self._nside, np.arange(npix, dtype=np.int64), lonlat=True
                 )
                 scale = self._scale * (np.abs(lat) / 90 + 0.5) ** self._power
                 sssmap *= scale
