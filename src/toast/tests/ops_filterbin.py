@@ -37,6 +37,9 @@ class FilterBinTest(MPITestCase):
         self.nside = 64
 
     def test_filterbin(self):
+        if "CIBUILDWHEEL" in os.environ:
+            print(f"WARNING:  Skipping test_filterbin during wheel tests")
+            return
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm, turnarounds_invalid=True)
 
@@ -299,6 +302,11 @@ class FilterBinTest(MPITestCase):
         if sys.platform.lower() == "darwin":
             print(f"WARNING:  Skipping test_filterbin_obsmatrix_flags on MacOS")
             return
+        if "CIBUILDWHEEL" in os.environ:
+            print(
+                f"WARNING:  Skipping test_filterbin_obsmatrix_flags during wheel tests"
+            )
+            return
 
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
@@ -452,6 +460,11 @@ class FilterBinTest(MPITestCase):
     def test_filterbin_obsmatrix_cached(self):
         if sys.platform.lower() == "darwin":
             print(f"WARNING:  Skipping test_filterbin_obsmatrix_cached on MacOS")
+            return
+        if "CIBUILDWHEEL" in os.environ:
+            print(
+                f"WARNING:  Skipping test_filterbin_obsmatrix_cached during wheel tests"
+            )
             return
 
         # Create a fake ground data set for testing
@@ -627,6 +640,11 @@ class FilterBinTest(MPITestCase):
     def test_filterbin_obsmatrix_noiseweighted(self):
         if sys.platform.lower() == "darwin":
             print(f"WARNING:  Skipping test_filterbin_obsmatrix_noiseweighted on MacOS")
+            return
+        if "CIBUILDWHEEL" in os.environ:
+            print(
+                f"WARNING:  Skipping test_filterbin_obsmatrix_noiseweighted during wheel tests"
+            )
             return
 
         # Create a fake ground data set for testing
