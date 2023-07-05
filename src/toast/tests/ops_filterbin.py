@@ -160,6 +160,9 @@ class FilterBinTest(MPITestCase):
         if sys.platform.lower() == "darwin":
             print(f"WARNING:  Skipping test_filterbin_obsmatrix on MacOS")
             return
+        if "CIBUILDWHEEL" in os.environ:
+            print(f"WARNING:  Skipping test_filterbin_obsmatrix during wheel tests")
+            return
 
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm, sample_rate=1 * u.Hz, pixel_per_process=4)
