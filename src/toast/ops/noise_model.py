@@ -144,6 +144,24 @@ class FitNoiseModel(Operator):
         help="The maximum frequency to consider for the white noise plateau",
     )
 
+    least_squares_xtol = Float(
+        None,
+        allow_none=True,
+        help="The xtol value passed to the least_squares solver",
+    )
+
+    least_squares_ftol = Float(
+        1.0e-10,
+        allow_none=True,
+        help="The ftol value passed to the least_squares solver",
+    )
+
+    least_squares_gtol = Float(
+        None,
+        allow_none=True,
+        help="The gtol value passed to the least_squares solver",
+    )
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -489,9 +507,9 @@ class FitNoiseModel(Operator):
             x_0,
             jac=self._fit_log_jac,
             bounds=bounds,
-            xtol=1.0e-10,
-            gtol=1.0e-10,
-            ftol=1.0e-10,
+            xtol=self.least_squares_xtol,
+            gtol=self.least_squares_gtol,
+            ftol=self.least_squares_ftol,
             max_nfev=500,
             verbose=0,
             kwargs={
