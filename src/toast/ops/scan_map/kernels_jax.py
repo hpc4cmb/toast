@@ -238,7 +238,7 @@ def scan_map_jax(
     Args:
         global2local (array):  The mapping from global submap to local submap index.
         n_pix_submap (int):  The number of pixels per submap.
-        mapdata (Pixels):  The local piece of the map.
+        mapdata (array, ?):  The local piece of the map.
         det_data (array, float): size ???*n_samp
         det_data_index (array, int): The indexes of the det_data (size n_det)
         pixels (array, int): pixels (size ???*n_samp)
@@ -246,10 +246,10 @@ def scan_map_jax(
         weights (optional array, float64): The flat packed detectors weights for the specified mode (size ???*n_samp*3)
         weight_index (optional array, int): The indexes of the weights (size n_det)
         intervals (array, Interval): The intervals to modify (size n_view)
-        map_dist (PixelDistribution): encapsulate information to translate the pixel mapping
         data_scale (float): unit scalling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
+        should_scale (bool): should we scale
         use_accel (bool): should we use an accelerator
 
     Returns:
@@ -257,7 +257,7 @@ def scan_map_jax(
     """
     # prepares inputs
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
-    mapdata = MutableJaxArray.to_array(mapdata.data)
+    mapdata = MutableJaxArray.to_array(mapdata) # TODO .data
     global2local = MutableJaxArray.to_array(global2local)
     det_data_input = MutableJaxArray.to_array(det_data)
     det_data_index = MutableJaxArray.to_array(det_data_index)
