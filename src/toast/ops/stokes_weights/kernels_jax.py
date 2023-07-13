@@ -70,7 +70,7 @@ def stokes_weights_IQU_inner(eps, cal, gamma, pin, hwpang, IAU):
 #        ["detectors", "intervals", "interval_size", ...],  # quats
 #        ["intervals", "interval_size"], # hwp
 #        [...], # IAU
-#    ],  
+#    ],
 #    out_axes=["detectors", "intervals", "interval_size", ...],
 # )
 # using vmap as the static arguments triggers the following error:

@@ -257,7 +257,7 @@ def scan_map_jax(
     """
     # prepares inputs
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
-    mapdata = MutableJaxArray.to_array(mapdata) # TODO .data
+    mapdata = MutableJaxArray.to_array(mapdata)  # TODO .data
     global2local = MutableJaxArray.to_array(global2local)
     det_data_input = MutableJaxArray.to_array(det_data)
     det_data_index = MutableJaxArray.to_array(det_data_index)
