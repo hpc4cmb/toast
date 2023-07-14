@@ -10,7 +10,6 @@
 
 #include <accelerator.hpp>
 
-
 // 2/PI
 #define TWOINVPI 0.63661977236758134308
 
@@ -18,8 +17,10 @@
 #define TWOTHIRDS 0.66666666666666666667
 
 // Helper table initialization
-void hpix_init_utab(uint64_t * utab) {
-    for (uint64_t m = 0; m < 0x100; ++m) {
+void hpix_init_utab(uint64_t *utab)
+{
+    for (uint64_t m = 0; m < 0x100; ++m)
+    {
         utab[m] = (m & 0x1) | ((m & 0x2) << 1) | ((m & 0x4) << 2) |
                   ((m & 0x8) << 3) | ((m & 0x10) << 4) | ((m & 0x20) << 5) |
                   ((m & 0x40) << 6) | ((m & 0x80) << 7);
@@ -28,36 +29,41 @@ void hpix_init_utab(uint64_t * utab) {
 }
 
 #ifdef HAVE_OPENMP_TARGET
-# pragma omp declare target
+#pragma omp declare target
 #endif // ifdef HAVE_OPENMP_TARGET
 
-void pixels_healpix_qa_rotate(double const * q_in, double const * v_in,
-                              double * v_out) {
+void pixels_healpix_qa_rotate(double const *q_in, double const *v_in,
+                              double *v_out)
+{
     // The input quaternion has already been normalized on the host.
 
-    double xw =  q_in[3] * q_in[0];
-    double yw =  q_in[3] * q_in[1];
-    double zw =  q_in[3] * q_in[2];
+    double xw = q_in[3] * q_in[0];
+    double yw = q_in[3] * q_in[1];
+    double zw = q_in[3] * q_in[2];
     double x2 = -q_in[0] * q_in[0];
-    double xy =  q_in[0] * q_in[1];
-    double xz =  q_in[0] * q_in[2];
+    double xy = q_in[0] * q_in[1];
+    double xz = q_in[0] * q_in[2];
     double y2 = -q_in[1] * q_in[1];
-    double yz =  q_in[1] * q_in[2];
+    double yz = q_in[1] * q_in[2];
     double z2 = -q_in[2] * q_in[2];
 
     v_out[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) * v_in[1] +
-                    (yw + xz) * v_in[2]) + v_in[0];
+                    (yw + xz) * v_in[2]) +
+               v_in[0];
 
     v_out[1] = 2 * ((zw + xy) * v_in[0] + (x2 + z2) * v_in[1] +
-                    (yz - xw) * v_in[2]) + v_in[1];
+                    (yz - xw) * v_in[2]) +
+               v_in[1];
 
     v_out[2] = 2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] +
-                    (x2 + y2) * v_in[2]) + v_in[2];
+                    (x2 + y2) * v_in[2]) +
+               v_in[2];
 
     return;
 }
 
-uint64_t hpix_xy2pix(uint64_t * utab, uint64_t x, uint64_t y) {
+uint64_t hpix_xy2pix(uint64_t *utab, uint64_t x, uint64_t y)
+{
     return utab[x & 0xff] | (utab[(x >> 8) & 0xff] << 16) |
            (utab[(x >> 16) & 0xff] << 32) |
            (utab[(x >> 24) & 0xff] << 48) |
@@ -66,8 +72,9 @@ uint64_t hpix_xy2pix(uint64_t * utab, uint64_t x, uint64_t y) {
            (utab[(y >> 24) & 0xff] << 49);
 }
 
-void hpix_vec2zphi(double const * vec, double * phi, int * region, double * z,
-                   double * rtz) {
+void hpix_vec2zphi(double const *vec, double *phi, int *region, double *z,
+                   double *rtz)
+{
     // region encodes BOTH the sign of Z and whether its
     // absolute value is greater than 2/3.
     (*z) = vec[2];
@@ -79,8 +86,9 @@ void hpix_vec2zphi(double const * vec, double * phi, int * region, double * z,
     return;
 }
 
-void hpix_zphi2nest(int64_t nside, int64_t factor, uint64_t * utab, double phi,
-                    int region, double z, double rtz, int64_t * pix) {
+void hpix_zphi2nest(int64_t nside, int64_t factor, uint64_t *utab, double phi,
+                    int region, double z, double rtz, int64_t *pix)
+{
     double tt = (phi >= 0.0) ? phi * TWOINVPI : phi * TWOINVPI + 4.0;
     int64_t x;
     int64_t y;
@@ -94,13 +102,14 @@ void hpix_zphi2nest(int64_t nside, int64_t factor, uint64_t * utab, double phi,
     int64_t ntt;
     double tp;
 
-    double dnside = static_cast <double> (nside);
+    double dnside = static_cast<double>(nside);
     int64_t twonside = 2 * nside;
     double halfnside = 0.5 * dnside;
     double tqnside = 0.75 * dnside;
     int64_t nsideminusone = nside - 1;
 
-    if ((region == 1) || (region == -1)) {
+    if ((region == 1) || (region == -1))
+    {
         temp1 = halfnside + dnside * tt;
         temp2 = tqnside * z;
 
@@ -110,17 +119,24 @@ void hpix_zphi2nest(int64_t nside, int64_t factor, uint64_t * utab, double phi,
         ifp = jp >> factor;
         ifm = jm >> factor;
 
-        if (ifp == ifm) {
+        if (ifp == ifm)
+        {
             face = (ifp == 4) ? (int64_t)4 : ifp + 4;
-        } else if (ifp < ifm) {
+        }
+        else if (ifp < ifm)
+        {
             face = ifp;
-        } else {
+        }
+        else
+        {
             face = ifm + 8;
         }
 
         x = jm & nsideminusone;
         y = nsideminusone - (jp & nsideminusone);
-    } else {
+    }
+    else
+    {
         ntt = (int64_t)tt;
 
         tp = tt - (double)ntt;
@@ -130,18 +146,23 @@ void hpix_zphi2nest(int64_t nside, int64_t factor, uint64_t * utab, double phi,
         jp = (int64_t)(tp * temp1);
         jm = (int64_t)((1.0 - tp) * temp1);
 
-        if (jp >= nside) {
+        if (jp >= nside)
+        {
             jp = nsideminusone;
         }
-        if (jm >= nside) {
+        if (jm >= nside)
+        {
             jm = nsideminusone;
         }
 
-        if (z >= 0) {
+        if (z >= 0)
+        {
             face = ntt;
             x = nsideminusone - jm;
             y = nsideminusone - jp;
-        } else {
+        }
+        else
+        {
             face = ntt + 8;
             x = jp;
             y = jm;
@@ -156,7 +177,8 @@ void hpix_zphi2nest(int64_t nside, int64_t factor, uint64_t * utab, double phi,
 }
 
 void hpix_zphi2ring(int64_t nside, int64_t factor, double phi, int region, double z,
-                    double rtz, int64_t * pix) {
+                    double rtz, int64_t *pix)
+{
     double tt = (phi >= 0.0) ? phi * TWOINVPI : phi * TWOINVPI + 4.0;
     double tp;
     int64_t longpart;
@@ -168,7 +190,7 @@ void hpix_zphi2ring(int64_t nside, int64_t factor, double phi, int region, doubl
     int64_t ir;
     int64_t kshift;
 
-    double dnside = static_cast <double> (nside);
+    double dnside = static_cast<double>(nside);
     int64_t fournside = 4 * nside;
     double halfnside = 0.5 * dnside;
     double tqnside = 0.75 * dnside;
@@ -176,7 +198,8 @@ void hpix_zphi2ring(int64_t nside, int64_t factor, double phi, int region, doubl
     int64_t ncap = 2 * (nside * nside - nside);
     int64_t npix = 12 * nside * nside;
 
-    if ((region == 1) || (region == -1)) {
+    if ((region == 1) || (region == -1))
+    {
         temp1 = halfnside + dnside * tt;
         temp2 = tqnside * z;
 
@@ -190,7 +213,9 @@ void hpix_zphi2ring(int64_t nside, int64_t factor, double phi, int region, doubl
         ip = ip % fournside;
 
         (*pix) = ncap + ((ir - 1) * fournside + ip);
-    } else {
+    }
+    else
+    {
         tp = tt - floor(tt);
 
         temp1 = dnside * rtz;
@@ -203,7 +228,7 @@ void hpix_zphi2ring(int64_t nside, int64_t factor, double phi, int region, doubl
         ip -= longpart;
 
         (*pix) = (region > 0) ? (2 * ir * (ir - 1) + ip)
-                 : (npix - 2 * ir * (ir + 1) + ip);
+                              : (npix - 2 * ir * (ir + 1) + ip);
     }
 
     return;
@@ -212,20 +237,20 @@ void hpix_zphi2ring(int64_t nside, int64_t factor, double phi, int region, doubl
 void pixels_healpix_nest_inner(
     int64_t nside,
     int64_t factor,
-    uint64_t * utab,
-    int32_t const * quat_index,
-    int32_t const * pixel_index,
-    double const * quats,
-    uint8_t const * flags,
-    uint8_t * hsub,
-    int64_t * pixels,
+    uint64_t *utab,
+    int32_t const *quat_index,
+    int32_t const *pixel_index,
+    double const *quats,
+    uint8_t const *flags,
+    uint8_t *hsub,
+    int64_t *pixels,
     int64_t n_pix_submap,
     int64_t isamp,
     int64_t n_samp,
     int64_t idet,
     uint8_t mask,
-    bool use_flags
-) {
+    bool use_flags)
+{
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
     int32_t q_indx = quat_index[idet];
@@ -241,9 +266,12 @@ void pixels_healpix_nest_inner(
     pixels_healpix_qa_rotate(&(quats[qoff]), zaxis, dir);
     hpix_vec2zphi(dir, &phi, &region, &z, &rtz);
     hpix_zphi2nest(nside, factor, utab, phi, region, z, rtz, &(pixels[poff]));
-    if (use_flags && ((flags[isamp] & mask) != 0)) {
+    if (use_flags && ((flags[isamp] & mask) != 0))
+    {
         pixels[poff] = -1;
-    } else {
+    }
+    else
+    {
         sub_map = (int64_t)(pixels[poff] / n_pix_submap);
         hsub[sub_map] = 1;
     }
@@ -254,19 +282,19 @@ void pixels_healpix_nest_inner(
 void pixels_healpix_ring_inner(
     int64_t nside,
     int64_t factor,
-    int32_t const * quat_index,
-    int32_t const * pixel_index,
-    double const * quats,
-    uint8_t const * flags,
-    uint8_t * hsub,
-    int64_t * pixels,
+    int32_t const *quat_index,
+    int32_t const *pixel_index,
+    double const *quats,
+    uint8_t const *flags,
+    uint8_t *hsub,
+    int64_t *pixels,
     int64_t n_pix_submap,
     int64_t isamp,
     int64_t n_samp,
     int64_t idet,
     uint8_t mask,
-    bool use_flags
-) {
+    bool use_flags)
+{
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
     int32_t q_indx = quat_index[idet];
@@ -282,9 +310,12 @@ void pixels_healpix_ring_inner(
     pixels_healpix_qa_rotate(&(quats[qoff]), zaxis, dir);
     hpix_vec2zphi(dir, &phi, &region, &z, &rtz);
     hpix_zphi2ring(nside, factor, phi, region, z, rtz, &(pixels[poff]));
-    if (use_flags && ((flags[isamp] & mask) != 0)) {
+    if (use_flags && ((flags[isamp] & mask) != 0))
+    {
         pixels[poff] = -1;
-    } else {
+    }
+    else
+    {
         sub_map = (int64_t)(pixels[poff] / n_pix_submap);
         hsub[sub_map] = 1;
     }
@@ -293,25 +324,26 @@ void pixels_healpix_ring_inner(
 }
 
 #ifdef HAVE_OPENMP_TARGET
-# pragma omp end declare target
+#pragma omp end declare target
 #endif // ifdef HAVE_OPENMP_TARGET
 
-void init_ops_pixels_healpix(py::module & m) {
+void init_ops_pixels_healpix(py::module &m)
+{
     m.def(
         "pixels_healpix", [](
-            py::buffer quat_index,
-            py::buffer quats,
-            py::buffer shared_flags,
-            uint8_t shared_flag_mask,
-            py::buffer pixel_index,
-            py::buffer pixels,
-            py::buffer intervals,
-            py::buffer hit_submaps,
-            int64_t n_pix_submap,
-            int64_t nside,
-            bool nest,
-            bool use_accel
-        ) {
+                              py::buffer quat_index,
+                              py::buffer quats,
+                              py::buffer shared_flags,
+                              uint8_t shared_flag_mask,
+                              py::buffer pixel_index,
+                              py::buffer pixels,
+                              py::buffer intervals,
+                              py::buffer hit_submaps,
+                              int64_t n_pix_submap,
+                              int64_t nside,
+                              bool nest,
+                              bool use_accel)
+        {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -366,7 +398,7 @@ void init_ops_pixels_healpix(py::module & m) {
             }
 
             if (offload) {
-                #ifdef HAVE_OPENMP_TARGET
+#ifdef HAVE_OPENMP_TARGET
 
                 double * dev_quats = omgr.device_ptr(raw_quats);
                 int64_t * dev_pixels = omgr.device_ptr(raw_pixels);
@@ -383,110 +415,102 @@ void init_ops_pixels_healpix(py::module & m) {
 
                 uint64_t * dev_utab = omgr.device_ptr(utab);
 
-                # pragma omp target data  \
-                map(to:                   \
-                raw_pixel_index[0:n_det], \
-                raw_quat_index[0:n_det],  \
-                n_pix_submap,             \
-                nside,                    \
-                factor,                   \
-                nest,                     \
-                n_view,                   \
-                n_det,                    \
-                n_samp,                   \
-                shared_flag_mask,         \
-                use_flags                 \
-                )                         \
-                map(tofrom: raw_hsub[0:n_submap])
-                {
-                    if (nest) {
-                        # pragma omp target teams distribute collapse(2) \
-                        is_device_ptr(                                   \
-                        dev_pixels,                                      \
-                        dev_quats,                                       \
-                        dev_flags,                                       \
-                        dev_intervals,                                   \
-                        dev_utab                                         \
-                        )
-                        for (int64_t idet = 0; idet < n_det; idet++) {
-                            for (int64_t iview = 0; iview < n_view; iview++) {
-                                # pragma omp parallel
-                                {
-                                    # pragma omp for default(shared)
-                                    for (
-                                        int64_t isamp = dev_intervals[iview].first;
-                                        isamp <= dev_intervals[iview].last;
-                                        isamp++
-                                    ) {
-                                        pixels_healpix_nest_inner(
-                                            nside,
-                                            factor,
-                                            dev_utab,
-                                            raw_quat_index,
-                                            raw_pixel_index,
-                                            dev_quats,
-                                            dev_flags,
-                                            raw_hsub,
-                                            dev_pixels,
-                                            n_pix_submap,
-                                            isamp,
-                                            n_samp,
-                                            idet,
-                                            shared_flag_mask,
-                                            use_flags
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        # pragma omp target teams distribute collapse(2) \
-                        is_device_ptr(                                   \
-                        dev_pixels,                                      \
-                        dev_quats,                                       \
-                        dev_flags,                                       \
-                        dev_intervals,                                   \
-                        dev_utab                                         \
-                        )
-                        for (int64_t idet = 0; idet < n_det; idet++) {
-                            for (int64_t iview = 0; iview < n_view; iview++) {
-                                # pragma omp parallel
-                                {
-                                    # pragma omp for default(shared)
-                                    for (
-                                        int64_t isamp = dev_intervals[iview].first;
-                                        isamp <= dev_intervals[iview].last;
-                                        isamp++
-                                    ) {
-                                        pixels_healpix_ring_inner(
-                                            nside,
-                                            factor,
-                                            raw_quat_index,
-                                            raw_pixel_index,
-                                            dev_quats,
-                                            dev_flags,
-                                            raw_hsub,
-                                            dev_pixels,
-                                            n_pix_submap,
-                                            isamp,
-                                            n_samp,
-                                            idet,
-                                            shared_flag_mask,
-                                            use_flags
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+ // Calculate the maximum interval size on the CPU
+int64_t max_interval_size = 0;
+for (int64_t iview = 0; iview < n_view; iview++) {
+    int64_t interval_size = raw_intervals[iview].last - raw_intervals[iview].first + 1;
+    if (interval_size > max_interval_size) {
+        max_interval_size = interval_size;
+    }
+}
 
-                #endif // ifdef HAVE_OPENMP_TARGET
+#pragma omp target data map(to : raw_pixel_index[0 : n_det], \
+                                raw_quat_index[0 : n_det],   \
+                                n_pix_submap,                \
+                                nside,                       \
+                                factor,                      \
+                                nest,                        \
+                                n_view,                      \
+                                n_det,                       \
+                                n_samp,                      \
+                                shared_flag_mask,            \
+                                use_flags)                   \
+    map(tofrom : raw_hsub[0 : n_submap])
+{
+    if (nest) {
+#pragma omp target teams distribute parallel for collapse(3)
+        for (int64_t idet = 0; idet < n_det; idet++) {
+            for (int64_t iview = 0; iview < n_view; iview++) {
+                for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+                    // Adjust for the actual start of the interval
+                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                    // Check if the value is out of range for the current interval
+                    if (adjusted_isamp > dev_intervals[iview].last) {
+                        continue;
+                    }
+
+                    pixels_healpix_nest_inner(
+                        nside,
+                        factor,
+                        dev_utab,
+                        raw_quat_index,
+                        raw_pixel_index,
+                        dev_quats,
+                        dev_flags,
+                        raw_hsub,
+                        dev_pixels,
+                        n_pix_submap,
+                        adjusted_isamp,
+                        n_samp,
+                        idet,
+                        shared_flag_mask,
+                        use_flags
+                    );
+                }
+            }
+        }
+    } else {
+#pragma omp target teams distribute parallel for collapse(3)
+        for (int64_t idet = 0; idet < n_det; idet++) {
+            for (int64_t iview = 0; iview < n_view; iview++) {
+                for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+                    // Adjust for the actual start of the interval
+                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                    // Check if the value is out of range for the current interval
+                    if (adjusted_isamp > dev_intervals[iview].last) {
+                        continue;
+                    }
+
+                    pixels_healpix_ring_inner(
+                        nside,
+                        factor,
+                        raw_quat_index,
+                        raw_pixel_index,
+                        dev_quats,
+                        dev_flags,
+                        raw_hsub,
+                        dev_pixels,
+                        n_pix_submap,
+                        adjusted_isamp,
+                        n_samp,
+                        idet,
+                        shared_flag_mask,
+                        use_flags
+                    );
+                }
+            }
+        }
+    }
+}
+
+#endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 if (nest) {
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            #pragma omp parallel for default(shared)
+#pragma omp parallel for default(shared)
                             for (
                                 int64_t isamp = raw_intervals[iview].first;
                                 isamp <= raw_intervals[iview].last;
@@ -515,7 +539,7 @@ void init_ops_pixels_healpix(py::module & m) {
                 } else {
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            #pragma omp parallel for default(shared)
+#pragma omp parallel for default(shared)
                             for (
                                 int64_t isamp = raw_intervals[iview].first;
                                 isamp <= raw_intervals[iview].last;
@@ -542,6 +566,5 @@ void init_ops_pixels_healpix(py::module & m) {
                     }
                 }
             }
-            return;
-        });
+            return; });
 }
