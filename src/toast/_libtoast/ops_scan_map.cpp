@@ -218,7 +218,7 @@ void register_ops_scan_map(py::module & m, char const * name) {
               } else   {
                   for (int64_t idet = 0; idet < n_det; idet++) {
                       for (int64_t iview = 0; iview < n_view; iview++) {
-                          // #pragma omp parallel for default(shared)
+                          #pragma omp parallel for default(shared)
                           for (
                               int64_t isamp = raw_intervals[iview].first;
                               isamp <= raw_intervals[iview].last;
