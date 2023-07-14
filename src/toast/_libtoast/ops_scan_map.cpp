@@ -30,8 +30,7 @@ void scan_map_inner(
     int64_t n_pix_submap,
     bool should_zero,
     bool should_subtract,
-    bool should_scale
-) {
+    bool should_scale) {
     int32_t w_indx = weight_index[idet];
     int32_t p_indx = pixel_index[idet];
     int32_t d_indx = data_index[idet];
@@ -69,9 +68,9 @@ void scan_map_inner(
 
         if (should_subtract) {
             data[off_d] -= tod_val;
-        } else if (should_scale) {
+        } else if (should_scale)   {
             data[off_d] *= tod_val;
-        } else {
+        } else   {
             data[off_d] += tod_val;
         }
     }
@@ -100,8 +99,8 @@ void register_ops_scan_map(py::module & m, char const * name) {
               bool should_zero,
               bool should_subtract,
               bool should_scale,
-              bool use_accel
-          ) {
+              bool use_accel)
+          {
               auto & omgr = OmpManager::get();
               int dev = omgr.get_device();
               bool offload = (!omgr.device_is_host()) && use_accel;
@@ -110,18 +109,15 @@ void register_ops_scan_map(py::module & m, char const * name) {
               std::vector <int64_t> temp_shape(3);
 
               int32_t * raw_pixel_index = extract_buffer <int32_t> (
-                  pixel_index, "pixel_index", 1, temp_shape, {-1}
-              );
+                  pixel_index, "pixel_index", 1, temp_shape, {-1});
               int64_t n_det = temp_shape[0];
 
               int64_t * raw_pixels = extract_buffer <int64_t> (
-                  pixels, "pixels", 2, temp_shape, {-1, -1}
-              );
+                  pixels, "pixels", 2, temp_shape, {-1, -1});
               int64_t n_samp = temp_shape[1];
 
               int32_t * raw_weight_index = extract_buffer <int32_t> (
-                  weight_index, "weight_index", 1, temp_shape, {n_det}
-              );
+                  weight_index, "weight_index", 1, temp_shape, {n_det});
 
 // Handle the case of either 2 or 3 dims
               auto winfo = weights.request();
@@ -130,35 +126,28 @@ void register_ops_scan_map(py::module & m, char const * name) {
               if (winfo.ndim == 2) {
                   nnz = 1;
                   raw_weights = extract_buffer <double> (
-                      weights, "weights", 2, temp_shape, {-1, n_samp}
-                  );
-              } else {
+                      weights, "weights", 2, temp_shape, {-1, n_samp});
+              } else   {
                   raw_weights = extract_buffer <double> (
-                      weights, "weights", 3, temp_shape, {-1, n_samp, -1}
-                  );
+                      weights, "weights", 3, temp_shape, {-1, n_samp, -1});
                   nnz = temp_shape[2];
               }
 
               int32_t * raw_data_index = extract_buffer <int32_t> (
-                  data_index, "data_index", 1, temp_shape, {n_det}
-              );
+                  data_index, "data_index", 1, temp_shape, {n_det});
               double * raw_det_data = extract_buffer <double> (
-                  det_data, "det_data", 2, temp_shape, {-1, n_samp}
-              );
+                  det_data, "det_data", 2, temp_shape, {-1, n_samp});
 
               Interval * raw_intervals = extract_buffer <Interval> (
-                  intervals, "intervals", 1, temp_shape, {-1}
-              );
+                  intervals, "intervals", 1, temp_shape, {-1});
               int64_t n_view = temp_shape[0];
 
               int64_t * raw_global2local = extract_buffer <int64_t> (
-                  global2local, "global2local", 1, temp_shape, {-1}
-              );
+                  global2local, "global2local", 1, temp_shape, {-1});
               int64_t n_global_submap = temp_shape[0];
 
               T * raw_mapdata = extract_buffer <T> (
-                  mapdata, "mapdata", 3, temp_shape, {-1, n_pix_submap, nnz}
-              );
+                  mapdata, "mapdata", 3, temp_shape, {-1, n_pix_submap, nnz});
               int64_t n_local_submap = temp_shape[0];
 
               if (offload) {
@@ -170,22 +159,20 @@ void register_ops_scan_map(py::module & m, char const * name) {
                   Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                   T * dev_mapdata = omgr.device_ptr(raw_mapdata);
 
-                  # pragma omp target data             \
-                  map(to:                              \
-                  raw_weight_index[0:n_det],           \
-                  raw_pixel_index[0:n_det],            \
-                  raw_data_index[0:n_det],             \
-                  raw_global2local[0:n_global_submap], \
-                  n_view,                              \
-                  n_det,                               \
-                  n_samp,                              \
-                  nnz,                                 \
-                  n_pix_submap,                        \
-                  data_scale,                          \
-                  should_scale,                        \
-                  should_subtract,                     \
-                  should_zero                          \
-                  )
+                  # pragma omp target data               \
+                  map(to : raw_weight_index[0 : n_det],  \
+                  raw_pixel_index[0 : n_det],            \
+                  raw_data_index[0 : n_det],             \
+                  raw_global2local[0 : n_global_submap], \
+                  n_view,                                \
+                  n_det,                                 \
+                  n_samp,                                \
+                  nnz,                                   \
+                  n_pix_submap,                          \
+                  data_scale,                            \
+                  should_scale,                          \
+                  should_subtract,                       \
+                  should_zero)
                   {
                       # pragma omp target teams distribute collapse(2) \
                       is_device_ptr(                                   \
@@ -193,8 +180,7 @@ void register_ops_scan_map(py::module & m, char const * name) {
                       dev_weights,                                     \
                       dev_det_data,                                    \
                       dev_intervals,                                   \
-                      dev_mapdata                                      \
-                      )
+                      dev_mapdata)
                       for (int64_t idet = 0; idet < n_det; idet++) {
                           for (int64_t iview = 0; iview < n_view; iview++) {
                               # pragma omp parallel
@@ -203,8 +189,7 @@ void register_ops_scan_map(py::module & m, char const * name) {
                                   for (
                                       int64_t isamp = dev_intervals[iview].first;
                                       isamp <= dev_intervals[iview].last;
-                                      isamp++
-                                  ) {
+                                      isamp++) {
                                       scan_map_inner <T> (
                                           raw_pixel_index,
                                           raw_weight_index,
@@ -222,8 +207,7 @@ void register_ops_scan_map(py::module & m, char const * name) {
                                           n_pix_submap,
                                           should_zero,
                                           should_subtract,
-                                          should_scale
-                                      );
+                                          should_scale);
                                   }
                               }
                           }
@@ -231,15 +215,14 @@ void register_ops_scan_map(py::module & m, char const * name) {
                   }
 
                   #endif // ifdef HAVE_OPENMP_TARGET
-              } else {
+              } else   {
                   for (int64_t idet = 0; idet < n_det; idet++) {
                       for (int64_t iview = 0; iview < n_view; iview++) {
                           #pragma omp parallel for default(shared)
                           for (
                               int64_t isamp = raw_intervals[iview].first;
                               isamp <= raw_intervals[iview].last;
-                              isamp++
-                          ) {
+                              isamp++) {
                               scan_map_inner <T> (
                                   raw_pixel_index,
                                   raw_weight_index,
@@ -257,8 +240,7 @@ void register_ops_scan_map(py::module & m, char const * name) {
                                   n_pix_submap,
                                   should_zero,
                                   should_subtract,
-                                  should_scale
-                              );
+                                  should_scale);
                           }
                       }
                   }

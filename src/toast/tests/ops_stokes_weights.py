@@ -48,7 +48,6 @@ class SimStokesWeightsTest(MPITestCase):
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pixels.apply(data)
         weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=hwp_name,
@@ -56,7 +55,8 @@ class SimStokesWeightsTest(MPITestCase):
             fp_gamma="gamma",
             IAU=False,
         )
-        weights.apply(data)
+        pipe = ops.Pipeline(operators=[pixels, weights])
+        pipe.apply(data)
         # print(data.obs[0].detdata[weights.weights])
 
         # Create a fake sky with fixed I/Q/U values at all pixels.  Just
