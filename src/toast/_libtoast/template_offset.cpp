@@ -67,7 +67,7 @@ void init_template_offset(py::module &m)
 // Calculate the maximum interval size on the CPU
 int64_t max_interval_size = 0;
 for (int64_t iview = 0; iview < n_view; iview++) {
-    int64_t interval_size = dev_intervals[iview].last - dev_intervals[iview].first + 1;
+    int64_t interval_size = raw_intervals[iview].last - raw_intervals[iview].first + 1;
     if (interval_size > max_interval_size) {
         max_interval_size = interval_size;
     }
@@ -190,7 +190,7 @@ for (int64_t iview = 0; iview < n_view; iview++) {
 // Calculate the maximum interval size on the CPU
 int64_t max_interval_size = 0;
 for (int64_t iview = 0; iview < n_view; iview++) {
-    int64_t interval_size = dev_intervals[iview].last - dev_intervals[iview].first + 1;
+    int64_t interval_size = raw_intervals[iview].last - raw_intervals[iview].first + 1;
     if (interval_size > max_interval_size) {
         max_interval_size = interval_size;
     }
