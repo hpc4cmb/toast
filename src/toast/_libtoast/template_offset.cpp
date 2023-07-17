@@ -217,9 +217,7 @@ for (int64_t iview = 0; iview < n_view; iview++) {
             }
 
             int64_t d = data_index * n_samp + adjusted_isamp;
-            int64_t amp = amp_offset + amp_view_off[iview] + (int64_t)(
-                (adjusted_isamp - dev_intervals[iview].first) / step_length
-            );
+            int64_t amp = amp_offset + amp_view_off[iview] + (int64_t)(isamp / step_length);
             double contrib = 0.0;
             if (use_flags) {
                 int64_t f = flag_index * n_samp + adjusted_isamp;
