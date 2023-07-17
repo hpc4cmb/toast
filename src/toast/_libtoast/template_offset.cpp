@@ -205,6 +205,7 @@ for (int64_t iview = 0; iview < n_view; iview++) {
                                 amp_view_off[0 : n_view], \
                                 use_flags)
 {
+                // TODO the paralelism can likely be improved on this function
 #pragma omp target teams distribute collapse(2)
     for (int64_t iview = 0; iview < n_view; iview++) {
         for (int64_t isamp = 0; isamp < max_interval_size; isamp += step_length) {
