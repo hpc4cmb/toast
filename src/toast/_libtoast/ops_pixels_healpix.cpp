@@ -437,72 +437,57 @@ for (int64_t iview = 0; iview < n_view; iview++) {
                                 use_flags)                   \
     map(tofrom : raw_hsub[0 : n_submap])
 {
-    if (nest) {
 #pragma omp target teams distribute parallel for collapse(3)
-        for (int64_t idet = 0; idet < n_det; idet++) {
-            for (int64_t iview = 0; iview < n_view; iview++) {
-                for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
-                    // Adjust for the actual start of the interval
-                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+for (int64_t idet = 0; idet < n_det; idet++) {
+    for (int64_t iview = 0; iview < n_view; iview++) {
+        for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+            // Adjust for the actual start of the interval
+            int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
 
-                    // Check if the value is out of range for the current interval
-                    if (adjusted_isamp > dev_intervals[iview].last) {
-                        continue;
-                    }
-
-                    pixels_healpix_nest_inner(
-                        nside,
-                        factor,
-                        dev_utab,
-                        raw_quat_index,
-                        raw_pixel_index,
-                        dev_quats,
-                        dev_flags,
-                        raw_hsub,
-                        dev_pixels,
-                        n_pix_submap,
-                        adjusted_isamp,
-                        n_samp,
-                        idet,
-                        shared_flag_mask,
-                        use_flags
-                    );
-                }
+            // Check if the value is out of range for the current interval
+            if (adjusted_isamp > dev_intervals[iview].last) {
+                continue;
             }
-        }
-    } else {
-#pragma omp target teams distribute parallel for collapse(3)
-        for (int64_t idet = 0; idet < n_det; idet++) {
-            for (int64_t iview = 0; iview < n_view; iview++) {
-                for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
-                    // Adjust for the actual start of the interval
-                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
 
-                    // Check if the value is out of range for the current interval
-                    if (adjusted_isamp > dev_intervals[iview].last) {
-                        continue;
-                    }
-
-                    pixels_healpix_ring_inner(
-                        nside,
-                        factor,
-                        raw_quat_index,
-                        raw_pixel_index,
-                        dev_quats,
-                        dev_flags,
-                        raw_hsub,
-                        dev_pixels,
-                        n_pix_submap,
-                        adjusted_isamp,
-                        n_samp,
-                        idet,
-                        shared_flag_mask,
-                        use_flags
-                    );
-                }
+            if (nest) {
+                pixels_healpix_nest_inner(
+                    nside,
+                    factor,
+                    dev_utab,
+                    raw_quat_index,
+                    raw_pixel_index,
+                    dev_quats,
+                    dev_flags,
+                    raw_hsub,
+                    dev_pixels,
+                    n_pix_submap,
+                    adjusted_isamp,
+                    n_samp,
+                    idet,
+                    shared_flag_mask,
+                    use_flags
+                );
+            } else {
+                pixels_healpix_ring_inner(
+                    nside,
+                    factor,
+                    raw_quat_index,
+                    raw_pixel_index,
+                    dev_quats,
+                    dev_flags,
+                    raw_hsub,
+                    dev_pixels,
+                    n_pix_submap,
+                    adjusted_isamp,
+                    n_samp,
+                    idet,
+                    shared_flag_mask,
+                    use_flags
+                );
             }
         }
     }
+}
 }
 
 #endif // ifdef HAVE_OPENMP_TARGET
