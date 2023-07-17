@@ -205,9 +205,9 @@ for (int64_t iview = 0; iview < n_view; iview++) {
                                 amp_view_off[0 : n_view], \
                                 use_flags)
 {
-#pragma omp target teams distribute parallel for collapse(2)
+#pragma omp target teams distribute collapse(2)
     for (int64_t iview = 0; iview < n_view; iview++) {
-        for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+        for (int64_t isamp = 0; isamp < max_interval_size; isamp += step_length) {
             // Adjust for the actual start of the interval
             int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
 
@@ -216,19 +216,26 @@ for (int64_t iview = 0; iview < n_view; iview++) {
                 continue;
             }
 
-            int64_t d = data_index * n_samp + adjusted_isamp;
-            int64_t amp = amp_offset + amp_view_off[iview] + (int64_t)(isamp / step_length);
+            // Insure we do not go out of the current interval
+            int64_t max_step_length = std::min(step_length, dev_intervals[iview].last - adjusted_isamp + 1);
+
+            // Reduce on a chunk of `step_length` samples.
             double contrib = 0.0;
-            if (use_flags) {
-                int64_t f = flag_index * n_samp + adjusted_isamp;
-                uint8_t check = dev_det_flags[f] & flag_mask;
-                if (check == 0) {
-                    contrib = dev_det_data[d];
+#pragma omp parallel for reduction(+ : contrib)
+            for (int64_t i = 0; i < max_step_length; i++) {
+                int64_t d = data_index * n_samp + adjusted_isamp + i;
+                if (use_flags) {
+                    int64_t f = flag_index * n_samp + adjusted_isamp + i;
+                    uint8_t check = dev_det_flags[f] & flag_mask;
+                    if (check == 0) {
+                        contrib += dev_det_data[d];
+                    }
+                } else {
+                    contrib += dev_det_data[d];
                 }
-            } else {
-                contrib = dev_det_data[d];
             }
-#pragma omp atomic update
+
+            int64_t amp = amp_offset + amp_view_off[iview] + (int64_t)(isamp / step_length);
             dev_amplitudes[amp] += contrib;
         }
     }
