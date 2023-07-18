@@ -307,25 +307,14 @@ for (int64_t iview = 0; iview < n_view; iview++) {
                 double * dev_amp_out = omgr.device_ptr(raw_amp_out);
                 double * dev_offset_var = omgr.device_ptr(raw_offset_var);
 
-#pragma omp target data \
-map(to : n_amp)
-                {
-#pragma omp target       \
-is_device_ptr(           \
-        dev_amp_in,      \
-            dev_amp_out, \
-            dev_offset_var)
-                    {
-#pragma omp parallel default(shared)
-                        {
-#pragma omp for
-                            for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                                dev_amp_out[iamp] = dev_amp_in[iamp];
-                                dev_amp_out[iamp] *= dev_offset_var[iamp];
-                            }
-                        }
-                    }
-                }
+#pragma omp target data map(to : n_amp)
+{
+#pragma omp target teams distribute parallel for
+    for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+        dev_amp_out[iamp] = dev_amp_in[iamp];
+        dev_amp_out[iamp] *= dev_offset_var[iamp];
+    }
+}
 
 #endif // ifdef HAVE_OPENMP_TARGET
             } else {

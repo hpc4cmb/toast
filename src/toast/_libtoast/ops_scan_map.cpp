@@ -173,7 +173,7 @@ void register_ops_scan_map(py::module &m, char const *name)
                   Interval *dev_intervals = omgr.device_ptr(raw_intervals);
                   T *dev_mapdata = omgr.device_ptr(raw_mapdata);
 
-                  // calculate the maximum interval size
+                  // Calculate the maximum interval size on the CPU
                   int64_t max_interval_size = 0;
                   for (int64_t iview = 0; iview < n_view; iview++)
                   {

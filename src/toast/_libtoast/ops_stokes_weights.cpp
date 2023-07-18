@@ -224,7 +224,7 @@ void init_ops_stokes_weights(py::module &m)
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                 double * dev_hwp = omgr.device_ptr(raw_hwp);
 
-                // calculate the maximum interval size
+                // Calculate the maximum interval size on the CPU
                 int64_t max_interval_size = 0;
                 for (int64_t iview = 0; iview < n_view; iview++) {
                     int64_t interval_size = raw_intervals[iview].last - raw_intervals[iview].first + 1;
@@ -404,35 +404,36 @@ void init_ops_stokes_weights(py::module &m)
                 double * dev_weights = omgr.device_ptr(raw_weights);
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
 
-#pragma omp target data               \
-map(to : raw_weight_index[0 : n_det], \
-        n_view,                       \
-        n_det,                        \
-        n_samp,                       \
-        cal)
-                {
-#pragma omp target teams distribute collapse(2) \
-    is_device_ptr(                              \
-            dev_weights,                        \
-                dev_intervals)
-                    for (int64_t idet = 0; idet < n_det; idet++) {
-                        for (int64_t iview = 0; iview < n_view; iview++) {
-#pragma omp parallel
-                            {
-#pragma omp for default(shared)
-                                for (
-                                    int64_t isamp = dev_intervals[iview].first;
-                                    isamp <= dev_intervals[iview].last;
-                                    isamp++
-                                ) {
-                                    int32_t w_indx = raw_weight_index[idet];
-                                    int64_t off = (w_indx * n_samp) + isamp;
-                                    dev_weights[off] = cal;
-                                }
-                            }
-                        }
-                    }
+// Calculate the maximum interval size on the CPU
+int64_t max_interval_size = 0;
+for (int64_t iview = 0; iview < n_view; iview++) {
+    int64_t interval_size = raw_intervals[iview].last - raw_intervals[iview].first + 1;
+    if (interval_size > max_interval_size) {
+        max_interval_size = interval_size;
+    }
+}
+
+#pragma omp target data map(to : raw_weight_index[0 : n_det], n_view, n_det, n_samp, cal)
+{
+#pragma omp target teams distribute parallel for collapse(3)
+    for (int64_t idet = 0; idet < n_det; idet++) {
+        for (int64_t iview = 0; iview < n_view; iview++) {
+            for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+                // Adjust for the actual start of the interval
+                int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                // Check if the value is out of range for the current interval
+                if (adjusted_isamp > dev_intervals[iview].last) {
+                    continue;
                 }
+
+                int32_t w_indx = raw_weight_index[idet];
+                int64_t off = (w_indx * n_samp) + adjusted_isamp;
+                dev_weights[off] = cal;
+            }
+        }
+    }
+}
 
 #endif // ifdef HAVE_OPENMP_TARGET
             } else {
