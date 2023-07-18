@@ -8,15 +8,14 @@
 
 #include <accelerator.hpp>
 
-void init_ops_noise_weight(py::module &m)
-{
+void init_ops_noise_weight(py::module & m) {
     m.def(
         "noise_weight", [](
-                            py::buffer det_data,
-                            py::buffer data_index,
-                            py::buffer intervals,
-                            py::buffer detector_weights,
-                            bool use_accel)
+            py::buffer det_data,
+            py::buffer data_index,
+            py::buffer intervals,
+            py::buffer detector_weights,
+            bool use_accel)
         {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
@@ -45,51 +44,54 @@ void init_ops_noise_weight(py::module &m)
             );
 
             if (offload) {
-#ifdef HAVE_OPENMP_TARGET
+                #ifdef HAVE_OPENMP_TARGET
 
                 double * dev_det_data = omgr.device_ptr(raw_det_data);
-                Interval * dev_intervals = omgr.device_ptr(raw_intervals);
+                Interval * dev_intervals = omgr.device_ptr(
+                    raw_intervals);
 
-// Calculate the maximum interval size on the CPU
-int64_t max_interval_size = 0;
-for (int64_t iview = 0; iview < n_view; iview++) {
-    int64_t interval_size = raw_intervals[iview].last - raw_intervals[iview].first + 1;
-    if (interval_size > max_interval_size) {
-        max_interval_size = interval_size;
-    }
-}
-
-#pragma omp target data map(to : raw_data_index[0 : n_det], \
-                                raw_det_weights[0 : n_det], \
-                                n_view,                     \
-                                n_det,                      \
-                                n_samp)
-{
-#pragma omp target teams distribute parallel for collapse(3)
-    for (int64_t idet = 0; idet < n_det; idet++) {
-        for (int64_t iview = 0; iview < n_view; iview++) {
-            for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
-                // Adjust for the actual start of the interval
-                int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
-
-                // Check if the value is out of range for the current interval
-                if (adjusted_isamp > dev_intervals[iview].last) {
-                    continue;
+                // Calculate the maximum interval size on the CPU
+                int64_t max_interval_size = 0;
+                for (int64_t iview = 0; iview < n_view; iview++) {
+                    int64_t interval_size = raw_intervals[iview].last -
+                                            raw_intervals[iview].first + 1;
+                    if (interval_size > max_interval_size) {
+                        max_interval_size = interval_size;
+                    }
                 }
 
-                int32_t d_indx = raw_data_index[idet];
-                int64_t off_d = d_indx * n_samp + adjusted_isamp;
-                dev_det_data[off_d] *= raw_det_weights[idet];
-            }
-        }
-    }
-}
+                # pragma omp target data map(to : raw_data_index[0 : n_det], \
+                raw_det_weights[0 : n_det],                                  \
+                n_view,                                                      \
+                n_det,                                                       \
+                n_samp)
+                {
+                    # pragma omp target teams distribute parallel for collapse(3)
+                    for (int64_t idet = 0; idet < n_det; idet++) {
+                        for (int64_t iview = 0; iview < n_view; iview++) {
+                            for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+                                // Adjust for the actual start of the interval
+                                int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
 
-#endif // ifdef HAVE_OPENMP_TARGET
+                                // Check if the value is out of range for the current
+                                // interval
+                                if (adjusted_isamp > dev_intervals[iview].last) {
+                                    continue;
+                                }
+
+                                int32_t d_indx = raw_data_index[idet];
+                                int64_t off_d = d_indx * n_samp + adjusted_isamp;
+                                dev_det_data[off_d] *= raw_det_weights[idet];
+                            }
+                        }
+                    }
+                }
+
+                #endif // ifdef HAVE_OPENMP_TARGET
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
-#pragma omp parallel for default(shared)
+                        #pragma omp parallel for default(shared)
                         for (
                             int64_t isamp = raw_intervals[iview].first;
                             isamp <= raw_intervals[iview].last;
@@ -103,5 +105,6 @@ for (int64_t iview = 0; iview < n_view; iview++) {
                 }
             }
 
-            return; });
+            return;
+        });
 }
