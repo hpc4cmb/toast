@@ -9,6 +9,26 @@
 
 set -e
 
+toolchain=$1
+PREFIX=$2
+static=$3
+
+# For testing locally
+# MAKEJ=8
+MAKEJ=2
+
+if [ "x${toolchain}" = "x" ]; then
+    toolchain="gcc"
+fi
+
+if [ "x${PREFIX}" = "x" ]; then
+    PREFIX=/usr/local
+fi
+
+if [ "x${static}" = "x" ]; then
+    static="yes"
+fi
+
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
 scriptdir=$(pwd)
@@ -17,23 +37,30 @@ echo "Wheel script directory = ${scriptdir}"
 
 # Build options
 
-CC=gcc
-CXX=g++
-FC=gfortran
+if [ "x${toolchain}" = "xgcc" ]; then
+    CC=gcc
+    CXX=g++
+    FC=gfortran
 
-CFLAGS="-O3 -fPIC -pthread"
-FCFLAGS="-O3 -fPIC -pthread"
-CXXFLAGS="-O3 -fPIC -pthread -std=c++11"
+    CFLAGS="-O3 -fPIC -pthread"
+    FCFLAGS="-O3 -fPIC -pthread"
+    CXXFLAGS="-O3 -fPIC -pthread -std=c++11"
+    FCLIBS="-lgfortran"
+else
+    if [ "x${toolchain}" = "xllvm" ]; then
+        CC=clang-17
+        CXX=clang++-17
+        FC=gfortran
 
-# For testing locally
-# MAKEJ=8
-MAKEJ=2
-
-PREFIX=/usr
-
-# Use yum to install OS packages
-
-yum update -y
+        CFLAGS="-O3 -fPIC -pthread"
+        FCFLAGS="-O3 -fPIC -pthread"
+        CXXFLAGS="-O3 -fPIC -pthread -std=c++11 -stdlib=libc++"
+        FCLIBS="-L/usr/lib/llvm-17/lib /usr/lib/x86_64-linux-gnu/libgfortran.so.5"
+    else
+        echo "Unsupported toolchain \"${toolchain}\""
+        exit 1
+    fi
+fi
 
 # Update pip
 pip install --upgrade pip
@@ -60,29 +87,36 @@ fi
 # Install build requirements.
 CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdir}/build_requirements.txt"
 
-# Install Openblas
+# # Install Openblas
 
-openblas_version=0.3.21
-openblas_dir=OpenBLAS-${openblas_version}
-openblas_pkg=${openblas_dir}.tar.gz
+# openblas_version=0.3.23
+# openblas_dir=OpenBLAS-${openblas_version}
+# openblas_pkg=${openblas_dir}.tar.gz
 
-if [ ! -e ${openblas_pkg} ]; then
-    echo "Fetching OpenBLAS..."
-    curl -SL https://github.com/xianyi/OpenBLAS/archive/v${openblas_version}.tar.gz -o ${openblas_pkg}
-fi
+# if [ ! -e ${openblas_pkg} ]; then
+#     echo "Fetching OpenBLAS..."
+#     curl -SL https://github.com/xianyi/OpenBLAS/archive/v${openblas_version}.tar.gz -o ${openblas_pkg}
+# fi
 
-echo "Building OpenBLAS..."
+# echo "Building OpenBLAS..."
 
-rm -rf ${openblas_dir}
-tar xzf ${openblas_pkg} \
-    && pushd ${openblas_dir} >/dev/null 2>&1 \
-    && make USE_OPENMP=1 NO_SHARED=1 \
-    MAKE_NB_JOBS=${MAKEJ} \
-    CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
-    COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
-    LDFLAGS="-fopenmp -lm" libs netlib \
-    && make NO_SHARED=1 DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
-    && popd >/dev/null 2>&1
+# shr="NO_STATIC=1"
+# if [ "${static}" = "yes" ]; then
+#     shr="NO_SHARED=1"
+# fi
+
+# rm -rf ${openblas_dir}
+# tar xzf ${openblas_pkg} \
+#     && pushd ${openblas_dir} >/dev/null 2>&1 \
+#     && make USE_OPENMP=1 ${shr} \
+#     MAKE_NB_JOBS=${MAKEJ} \
+#     CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
+#     COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
+#     EXTRALIB="-fopenmp -lm ${FCLIBS}" all \
+#     && make ${shr} DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
+#     && popd >/dev/null 2>&1
+
+# exit 0
 
 # Install FFTW
 
@@ -98,15 +132,18 @@ fi
 
 echo "Building FFTW..."
 
+shr="--enable-shared --disable-static"
+if [ "${static}" = "yes" ]; then
+    shr="--enable-static --disable-shared"
+fi
+
 rm -rf ${fftw_dir}
 tar xzf ${fftw_pkg} \
     && pushd ${fftw_dir} >/dev/null 2>&1 \
     && CC="${CC}" CFLAGS="${CFLAGS}" \
     ./configure \
     --disable-fortran \
-    --enable-openmp \
-    --enable-static \
-    --disable-shared \
+    --enable-openmp ${shr} \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
     && make install \
@@ -145,7 +182,7 @@ tar xzf ${aatm_pkg} \
 
 # Install libFLAC
 
-flac_version=1.4.2
+flac_version=1.4.3
 flac_dir=flac-${flac_version}
 flac_pkg=${flac_dir}.tar.gz
 
@@ -179,7 +216,7 @@ tar xzf ${flac_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=6.0.3
+ssparse_version=7.1.0
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
@@ -190,6 +227,11 @@ if [ ! -e ${ssparse_pkg} ]; then
 fi
 
 echo "Building SuiteSparse..."
+
+shr="-DNSTATIC:BOOL=ON -DBLA_STATIC:BOOL=OFF"
+if [ "${static}" = "yes" ]; then
+    shr="-DNSTATIC:BOOL=OFF -DBLA_STATIC:BOOL=ON"
+fi
 
 rm -rf ${ssparse_dir}
 tar xzf ${ssparse_pkg} \
@@ -205,12 +247,10 @@ tar xzf ${ssparse_pkg} \
     -DCMAKE_Fortran_FLAGS=\"${FCFLAGS}\" \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
     -DCMAKE_INSTALL_PATH=\"${PREFIX}\" \
-    -DNSTATIC:BOOL=OFF \
     -DCMAKE_BUILD_TYPE=Release \
-    -DBLA_VENDOR=OpenBLAS \
-    -DBLA_STATIC:BOOL=ON \
-    -DBLAS_LIBRARIES=\"-L${PREFIX}/lib -lopenblas -lgomp -lm -lgfortran\" \
-    -DLAPACK_LIBRARIES=\"-L${PREFIX}/lib -lopenblas -lgomp -lm -lgfortran\" \
+    -DBLA_VENDOR=OpenBLAS ${shr} \
+    -DBLAS_LIBRARIES=\"-L${PREFIX}/lib -lopenblas -lm ${FCLIBS}\" \
+    -DLAPACK_LIBRARIES=\"-L${PREFIX}/lib -lopenblas -lm ${FCLIBS}\" \
     " make local \
     && make install \
     && cp ./lib/*.a "${PREFIX}/lib/" \

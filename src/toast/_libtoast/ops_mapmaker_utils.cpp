@@ -33,7 +33,8 @@ void build_noise_weighted_inner(
     uint8_t shared_mask,
     int64_t n_pix_submap,
     bool use_shared_flags,
-    bool use_det_flags) {
+    bool use_det_flags
+) {
     int32_t w_indx = weight_index[idet];
     int32_t p_indx = pixel_index[idet];
     int32_t f_indx = flag_index[idet];
@@ -62,7 +63,8 @@ void build_noise_weighted_inner(
     if (
         (pixels[off_p] >= 0) &&
         (det_check == 0) &&
-        (shared_check == 0)) {
+        (shared_check == 0)
+    ) {
         // Good data, accumulate
         global_submap = (int64_t)(pixels[off_p] / n_pix_submap);
 
@@ -105,8 +107,8 @@ void init_ops_mapmaker_utils(py::module & m) {
             py::buffer intervals,
             py::buffer shared_flags,
             uint8_t shared_flag_mask,
-            bool use_accel)
-        {
+            bool use_accel
+        ) {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -216,24 +218,35 @@ void init_ops_mapmaker_utils(py::module & m) {
                     }
                 }
 
-                # pragma omp target data map(to : raw_weight_index[0 : n_det], \
-                raw_pixel_index[0 : n_det],                                    \
-                raw_flag_index[0 : n_det],                                     \
-                raw_data_index[0 : n_det],                                     \
-                raw_det_scale[0 : n_det],                                      \
-                raw_global2local[0 : n_global_submap],                         \
-                n_view,                                                        \
-                n_det,                                                         \
-                n_samp,                                                        \
-                max_interval_size,                                             \
-                nnz,                                                           \
-                n_pix_submap,                                                  \
-                det_flag_mask,                                                 \
-                shared_flag_mask,                                              \
-                use_shared_flags,                                              \
-                use_det_flags)
+                # pragma omp target data map(          \
+                to : raw_weight_index[0 : n_det],      \
+                raw_pixel_index[0 : n_det],            \
+                raw_flag_index[0 : n_det],             \
+                raw_data_index[0 : n_det],             \
+                raw_det_scale[0 : n_det],              \
+                raw_global2local[0 : n_global_submap], \
+                n_view,                                \
+                n_det,                                 \
+                n_samp,                                \
+                max_interval_size,                     \
+                nnz,                                   \
+                n_pix_submap,                          \
+                det_flag_mask,                         \
+                shared_flag_mask,                      \
+                use_shared_flags,                      \
+                use_det_flags                          \
+                )
                 {
-                    # pragma omp target teams distribute parallel for collapse(3)
+                    # pragma omp target teams distribute parallel for collapse(3) \
+                    is_device_ptr(                                                \
+                    dev_pixels,                                                   \
+                    dev_weights,                                                  \
+                    dev_det_data,                                                 \
+                    dev_det_flags,                                                \
+                    dev_intervals,                                                \
+                    dev_shared_flags,                                             \
+                    dev_zmap                                                      \
+                    )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
                             for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {

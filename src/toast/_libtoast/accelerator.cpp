@@ -634,11 +634,10 @@ void OmpManager::reset(void * buffer, size_t nbytes, std::string const & name) {
       << "') with " << nbytes << " bytes";
     log.verbose(o.str().c_str());
 
-    # pragma omp target data \
-    map(to: nbytes)
+    # pragma omp target data map(to: nbytes)
     {
-        # pragma omp target teams distribute is_device_ptr(dev_buffer) \
-        parallel for default(shared)
+        # pragma \
+        omp target teams distribute parallel for default(shared) is_device_ptr(dev_buffer)
         for (size_t i = 0; i < nbytes; ++i) {
             ((uint8_t *)dev_buffer)[i] = 0;
         }
@@ -1126,17 +1125,14 @@ void init_accelerator(py::module & m) {
             int dev = omgr.get_device();
             bool offload = !omgr.device_is_host();
 
-            void * dev_raw = omgr.device_ptr(raw);
+            double * dev_raw = omgr.device_ptr(raw);
 
             #ifdef HAVE_OPENMP_TARGET
-            # pragma omp target data
-            {
-                # pragma omp target teams distribute parallel for collapse(2) \
-                is_device_ptr(dev_raw)
-                for (int64_t i = 0; i < n_det; i++) {
-                    for (int64_t j = 0; j < n_samp; j++) {
-                        raw[i * n_samp + j] *= 2.0;
-                    }
+            # pragma \
+            omp target teams distribute parallel for is_device_ptr(dev_raw) collapse(2)
+            for (int64_t i = 0; i < n_det; i++) {
+                for (int64_t j = 0; j < n_samp; j++) {
+                    dev_raw[i * n_samp + j] *= 2.0;
                 }
             }
             #endif // ifdef HAVE_OPENMP_TARGET
@@ -1155,17 +1151,14 @@ void init_accelerator(py::module & m) {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = !omgr.device_is_host();
-            void * dev_raw = omgr.device_ptr(raw);
+            double * dev_raw = omgr.device_ptr(raw);
 
             #ifdef HAVE_OPENMP_TARGET
-            # pragma omp target data
-            {
-                # pragma omp target teams distribute parallel for collapse(2) \
-                is_device_ptr(dev_raw)
-                for (size_t i = 0; i < n_det; i++) {
-                    for (size_t j = 0; j < n_samp; j++) {
-                        raw[i * n_samp + j] *= 2.0;
-                    }
+            # pragma \
+            omp target teams distribute parallel for is_device_ptr(dev_raw) collapse(2)
+            for (size_t i = 0; i < n_det; i++) {
+                for (size_t j = 0; j < n_samp; j++) {
+                    dev_raw[i * n_samp + j] *= 2.0;
                 }
             }
             #endif // ifdef HAVE_OPENMP_TARGET

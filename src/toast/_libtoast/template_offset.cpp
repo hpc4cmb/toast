@@ -21,8 +21,8 @@ void init_template_offset(py::module & m) {
             int32_t data_index,
             py::buffer det_data,
             py::buffer intervals,
-            bool use_accel)
-        {
+            bool use_accel
+        ) {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -73,14 +73,21 @@ void init_template_offset(py::module & m) {
                     }
                 }
 
-                # pragma omp target data map(to : n_view, \
-                n_samp,                                   \
-                data_index,                               \
-                step_length,                              \
-                amp_offset,                               \
-                amp_view_off[0 : n_view])
+                # pragma omp target data map( \
+                to : n_view,                  \
+                n_samp,                       \
+                data_index,                   \
+                step_length,                  \
+                amp_offset,                   \
+                amp_view_off[0 : n_view]      \
+                )
                 {
-                    # pragma omp target teams distribute parallel for collapse(2)
+                    # pragma omp target teams distribute parallel for collapse(2) \
+                    is_device_ptr(                                                \
+                    dev_amplitudes,                                               \
+                    dev_det_data,                                                 \
+                    dev_intervals                                                 \
+                    )
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
                             // Adjust for the actual start of the interval
@@ -137,8 +144,8 @@ void init_template_offset(py::module & m) {
             py::buffer n_amp_views,
             py::buffer amplitudes,
             py::buffer intervals,
-            bool use_accel)
-        {
+            bool use_accel
+        ) {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -200,20 +207,31 @@ void init_template_offset(py::module & m) {
                     }
                 }
 
-                # pragma omp target data map(to : n_view, \
-                n_samp,                                   \
-                data_index,                               \
-                flag_index,                               \
-                step_length,                              \
-                amp_offset,                               \
-                amp_view_off[0 : n_view],                 \
-                use_flags)
+                # pragma omp target data map( \
+                to : n_view,                  \
+                n_samp,                       \
+                data_index,                   \
+                flag_index,                   \
+                step_length,                  \
+                amp_offset,                   \
+                amp_view_off[0 : n_view],     \
+                use_flags                     \
+                )
                 {
                     // TODO the paralelism can likely be improved on this function
-                    # pragma omp target teams distribute collapse(2)
+                    # pragma omp target teams distribute collapse(2) \
+                    is_device_ptr(                                   \
+                    dev_amplitudes,                                  \
+                    dev_det_data,                                    \
+                    dev_det_flags,                                   \
+                    dev_intervals                                    \
+                    )
                     for (int64_t iview = 0; iview < n_view; iview++) {
-                        for (int64_t isamp = 0; isamp < max_interval_size;
-                             isamp += step_length) {
+                        for (
+                            int64_t isamp = 0;
+                            isamp < max_interval_size;
+                            isamp += step_length
+                        ) {
                             // Adjust for the actual start of the interval
                             int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
 
@@ -224,9 +242,10 @@ void init_template_offset(py::module & m) {
                             }
 
                             // Insure we do not go out of the current interval
-                            int64_t max_step_length =
-                                std::min(step_length,
-                                         dev_intervals[iview].last - adjusted_isamp + 1);
+                            int64_t max_step_length = std::min(
+                                step_length,
+                                dev_intervals[iview].last - adjusted_isamp + 1
+                            );
 
                             // Reduce on a chunk of `step_length` samples.
                             double contrib = 0.0;
@@ -288,8 +307,8 @@ void init_template_offset(py::module & m) {
             py::buffer offset_var,
             py::buffer amplitudes_in,
             py::buffer amplitudes_out,
-            bool use_accel)
-        {
+            bool use_accel
+        ) {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -319,7 +338,12 @@ void init_template_offset(py::module & m) {
 
                 # pragma omp target data map(to : n_amp)
                 {
-                    # pragma omp target teams distribute parallel for
+                    # pragma omp target teams distribute parallel for \
+                    is_device_ptr(                                    \
+                    dev_amp_in,                                       \
+                    dev_amp_out,                                      \
+                    dev_offset_var                                    \
+                    )
                     for (int64_t iamp = 0; iamp < n_amp; iamp++) {
                         dev_amp_out[iamp] = dev_amp_in[iamp];
                         dev_amp_out[iamp] *= dev_offset_var[iamp];
