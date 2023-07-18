@@ -19,11 +19,11 @@
 // So we must duplicate this across compilation units.
 
 void pointing_detector_qa_mult(double const * p, double const * q, double * r) {
-    r[0] =  p[0] * q[3] + p[1] * q[2] -
+    r[0] = p[0] * q[3] + p[1] * q[2] -
            p[2] * q[1] + p[3] * q[0];
     r[1] = -p[0] * q[2] + p[1] * q[3] +
            p[2] * q[0] + p[3] * q[1];
-    r[2] =  p[0] * q[1] - p[1] * q[0] +
+    r[2] = p[0] * q[1] - p[1] * q[0] +
            p[2] * q[3] + p[3] * q[2];
     r[3] = -p[0] * q[0] - p[1] * q[1] -
            p[2] * q[2] + p[3] * q[3];
@@ -40,8 +40,7 @@ void pointing_detector_inner(
     int64_t n_samp,
     int64_t idet,
     uint8_t mask,
-    bool use_flags
-) {
+    bool use_flags) {
     int32_t qidx = q_index[idet];
     double temp_bore[4];
     uint8_t check = 0;
@@ -62,8 +61,7 @@ void pointing_detector_inner(
     pointing_detector_qa_mult(
         temp_bore,
         &(fp[4 * idet]),
-        &(quats[(qidx * 4 * n_samp) + 4 * isamp])
-    );
+        &(quats[(qidx * 4 * n_samp) + 4 * isamp]));
     return;
 }
 
@@ -84,8 +82,8 @@ void init_ops_pointing_detector(py::module & m) {
             py::buffer intervals,
             py::buffer shared_flags,
             uint8_t shared_flag_mask,
-            bool use_accel
-        ) {
+            bool use_accel)
+        {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -134,49 +132,52 @@ void init_ops_pointing_detector(py::module & m) {
                 double * dev_quats = omgr.device_ptr(raw_quats);
                 double * dev_boresight = omgr.device_ptr(raw_boresight);
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
-                uint8_t * dev_flags = omgr.device_ptr(raw_flags);
+                uint8_t * dev_flags = omgr.device_ptr(
+                    raw_flags);
 
-                # pragma omp target data   \
-                map(to:                    \
-                raw_focalplane[0:4*n_det], \
-                raw_quat_index[0:n_det],   \
-                shared_flag_mask,          \
-                n_view,                    \
-                n_det,                     \
-                n_samp,                    \
-                use_flags                  \
-                )
+                // Calculate the maximum interval size on the CPU
+                int64_t max_interval_size = 0;
+                for (int64_t iview = 0; iview < n_view; iview++) {
+                    int64_t interval_size = raw_intervals[iview].last -
+                                            raw_intervals[iview].first + 1;
+                    if (interval_size > max_interval_size) {
+                        max_interval_size = interval_size;
+                    }
+                }
+
+                # pragma omp target data map(to : raw_focalplane[0 : 4 * n_det], \
+                raw_quat_index[0 : n_det],                                       \
+                shared_flag_mask,                                                \
+                n_view,                                                          \
+                n_det,                                                           \
+                n_samp,                                                          \
+                use_flags)
                 {
-                    # pragma omp target teams distribute collapse(2) \
-                    is_device_ptr(                                   \
-                    dev_boresight,                                   \
-                    dev_quats,                                       \
-                    dev_flags,                                       \
-                    dev_intervals                                    \
-                    )
+                    # pragma omp target teams distribute parallel for collapse(3)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            # pragma omp parallel
-                            {
-                                # pragma omp for default(shared)
-                                for (
-                                    int64_t isamp = dev_intervals[iview].first;
-                                    isamp <= dev_intervals[iview].last;
-                                    isamp++
-                                ) {
-                                    pointing_detector_inner(
-                                        raw_quat_index,
-                                        dev_flags,
-                                        dev_boresight,
-                                        raw_focalplane,
-                                        dev_quats,
-                                        isamp,
-                                        n_samp,
-                                        idet,
-                                        shared_flag_mask,
-                                        use_flags
-                                    );
+                            for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+                                // Adjust for the actual start of the interval
+                                int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                                // Check if the value is out of range for the current
+                                // interval
+                                if (adjusted_isamp > dev_intervals[iview].last) {
+                                    continue;
                                 }
+
+                                pointing_detector_inner(
+                                    raw_quat_index,
+                                    dev_flags,
+                                    dev_boresight,
+                                    raw_focalplane,
+                                    dev_quats,
+                                    adjusted_isamp,
+                                    n_samp,
+                                    idet,
+                                    shared_flag_mask,
+                                    use_flags
+                                );
                             }
                         }
                     }

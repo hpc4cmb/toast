@@ -22,32 +22,34 @@ void stokes_weights_qa_rotate(double const * q_in, double const * v_in,
                               double * v_out) {
     // The input quaternion has already been normalized on the host.
 
-    double xw =  q_in[3] * q_in[0];
-    double yw =  q_in[3] * q_in[1];
-    double zw =  q_in[3] * q_in[2];
+    double xw = q_in[3] * q_in[0];
+    double yw = q_in[3] * q_in[1];
+    double zw = q_in[3] * q_in[2];
     double x2 = -q_in[0] * q_in[0];
-    double xy =  q_in[0] * q_in[1];
-    double xz =  q_in[0] * q_in[2];
+    double xy = q_in[0] * q_in[1];
+    double xz = q_in[0] * q_in[2];
     double y2 = -q_in[1] * q_in[1];
-    double yz =  q_in[1] * q_in[2];
+    double yz = q_in[1] * q_in[2];
     double z2 = -q_in[2] * q_in[2];
 
     v_out[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) * v_in[1] +
-                    (yw + xz) * v_in[2]) + v_in[0];
+                    (yw + xz) * v_in[2]) +
+               v_in[0];
 
     v_out[1] = 2 * ((zw + xy) * v_in[0] + (x2 + z2) * v_in[1] +
-                    (yz - xw) * v_in[2]) + v_in[1];
+                    (yz - xw) * v_in[2]) +
+               v_in[1];
 
     v_out[2] = 2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] +
-                    (x2 + y2) * v_in[2]) + v_in[2];
+                    (x2 + y2) * v_in[2]) +
+               v_in[2];
 
     return;
 }
 
 void stokes_weights_alpha(
     double const * quats,
-    double * alpha
-) {
+    double * alpha) {
     const double xaxis[3] = {1.0, 0.0, 0.0};
     const double zaxis[3] = {0.0, 0.0, 1.0};
     double vd[3];
@@ -61,14 +63,10 @@ void stokes_weights_alpha(
     double vm_y = vd[2] * sin(ang_xy);
     double vm_z = -sqrt(1.0 - vd[2] * vd[2]);
 
-    double alpha_y = (
-        vd[0] * (vm_y * vo[2] - vm_z * vo[1])
-        - vd[1] * (vm_x * vo[2] - vm_z * vo[0])
-        + vd[2] * (vm_x * vo[1] - vm_y * vo[0])
-    );
-    double alpha_x = (
-        vm_x * vo[0] + vm_y * vo[1] + vm_z * vo[2]
-    );
+    double alpha_y =
+        (vd[0] * (vm_y * vo[2] - vm_z * vo[1]) - vd[1] * (vm_x * vo[2] - vm_z * vo[0]) +
+         vd[2] * (vm_x * vo[1] - vm_y * vo[0]));
+    double alpha_x = (vm_x * vo[0] + vm_y * vo[1] + vm_z * vo[2]);
 
     (*alpha) = atan2(alpha_y, alpha_x);
     return;
@@ -84,8 +82,7 @@ void stokes_weights_IQU_inner(
     int64_t isamp,
     int64_t n_samp,
     int64_t idet,
-    double U_sign
-) {
+    double U_sign) {
     double eta = (1.0 - epsilon[idet]) / (1.0 + epsilon[idet]);
     int32_t q_indx = quat_index[idet];
     int32_t w_indx = weight_index[idet];
@@ -117,8 +114,7 @@ void stokes_weights_IQU_inner_hwp(
     int64_t isamp,
     int64_t n_samp,
     int64_t idet,
-    double U_sign
-) {
+    double U_sign) {
     double eta = (1.0 - epsilon[idet]) / (1.0 + epsilon[idet]);
     int32_t q_indx = quat_index[idet];
     int32_t w_indx = weight_index[idet];
@@ -127,9 +123,7 @@ void stokes_weights_IQU_inner_hwp(
     double alpha;
     stokes_weights_alpha(&(quats[off]), &alpha);
 
-    double ang = 2.0 * (
-        alpha + 2.0 * (hwp[isamp] - gamma[idet])
-    );
+    double ang = 2.0 * (alpha + 2.0 * (hwp[isamp] - gamma[idet]));
 
     double cang = cos(ang);
     double sang = sin(ang);
@@ -161,8 +155,8 @@ void init_ops_stokes_weights(py::module & m) {
             py::buffer gamma,
             double cal,
             bool IAU,
-            bool use_accel
-        ) {
+            bool use_accel)
+        {
             // NOTE:  Flags are not needed here, since the quaternions
             // have already had bad samples converted to null rotations.
 
@@ -225,89 +219,91 @@ void init_ops_stokes_weights(py::module & m) {
                 double * dev_quats = omgr.device_ptr(raw_quats);
                 double * dev_weights = omgr.device_ptr(raw_weights);
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
-                double * dev_hwp = omgr.device_ptr(raw_hwp);
+                double * dev_hwp = omgr.device_ptr(
+                    raw_hwp);
 
-                # pragma omp target data   \
-                map(to:                    \
-                raw_weight_index[0:n_det], \
-                raw_quat_index[0:n_det],   \
-                raw_epsilon[0:n_det],      \
-                raw_gamma[0:n_det],        \
-                cal,                       \
-                U_sign,                    \
-                n_view,                    \
-                n_det,                     \
-                n_samp                     \
-                )
+                // Calculate the maximum interval size on the CPU
+                int64_t max_interval_size = 0;
+                for (int64_t iview = 0; iview < n_view; iview++) {
+                    int64_t interval_size = raw_intervals[iview].last -
+                                            raw_intervals[iview].first + 1;
+                    if (interval_size > max_interval_size) {
+                        max_interval_size = interval_size;
+                    }
+                }
+
+                # pragma omp target data map(to : raw_weight_index[0 : n_det], \
+                raw_quat_index[0 : n_det],                                     \
+                raw_epsilon[0 : n_det],                                        \
+                raw_gamma[0 : n_det],                                          \
+                cal,                                                           \
+                U_sign,                                                        \
+                n_view,                                                        \
+                n_det,                                                         \
+                n_samp,                                                        \
+                max_interval_size)
                 {
                     if (!use_hwp) {
                         // No HWP
-                        # pragma omp target teams distribute collapse(2) \
-                        is_device_ptr(                                   \
-                        dev_weights,                                     \
-                        dev_quats,                                       \
-                        dev_intervals                                    \
-                        )
+                        # pragma omp target teams distribute parallel for collapse(3)
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
-                                # pragma omp parallel
-                                {
-                                    # pragma omp for default(shared)
-                                    for (
-                                        int64_t isamp = dev_intervals[iview].first;
-                                        isamp <= dev_intervals[iview].last;
-                                        isamp++
-                                    ) {
-                                        stokes_weights_IQU_inner(
-                                            cal,
-                                            raw_quat_index,
-                                            raw_weight_index,
-                                            dev_quats,
-                                            raw_epsilon,
-                                            dev_weights,
-                                            isamp,
-                                            n_samp,
-                                            idet,
-                                            U_sign
-                                        );
+                                for (int64_t isamp = 0; isamp < max_interval_size;
+                                     isamp++) {
+                                    // adjust for the actual start of the interval
+                                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                                    // check if the value is out of range for the
+                                    // current interval
+                                    if (adjusted_isamp > dev_intervals[iview].last) {
+                                        continue;
                                     }
+
+                                    stokes_weights_IQU_inner(
+                                        cal,
+                                        raw_quat_index,
+                                        raw_weight_index,
+                                        dev_quats,
+                                        raw_epsilon,
+                                        dev_weights,
+                                        adjusted_isamp,
+                                        n_samp,
+                                        idet,
+                                        U_sign
+                                    );
                                 }
                             }
                         }
                     } else {
                         // We have a HWP
-                        # pragma omp target teams distribute collapse(2) \
-                        is_device_ptr(                                   \
-                        dev_weights,                                     \
-                        dev_quats,                                       \
-                        dev_hwp,                                         \
-                        dev_intervals                                    \
-                        )
+                        # pragma omp target teams distribute parallel for collapse(3)
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
-                                # pragma omp parallel
-                                {
-                                    # pragma omp for default(shared)
-                                    for (
-                                        int64_t isamp = dev_intervals[iview].first;
-                                        isamp <= dev_intervals[iview].last;
-                                        isamp++
-                                    ) {
-                                        stokes_weights_IQU_inner_hwp(
-                                            cal,
-                                            raw_quat_index,
-                                            raw_weight_index,
-                                            dev_quats,
-                                            dev_hwp,
-                                            raw_epsilon,
-                                            raw_gamma,
-                                            dev_weights,
-                                            isamp,
-                                            n_samp,
-                                            idet,
-                                            U_sign
-                                        );
+                                for (int64_t isamp = 0; isamp < max_interval_size;
+                                     isamp++) {
+                                    // adjust for the actual start of the interval
+                                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                                    // check if the value is out of range for the
+                                    // current interval
+                                    if (adjusted_isamp > dev_intervals[iview].last) {
+                                        continue;
                                     }
+
+                                    stokes_weights_IQU_inner_hwp(
+                                        cal,
+                                        raw_quat_index,
+                                        raw_weight_index,
+                                        dev_quats,
+                                        dev_hwp,
+                                        raw_epsilon,
+                                        raw_gamma,
+                                        dev_weights,
+                                        adjusted_isamp,
+                                        n_samp,
+                                        idet,
+                                        U_sign
+                                    );
                                 }
                             }
                         }
@@ -379,8 +375,8 @@ void init_ops_stokes_weights(py::module & m) {
             py::buffer weights,
             py::buffer intervals,
             double cal,
-            bool use_accel
-        ) {
+            bool use_accel)
+        {
             // NOTE:  Flags are not needed here, since the quaternions
             // have already had bad samples converted to null rotations.
 
@@ -410,36 +406,38 @@ void init_ops_stokes_weights(py::module & m) {
                 #ifdef HAVE_OPENMP_TARGET
 
                 double * dev_weights = omgr.device_ptr(raw_weights);
-                Interval * dev_intervals = omgr.device_ptr(raw_intervals);
+                Interval * dev_intervals = omgr.device_ptr(
+                    raw_intervals);
 
-                # pragma omp target data   \
-                map(to:                    \
-                raw_weight_index[0:n_det], \
-                n_view,                    \
-                n_det,                     \
-                n_samp,                    \
-                cal                        \
-                )
+                // Calculate the maximum interval size on the CPU
+                int64_t max_interval_size = 0;
+                for (int64_t iview = 0; iview < n_view; iview++) {
+                    int64_t interval_size = raw_intervals[iview].last -
+                                            raw_intervals[iview].first + 1;
+                    if (interval_size > max_interval_size) {
+                        max_interval_size = interval_size;
+                    }
+                }
+
+                # pragma \
+                omp target data map(to : raw_weight_index[0 : n_det], n_view, n_det, n_samp, cal)
                 {
-                    # pragma omp target teams distribute collapse(2) \
-                    is_device_ptr(                                   \
-                    dev_weights,                                     \
-                    dev_intervals                                    \
-                    )
+                    # pragma omp target teams distribute parallel for collapse(3)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            # pragma omp parallel
-                            {
-                                # pragma omp for default(shared)
-                                for (
-                                    int64_t isamp = dev_intervals[iview].first;
-                                    isamp <= dev_intervals[iview].last;
-                                    isamp++
-                                ) {
-                                    int32_t w_indx = raw_weight_index[idet];
-                                    int64_t off = (w_indx * n_samp) + isamp;
-                                    dev_weights[off] = cal;
+                            for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+                                // Adjust for the actual start of the interval
+                                int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                                // Check if the value is out of range for the current
+                                // interval
+                                if (adjusted_isamp > dev_intervals[iview].last) {
+                                    continue;
                                 }
+
+                                int32_t w_indx = raw_weight_index[idet];
+                                int64_t off = (w_indx * n_samp) + adjusted_isamp;
+                                dev_weights[off] = cal;
                             }
                         }
                     }

@@ -8,7 +8,6 @@
 
 #include <accelerator.hpp>
 
-
 void init_ops_noise_weight(py::module & m) {
     m.def(
         "noise_weight", [](
@@ -16,8 +15,8 @@ void init_ops_noise_weight(py::module & m) {
             py::buffer data_index,
             py::buffer intervals,
             py::buffer detector_weights,
-            bool use_accel
-        ) {
+            bool use_accel)
+        {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -48,36 +47,41 @@ void init_ops_noise_weight(py::module & m) {
                 #ifdef HAVE_OPENMP_TARGET
 
                 double * dev_det_data = omgr.device_ptr(raw_det_data);
-                Interval * dev_intervals = omgr.device_ptr(raw_intervals);
+                Interval * dev_intervals = omgr.device_ptr(
+                    raw_intervals);
 
-                # pragma omp target data  \
-                map(to:                   \
-                raw_data_index[0:n_det],  \
-                raw_det_weights[0:n_det], \
-                n_view,                   \
-                n_det,                    \
-                n_samp                    \
-                )
+                // Calculate the maximum interval size on the CPU
+                int64_t max_interval_size = 0;
+                for (int64_t iview = 0; iview < n_view; iview++) {
+                    int64_t interval_size = raw_intervals[iview].last -
+                                            raw_intervals[iview].first + 1;
+                    if (interval_size > max_interval_size) {
+                        max_interval_size = interval_size;
+                    }
+                }
+
+                # pragma omp target data map(to : raw_data_index[0 : n_det], \
+                raw_det_weights[0 : n_det],                                  \
+                n_view,                                                      \
+                n_det,                                                       \
+                n_samp)
                 {
-                    # pragma omp target teams distribute collapse(2) \
-                    is_device_ptr(                                   \
-                    dev_det_data,                                    \
-                    dev_intervals                                    \
-                    )
+                    # pragma omp target teams distribute parallel for collapse(3)
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            # pragma omp parallel
-                            {
-                                # pragma omp for default(shared)
-                                for (
-                                    int64_t isamp = dev_intervals[iview].first;
-                                    isamp <= dev_intervals[iview].last;
-                                    isamp++
-                                ) {
-                                    int32_t d_indx = raw_data_index[idet];
-                                    int64_t off_d = d_indx * n_samp + isamp;
-                                    dev_det_data[off_d] *= raw_det_weights[idet];
+                            for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+                                // Adjust for the actual start of the interval
+                                int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                                // Check if the value is out of range for the current
+                                // interval
+                                if (adjusted_isamp > dev_intervals[iview].last) {
+                                    continue;
                                 }
+
+                                int32_t d_indx = raw_data_index[idet];
+                                int64_t off_d = d_indx * n_samp + adjusted_isamp;
+                                dev_det_data[off_d] *= raw_det_weights[idet];
                             }
                         }
                     }

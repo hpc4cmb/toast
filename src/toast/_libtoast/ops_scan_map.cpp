@@ -68,9 +68,9 @@ void scan_map_inner(
 
         if (should_subtract) {
             data[off_d] -= tod_val;
-        } else if (should_scale)   {
+        } else if (should_scale) {
             data[off_d] *= tod_val;
-        } else   {
+        } else {
             data[off_d] += tod_val;
         }
     }
@@ -127,7 +127,7 @@ void register_ops_scan_map(py::module & m, char const * name) {
                   nnz = 1;
                   raw_weights = extract_buffer <double> (
                       weights, "weights", 2, temp_shape, {-1, n_samp});
-              } else   {
+              } else {
                   raw_weights = extract_buffer <double> (
                       weights, "weights", 3, temp_shape, {-1, n_samp, -1});
                   nnz = temp_shape[2];
@@ -157,65 +157,73 @@ void register_ops_scan_map(py::module & m, char const * name) {
                   double * dev_weights = omgr.device_ptr(raw_weights);
                   double * dev_det_data = omgr.device_ptr(raw_det_data);
                   Interval * dev_intervals = omgr.device_ptr(raw_intervals);
-                  T * dev_mapdata = omgr.device_ptr(raw_mapdata);
+                  T * dev_mapdata = omgr.device_ptr(
+                      raw_mapdata);
 
-                  # pragma omp target data               \
-                  map(to : raw_weight_index[0 : n_det],  \
-                  raw_pixel_index[0 : n_det],            \
-                  raw_data_index[0 : n_det],             \
-                  raw_global2local[0 : n_global_submap], \
-                  n_view,                                \
-                  n_det,                                 \
-                  n_samp,                                \
-                  nnz,                                   \
-                  n_pix_submap,                          \
-                  data_scale,                            \
-                  should_scale,                          \
-                  should_subtract,                       \
+                  // Calculate the maximum interval size on the CPU
+                  int64_t max_interval_size = 0;
+                  for (int64_t iview = 0; iview < n_view; iview++) {
+                      int64_t interval_size = raw_intervals[iview].last -
+                                              raw_intervals[iview].first + 1;
+                      if (interval_size > max_interval_size) {
+                          max_interval_size = interval_size;
+                      }
+                  }
+
+                  # pragma omp target data map(to : raw_weight_index[0 : n_det], \
+                  raw_pixel_index[0 : n_det],                                    \
+                  raw_data_index[0 : n_det],                                     \
+                  raw_global2local[0 : n_global_submap],                         \
+                  n_view,                                                        \
+                  n_det,                                                         \
+                  n_samp,                                                        \
+                  max_interval_size,                                             \
+                  nnz,                                                           \
+                  n_pix_submap,                                                  \
+                  data_scale,                                                    \
+                  should_scale,                                                  \
+                  should_subtract,                                               \
                   should_zero)
                   {
-                      # pragma omp target teams distribute collapse(2) \
-                      is_device_ptr(                                   \
-                      dev_pixels,                                      \
-                      dev_weights,                                     \
-                      dev_det_data,                                    \
-                      dev_intervals,                                   \
-                      dev_mapdata)
+                      # pragma omp target teams distribute parallel for collapse(3)
                       for (int64_t idet = 0; idet < n_det; idet++) {
                           for (int64_t iview = 0; iview < n_view; iview++) {
-                              # pragma omp parallel
-                              {
-                                  # pragma omp for default(shared)
-                                  for (
-                                      int64_t isamp = dev_intervals[iview].first;
-                                      isamp <= dev_intervals[iview].last;
-                                      isamp++) {
-                                      scan_map_inner <T> (
-                                          raw_pixel_index,
-                                          raw_weight_index,
-                                          raw_data_index,
-                                          raw_global2local,
-                                          dev_det_data,
-                                          dev_pixels,
-                                          dev_weights,
-                                          dev_mapdata,
-                                          data_scale,
-                                          isamp,
-                                          n_samp,
-                                          idet,
-                                          nnz,
-                                          n_pix_submap,
-                                          should_zero,
-                                          should_subtract,
-                                          should_scale);
+                              for (int64_t isamp = 0; isamp < max_interval_size;
+                                   isamp++) {
+                                  // adjust for the actual start of the interval
+                                  int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                                  // check if the value is out of range for the current
+                                  // interval
+                                  if (adjusted_isamp > dev_intervals[iview].last) {
+                                      continue;
                                   }
+
+                                  scan_map_inner <T> (
+                                      raw_pixel_index,
+                                      raw_weight_index,
+                                      raw_data_index,
+                                      raw_global2local,
+                                      dev_det_data,
+                                      dev_pixels,
+                                      dev_weights,
+                                      dev_mapdata,
+                                      data_scale,
+                                      adjusted_isamp,
+                                      n_samp,
+                                      idet,
+                                      nnz,
+                                      n_pix_submap,
+                                      should_zero,
+                                      should_subtract,
+                                      should_scale);
                               }
                           }
                       }
                   }
 
                   #endif // ifdef HAVE_OPENMP_TARGET
-              } else   {
+              } else {
                   for (int64_t idet = 0; idet < n_det; idet++) {
                       for (int64_t iview = 0; iview < n_view; iview++) {
                           #pragma omp parallel for default(shared)

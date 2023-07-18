@@ -63,31 +63,39 @@ void init_template_offset(py::module & m) {
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                 double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
 
-                # pragma omp target data \
-                map(to:                  \
-                n_view,                  \
-                n_samp,                  \
-                data_index,              \
-                step_length,             \
-                amp_offset,              \
-                amp_view_off[0:n_view]   \
-                )
+                // Calculate the maximum interval size on the CPU
+                int64_t max_interval_size = 0;
+                for (int64_t iview = 0; iview < n_view; iview++) {
+                    int64_t interval_size = raw_intervals[iview].last -
+                                            raw_intervals[iview].first + 1;
+                    if (interval_size > max_interval_size) {
+                        max_interval_size = interval_size;
+                    }
+                }
+
+                # pragma omp target data map(to : n_view, \
+                n_samp,                                   \
+                data_index,                               \
+                step_length,                              \
+                amp_offset,                               \
+                amp_view_off[0 : n_view])
                 {
-                    # pragma omp target teams distribute \
-                    is_device_ptr(                       \
-                    dev_amplitudes,                      \
-                    dev_det_data,                        \
-                    dev_intervals)
+                    # pragma omp target teams distribute parallel for collapse(2)
                     for (int64_t iview = 0; iview < n_view; iview++) {
-                        # pragma omp parallel for default(shared)
-                        for (
-                            int64_t isamp = dev_intervals[iview].first;
-                            isamp <= dev_intervals[iview].last;
-                            isamp++
-                        ) {
-                            int64_t d = data_index * n_samp + isamp;
+                        for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+                            // Adjust for the actual start of the interval
+                            int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                            // Check if the value is out of range for the current
+                            // interval
+                            if (adjusted_isamp > dev_intervals[iview].last) {
+                                continue;
+                            }
+
+                            int64_t d = data_index * n_samp + adjusted_isamp;
                             int64_t amp = amp_offset + amp_view_off[iview] + (int64_t)(
-                                (isamp - dev_intervals[iview].first) / step_length
+                                (adjusted_isamp - dev_intervals[iview].first) /
+                                step_length
                             );
                             dev_det_data[d] += dev_amplitudes[amp];
                         }
@@ -182,52 +190,63 @@ void init_template_offset(py::module & m) {
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                 double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
 
-                # pragma omp target data \
-                map(to:                  \
-                n_view,                  \
-                n_samp,                  \
-                data_index,              \
-                flag_index,              \
-                step_length,             \
-                amp_offset,              \
-                amp_view_off[0:n_view],  \
-                use_flags                \
-                )
+                // Calculate the maximum interval size on the CPU
+                int64_t max_interval_size = 0;
+                for (int64_t iview = 0; iview < n_view; iview++) {
+                    int64_t interval_size = raw_intervals[iview].last -
+                                            raw_intervals[iview].first + 1;
+                    if (interval_size > max_interval_size) {
+                        max_interval_size = interval_size;
+                    }
+                }
+
+                # pragma omp target data map(to : n_view, \
+                n_samp,                                   \
+                data_index,                               \
+                flag_index,                               \
+                step_length,                              \
+                amp_offset,                               \
+                amp_view_off[0 : n_view],                 \
+                use_flags)
                 {
-                    # pragma omp target teams distribute \
-                    is_device_ptr(                       \
-                    dev_amplitudes,                      \
-                    dev_det_data,                        \
-                    dev_det_flags,                       \
-                    dev_intervals)
+                    // TODO the paralelism can likely be improved on this function
+                    # pragma omp target teams distribute collapse(2)
                     for (int64_t iview = 0; iview < n_view; iview++) {
-                        # pragma omp parallel default(shared)
-                        {
-                            double contrib;
-                            # pragma omp for
-                            for (
-                                int64_t isamp = dev_intervals[iview].first;
-                                isamp <= dev_intervals[iview].last;
-                                isamp++
-                            ) {
-                                int64_t d = data_index * n_samp + isamp;
-                                int64_t amp = amp_offset + amp_view_off[iview] +
-                                              (int64_t)(
-                                    (isamp - dev_intervals[iview].first) / step_length
-                                              );
-                                contrib = 0.0;
+                        for (int64_t isamp = 0; isamp < max_interval_size;
+                             isamp += step_length) {
+                            // Adjust for the actual start of the interval
+                            int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                            // Check if the value is out of range for the current
+                            // interval
+                            if (adjusted_isamp > dev_intervals[iview].last) {
+                                continue;
+                            }
+
+                            // Insure we do not go out of the current interval
+                            int64_t max_step_length =
+                                std::min(step_length,
+                                         dev_intervals[iview].last - adjusted_isamp + 1);
+
+                            // Reduce on a chunk of `step_length` samples.
+                            double contrib = 0.0;
+                            # pragma omp parallel for reduction(+ : contrib)
+                            for (int64_t i = 0; i < max_step_length; i++) {
+                                int64_t d = data_index * n_samp + adjusted_isamp + i;
                                 if (use_flags) {
-                                    int64_t f = flag_index * n_samp + isamp;
+                                    int64_t f = flag_index * n_samp + adjusted_isamp + i;
                                     uint8_t check = dev_det_flags[f] & flag_mask;
                                     if (check == 0) {
-                                        contrib = dev_det_data[d];
+                                        contrib += dev_det_data[d];
                                     }
                                 } else {
-                                    contrib = dev_det_data[d];
+                                    contrib += dev_det_data[d];
                                 }
-                                # pragma omp atomic update
-                                dev_amplitudes[amp] += contrib;
                             }
+
+                            int64_t amp = amp_offset + amp_view_off[iview] +
+                                          (int64_t)(isamp / step_length);
+                            dev_amplitudes[amp] += contrib;
                         }
                     }
                 }
@@ -298,24 +317,12 @@ void init_template_offset(py::module & m) {
                 double * dev_amp_out = omgr.device_ptr(raw_amp_out);
                 double * dev_offset_var = omgr.device_ptr(raw_offset_var);
 
-                # pragma omp target data \
-                map(to                   \
-                : n_amp)
+                # pragma omp target data map(to : n_amp)
                 {
-                    # pragma omp target \
-                    is_device_ptr(      \
-                    dev_amp_in,         \
-                    dev_amp_out,        \
-                    dev_offset_var)
-                    {
-                        # pragma omp parallel default(shared)
-                        {
-                            # pragma omp for
-                            for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                                dev_amp_out[iamp] = dev_amp_in[iamp];
-                                dev_amp_out[iamp] *= dev_offset_var[iamp];
-                            }
-                        }
+                    # pragma omp target teams distribute parallel for
+                    for (int64_t iamp = 0; iamp < n_amp; iamp++) {
+                        dev_amp_out[iamp] = dev_amp_in[iamp];
+                        dev_amp_out[iamp] *= dev_offset_var[iamp];
                     }
                 }
 

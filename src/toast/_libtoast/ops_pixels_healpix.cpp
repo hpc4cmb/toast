@@ -10,7 +10,6 @@
 
 #include <accelerator.hpp>
 
-
 // 2/PI
 #define TWOINVPI 0.63661977236758134308
 
@@ -35,24 +34,27 @@ void pixels_healpix_qa_rotate(double const * q_in, double const * v_in,
                               double * v_out) {
     // The input quaternion has already been normalized on the host.
 
-    double xw =  q_in[3] * q_in[0];
-    double yw =  q_in[3] * q_in[1];
-    double zw =  q_in[3] * q_in[2];
+    double xw = q_in[3] * q_in[0];
+    double yw = q_in[3] * q_in[1];
+    double zw = q_in[3] * q_in[2];
     double x2 = -q_in[0] * q_in[0];
-    double xy =  q_in[0] * q_in[1];
-    double xz =  q_in[0] * q_in[2];
+    double xy = q_in[0] * q_in[1];
+    double xz = q_in[0] * q_in[2];
     double y2 = -q_in[1] * q_in[1];
-    double yz =  q_in[1] * q_in[2];
+    double yz = q_in[1] * q_in[2];
     double z2 = -q_in[2] * q_in[2];
 
     v_out[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) * v_in[1] +
-                    (yw + xz) * v_in[2]) + v_in[0];
+                    (yw + xz) * v_in[2]) +
+               v_in[0];
 
     v_out[1] = 2 * ((zw + xy) * v_in[0] + (x2 + z2) * v_in[1] +
-                    (yz - xw) * v_in[2]) + v_in[1];
+                    (yz - xw) * v_in[2]) +
+               v_in[1];
 
     v_out[2] = 2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] +
-                    (x2 + y2) * v_in[2]) + v_in[2];
+                    (x2 + y2) * v_in[2]) +
+               v_in[2];
 
     return;
 }
@@ -203,7 +205,7 @@ void hpix_zphi2ring(int64_t nside, int64_t factor, double phi, int region, doubl
         ip -= longpart;
 
         (*pix) = (region > 0) ? (2 * ir * (ir - 1) + ip)
-                 : (npix - 2 * ir * (ir + 1) + ip);
+                              : (npix - 2 * ir * (ir + 1) + ip);
     }
 
     return;
@@ -224,8 +226,7 @@ void pixels_healpix_nest_inner(
     int64_t n_samp,
     int64_t idet,
     uint8_t mask,
-    bool use_flags
-) {
+    bool use_flags) {
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
     int32_t q_indx = quat_index[idet];
@@ -265,8 +266,7 @@ void pixels_healpix_ring_inner(
     int64_t n_samp,
     int64_t idet,
     uint8_t mask,
-    bool use_flags
-) {
+    bool use_flags) {
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
     int32_t q_indx = quat_index[idet];
@@ -310,8 +310,8 @@ void init_ops_pixels_healpix(py::module & m) {
             int64_t n_pix_submap,
             int64_t nside,
             bool nest,
-            bool use_accel
-        ) {
+            bool use_accel)
+        {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -381,100 +381,98 @@ void init_ops_pixels_healpix(py::module & m) {
                     omgr.update_device((void *)utab, utab_bytes);
                 }
 
-                uint64_t * dev_utab = omgr.device_ptr(utab);
+                uint64_t * dev_utab = omgr.device_ptr(
+                    utab);
 
-                # pragma omp target data  \
-                map(to:                   \
-                raw_pixel_index[0:n_det], \
-                raw_quat_index[0:n_det],  \
-                n_pix_submap,             \
-                nside,                    \
-                factor,                   \
-                nest,                     \
-                n_view,                   \
-                n_det,                    \
-                n_samp,                   \
-                shared_flag_mask,         \
-                use_flags                 \
-                )                         \
-                map(tofrom: raw_hsub[0:n_submap])
+                // Calculate the maximum interval size on the CPU
+                int64_t max_interval_size = 0;
+                for (int64_t iview = 0; iview < n_view; iview++) {
+                    int64_t interval_size = raw_intervals[iview].last -
+                                            raw_intervals[iview].first + 1;
+                    if (interval_size > max_interval_size) {
+                        max_interval_size = interval_size;
+                    }
+                }
+
+                # pragma omp target data map(to : raw_pixel_index[0 : n_det], \
+                raw_quat_index[0 : n_det],                                    \
+                n_pix_submap,                                                 \
+                nside,                                                        \
+                factor,                                                       \
+                nest,                                                         \
+                n_view,                                                       \
+                n_det,                                                        \
+                n_samp,                                                       \
+                shared_flag_mask,                                             \
+                use_flags)                                                    \
+                map(tofrom : raw_hsub[0 : n_submap])
                 {
                     if (nest) {
-                        # pragma omp target teams distribute collapse(2) \
-                        is_device_ptr(                                   \
-                        dev_pixels,                                      \
-                        dev_quats,                                       \
-                        dev_flags,                                       \
-                        dev_intervals,                                   \
-                        dev_utab                                         \
-                        )
+                        # pragma omp target teams distribute parallel for collapse(3)
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
-                                # pragma omp parallel
-                                {
-                                    # pragma omp for default(shared)
-                                    for (
-                                        int64_t isamp = dev_intervals[iview].first;
-                                        isamp <= dev_intervals[iview].last;
-                                        isamp++
-                                    ) {
-                                        pixels_healpix_nest_inner(
-                                            nside,
-                                            factor,
-                                            dev_utab,
-                                            raw_quat_index,
-                                            raw_pixel_index,
-                                            dev_quats,
-                                            dev_flags,
-                                            raw_hsub,
-                                            dev_pixels,
-                                            n_pix_submap,
-                                            isamp,
-                                            n_samp,
-                                            idet,
-                                            shared_flag_mask,
-                                            use_flags
-                                        );
+                                for (int64_t isamp = 0; isamp < max_interval_size;
+                                     isamp++) {
+                                    // Adjust for the actual start of the interval
+                                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                                    // Check if the value is out of range for the
+                                    // current interval
+                                    if (adjusted_isamp > dev_intervals[iview].last) {
+                                        continue;
                                     }
+
+                                    pixels_healpix_nest_inner(
+                                        nside,
+                                        factor,
+                                        dev_utab,
+                                        raw_quat_index,
+                                        raw_pixel_index,
+                                        dev_quats,
+                                        dev_flags,
+                                        raw_hsub,
+                                        dev_pixels,
+                                        n_pix_submap,
+                                        adjusted_isamp,
+                                        n_samp,
+                                        idet,
+                                        shared_flag_mask,
+                                        use_flags
+                                    );
                                 }
                             }
                         }
                     } else {
-                        # pragma omp target teams distribute collapse(2) \
-                        is_device_ptr(                                   \
-                        dev_pixels,                                      \
-                        dev_quats,                                       \
-                        dev_flags,                                       \
-                        dev_intervals,                                   \
-                        dev_utab                                         \
-                        )
+                        # pragma omp target teams distribute parallel for collapse(3)
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
-                                # pragma omp parallel
-                                {
-                                    # pragma omp for default(shared)
-                                    for (
-                                        int64_t isamp = dev_intervals[iview].first;
-                                        isamp <= dev_intervals[iview].last;
-                                        isamp++
-                                    ) {
-                                        pixels_healpix_ring_inner(
-                                            nside,
-                                            factor,
-                                            raw_quat_index,
-                                            raw_pixel_index,
-                                            dev_quats,
-                                            dev_flags,
-                                            raw_hsub,
-                                            dev_pixels,
-                                            n_pix_submap,
-                                            isamp,
-                                            n_samp,
-                                            idet,
-                                            shared_flag_mask,
-                                            use_flags
-                                        );
+                                for (int64_t isamp = 0; isamp < max_interval_size;
+                                     isamp++) {
+                                    // Adjust for the actual start of the interval
+                                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+
+                                    // Check if the value is out of range for the
+                                    // current interval
+                                    if (adjusted_isamp > dev_intervals[iview].last) {
+                                        continue;
                                     }
+
+                                    pixels_healpix_ring_inner(
+                                        nside,
+                                        factor,
+                                        raw_quat_index,
+                                        raw_pixel_index,
+                                        dev_quats,
+                                        dev_flags,
+                                        raw_hsub,
+                                        dev_pixels,
+                                        n_pix_submap,
+                                        adjusted_isamp,
+                                        n_samp,
+                                        idet,
+                                        shared_flag_mask,
+                                        use_flags
+                                    );
                                 }
                             }
                         }
