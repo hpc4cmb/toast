@@ -34,6 +34,11 @@ if use_mpi is None:
             in_slurm = True
         if (not at_nersc) or in_slurm:
             try:
+                # related to MPI_THREAD_MULTIPLE and errors when OpenMPI 4 is used.
+                # https://github.com/mpi4py/mpi4py/issues/34#issuecomment-800233017
+                import mpi4py
+                mpi4py.rc.thread_level = "serialized"
+
                 import mpi4py.MPI as MPI
 
                 use_mpi = True
