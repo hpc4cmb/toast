@@ -45,16 +45,13 @@ void pixels_healpix_qa_rotate(double const * q_in, double const * v_in,
     double z2 = -q_in[2] * q_in[2];
 
     v_out[0] = 2 * ((y2 + z2) * v_in[0] + (xy - zw) * v_in[1] +
-                    (yw + xz) * v_in[2]) +
-               v_in[0];
+                    (yw + xz) * v_in[2]) + v_in[0];
 
     v_out[1] = 2 * ((zw + xy) * v_in[0] + (x2 + z2) * v_in[1] +
-                    (yz - xw) * v_in[2]) +
-               v_in[1];
+                    (yz - xw) * v_in[2]) + v_in[1];
 
     v_out[2] = 2 * ((xz - yw) * v_in[0] + (xw + yz) * v_in[1] +
-                    (x2 + y2) * v_in[2]) +
-               v_in[2];
+                    (x2 + y2) * v_in[2]) + v_in[2];
 
     return;
 }
@@ -205,7 +202,7 @@ void hpix_zphi2ring(int64_t nside, int64_t factor, double phi, int region, doubl
         ip -= longpart;
 
         (*pix) = (region > 0) ? (2 * ir * (ir - 1) + ip)
-                              : (npix - 2 * ir * (ir + 1) + ip);
+            : (npix - 2 * ir * (ir + 1) + ip);
     }
 
     return;
@@ -226,7 +223,8 @@ void pixels_healpix_nest_inner(
     int64_t n_samp,
     int64_t idet,
     uint8_t mask,
-    bool use_flags) {
+    bool use_flags
+) {
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
     int32_t q_indx = quat_index[idet];
@@ -310,8 +308,8 @@ void init_ops_pixels_healpix(py::module & m) {
             int64_t n_pix_submap,
             int64_t nside,
             bool nest,
-            bool use_accel)
-        {
+            bool use_accel
+        ) {
             auto & omgr = OmpManager::get();
             int dev = omgr.get_device();
             bool offload = (!omgr.device_is_host()) && use_accel;
@@ -394,21 +392,30 @@ void init_ops_pixels_healpix(py::module & m) {
                     }
                 }
 
-                # pragma omp target data map(to : raw_pixel_index[0 : n_det], \
-                raw_quat_index[0 : n_det],                                    \
-                n_pix_submap,                                                 \
-                nside,                                                        \
-                factor,                                                       \
-                nest,                                                         \
-                n_view,                                                       \
-                n_det,                                                        \
-                n_samp,                                                       \
-                shared_flag_mask,                                             \
-                use_flags)                                                    \
+                # pragma omp target data map(    \
+                to : raw_pixel_index[0 : n_det], \
+                raw_quat_index[0 : n_det],       \
+                n_pix_submap,                    \
+                nside,                           \
+                factor,                          \
+                nest,                            \
+                n_view,                          \
+                n_det,                           \
+                n_samp,                          \
+                shared_flag_mask,                \
+                use_flags                        \
+                )                                \
                 map(tofrom : raw_hsub[0 : n_submap])
                 {
                     if (nest) {
-                        # pragma omp target teams distribute parallel for collapse(3)
+                        # pragma omp target teams distribute parallel for collapse(3) \
+                        is_device_ptr(                                                \
+                        dev_pixels,                                                   \
+                        dev_quats,                                                    \
+                        dev_flags,                                                    \
+                        dev_intervals,                                                \
+                        dev_utab                                                      \
+                        )
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 for (int64_t isamp = 0; isamp < max_interval_size;
@@ -443,7 +450,14 @@ void init_ops_pixels_healpix(py::module & m) {
                             }
                         }
                     } else {
-                        # pragma omp target teams distribute parallel for collapse(3)
+                        # pragma omp target teams distribute parallel for collapse(3) \
+                        is_device_ptr(                                                \
+                        dev_pixels,                                                   \
+                        dev_quats,                                                    \
+                        dev_flags,                                                    \
+                        dev_intervals,                                                \
+                        dev_utab                                                      \
+                        )
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 for (int64_t isamp = 0; isamp < max_interval_size;

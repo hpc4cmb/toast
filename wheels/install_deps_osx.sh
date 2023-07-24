@@ -219,7 +219,7 @@ tar xzf ${aatm_pkg} \
 
 # Install libFLAC
 
-flac_version=1.4.2
+flac_version=1.4.3
 flac_dir=flac-${flac_version}
 flac_pkg=${flac_dir}.tar.gz
 
