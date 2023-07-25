@@ -36,7 +36,6 @@ def pixels_healpix_inner(hpix, quats, nest):
 
     return pixel
 
-
 # maps over samples and detectors
 # pixels_healpix_inner = jax_xmap(pixels_healpix_inner,
 #                                 in_axes=[[...], # hpix
@@ -224,7 +223,6 @@ def pixels_healpix_jax(
     # modifies output buffers in place
     pixels[:] = new_pixels
     hit_submaps[:] = new_hit_submaps
-
 
 # To test:
 # python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix", "ops_sim_ground", "ops_sim_satellite", "ops_demodulate");'

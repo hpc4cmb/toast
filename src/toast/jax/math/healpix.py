@@ -95,63 +95,45 @@ def zphi2nest(hpix, phi, region, z, rtz):
         pix (int)
     """
     phi = jnp.where(jnp.abs(phi) < MACHINE_EPSILON, 0.0, phi)
+    tt = jnp.where(phi >= 0.0, phi * TWOINVPI, phi * TWOINVPI + 4.0)
 
-    tt = phi * TWOINVPI
-    tt = jnp.where(phi < 0.0, tt + 4.0, tt)
+    # Then branch
+    temp1 = hpix.halfnside + hpix.dnside * tt
+    temp2 = hpix.tqnside * z
 
-    # then branch
-    def then_branch(tt, z):
-        temp1 = hpix.halfnside + hpix.dnside * tt
-        temp2 = hpix.tqnside * z
+    jp = jnp.int64(temp1 - temp2)
+    jm = jnp.int64(temp1 + temp2)
 
-        jp = jnp.int64(temp1 - temp2)
-        jm = jnp.int64(temp1 + temp2)
+    ifp = jnp.right_shift(jp, hpix.factor)
+    ifm = jnp.right_shift(jm, hpix.factor)
 
-        ifp = jp >> hpix.factor
-        ifm = jm >> hpix.factor
+    face = jnp.where(ifp == ifm, jnp.where(ifp == 4, 4, ifp + 4), jnp.where(ifp < ifm, ifp, ifm + 8))
+    x = jm & hpix.nsideminusone
+    y = hpix.nsideminusone - (jp & hpix.nsideminusone)
 
-        face = jnp.where(
-            ifp == ifm,
-            jnp.where(ifp == 4, 4, ifp + 4),
-            jnp.where(ifp < ifm, ifp, ifm + 8),
-        )
+    # Else branch
+    ntt = jnp.floor(tt)
+    tp = tt - ntt
+    temp1 = hpix.dnside * rtz
 
-        x = jm & hpix.nsideminusone
-        y = hpix.nsideminusone - (jp & hpix.nsideminusone)
-        return (face, x, y)
+    jp = jnp.int64(tp * temp1)
+    jm = jnp.int64((1.0 - tp) * temp1)
 
-    (face_then, x_then, y_then) = then_branch(tt, z)
+    jp = jnp.where(jp >= hpix.nside, hpix.nsideminusone, jp)
+    jm = jnp.where(jm >= hpix.nside, hpix.nsideminusone, jm)
 
-    # else branch
-    def else_branch(tt, rtz, z):
-        ntt = jnp.int64(tt)
+    face_else = jnp.where(z >= 0, ntt, ntt + 8)
+    x_else = jnp.where(z >= 0, hpix.nsideminusone - jm, jp)
+    y_else = jnp.where(z >= 0, hpix.nsideminusone - jp, jm)
 
-        tp = tt - jnp.double(ntt)
-
-        temp1 = hpix.dnside * rtz
-
-        jp = jnp.int64(tp * temp1)
-        jp = jnp.where(jp >= hpix.nside, hpix.nsideminusone, jp)
-
-        jm = jnp.int64((1.0 - tp) * temp1)
-        jm = jnp.where(jm >= hpix.nside, hpix.nsideminusone, jm)
-
-        face = jnp.where(z >= 0, ntt, ntt + 8)
-        x = jnp.where(z >= 0, hpix.nsideminusone - jm, jp)
-        y = jnp.where(z >= 0, hpix.nsideminusone - jp, jm)
-        return (face, x, y)
-
-    (face_else, x_else, y_else) = else_branch(tt, rtz, z)
-
-    # test
-    cond = jnp.abs(region) == 1
-    face = jnp.where(cond, face_then, face_else)
-    x = jnp.where(cond, x_then, x_else)
-    y = jnp.where(cond, y_then, y_else)
+    # Test
+    if_cond = (jnp.abs(region) == 1)
+    face = jnp.where(if_cond, face, face_else)
+    x = jnp.where(if_cond, x, x_else)
+    y = jnp.where(if_cond, y, y_else)
 
     sipf = hpix.xy2pix(x, y)
-    pix = jnp.int64(sipf) + (face << (2 * hpix.factor))
-    return pix
+    return jnp.int64(sipf) + (jnp.int64(face) << (2 * hpix.factor))
 
 
 def zphi2ring(hpix, phi, region, z, rtz):
@@ -167,7 +149,6 @@ def zphi2ring(hpix, phi, region, z, rtz):
         pix (int)
     """
     phi = jnp.where(jnp.abs(phi) < MACHINE_EPSILON, 0.0, phi)
-
     tt = phi * TWOINVPI
     tt = jnp.where(phi < 0.0, tt + 4.0, tt)
 
@@ -187,7 +168,6 @@ def zphi2ring(hpix, phi, region, z, rtz):
 
         pix = hpix.ncap + ((ir - 1) * hpix.fournside + ip)
         return pix
-
     pix_then = then_branch(tt, z)
 
     # else branch
@@ -207,12 +187,10 @@ def zphi2ring(hpix, phi, region, z, rtz):
         pix_neg = hpix.npix - 2 * ir * (ir + 1) + ip
         pix = jnp.where(region > 0, pix_pos, pix_neg)
         return pix
-
     pix_else = else_branch(tt, rtz)
 
     # test
     pix = jnp.where(jnp.abs(region) == 1, pix_then, pix_else)
-
     return pix
 
 
