@@ -204,6 +204,10 @@ def hex_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=0):
     parameter.  These, along with the npos parameter, constrain the packing
     locations of the pixel centers.
 
+    NOTE:  The "angwidth" parameter specifies the width across the long axis
+    (the vertex-vertex axis).  This is the distance between the pixel centers,
+    not including any beam FWHM or field of view.
+
     If the "center" argument is specified, then each quaternion is additionally
     multiplied by this in order to shift all positions to be relative to a new
     center.
@@ -213,7 +217,7 @@ def hex_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=0):
         angwidth (Quantity): the angle subtended by the width.
         prefix (str): the detector name prefix.
         suffix (str): the detector name suffix.
-        pol (ndarray): 1D array of detector polarization angles.  These are the
+        pol (Quantity): 1D array of detector polarization angles.  These are the
             "gamma" angle in the xi / eta / gamma coordinate system.
         center (ndarray): quaternion offset of the center of the layout (or None).
         pos_offset (int): starting index of position numbers.
@@ -230,16 +234,14 @@ def hex_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=0):
     rtthree = np.sqrt(3.0)
     rtthreebytwo = 0.5 * rtthree
 
-    # compute the diameter (vertex to vertex width)
-    angdiameter = angwidth.to_value(u.radian) / np.cos(thirty)
+    # The diameter (vertex to vertex width)
+    angdiameter = angwidth.to_value(u.radian)
 
-    # find the angular packing size of one detector
-    test = npos - 1
-    nrings = 1
-    while (test - 6 * nrings) >= 0:
-        test -= 6 * nrings
-        nrings += 1
-    pixdiam = angdiameter / (2 * nrings - 1)
+    # Find the angular packing size of one pixel.  A pixel extends halfway
+    # to its neighbors, and so the diameter is equal to the pixel center
+    # distance.
+    nrings = hex_nring(npos)
+    pixdiam = angdiameter / (2 * nrings - 2)
 
     # number of digits for pixel indexing
     ndigit = int(np.log10(npos)) + 1
@@ -304,8 +306,11 @@ def hex_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=0):
         dprops = {}
         if center is None:
             dprops["quat"] = xieta_to_quat(xi, eta, gamma)
+            dprops["gamma"] = gamma
         else:
             dprops["quat"] = qa.mult(center, xieta_to_quat(xi, eta, gamma))
+            _, _, temp_gamma = quat_to_xieta(dprops["quat"])
+            dprops["gamma"] = temp_gamma
 
         dets[dname] = dprops
 
@@ -440,6 +445,9 @@ def rhombus_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=
     This, along with the npos parameter, constrain the packing locations of
     the pixel centers.
 
+    NOTE:  The "angwidth" parameter is the angular distance from the extreme
+    pixel centers along the short axis.
+
     Args:
         npos (int): number of pixels packed onto wafer.
         angwidth (Quantity): the angle subtended by the short dimension.
@@ -455,23 +463,19 @@ def rhombus_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=
             dictionary of detector properties.
 
     """
-    zaxis = np.array([0, 0, 1], dtype=np.float64)
-    nullquat = np.array([0, 0, 0, 1], dtype=np.float64)
     rtthree = np.sqrt(3.0)
 
+    # Dimensions of the rhombus
     dim = rhomb_dim(npos)
 
-    # compute the height
-    angheight = rtthree * angwidth.to_value(u.radian)
+    # Find the angular packing size of one pixel
+    pixdiam = angwidth.to_value(u.radian) / (dim - 1)
 
-    # find the angular packing size of one detector
-    pixdiam = angwidth.to_value(u.radian) / dim
-
-    # number of digits for pixel indexing
+    # Number of digits for pixel indexing
     ndigit = int(np.log10(npos)) + 1
     nameformat = "{{}}{{:0{}d}}{{}}".format(ndigit)
 
-    # compute positions of all detectors
+    # Compute positions of all detectors
 
     dets = {}
 
@@ -496,12 +500,127 @@ def rhombus_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=
         dprops = {}
         if center is None:
             dprops["quat"] = xieta_to_quat(xi, eta, gamma)
+            dprops["gamma"] = gamma
         else:
             dprops["quat"] = qa.mult(center, xieta_to_quat(xi, eta, gamma))
+            _, _, temp_gamma = quat_to_xieta(dprops["quat"])
+            dprops["gamma"] = temp_gamma
 
         dets[dname] = dprops
 
     return dets
+
+
+def rhombus_hex_layout(
+    rhombus_npos, rhombus_width, prefix, suffix, gap=0 * u.radian, pol=None
+):
+    """Construct a hexagon from 3 rhombi.
+
+    Args:
+        rhombus_npos (int):  The number of pixel locations in one rhombus.
+        rhombus_width (Quantity):  The angle subtended by pixel center-to-center
+            distance along the short dimension of one rhombus.
+        prefix (str): the detector name prefix.
+        suffix (str): the detector name suffix.
+        gap (Quantity):  The *additional* gap between the edges of the rhombi.  By
+            default, the rhombi are aligned such that the center spacing across
+            the gap is the same as the center spacing within a rhombus.
+        pol (array, Quantity): The polarization angle of each position on each
+            rhombus before the rhombus is rotated into place.  This can either
+            describe the same angles to be applied to each rhombus (if it has
+            length rhombus_npos), or a unique set of angles (if it has length
+            3 * rhombus_npos).
+
+    Returns:
+        (dict):  A dictionary keyed on detector name, with each value itself a
+            dictionary of detector properties.  This will include the quaternion
+            and gamma angle for each detector.
+
+    """
+    # Width of one rhombus in radians
+    width_rad = rhombus_width.to_value(u.radian)
+
+    # Dimension of one rhombus
+    dim = rhomb_dim(rhombus_npos)
+
+    # Total gap between rhombi in radians.  This is the normal pixel spacing
+    # plus the additional gap.
+    gap_rad = gap.to_value(u.radian) + (width_rad / (dim - 1))
+
+    # Quaternion offsets of the 3 rhombi
+    centers = [
+        xieta_to_quat(
+            0.25 * np.sqrt(3.0) * width_rad + 0.5 * gap_rad,
+            -0.25 * width_rad - 0.5 * gap_rad / np.sqrt(3.0),
+            np.pi / 6,
+        ),
+        xieta_to_quat(
+            0.0,
+            0.5 * width_rad + gap_rad / np.sqrt(3.0),
+            -0.5 * np.pi,
+        ),
+        xieta_to_quat(
+            -0.25 * np.sqrt(3.0) * width_rad - 0.5 * gap_rad,
+            -0.25 * width_rad - 0.5 * gap_rad / np.sqrt(3.0),
+            5 * np.pi / 6,
+        ),
+    ]
+    rhomb_gamma = [
+        np.pi / 6,
+        -0.5 * np.pi,
+        5 * np.pi / 6,
+    ]
+
+    # The polarization rotation for each rhombus
+    rhombus_pol = list()
+    if pol is None:
+        # No polarization rotation
+        for irhomb in range(3):
+            rhombus_pol.append(u.Quantity(np.zeros(rhombus_npos), u.radian))
+    elif len(pol) == rhombus_npos:
+        # Replicating polarization for all rhombi
+        for irhomb in range(3):
+            rhombus_pol.append(pol)
+    elif len(pol) == 3 * rhombus_npos:
+        for irhomb in range(3):
+            rhombus_pol.append(pol[irhomb * rhombus_npos : (irhomb + 1) * rhombus_npos])
+    else:
+        msg = "Invalid length of pos_rotate argument"
+        raise RuntimeError(msg)
+
+    all_pix = dict()
+    for irhomb, cent in enumerate(centers):
+        props = rhombus_layout(
+            rhombus_npos,
+            rhombus_width,
+            "",
+            "",
+            rhombus_pol[irhomb],
+            center=cent,
+            pos_offset=irhomb * rhombus_npos,
+        )
+        all_pix.update(props)
+
+    # Number of digits for pixel indexing
+    ndigit = int(np.log10(3 * rhombus_npos)) + 1
+    nameformat = "{{}}{{:0{}d}}{{}}".format(ndigit)
+
+    # Update the detector gamma angles to include the rotation of each rhombus.
+    # Also ensure that the pixel naming format is sufficient
+    result = dict()
+    for pstr, props in all_pix.items():
+        ipix = int(pstr)
+        irhomb = ipix // rhombus_npos
+        pname = nameformat.format(prefix, ipix, suffix)
+        _, _, temp_gamma = quat_to_xieta(props["quat"])
+        props["gamma"] = temp_gamma + rhomb_gamma[irhomb]
+        # Range reduction
+        while props["gamma"] >= 2 * np.pi:
+            props["gamma"] -= 2 * np.pi
+        while props["gamma"] < -2 * np.pi:
+            props["gamma"] += 2 * np.pi
+        result[pname] = props
+    return result
 
 
 def boresight_layout(npix, prefix, suffix, pol, center=None, pos_offset=0):
@@ -524,7 +643,7 @@ def boresight_layout(npix, prefix, suffix, pol, center=None, pos_offset=0):
         npix (int): number of pixels at the boresight.
         prefix (str): the detector name prefix.
         suffix (str): the detector name suffix.
-        pol (ndarray): 1D array of detector polarization angles.  These are the
+        pol (Quantity): 1D array of detector polarization angles.  These are the
             "gamma" angle in the xi / eta / gamma coordinate system.
         center (ndarray): quaternion offset of the center of the layout (or None).
         pos_offset (int): starting index of position numbers.
@@ -548,8 +667,11 @@ def boresight_layout(npix, prefix, suffix, pol, center=None, pos_offset=0):
         dprops = {}
         if center is None:
             dprops["quat"] = xieta_to_quat(xi, eta, gamma)
+            dprops["gamma"] = gamma
         else:
             dprops["quat"] = qa.mult(center, xieta_to_quat(xi, eta, gamma))
+            _, _, temp_gamma = quat_to_xieta(dprops["quat"])
+            dprops["gamma"] = temp_gamma
         dets[dname] = dprops
     return dets
 
@@ -607,23 +729,13 @@ def fake_hexagon_focalplane(
     zaxis = np.array([0.0, 0.0, 1.0])
     center = None
 
-    # When laying out the hexagonal pixels, the angular "width" is the distance
-    # between the flat sides.
-    width_flats = np.cos(np.pi / 6) * width
     pol_A = hex_gamma_angles_qu(n_pix, offset=0.0 * u.degree)
     pol_B = hex_gamma_angles_qu(n_pix, offset=90.0 * u.degree)
-    quat_A = hex_layout(n_pix, width_flats, "D", "A", pol_A, center=center)
-    quat_B = hex_layout(n_pix, width_flats, "D", "B", pol_B, center=center)
+    props_A = hex_layout(n_pix, width, "D", "A", pol_A, center=center)
+    props_B = hex_layout(n_pix, width, "D", "B", pol_B, center=center)
 
-    # Map the gamma angles to detector names for later storing in the table
-    dgamma = dict()
-    for i, (k, v) in enumerate(quat_A.items()):
-        dgamma[k] = pol_A[i]
-    for i, (k, v) in enumerate(quat_B.items()):
-        dgamma[k] = pol_B[i]
-
-    temp_data = dict(quat_A)
-    temp_data.update(quat_B)
+    temp_data = dict(props_A)
+    temp_data.update(props_B)
 
     # Sort by detector name so that detector pairs are together
     det_data = {x: temp_data[x] for x in sorted(temp_data.keys())}
@@ -634,7 +746,7 @@ def fake_hexagon_focalplane(
 
     nominal_freq = str(int(bandcenter.to_value(u.GHz)))
     det_names = [f"{x}-{nominal_freq}" for x in det_data.keys()]
-    det_gamma = [dgamma[x] for x in det_data.keys()]
+    det_gamma = u.Quantity([det_data[x]["gamma"] for x in det_data.keys()], u.radian)
 
     det_table = QTable(
         [
@@ -691,6 +803,7 @@ def fake_hexagon_focalplane(
 def fake_rhombihex_focalplane(
     n_pix_rhombus=4,
     width=5.0 * u.degree,
+    gap=0 * u.radian,
     sample_rate=1.0 * u.Hz,
     epsilon=0.0,
     fwhm=10.0 * u.arcmin,
@@ -716,6 +829,7 @@ def fake_rhombihex_focalplane(
     Args:
         n_pix_rhombus (int):  The (square) number of pixels in each of the 3 rhombi.
         width (Quantity):  The angular width of the focalplane field of view on the sky.
+        gap (Quantity):  The *additional* gap between the edges of the rhombi.
         sample_rate (Quantity):  The sample rate for all detectors.
         epsilon (float):  The cross-polar response for all detectors.
         fwhm (Quantity):  The beam FWHM
@@ -739,65 +853,20 @@ def fake_rhombihex_focalplane(
     """
     xaxis, yaxis, zaxis = np.eye(3)
 
-    # Gap between rhombi as a fraction of the total width
-    gap = 0.1 * width
-    gap_rad = gap.to_value(u.radian)
+    # The dimension of one rhombus
+    dim = rhomb_dim(n_pix_rhombus)
 
-    # The full width is twice the short dimension of one rhombus.
-    rhomb_width = 0.5 * (width - gap)
-    rhomb_width_rad = rhomb_width.to_value(u.radian)
+    # The width of one rhombus, assuming the nominal gap of one pixel width
+    rhomb_width = 0.5 * width
 
-    # Quaternion offsets of the 3 rhombi
-    centers = [
-        xieta_to_quat(0.5 * rhomb_width_rad + gap_rad / np.sqrt(3), 0.0, 0.0),
-        xieta_to_quat(
-            -0.25 * rhomb_width_rad - 0.5 * gap_rad / np.sqrt(3),
-            0.25 * np.sqrt(3) * rhomb_width_rad + 0.5 * gap_rad,
-            -2 * np.pi / 3,
-        ),
-        xieta_to_quat(
-            -0.25 * rhomb_width_rad - 0.5 * gap_rad / np.sqrt(3),
-            -0.25 * np.sqrt(3) * rhomb_width_rad - 0.5 * gap_rad,
-            2 * np.pi / 3,
-        ),
-    ]
-    rhomb_gamma = [
-        0.0,
-        -2 * np.pi / 3,
-        2 * np.pi / 3,
-    ]
+    # Polarization orientations within one rhombus
+    pol_A = rhomb_gamma_angles_qu(n_pix_rhombus, offset=0.0 * u.degree)
+    pol_B = rhomb_gamma_angles_qu(n_pix_rhombus, offset=90.0 * u.degree)
 
-    # Map the gamma angles to detector names for later storing in the table
-    dgamma = dict()
-
-    full_fp = dict()
-    for irhomb, cent in enumerate(centers):
-        pol_A = rhomb_gamma_angles_qu(n_pix_rhombus, offset=0.0 * u.degree)
-        pol_B = rhomb_gamma_angles_qu(n_pix_rhombus, offset=90.0 * u.degree)
-        quat_A = rhombus_layout(
-            n_pix_rhombus,
-            rhomb_width,
-            "D",
-            "A",
-            pol_A,
-            center=cent,
-            pos_offset=irhomb * n_pix_rhombus,
-        )
-        quat_B = rhombus_layout(
-            n_pix_rhombus,
-            rhomb_width,
-            "D",
-            "B",
-            pol_B,
-            center=cent,
-            pos_offset=irhomb * n_pix_rhombus,
-        )
-        full_fp.update(quat_A)
-        full_fp.update(quat_B)
-        for i, (k, v) in enumerate(quat_A.items()):
-            dgamma[k] = pol_A[i] + rhomb_gamma[irhomb] * u.rad
-        for i, (k, v) in enumerate(quat_B.items()):
-            dgamma[k] = pol_B[i] + rhomb_gamma[irhomb] * u.rad
+    det_A = rhombus_hex_layout(n_pix_rhombus, rhomb_width, "D", "A", gap=gap, pol=pol_A)
+    det_B = rhombus_hex_layout(n_pix_rhombus, rhomb_width, "D", "B", gap=gap, pol=pol_B)
+    full_fp = dict(det_A)
+    full_fp.update(det_B)
 
     # Sort by detector name so that detector pairs are together
     det_data = {x: full_fp[x] for x in sorted(full_fp.keys())}
@@ -806,7 +875,7 @@ def fake_rhombihex_focalplane(
 
     nominal_freq = str(int(bandcenter.to_value(u.GHz)))
     det_names = [f"{x}-{nominal_freq}" for x in det_data.keys()]
-    det_gamma = [dgamma[x] for x in det_data.keys()]
+    det_gamma = u.Quantity([det_data[x]["gamma"] for x in det_data.keys()], u.radian)
 
     det_table = QTable(
         [
@@ -909,18 +978,11 @@ def fake_boresight_focalplane(
     center = None
     pol_A = hex_gamma_angles_qu(n_pix, offset=0.0 * u.degree)
     pol_B = hex_gamma_angles_qu(n_pix, offset=90.0 * u.degree)
-    quat_A = boresight_layout(n_pix, "D", "A", pol_A, center=center)
-    quat_B = boresight_layout(n_pix, "D", "B", pol_B, center=center)
+    det_A = boresight_layout(n_pix, "D", "A", pol_A, center=center)
+    det_B = boresight_layout(n_pix, "D", "B", pol_B, center=center)
 
-    # Map the gamma angles to detector names for later storing in the table
-    dgamma = dict()
-    for i, (k, v) in enumerate(quat_A.items()):
-        dgamma[k] = pol_A[i]
-    for i, (k, v) in enumerate(quat_B.items()):
-        dgamma[k] = pol_B[i]
-
-    temp_data = dict(quat_A)
-    temp_data.update(quat_B)
+    temp_data = dict(det_A)
+    temp_data.update(det_B)
 
     # Sort by detector name so that detector pairs are together
     det_data = {x: temp_data[x] for x in sorted(temp_data.keys())}
@@ -929,7 +991,7 @@ def fake_boresight_focalplane(
 
     nominal_freq = str(int(bandcenter.to_value(u.GHz)))
     det_names = [f"{x}-{nominal_freq}" for x in det_data.keys()]
-    det_gamma = [dgamma[x] for x in det_data.keys()]
+    det_gamma = u.Quantity([det_data[x]["gamma"] for x in det_data.keys()], u.radian)
 
     det_table = QTable(
         [
@@ -992,6 +1054,8 @@ def plot_focalplane(
     face_color=None,
     pol_color=None,
     xieta=False,
+    show_centers=False,
+    show_gamma=False,
 ):
     """Visualize a projected Focalplane.
 
@@ -1016,6 +1080,8 @@ def plot_focalplane(
             arrows.
         xieta (bool):  Plot in observer xi/eta/gamma coordinates rather than
             boresight X/Y/Z.
+        show_centers (bool):  If True, label the pixel centers.
+        show_gamma (bool):  If True, show gamma angle (for debugging).
 
     Returns:
         (Figure):  The figure.
@@ -1079,6 +1145,7 @@ def plot_focalplane(
             ypos = eta * 180.0 / np.pi
             # Polang is plotted relative to visualization x/y coords
             polang = 1.5 * np.pi - gamma
+            plot_gamma = polang
         else:
             # rotation from boresight
             rdir = qa.rotate(quat, zaxis).flatten()
@@ -1088,6 +1155,8 @@ def plot_focalplane(
             polang = np.arctan2(orient[1], orient[0])
             xpos = mag * np.cos(ang)
             ypos = mag * np.sin(ang)
+            xi, eta, gamma = quat_to_xieta(quat)
+            plot_gamma = gamma
 
         detface = "none"
         if face_color is not None:
@@ -1096,7 +1165,7 @@ def plot_focalplane(
         circ = plt.Circle((xpos, ypos), radius=detradius, fc=detface, ec="k")
         ax.add_artist(circ)
 
-        ascale = 2.0
+        ascale = 1.5
 
         xtail = xpos - ascale * detradius * np.cos(polang)
         ytail = ypos - ascale * detradius * np.sin(polang)
@@ -1106,6 +1175,21 @@ def plot_focalplane(
         detcolor = "black"
         if pol_color is not None:
             detcolor = pol_color[d]
+
+        if show_centers:
+            ysgn = -1.0
+            if dx < 0.0:
+                ysgn = 1.0
+            ax.text(
+                (xpos + 0.1 * dx),
+                (ypos + 0.1 * ysgn * dy),
+                f"({xpos:0.4f}, {ypos:0.4f})",
+                color="green",
+                fontsize=fontpt,
+                horizontalalignment="center",
+                verticalalignment="center",
+                bbox=dict(fc="w", ec="none", pad=1, alpha=0.0),
+            )
 
         if show_labels:
             xsgn = 1.0
@@ -1123,6 +1207,19 @@ def plot_focalplane(
                 bbox=dict(fc="w", ec="none", pad=1, alpha=0.0),
             )
 
+        if show_gamma:
+            ax.arrow(
+                xtail,
+                ytail,
+                1.3 * dx,
+                1.3 * dy,
+                width=0.1 * detradius,
+                head_width=0.2 * detradius,
+                head_length=0.2 * detradius,
+                fc="gray",
+                ec="gray",
+                length_includes_head=True,
+            )
         ax.arrow(
             xtail,
             ytail,

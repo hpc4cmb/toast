@@ -320,6 +320,8 @@ class InstrumentTest(MPITestCase):
                 height=3.0 * u.degree,
                 outfile=pltfile,
                 show_labels=True,
+                show_centers=True,
+                show_gamma=True,
             )
             pltfile = os.path.join(self.outdir, "fake_hex_xieta.pdf")
             fig = plot_focalplane(
@@ -328,7 +330,9 @@ class InstrumentTest(MPITestCase):
                 height=3.0 * u.degree,
                 outfile=pltfile,
                 show_labels=True,
+                show_centers=True,
                 xieta=True,
+                show_gamma=True,
             )
             del fig
 
@@ -337,17 +341,16 @@ class InstrumentTest(MPITestCase):
 
     def test_sim_focalplane_rhombihex(self):
         # Number of per-rhombus positions
-        n_pix_rhombus = 4
+        n_pix_rhombus = 16
 
         # Number of positions across the short axis of one rhombus
-        n_pos_short = 2
+        n_pos_short = 4
 
         # Overall width of the total focalplane
         width = 2.0 * u.degree
 
-        # FWHM.  Half of the total width is taken up by the short
-        # axis of one rhombus.
-        fwhm = 0.5 * width / n_pos_short
+        # FWHM.  Just set to support cleaner plot.
+        fwhm = 0.5 * width / (n_pos_short + 1)
 
         fp = fake_rhombihex_focalplane(
             n_pix_rhombus=n_pix_rhombus,
@@ -377,6 +380,8 @@ class InstrumentTest(MPITestCase):
                 height=3.0 * u.degree,
                 outfile=pltfile,
                 show_labels=True,
+                show_centers=True,
+                show_gamma=True,
             )
             pltfile = os.path.join(self.outdir, "fake_rhombihex_xieta.pdf")
             fig = plot_focalplane(
@@ -385,7 +390,9 @@ class InstrumentTest(MPITestCase):
                 height=3.0 * u.degree,
                 outfile=pltfile,
                 show_labels=True,
+                show_centers=True,
                 xieta=True,
+                show_gamma=True,
             )
             del fig
 
