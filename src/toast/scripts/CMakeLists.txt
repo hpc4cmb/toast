@@ -23,6 +23,7 @@ set(ENTRY_POINTS
 foreach(pyscript ${ENTRY_POINTS})
     string(REPLACE ".py" "" outscript "${pyscript}")
     install(PROGRAMS "${pyscript}" DESTINATION bin RENAME "${outscript}")
+    install(FILES "${pyscript}" DESTINATION ${PYTHON_SITE}/toast/scripts)
 endforeach()
 
 install(FILES
