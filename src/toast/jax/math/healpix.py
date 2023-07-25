@@ -107,7 +107,9 @@ def zphi2nest(hpix, phi, region, z, rtz):
     ifp = jnp.right_shift(jp, hpix.factor)
     ifm = jnp.right_shift(jm, hpix.factor)
 
-    face = jnp.where(ifp == ifm, jnp.where(ifp == 4, 4, ifp + 4), jnp.where(ifp < ifm, ifp, ifm + 8))
+    face = jnp.where(
+        ifp == ifm, jnp.where(ifp == 4, 4, ifp + 4), jnp.where(ifp < ifm, ifp, ifm + 8)
+    )
     x = jm & hpix.nsideminusone
     y = hpix.nsideminusone - (jp & hpix.nsideminusone)
 
@@ -127,7 +129,7 @@ def zphi2nest(hpix, phi, region, z, rtz):
     y_else = jnp.where(z >= 0, hpix.nsideminusone - jp, jm)
 
     # Test
-    if_cond = (jnp.abs(region) == 1)
+    if_cond = jnp.abs(region) == 1
     face = jnp.where(if_cond, face, face_else)
     x = jnp.where(if_cond, x, x_else)
     y = jnp.where(if_cond, y, y_else)
@@ -168,6 +170,7 @@ def zphi2ring(hpix, phi, region, z, rtz):
 
         pix = hpix.ncap + ((ir - 1) * hpix.fournside + ip)
         return pix
+
     pix_then = then_branch(tt, z)
 
     # else branch
@@ -187,6 +190,7 @@ def zphi2ring(hpix, phi, region, z, rtz):
         pix_neg = hpix.npix - 2 * ir * (ir + 1) + ip
         pix = jnp.where(region > 0, pix_pos, pix_neg)
         return pix
+
     pix_else = else_branch(tt, rtz)
 
     # test
