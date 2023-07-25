@@ -321,6 +321,7 @@ class InstrumentTest(MPITestCase):
                 outfile=pltfile,
                 show_labels=True,
                 show_centers=True,
+                show_gamma=True,
             )
             pltfile = os.path.join(self.outdir, "fake_hex_xieta.pdf")
             fig = plot_focalplane(
@@ -331,6 +332,7 @@ class InstrumentTest(MPITestCase):
                 show_labels=True,
                 show_centers=True,
                 xieta=True,
+                show_gamma=True,
             )
             del fig
 
@@ -379,6 +381,7 @@ class InstrumentTest(MPITestCase):
                 outfile=pltfile,
                 show_labels=True,
                 show_centers=True,
+                show_gamma=True,
             )
             pltfile = os.path.join(self.outdir, "fake_rhombihex_xieta.pdf")
             fig = plot_focalplane(
@@ -389,6 +392,7 @@ class InstrumentTest(MPITestCase):
                 show_labels=True,
                 show_centers=True,
                 xieta=True,
+                show_gamma=True,
             )
             del fig
 

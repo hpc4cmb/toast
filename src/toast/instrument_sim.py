@@ -217,7 +217,7 @@ def hex_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=0):
         angwidth (Quantity): the angle subtended by the width.
         prefix (str): the detector name prefix.
         suffix (str): the detector name suffix.
-        pol (ndarray): 1D array of detector polarization angles.  These are the
+        pol (Quantity): 1D array of detector polarization angles.  These are the
             "gamma" angle in the xi / eta / gamma coordinate system.
         center (ndarray): quaternion offset of the center of the layout (or None).
         pos_offset (int): starting index of position numbers.
@@ -512,7 +512,7 @@ def rhombus_layout(npos, angwidth, prefix, suffix, pol, center=None, pos_offset=
 
 
 def rhombus_hex_layout(
-    rhombus_npos, rhombus_width, prefix, suffix, gap=0 * u.radian, pos_rotate=None
+    rhombus_npos, rhombus_width, prefix, suffix, gap=0 * u.radian, pol=None
 ):
     """Construct a hexagon from 3 rhombi.
 
@@ -525,10 +525,10 @@ def rhombus_hex_layout(
         gap (Quantity):  The *additional* gap between the edges of the rhombi.  By
             default, the rhombi are aligned such that the center spacing across
             the gap is the same as the center spacing within a rhombus.
-        pos_rotate (array, Quantity): An additional angle rotation of each position
-            on each rhombus before the rhombus is rotated into place.  This can either
-            describe the same rotations to be applied to each rhombus (if it has
-            length rhombus_npos), or a unique set of rotations (if it has length
+        pol (array, Quantity): The polarization angle of each position on each
+            rhombus before the rhombus is rotated into place.  This can either
+            describe the same angles to be applied to each rhombus (if it has
+            length rhombus_npos), or a unique set of angles (if it has length
             3 * rhombus_npos).
 
     Returns:
@@ -573,19 +573,17 @@ def rhombus_hex_layout(
 
     # The polarization rotation for each rhombus
     rhombus_pol = list()
-    if pos_rotate is None:
+    if pol is None:
         # No polarization rotation
         for irhomb in range(3):
             rhombus_pol.append(u.Quantity(np.zeros(rhombus_npos), u.radian))
-    elif len(pos_rotate) == rhombus_npos:
+    elif len(pol) == rhombus_npos:
         # Replicating polarization for all rhombi
         for irhomb in range(3):
-            rhombus_pol.append(pos_rotate)
-    elif len(pos_rotate) == 3 * rhombus_npos:
+            rhombus_pol.append(pol)
+    elif len(pol) == 3 * rhombus_npos:
         for irhomb in range(3):
-            rhombus_pol.append(
-                pos_rotate[irhomb * rhombus_npos : (irhomb + 1) * rhombus_npos]
-            )
+            rhombus_pol.append(pol[irhomb * rhombus_npos : (irhomb + 1) * rhombus_npos])
     else:
         msg = "Invalid length of pos_rotate argument"
         raise RuntimeError(msg)
@@ -645,7 +643,7 @@ def boresight_layout(npix, prefix, suffix, pol, center=None, pos_offset=0):
         npix (int): number of pixels at the boresight.
         prefix (str): the detector name prefix.
         suffix (str): the detector name suffix.
-        pol (ndarray): 1D array of detector polarization angles.  These are the
+        pol (Quantity): 1D array of detector polarization angles.  These are the
             "gamma" angle in the xi / eta / gamma coordinate system.
         center (ndarray): quaternion offset of the center of the layout (or None).
         pos_offset (int): starting index of position numbers.
@@ -865,12 +863,8 @@ def fake_rhombihex_focalplane(
     pol_A = rhomb_gamma_angles_qu(n_pix_rhombus, offset=0.0 * u.degree)
     pol_B = rhomb_gamma_angles_qu(n_pix_rhombus, offset=90.0 * u.degree)
 
-    det_A = rhombus_hex_layout(
-        n_pix_rhombus, rhomb_width, "D", "A", gap=gap, pos_rotate=pol_A
-    )
-    det_B = rhombus_hex_layout(
-        n_pix_rhombus, rhomb_width, "D", "B", gap=gap, pos_rotate=pol_B
-    )
+    det_A = rhombus_hex_layout(n_pix_rhombus, rhomb_width, "D", "A", gap=gap, pol=pol_A)
+    det_B = rhombus_hex_layout(n_pix_rhombus, rhomb_width, "D", "B", gap=gap, pol=pol_B)
     full_fp = dict(det_A)
     full_fp.update(det_B)
 
@@ -1061,6 +1055,7 @@ def plot_focalplane(
     pol_color=None,
     xieta=False,
     show_centers=False,
+    show_gamma=False,
 ):
     """Visualize a projected Focalplane.
 
@@ -1086,6 +1081,7 @@ def plot_focalplane(
         xieta (bool):  Plot in observer xi/eta/gamma coordinates rather than
             boresight X/Y/Z.
         show_centers (bool):  If True, label the pixel centers.
+        show_gamma (bool):  If True, show gamma angle (for debugging).
 
     Returns:
         (Figure):  The figure.
@@ -1149,6 +1145,7 @@ def plot_focalplane(
             ypos = eta * 180.0 / np.pi
             # Polang is plotted relative to visualization x/y coords
             polang = 1.5 * np.pi - gamma
+            plot_gamma = polang
         else:
             # rotation from boresight
             rdir = qa.rotate(quat, zaxis).flatten()
@@ -1158,6 +1155,8 @@ def plot_focalplane(
             polang = np.arctan2(orient[1], orient[0])
             xpos = mag * np.cos(ang)
             ypos = mag * np.sin(ang)
+            xi, eta, gamma = quat_to_xieta(quat)
+            plot_gamma = gamma
 
         detface = "none"
         if face_color is not None:
@@ -1208,6 +1207,19 @@ def plot_focalplane(
                 bbox=dict(fc="w", ec="none", pad=1, alpha=0.0),
             )
 
+        if show_gamma:
+            ax.arrow(
+                xtail,
+                ytail,
+                1.3 * dx,
+                1.3 * dy,
+                width=0.1 * detradius,
+                head_width=0.2 * detradius,
+                head_length=0.2 * detradius,
+                fc="gray",
+                ec="gray",
+                length_includes_head=True,
+            )
         ax.arrow(
             xtail,
             ytail,
