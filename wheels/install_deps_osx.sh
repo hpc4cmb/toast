@@ -253,7 +253,7 @@ tar xzf ${flac_pkg} \
 
 # Install SuiteSparse
 
-ssparse_version=6.0.3
+ssparse_version=7.1.0
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
