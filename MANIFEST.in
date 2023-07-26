@@ -11,3 +11,5 @@ recursive-include platforms *
 recursive-include cmake *
 recursive-include docs *
 prune docs/_build
+recursive-include toast/aux *
+prune toast/pybind11
