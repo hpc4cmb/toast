@@ -42,8 +42,6 @@ venv_py_ver=$(python3 --version | awk '{print $2}')
 # Install our dependencies
 eval "${topdir}/wheels/install_deps_linux.sh" "${toolchain}" "${venv_path}" "no"
 
-exit 0
-
 # Look for our dependencies in the virtualenv
 export LD_LIBRARY_PATH="${venv_path}/lib"
 export CPATH="${venv_path}/include"
