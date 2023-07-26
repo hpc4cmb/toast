@@ -1,6 +1,6 @@
 diff -urN SuiteSparse-7.1.0_orig/Makefile SuiteSparse-7.1.0/Makefile
 --- SuiteSparse-7.1.0_orig/Makefile	2023-06-29 19:06:35.000000000 -0700
-+++ SuiteSparse-7.1.0/Makefile	2023-07-19 06:43:06.142861843 -0700
++++ SuiteSparse-7.1.0/Makefile	2023-07-25 20:17:55.058447922 -0700
 @@ -39,8 +39,6 @@
  	( cd SuiteSparse_GPURuntime && $(MAKE) )
  	( cd GPUQREngine && $(MAKE) )
@@ -97,3 +97,17 @@ diff -urN SuiteSparse-7.1.0_orig/Makefile SuiteSparse-7.1.0/Makefile
 -	( cd GraphBLAS && $(MAKE) debug )
 -	( cd SPEX && $(MAKE) debug )
  
+diff -urN SuiteSparse-7.1.0_orig/Mongoose/Makefile SuiteSparse-7.1.0/Mongoose/Makefile
+--- SuiteSparse-7.1.0_orig/Mongoose/Makefile	2023-06-29 19:06:35.000000000 -0700
++++ SuiteSparse-7.1.0/Mongoose/Makefile	2023-07-25 20:20:39.827860133 -0700
+@@ -46,8 +46,8 @@
+ 	( cd build && cmake $(CMAKE_OPTIONS) -DLOCAL_INSTALL=0 .. && cmake --build . --config Release -j${JOBS} )
+ 
+ # build the Mongoose library (static and dynamic) and run a quick test
+-demos: library
+-	( cd build ; ./demo )
++# demos: library
++# 	( cd build ; ./demo )
+ 
+ # the same as "make library"
+ static: library
