@@ -223,7 +223,7 @@ def pixels_healpix_jax(
 
     # modifies output buffers in place
     pixels[:] = new_pixels
-    hit_submaps[:] = new_hit_submaps
+    hit_submaps[:] = new_hit_submaps  # NOTE: this is a move back to CPU
 
 
 # To test:
