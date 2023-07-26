@@ -12,7 +12,7 @@ configure_file(
 # modules
 
 execute_process(
-    COMMAND "${PYTHON_EXECUTABLE}" -c "if True:
+    COMMAND "${Python3_EXECUTABLE}" -c "if True:
         import sys
         print('{}.{}'.format(sys.version_info.major, sys.version_info.minor))"
     OUTPUT_VARIABLE PYTHON_MAJORMINOR
