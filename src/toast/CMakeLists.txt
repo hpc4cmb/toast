@@ -1,4 +1,5 @@
 # pybind11
+set(PYBIND11_FINDPYTHON ON)
 add_subdirectory(pybind11)
 
 # Copy the RELEASE file into the build directory
