@@ -1,0 +1,6 @@
+# Minimal config to ensure that setuptools is available
+# before loading setup.py.  We have extensive build and
+# version customization in setup.py that we intentionally
+# do not put in this file.
+[build-system]
+requires = ["setuptools", "wheel"]

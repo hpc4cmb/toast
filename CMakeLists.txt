@@ -206,7 +206,7 @@ else()
     endif()
 endif()
 
-find_package(PythonInterp REQUIRED)
+find_package(Python3 3.8 COMPONENTS Interpreter Development REQUIRED)
 
 # Internal products
 

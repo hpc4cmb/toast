@@ -2,12 +2,15 @@ include README.md
 include AUTHORS
 include LICENSE
 include CMakeLists.txt
+recursive-include cmake *
 recursive-include src *
 recursive-include tutorial *
 recursive-include examples *
-prune examples/job*
-prune examples/data
 recursive-include platforms *
-recursive-include cmake *
 recursive-include docs *
+recursive-include etc *
+recursive-include wheels *
+recursive-include workflows *
+recursive-exclude toast __pycache__
 prune docs/_build
+recursive-include toast/aux *

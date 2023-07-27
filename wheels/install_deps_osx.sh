@@ -251,9 +251,9 @@ tar xzf ${flac_pkg} \
     && popd >/dev/null 2>&1 \
     && popd >/dev/null 2>&1
 
-# Install SuiteSparse
+# Install SuiteSparse - only the pieces we need.
 
-ssparse_version=6.0.3
+ssparse_version=7.1.0
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 
@@ -273,12 +273,7 @@ fi
 
 blas_opt="-L${PREFIX}/lib -lopenblas -lm ${blas_extra}"
 
-rm -rf ${ssparse_dir}
-tar xzf ${ssparse_pkg} \
-    && pushd ${ssparse_dir} >/dev/null 2>&1 \
-    && patch -p1 < "${scriptdir}/suitesparse.patch" \
-    && CC="${CC}" CX="${CXX}" JOBS=${MAKEJ} \
-    CMAKE_OPTIONS=" \
+cmake_opts=" \
     -DCMAKE_C_COMPILER=\"${CC}\" \
     -DCMAKE_CXX_COMPILER=\"${CXX}\" \
     -DCMAKE_Fortran_COMPILER=\"${FC}\" \
@@ -287,14 +282,26 @@ tar xzf ${ssparse_pkg} \
     -DCMAKE_Fortran_FLAGS=\"${FCFLAGS}\" \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
     -DCMAKE_INSTALL_PATH=\"${PREFIX}\" \
-    -DNSTATIC:BOOL=ON \
     -DCMAKE_BUILD_TYPE=Release \
     -DBLA_VENDOR=OpenBLAS \
+    -DNSTATIC:BOOL=ON \
     -DBLA_STATIC:BOOL=OFF \
     -DBLAS_LIBRARIES=\"${blas_opt}\" \
     -DLAPACK_LIBRARIES=\"${blas_opt}\" \
-    " make local \
-    && make install \
-    && cp ./lib/*.a ./lib/*.dylib "${PREFIX}/lib/" \
+    "
+
+rm -rf ${ssparse_dir}
+tar xzf ${ssparse_pkg} \
+    && pushd ${ssparse_dir} >/dev/null 2>&1 \
+    && patch -p1 < "${scriptdir}/suitesparse.patch" \
+    && for pkg in SuiteSparse_config AMD CAMD CCOLAMD COLAMD CHOLMOD; do \
+    pushd ${pkg} >/dev/null 2>&1; \
+    CC="${CC}" CX="${CXX}" JOBS=${MAKEJ} \
+    CMAKE_OPTIONS=${cmake_opts} \
+    make local; \
+    make install; \
+    popd >/dev/null 2>&1; \
+    done \
+    && cp ./lib/*.dylib "${PREFIX}/lib/" \
     && cp ./include/* "${PREFIX}/include/" \
     && popd >/dev/null 2>&1
