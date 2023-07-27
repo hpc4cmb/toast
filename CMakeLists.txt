@@ -10,6 +10,7 @@ foreach(policy
     CMP0074
     CMP0077
     CMP0063
+    CMP0094
   )
   if(POLICY ${policy})
     cmake_policy(SET ${policy} NEW)
@@ -206,7 +207,7 @@ else()
     endif()
 endif()
 
-find_package(Python3 3.8 COMPONENTS Interpreter Development REQUIRED)
+find_package(Python3 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
 
 # Internal products
 
