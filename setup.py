@@ -278,9 +278,14 @@ conf["extras_require"] = {
     "mpi": ["mpi4py>=3.0"],
     "totalconvolve": ["ducc0"],
 }
-conf["packages"] = ["toast._libtoast"].extend(find_packages("src"))
+conf["packages"] = find_packages(
+    "src",
+)
 conf["package_dir"] = {"": "src"}
 conf["include_package_data"] = True
+conf["exclude_package_data"] = {
+    "": ["*.h", "*.c", "*.cpp", "*.hpp"],
+}
 conf["ext_modules"] = ext_modules
 conf["scripts"] = scripts
 conf["entry_points"] = {
