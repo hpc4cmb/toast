@@ -170,7 +170,9 @@ class CMakeBuild(build_ext):
             if mat is not None:
                 cmake_opts[mat.group(1)] = v
 
-        cmake_args = ["-DPYTHON_EXECUTABLE=" + sys.executable]
+        cmake_args = [
+            "-DPython3_ROOT_DIR=" + os.path.dirname(os.path.dirname(sys.executable))
+        ]
         cmake_args += ["-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON"]
 
         cfg = "Debug" if self.debug else "Release"
