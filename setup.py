@@ -113,8 +113,38 @@ class CMakeBuild(build_ext):
         for extension in self.extensions:
             if extension.name == "toast._libtoast":
                 # We always build the serial extension, so we trigger the build
-                # on that.
-                self.build_cmake()
+                # on that.  This function may be called multiple times, so we
+                # only build if the final output files do not exist.
+                extpath = self.get_ext_filename(extension.name)
+                dest_path = Path(self.get_ext_fullpath(extension.name)).resolve()
+                build_lib = Path(self.build_lib).resolve()
+                lib_path = os.path.join(build_lib, extpath)
+                build_temp = Path(self.build_temp).resolve()
+                source_path = os.path.join(build_temp, "src", extpath)
+                if not os.path.isfile(source_path):
+                    # The extension needs to be built
+                    print(
+                        f"Compiling extension '{source_path}' with CMake",
+                        flush=True,
+                    )
+                    self.build_cmake()
+                else:
+                    print(
+                        f"Compiled extension '{source_path}' already exists",
+                        flush=True,
+                    )
+                if not os.path.isfile(dest_path) or not os.path.isfile(lib_path):
+                    # The extension needs to be copied into place
+                    print(
+                        f"Copying built extension to '{dest_path}' and '{lib_path}'",
+                        flush=True,
+                    )
+                    self.move_output(extension)
+                else:
+                    print(
+                        f"Copy of extensions already exist at '{dest_path}' and '{lib_path}'",
+                        flush=True,
+                    )
         super().run()
 
     def build_cmake(self):
@@ -207,20 +237,16 @@ class CMakeBuild(build_ext):
         cmake_list_dir = os.path.abspath(os.path.dirname(__file__))
         print("-" * 10, "Running CMake prepare", "-" * 40)
         cmake_com = ["cmake", cmake_list_dir] + cmake_args
-        print("\n".join([f"   {x}" for x in cmake_com]))
+        print("\n".join([f"   {x}" for x in cmake_com]), flush=True)
         subprocess.check_call(cmake_com, cwd=self.build_temp, env=env)
 
-        print("-" * 10, "Building extensions", "-" * 40)
+        print("-" * 10, "Building extensions", "-" * 40, flush=True)
         cmake_cmd = ["cmake", "--build", "."] + self.build_args
         subprocess.check_call(cmake_cmd, cwd=self.build_temp)
 
         # If we are running on readthedocs, prepare sphinx inputs
         if "READTHEDOCS" in os.environ:
             subprocess.check_call([os.path.join("docs", "setup_docs.sh")])
-
-        # Move from build temp to final position
-        for ext in self.extensions:
-            self.move_output(ext)
 
     def move_output(self, ext):
         extpath = self.get_ext_filename(ext.name)

@@ -11,10 +11,10 @@ on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
-      - toast3
+  # pull_request:
+  #   branches:
+  #     - master
+  #     - toast3
 
 jobs:
   test:
