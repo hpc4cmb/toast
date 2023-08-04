@@ -173,6 +173,8 @@ class SaveHDF5(Operator):
         False, help="If True, convert any float64 detector data to float32 on write."
     )
 
+    compress_detdata = Bool(False, help="If True, use FLAC to compress detector signal")
+
     verify = Bool(False, help="If True, immediately load data back in and verify")
 
     def __init__(self, **kwargs):
@@ -199,6 +201,18 @@ class SaveHDF5(Operator):
         detdata_fields = None
         if len(self.detdata) > 0:
             detdata_fields = list(self.detdata)
+        else:
+            # Get the fields from the first observation
+            detdata_fields = list(data.obs[0].detdata.keys())
+
+        if self.compress_detdata:
+            for ifield, field in enumerate(detdata_fields):
+                if "flag" in field:
+                    # Flags are ZIP-compressed
+                    detdata_fields[ifield] = (field, {"type": "gzip"})
+                else:
+                    # Everything else is FLAC-compressed
+                    detdata_fields[ifield] = (field, {"type": "flac"})
 
         intervals_fields = None
         if len(self.intervals) > 0:
@@ -230,6 +244,8 @@ class SaveHDF5(Operator):
                 force_serial=self.force_serial,
                 detdata_float32=self.detdata_float32,
             )
+
+            log.info_rank(f"Wrote {outpath}", comm=data.comm.comm_group)
 
             if self.verify:
                 # We are going to load the data back in, but first we need to make
