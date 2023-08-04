@@ -100,6 +100,16 @@ class SimGround(Operator):
         help="If True, the Constant Elevation Scan will begin at a randomized phase.",
     )
 
+    use_ephem = Bool(
+        True,
+        help="Use PyEphem to convert between horizontal and equatorial systems",
+    )
+
+    use_qpoint = Bool(
+        False,
+        help="Use qpoint to convert between horizontal and equatorial systems",
+    )
+
     scan_rate_az = Quantity(
         1.0 * u.degree / u.second,
         help="The sky or mount azimuth scanning rate.  See `fix_rate_on_sky`",
@@ -321,6 +331,26 @@ class SimGround(Operator):
                     "telescope must be a Telescope instance with a focalplane"
                 )
         return tele
+
+    @traitlets.validate("use_ephem")
+    def _check_use_ephem(self, proposal):
+        use_ephem = proposal["value"]
+        if use_ephem:
+            if self.use_qpoint:
+                raise traitlets.TraitError("Cannot use both ephem and qpoint")
+        return use_ephem
+
+    @traitlets.validate("use_qpoint")
+    def _check_use_qpoint(self, proposal):
+        use_qpoint = proposal["value"]
+        if use_qpoint:
+            if self.use_ephem:
+                raise traitlets.TraitError("Cannot use both ephem and qpoint")
+            try:
+                import qpoint
+            except ModuleNotFoundError as e:
+                raise RuntimeError(f"Cannot use qpoint: '{e}'")
+        return use_qpoint
 
     @traitlets.validate("schedule")
     def _check_schedule(self, proposal):
@@ -672,7 +702,13 @@ class SimGround(Operator):
                         )
                         bore_azel = qa.mult(bore_azel, rot)
                     # Convert to RA / DEC.  Use pyephem for now.
-                    bore_radec = azel_to_radec(site, stamps, bore_azel, use_ephem=True)
+                    bore_radec = azel_to_radec(
+                        site,
+                        stamps,
+                        bore_azel,
+                        use_ephem=self.use_ephem,
+                        use_qpoint=self.use_qpoint,
+                    )
 
             ob.shared[self.times].set(stamps, offset=(0,), fromrank=0)
             ob.shared[self.azimuth].set(az_data, offset=(0,), fromrank=0)
