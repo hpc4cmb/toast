@@ -173,6 +173,12 @@ class SaveHDF5(Operator):
         False, help="If True, convert any float64 detector data to float32 on write."
     )
 
+    detdata_in_place = Bool(
+        False,
+        help="If True, all compressed detector data will be decompressed and written "
+        "over the input data."
+    )
+
     compress_detdata = Bool(False, help="If True, use FLAC to compress detector signal")
 
     compress_precision = Int(
@@ -255,6 +261,7 @@ class SaveHDF5(Operator):
                 times=str(self.times),
                 force_serial=self.force_serial,
                 detdata_float32=self.detdata_float32,
+                detdata_in_place=self.detdata_in_place,
             )
 
             log.info_rank(f"Wrote {outpath}", comm=data.comm.comm_group)

@@ -23,8 +23,10 @@ from ..io.compression_flac import (
     int2float,
     int64to32,
 )
+from ..mpi import Comm
 from ..observation import default_values as defaults
 from ..observation_data import DetectorData
+from ..ops import SaveHDF5, LoadHDF5
 from ..timing import Timer
 from ..utils import AlignedI32, AlignedU8
 from ._helpers import close_data, create_ground_data, create_outdir
@@ -330,6 +332,46 @@ class IoCompressionTest(MPITestCase):
                 self.assertTrue(False)
 
         close_data(data)
+
+    def test_compression_in_place(self):
+        if not have_flac_support():
+            print("FLAC disabled, skipping...")
+            return
+
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        testdir = os.path.join(self.outdir, "test_in_place")
+        if rank == 0:
+            os.makedirs(testdir)
+
+        data = self.create_data()
+        save_hdf5 = SaveHDF5(
+            volume=testdir,
+            detdata_float32=True,
+            compress_detdata=True,
+            detdata_in_place=True,
+            compress_precision=3,
+        )
+        save_hdf5.apply(data)
+
+        compressed_data = Data(Comm(self.comm))
+        load_hdf5 = LoadHDF5(volume=testdir)
+        load_hdf5.apply(compressed_data)
+
+        for ob_in, ob_out in zip(data.obs, compressed_data.obs):
+            key = defaults.det_data
+            signal_in = ob_in.detdata[key].data
+            signal_out = ob_out.detdata[key].data
+            check = np.allclose(signal_in, signal_out, rtol=1e-6)
+            if not check:
+                print(f"signal in = {signal_in}")
+                print(f"signal out = {signal_out}")
+                self.assertTrue(False)
+
+        close_data(data)
+        close_data(compressed_data)
 
     def test_roundtrip_hdf5(self):
         rank = 0
