@@ -16,7 +16,7 @@ from .._libtoast import (
 from ..utils import AlignedU8, Logger, dtype_to_aligned
 
 
-def float2int(data, quanta=None):
+def float2int(data, quanta=None, precision=None):
     """Convert floating point data to integers.
 
     This function subtracts the mean and rescales data before rounding to 32bit
@@ -25,21 +25,30 @@ def float2int(data, quanta=None):
     Args:
         data (array):  The floating point data.
         quanta (float):  The floating point quantity corresponding to one integer
-            resolution amount in the output.
+            resolution amount in the output.  If `None`, quanta will be
+            based on the full dynamic range of the data.
+        precision (int):  Number of significant digits to preserve.  If
+            provided, `quanta` will be estimated accordingly.
 
     Returns:
         (tuple):  The (integer data, offset, gain)
 
     """
+    if np.any(np.isnan(data)):
+        raise RuntimeError("Cannot convert data with NaNs to integers")
     dmin = np.amin(data)
     dmax = np.amax(data)
     offset = 0.5 * (dmin + dmax)
     amp = 1.01 * max(np.abs(dmin - offset), np.abs(dmax - offset))
+    # Use the full bit range of int32 FLAC.  Actually we lose one bit
+    # Due to internal FLAC implementation.
+    max_flac = np.iinfo(np.int32).max // 2
+    min_quanta = amp / max_flac
+    if precision is not None:
+        rms = np.std(data)
+        quanta = rms / precision
     if quanta is None:
-        # Use the full bit range of int32 FLAC.  Actually we lose one bit
-        # Due to internal FLAC implementation.
-        max_flac = np.iinfo(np.int32).max // 2
-        quanta = amp / max_flac
+        quanta = min_quanta
     if quanta == 0:
         # This can happen if fed a vector of all zeros
         quanta = 1.0
@@ -110,7 +119,7 @@ def int2float(idata, offset, gain):
     return np.array((idata * coeff) + offset, dtype=np.float32)
 
 
-def compress_detdata_flac(detdata, level=5, quanta=None):
+def compress_detdata_flac(detdata, level=5, quanta=None, precision=None):
     """Compress a 2D DetectorData array into FLAC bytes.
 
     The input data is converted to 32bit integers.  The "quanta" value is used
@@ -119,6 +128,9 @@ def compress_detdata_flac(detdata, level=5, quanta=None):
     scaled independently based on its data range.  If quanta is a scalar, all
     detectors are scaled with the same value.  If quanta is an array, it specifies
     the scaling independently for each detector.
+
+    Alternatively, if "precision" is provided, each data vector is scaled to retain
+    the prescribed number of significant digits.
 
     The following rules specify the data conversion that is performed depending on
     the input type:
@@ -142,6 +154,8 @@ def compress_detdata_flac(detdata, level=5, quanta=None):
         detdata (DetectorData):  The input detector data.
         level (int):  Compression level
         quanta (array):  For floating point data, the increment of each integer.
+        precision (int):  Number of significant digits to retain in float-to-int
+            conversion.  Alternative to `quanta`.
 
     Returns:
         (tuple):  The (compressed bytes, byte ranges,
@@ -152,6 +166,8 @@ def compress_detdata_flac(detdata, level=5, quanta=None):
         raise RuntimeError("TOAST was not compiled with libFLAC support")
 
     if quanta is not None:
+        if precision is not None:
+            raise RuntimeError("Cannot set both quanta and precision")
         try:
             nq = len(quanta)
             # This is a sequence
@@ -190,7 +206,9 @@ def compress_detdata_flac(detdata, level=5, quanta=None):
             data_ioffsets[idet] = ioff
         else:
             intdata, foff, fgain = float2int(
-                detdata[idet, :].reshape(-1), quanta=dquanta[idet]
+                detdata[idet, :].reshape(-1),
+                quanta=dquanta[idet],
+                precision=precision,
             )
             data_offsets[idet] = foff
             data_gains[idet] = fgain

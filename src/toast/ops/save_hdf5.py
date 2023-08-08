@@ -175,6 +175,12 @@ class SaveHDF5(Operator):
 
     compress_detdata = Bool(False, help="If True, use FLAC to compress detector signal")
 
+    compress_precision = Int(
+        None,
+        allow_none=True,
+        help="Number of significant digits to retain in detdata compression",
+    )
+
     verify = Bool(False, help="If True, immediately load data back in and verify")
 
     def __init__(self, **kwargs):
@@ -198,22 +204,6 @@ class SaveHDF5(Operator):
         if len(self.shared) > 0:
             shared_fields = list(self.shared)
 
-        detdata_fields = None
-        if len(self.detdata) > 0:
-            detdata_fields = list(self.detdata)
-        else:
-            # Get the fields from the first observation
-            detdata_fields = list(data.obs[0].detdata.keys())
-
-        if self.compress_detdata:
-            for ifield, field in enumerate(detdata_fields):
-                if "flag" in field:
-                    # Flags are ZIP-compressed
-                    detdata_fields[ifield] = (field, {"type": "gzip"})
-                else:
-                    # Everything else is FLAC-compressed
-                    detdata_fields[ifield] = (field, {"type": "flac"})
-
         intervals_fields = None
         if len(self.intervals) > 0:
             intervals_fields = list(self.intervals)
@@ -224,6 +214,28 @@ class SaveHDF5(Operator):
                 raise RuntimeError(
                     "Observations must have a name in order to save to HDF5 format"
                 )
+
+            if len(self.detdata) > 0:
+                detdata_fields = list(self.detdata)
+            else:
+                detdata_fields = list(ob.detdata.keys())
+
+            if self.compress_detdata:
+                # Add generic compression instructions to detdata fields
+                for ifield, field in enumerate(detdata_fields):
+                    if not isinstance(field, "str"):
+                        # Assume user already supplied instructions for this field
+                        continue
+                    if "flag" in field:
+                        # Flags are ZIP-compressed
+                        detdata_fields[ifield] = (field, {"type": "gzip"})
+                    else:
+                        # Everything else is FLAC-compressed
+                        detdata_fields[ifield] = (field, {
+                            "type": "flac",
+                            "level": 5,
+                            "precision": self.compress_precision,
+                        })
 
             # Check to see if any detector data objects are temporary and have just
             # a partial list of detectors.  Delete these.
