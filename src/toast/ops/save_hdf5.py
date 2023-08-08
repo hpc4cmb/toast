@@ -215,6 +215,13 @@ class SaveHDF5(Operator):
                     "Observations must have a name in order to save to HDF5 format"
                 )
 
+            # Check to see if any detector data objects are temporary and have just
+            # a partial list of detectors.  Delete these.
+
+            for dd in list(ob.detdata.keys()):
+                if ob.detdata[dd].detectors != ob.local_detectors:
+                    del ob.detdata[dd]
+
             if len(self.detdata) > 0:
                 detdata_fields = list(self.detdata)
             else:
@@ -237,13 +244,6 @@ class SaveHDF5(Operator):
                             "precision": self.compress_precision,
                         })
 
-            # Check to see if any detector data objects are temporary and have just
-            # a partial list of detectors.  Delete these.
-
-            for dd in list(ob.detdata.keys()):
-                if ob.detdata[dd].detectors != ob.local_detectors:
-                    del ob.detdata[dd]
-
             outpath = save_hdf5(
                 ob,
                 self.volume,
@@ -265,17 +265,17 @@ class SaveHDF5(Operator):
                 # because we may have only a portion of the data on disk and we
                 # might have also converted data to 32bit floats.
 
-                loadpath = os.path.join(self.volume, f"{ob.name}_{ob.uid}.h5")
+                loadpath = outpath
 
-                if detdata_fields is None:
-                    # We saved everything
-                    verify_fields = list(ob.detdata.keys())
-                else:
+                if len(self.detdata) > 0:
                     # There might be compression info
                     if isinstance(detdata_fields[0], (tuple, list)):
                         verify_fields = [x[0] for x in detdata_fields]
                     else:
                         verify_fields = list(detdata_fields)
+                else:
+                    # We saved everything
+                    verify_fields = list(ob.detdata.keys())
 
                 if self.detdata_float32:
                     # We want to duplicate everything *except* float64 detdata
