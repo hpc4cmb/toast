@@ -279,6 +279,58 @@ class IoCompressionTest(MPITestCase):
 
         close_data(data)
 
+    def test_precision_vs_quanta(self):
+        if not have_flac_support():
+            print("FLAC disabled, skipping...")
+            return
+
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        data = self.create_data()
+
+        # Compress data using either "quanta" or "precision"
+        for ob in data.obs:
+            key = defaults.det_data
+            rms_in = np.std(ob.detdata[key].data)
+            precision = 3
+            quanta = rms_in / 10**precision
+            comp_data_precision = compress_detdata(
+                ob.detdata[key], {"type": "flac", "precision": precision}
+            )
+            comp_data_quanta = compress_detdata(
+                ob.detdata[key], {"type": "flac", "quanta": quanta}
+            )
+            new_detdata_float32 = ob.detdata[key].data.astype(np.float32)
+            new_detdata_precision = decompress_detdata(*comp_data_precision)
+            new_detdata_quanta = decompress_detdata(*comp_data_quanta)
+
+            rms_float32 = np.std(ob.detdata[key].data - new_detdata_float32.data)
+            rms_precision = np.std(new_detdata_float32.data - new_detdata_precision.data)
+            rms_quanta = np.std(new_detdata_float32.data - new_detdata_quanta.data)
+
+            print(f"RMS (in) = {rms_in}")
+            print(f"RMS (float32) = {rms_float32} abs, {rms_float32 / rms_in} rel")
+            print(f"RMS (precision) = {rms_precision} abs, {rms_precision / rms_in} rel")
+            print(f"RMS (quanta) = {rms_quanta} abs, {rms_quanta / rms_in} rel")
+
+            check = np.allclose(
+                new_detdata_precision[:], new_detdata_quanta[:], rtol=10**(-precision)
+            )
+            if not check:
+                print(f"RMS (in) = {rms_in}")
+                print(f"RMS (precision) = {rms_precision}, RMS (quanta) = {rms_quanta}")
+                print(f"Precision = {precision}:  {new_detdata_precision}")
+                print(f"Quanta = {quanta}:  {new_detdata_quanta}")
+                self.assertTrue(False)
+
+            if rms_in / rms_precision < .9 * 10**precision:
+                print(f"RMS(in) / RMS(precision) = {rms_in / rms_precision} but precision = {precision}")
+                self.assertTrue(False)
+
+        close_data(data)
+
     def test_roundtrip_hdf5(self):
         rank = 0
         if self.comm is not None:

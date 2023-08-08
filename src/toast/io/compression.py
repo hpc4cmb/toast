@@ -128,7 +128,7 @@ def compress_detdata(detdata, comp_params=None):
             quanta = None
             comp_params["quanta"] = quanta
         if "precision" in comp_params:
-            precision = comps_params["precision"]
+            precision = comp_params["precision"]
         else:
             precision = None
             comp_params["precision"] = precision

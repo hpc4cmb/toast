@@ -46,7 +46,11 @@ def float2int(data, quanta=None, precision=None):
     min_quanta = amp / max_flac
     if precision is not None:
         rms = np.std(data)
-        quanta = rms / precision
+        quanta = rms / 10**precision
+        if quanta < min_quanta:
+            msg = f"Set precision (={precision}) cannot be supported with 32bit FLAC: "
+            msg += f"{quanta} < {min_quanta}"
+            raise RuntimeError(msg)
     if quanta is None:
         quanta = min_quanta
     if quanta == 0:
