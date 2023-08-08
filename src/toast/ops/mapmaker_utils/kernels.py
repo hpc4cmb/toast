@@ -92,7 +92,7 @@ def build_noise_weighted(
         weight_index,
         weights,
         data_index,
-        det_data,
+        det_data.astype(np.float64),
         flag_index,
         det_flags,
         det_scale,
