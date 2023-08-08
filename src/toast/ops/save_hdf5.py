@@ -230,7 +230,7 @@ class SaveHDF5(Operator):
             if self.compress_detdata:
                 # Add generic compression instructions to detdata fields
                 for ifield, field in enumerate(detdata_fields):
-                    if not isinstance(field, "str"):
+                    if not isinstance(field, str):
                         # Assume user already supplied instructions for this field
                         continue
                     if "flag" in field:
