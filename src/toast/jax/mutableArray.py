@@ -101,7 +101,7 @@ class MutableJaxArray:
     """
 
     host_data: np.array
-    data: jnp.DeviceArray
+    data: jax.Array
     shape: Tuple
     size: int
     dtype: np.dtype
