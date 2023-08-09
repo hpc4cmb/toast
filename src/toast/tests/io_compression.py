@@ -196,8 +196,10 @@ class IoCompressionTest(MPITestCase):
                 del new_detdata
                 del detdata
 
-    def create_data(self):
-        data = create_ground_data(self.comm)
+    def create_data(self, pixel_per_process=1, single_group=False):
+        data = create_ground_data(
+            self.comm, pixel_per_process=pixel_per_process, single_group=single_group
+        )
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
@@ -312,10 +314,10 @@ class IoCompressionTest(MPITestCase):
             rms_precision = np.std(new_detdata_float32.data - new_detdata_precision.data)
             rms_quanta = np.std(new_detdata_float32.data - new_detdata_quanta.data)
 
-            print(f"RMS (in) = {rms_in}")
-            print(f"RMS (float32) = {rms_float32} abs, {rms_float32 / rms_in} rel")
-            print(f"RMS (precision) = {rms_precision} abs, {rms_precision / rms_in} rel")
-            print(f"RMS (quanta) = {rms_quanta} abs, {rms_quanta / rms_in} rel")
+            # print(f"RMS (in) = {rms_in}")
+            # print(f"RMS (float32) = {rms_float32} abs, {rms_float32 / rms_in} rel")
+            # print(f"RMS (precision) = {rms_precision} abs, {rms_precision / rms_in} rel")
+            # print(f"RMS (quanta) = {rms_quanta} abs, {rms_quanta / rms_in} rel")
 
             check = np.allclose(
                 new_detdata_precision[:], new_detdata_quanta[:], rtol=10**(-precision)
@@ -346,7 +348,10 @@ class IoCompressionTest(MPITestCase):
         if rank == 0:
             os.makedirs(testdir)
 
-        data = self.create_data()
+        # We use a single process group in this test to avoid having the
+        # data shuffled around between saving and loading
+
+        data = self.create_data(pixel_per_process=4, single_group=True)
         save_hdf5 = SaveHDF5(
             volume=testdir,
             detdata_float32=True,
