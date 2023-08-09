@@ -350,21 +350,23 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, use_float32=False, in_place
                     temp_detdata, fieldcomp
                 )
                 if in_place:
-                    # Prepare a 32-bit container for decompressed data
-                    del obs.detdata[field]
-                    obs.detdata[field] = temp_detdata
-                else:
-                    del temp_detdata
+                    # Decompress
+                    decompress_detdata(
+                        comp_bytes, comp_ranges, comp_props, detdata=temp_detdata
+                    )
+                    # upcast back to float64 and and overwrite the original detector data
+                    obs.detdata[field].data[:] = temp_detdata.data[:]
+                del temp_detdata
             else:
                 temp_detdata = None
                 comp_bytes, comp_ranges, comp_props = compress_detdata(
                     obs.detdata[field], fieldcomp
                 )
-            if in_place:
-                # Decompress and overwrite the original detector data
-                decompress_detdata(
-                    comp_bytes, comp_ranges, comp_props, detdata=obs.detdata[field]
-                )
+                if in_place:
+                    # Decompress and overwrite the original detector data
+                    decompress_detdata(
+                        comp_bytes, comp_ranges, comp_props, detdata=obs.detdata[field]
+                    )
 
             # Extract per-detector quantities for communicating / writing later
             comp_data_offsets = None
