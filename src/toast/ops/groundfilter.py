@@ -23,7 +23,7 @@ from .operator import Operator
 
 @function_timer
 def bin_proj_fast(ref, templates, good, proj):
-    return bin_proj(ref, templates, good, proj)
+    return bin_proj(ref.astype(np.float64), templates, good, proj)
 
 
 @function_timer
@@ -294,7 +294,7 @@ class GroundFilter(Operator):
             add_templates(trend, legendre_trend, coeff[: self.trend_order])
             ref -= trend
         # Ground template
-        grtemplate = np.zeros_like(ref)
+        grtemplate = np.zeros(ref.size, dtype=np.float64)
         add_templates(grtemplate, legendre_filter, coeff[self.trend_order :])
         ref -= grtemplate
         return

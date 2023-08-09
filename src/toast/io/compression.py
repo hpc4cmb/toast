@@ -31,6 +31,9 @@ def compress_detdata(detdata, comp_params=None):
             full amplitude of the input data (less the mean) will correspond
             to the range of 32bit integer values.  This can be an array, a
             scalar, or None.
+        "precision":  The number of significant digits to retain in
+            converting floating point data to integers.  Cannot be set
+            with "quanta"
 
     The compressed bytes are returned in an ndarray of type uint8.  The byte ranges
     are a tuple for each detector specifying the (start byte, end byte).
@@ -124,6 +127,13 @@ def compress_detdata(detdata, comp_params=None):
         else:
             quanta = None
             comp_params["quanta"] = quanta
+        if "precision" in comp_params:
+            precision = comp_params["precision"]
+        else:
+            precision = None
+            comp_params["precision"] = precision
+        if quanta is not None and precision is not None:
+            raise RuntimeError("Cannot set both quanta and precision")
 
         if detdata.dtype in ftypes:
             (
@@ -131,7 +141,9 @@ def compress_detdata(detdata, comp_params=None):
                 comp_ranges,
                 comp_params["data_offsets"],
                 comp_params["data_gains"],
-            ) = compress_detdata_flac(detdata, level=comp_level, quanta=quanta)
+            ) = compress_detdata_flac(
+                detdata, level=comp_level, quanta=quanta, precision=precision
+            )
         elif detdata.dtype == np.dtype(np.int64):
             (
                 comp_bytes,

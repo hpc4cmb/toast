@@ -173,6 +173,20 @@ class SaveHDF5(Operator):
         False, help="If True, convert any float64 detector data to float32 on write."
     )
 
+    detdata_in_place = Bool(
+        False,
+        help="If True, all compressed detector data will be decompressed and written "
+        "over the input data."
+    )
+
+    compress_detdata = Bool(False, help="If True, use FLAC to compress detector signal")
+
+    compress_precision = Int(
+        None,
+        allow_none=True,
+        help="Number of significant digits to retain in detdata compression",
+    )
+
     verify = Bool(False, help="If True, immediately load data back in and verify")
 
     def __init__(self, **kwargs):
@@ -196,10 +210,6 @@ class SaveHDF5(Operator):
         if len(self.shared) > 0:
             shared_fields = list(self.shared)
 
-        detdata_fields = None
-        if len(self.detdata) > 0:
-            detdata_fields = list(self.detdata)
-
         intervals_fields = None
         if len(self.intervals) > 0:
             intervals_fields = list(self.intervals)
@@ -218,6 +228,28 @@ class SaveHDF5(Operator):
                 if ob.detdata[dd].detectors != ob.local_detectors:
                     del ob.detdata[dd]
 
+            if len(self.detdata) > 0:
+                detdata_fields = list(self.detdata)
+            else:
+                detdata_fields = list(ob.detdata.keys())
+
+            if self.compress_detdata:
+                # Add generic compression instructions to detdata fields
+                for ifield, field in enumerate(detdata_fields):
+                    if not isinstance(field, str):
+                        # Assume user already supplied instructions for this field
+                        continue
+                    if "flag" in field:
+                        # Flags are ZIP-compressed
+                        detdata_fields[ifield] = (field, {"type": "gzip"})
+                    else:
+                        # Everything else is FLAC-compressed
+                        detdata_fields[ifield] = (field, {
+                            "type": "flac",
+                            "level": 5,
+                            "precision": self.compress_precision,
+                        })
+
             outpath = save_hdf5(
                 ob,
                 self.volume,
@@ -229,7 +261,10 @@ class SaveHDF5(Operator):
                 times=str(self.times),
                 force_serial=self.force_serial,
                 detdata_float32=self.detdata_float32,
+                detdata_in_place=self.detdata_in_place,
             )
+
+            log.info_rank(f"Wrote {outpath}", comm=data.comm.comm_group)
 
             if self.verify:
                 # We are going to load the data back in, but first we need to make
@@ -237,17 +272,17 @@ class SaveHDF5(Operator):
                 # because we may have only a portion of the data on disk and we
                 # might have also converted data to 32bit floats.
 
-                loadpath = os.path.join(self.volume, f"{ob.name}_{ob.uid}.h5")
+                loadpath = outpath
 
-                if detdata_fields is None:
-                    # We saved everything
-                    verify_fields = list(ob.detdata.keys())
-                else:
+                if len(self.detdata) > 0:
                     # There might be compression info
                     if isinstance(detdata_fields[0], (tuple, list)):
                         verify_fields = [x[0] for x in detdata_fields]
                     else:
                         verify_fields = list(detdata_fields)
+                else:
+                    # We saved everything
+                    verify_fields = list(ob.detdata.keys())
 
                 if self.detdata_float32:
                     # We want to duplicate everything *except* float64 detdata

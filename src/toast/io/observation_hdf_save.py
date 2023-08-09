@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -187,7 +187,7 @@ def save_hdf5_shared(obs, hgrp, fields, log_prefix):
 
 
 @function_timer
-def save_hdf5_detdata(obs, hgrp, fields, log_prefix, use_float32=False):
+def save_hdf5_detdata(obs, hgrp, fields, log_prefix, use_float32=False, in_place=False):
     log = Logger.get()
 
     timer = Timer()
@@ -349,11 +349,24 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, use_float32=False):
                 comp_bytes, comp_ranges, comp_props = compress_detdata(
                     temp_detdata, fieldcomp
                 )
+                if in_place:
+                    # Decompress
+                    decompress_detdata(
+                        comp_bytes, comp_ranges, comp_props, detdata=temp_detdata
+                    )
+                    # upcast back to float64 and and overwrite the original detector data
+                    obs.detdata[field].data[:] = temp_detdata.data[:]
                 del temp_detdata
             else:
+                temp_detdata = None
                 comp_bytes, comp_ranges, comp_props = compress_detdata(
                     obs.detdata[field], fieldcomp
                 )
+                if in_place:
+                    # Decompress and overwrite the original detector data
+                    decompress_detdata(
+                        comp_bytes, comp_ranges, comp_props, detdata=obs.detdata[field]
+                    )
 
             # Extract per-detector quantities for communicating / writing later
             comp_data_offsets = None
@@ -583,6 +596,7 @@ def save_hdf5(
     times=defaults.times,
     force_serial=False,
     detdata_float32=False,
+    detdata_in_place=False,
 ):
     """Save an observation to HDF5.
 
@@ -621,6 +635,10 @@ def save_hdf5(
             even if it is available.
         detdata_float32 (bool):  If True, cast any float64 detector fields
             to float32 on write.  Integer detdata is not affected.
+        detdata_in_place (bool):  If True, input detdata will be replaced
+            with a compressed and decompressed version that includes the
+            digitization error.
+
 
     Returns:
         (str):  The full path of the file that was written.
@@ -643,7 +661,7 @@ def save_hdf5(
     rank = obs.comm.group_rank
 
     namestr = f"{obs.name}_{obs.uid}"
-    hfpath = os.path.join(dir, f"{namestr}.h5")
+    hfpath = os.path.join(dir, f"obs_{namestr}.h5")
     hfpath_temp = f"{hfpath}.tmp"
 
     # Create the file and get the root group
@@ -858,7 +876,12 @@ def save_hdf5(
     if hgroup is not None:
         detdata_group = hgroup.create_group("detdata")
     save_hdf5_detdata(
-        obs, detdata_group, fields, log_prefix, use_float32=detdata_float32
+        obs,
+        detdata_group,
+        fields,
+        log_prefix,
+        use_float32=detdata_float32,
+        in_place=detdata_in_place,
     )
     del detdata_group
     log.debug_rank(
