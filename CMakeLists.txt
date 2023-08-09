@@ -22,8 +22,8 @@ string(REGEX REPLACE "^([0-9]+\\.[0-9]+)\\..*" "\\1" MAJMIN_VERSION "${REL_VERSI
 
 project(toast VERSION ${MAJMIN_VERSION} LANGUAGES C CXX)
 
-# Force C++11
-set(CMAKE_CXX_STANDARD 11)
+# Force C++14, needed by internal google test framework
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set symbol visibility to hidden to be consistent with pybind11
