@@ -95,6 +95,40 @@ def _ephem_transform(site, t):
     quat = qa.norm(np.array([b, c, d, a]))
     return quat
 
+def _qpoint_transform(site, t, quats_azel):
+    """Get the Az/El -> Ra/Dec conversion quaternion for boresight."""
+    import qpoint
+    qp = qpoint.QPoint(
+        accuracy="high",
+        fast_math=True,
+        mean_aber=True,
+        rate_ref="always",
+        temperature=0,
+        pressure=0,
+        humidity=0,
+        update_iers=True,
+        rate_dut1="always",
+        rate_wobble="always",
+        rate_npb="always",
+        rate_aaber="always",
+    )
+    theta, phi, psi = qa.to_iso_angles(quats_azel)
+    q = qp.azel2bore(
+        az=np.degrees(-phi),
+        el=np.degrees(np.pi / 2 - theta),
+        pitch=None,
+        roll=None,
+        lon=site.earthloc.lon.to_value(u.degree),
+        lat=site.earthloc.lat.to_value(u.degree),
+        ctime=t,
+    ).T
+    # Rearrange to match qarray component order
+    quats_radec = np.vstack([q[1], q[2], q[3], q[0]]).T
+    XAXIS, YAXIS, ZAXIS = np.eye(3)
+    zrot = qa.rotation(ZAXIS, np.pi)
+    quats_radec = qa.mult(quats_radec, zrot)
+    return quats_radec
+
 
 def _transform(site, obstime):
     """Helper function to get the coordinate transform quaternions."""
@@ -167,7 +201,7 @@ def _transform(site, obstime):
 
 
 @function_timer
-def azel_to_radec(site, times, azel, use_ephem=False):
+def azel_to_radec(site, times, azel, use_ephem=False, use_qpoint=False):
     """Transform Az / El quaternions to RA / DEC.
 
     This uses the Earth location of the ground site to convert timestamped Az / El
@@ -183,11 +217,16 @@ def azel_to_radec(site, times, azel, use_ephem=False):
         times (array):  The timestamps in UTC seconds.
         azel (array):  The Az / El boresight quaternions.
         use_ephem (bool):  Use pyephem instead of astropy
+        use_qpoint (bool):  Use qpoint instead of astropy
 
     Returns:
         (array):  The RA / DEC boresight quaternions.
 
     """
+
+    if use_qpoint:
+        return _qpoint_transform(site, times, azel)
+
     x_axis = np.array([1.0, 0.0, 0.0])
     y_axis = np.array([0.0, 1.0, 0.0])
     z_axis = np.array([0.0, 0.0, 1.0])
