@@ -524,11 +524,18 @@ class FilterBin(Operator):
         help="Write output data products to this directory",
     )
 
-    write_map = Bool(True, help="If True, write the projected map")
+    write_binmap = Bool(False, help="If True, write the unfiltered map")
+
+    write_map = Bool(True, help="If True, write the filtered map")
+
+    write_noiseweighted_binmap = Bool(
+        False,
+        help="If True, write the noise-weighted unfiltered map",
+    )
 
     write_noiseweighted_map = Bool(
         False,
-        help="If True, write the noise-weighted map",
+        help="If True, write the noise-weighted filtered map",
     )
 
     write_hits = Bool(True, help="If True, write the hits map")
@@ -794,8 +801,8 @@ class FilterBin(Operator):
                     )
                     t1 = time()
 
-                memreport.prefix = "After detector templates"
-                memreport.apply(data)
+                # memreport.prefix = "After detector templates"
+                # memreport.apply(data)
 
                 if template_covariance is None or np.any(last_good_fit != good_fit):
                     template_covariance = self._build_template_covariance(
@@ -1555,17 +1562,23 @@ class FilterBin(Operator):
                 mc_root += f"_{self.mc_index:05d}"
 
         binned = not filtered  # only write hits and covariance once
+        if binned:
+            write_map = self.write_binmap
+            write_noiseweighted_map = self.write_noiseweighted_binmap
+        else:
+            write_map = self.write_map
+            write_noiseweighted_map = self.write_noiseweighted_map
         for key, write, keep, force, rootname in [
             (hits_name, self.write_hits and binned, False, False, self.name),
             (rcond_name, self.write_rcond and binned, False, False, self.name),
             (
                 noiseweighted_map_name,
-                self.write_noiseweighted_map,
+                write_noiseweighted_map,
                 False,
                 True,
                 mc_root,
             ),
-            (map_name, self.write_map, False, True, mc_root),
+            (map_name, write_map, False, True, mc_root),
             (invcov_name, self.write_invcov and binned, False, False, self.name),
             (cov_name, self.write_cov and binned, True, False, self.name),
         ]:
