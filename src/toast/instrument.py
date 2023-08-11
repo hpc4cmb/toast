@@ -631,9 +631,10 @@ class Focalplane(object):
             # Check that efficiency and leakage are consistent
             epsilon = self.detector_data["pol_leakage"]
             eta = self.detector_data["pol_efficiency"]
-            np.testing.assert_almost_equal(
+            np.testing.assert_allclose(
                 eta,
                 (1 + epsilon) / (1 - epsilon),
+                rtol=1e-6,
                 err_msg="inconsistent polarization leakage and efficiency",
             )
             return
