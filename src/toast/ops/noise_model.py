@@ -602,9 +602,9 @@ class FlagNoiseFit(Operator):
             local_net = list()
             local_fknee = list()
 
-            # If we have an analytic noise model from a simulation or fit, then we can access
-            # the properties directly.  If not, we will use the detector weight as a proxy
-            # for the NET and make a crude estimate of the knee frequency.
+            # If we have an analytic noise model from a simulation or fit, then we can
+            # access the properties directly.  If not, we will use the detector weight
+            # as a proxy for the NET and make a crude estimate of the knee frequency.
 
             for det in dets:
                 try:
@@ -623,20 +623,23 @@ class FlagNoiseFit(Operator):
 
             # Gather data across the process column
 
+            local_net = np.array(local_net, dtype=np.float64)
+            local_fknee = np.array(local_fknee, dtype=np.float64)
             net_mean = None
             net_std = None
             fknee_mean = None
             fknee_std = None
+            good_fit = local_net > 0.0
             if obs.comm_col is None:
-                all_net = np.array(local_net)
+                all_net = np.array(local_net[good_fit])
                 net_mean = np.mean(all_net)
                 net_std = np.std(all_net)
                 if self.sigma_fknee is not None:
-                    all_fknee = np.array(local_fknee)
+                    all_fknee = np.array(local_fknee[good_fit])
                     fknee_mean = np.mean(all_fknee)
                     fknee_std = np.std(all_fknee)
             else:
-                all_net = obs.comm_col.gather(local_net, root=0)
+                all_net = obs.comm_col.gather(local_net[good_fit], root=0)
                 if obs.comm_col_rank == 0:
                     all_net = np.array([val for plist in all_net for val in plist])
                     net_mean = np.mean(all_net)
@@ -644,7 +647,7 @@ class FlagNoiseFit(Operator):
                 net_mean = obs.comm_col.bcast(net_mean, root=0)
                 net_std = obs.comm_col.bcast(net_std, root=0)
                 if self.sigma_fknee is not None:
-                    all_fknee = obs.comm_col.gather(local_fknee, root=0)
+                    all_fknee = obs.comm_col.gather(local_fknee[good_fit], root=0)
                     if obs.comm_col_rank == 0:
                         all_fknee = np.array(
                             [val for plist in all_fknee for val in plist]
@@ -660,6 +663,12 @@ class FlagNoiseFit(Operator):
             local_cut_fknee = list()
             new_flags = dict()
             for idet, det in enumerate(dets):
+                if not good_fit[idet]:
+                    msg = f"obs {obs.name}, det {det} has NET=0 (bad model fit)"
+                    log.info(msg)
+                    obs.detdata[self.det_flags][det, :] |= self.det_flag_mask
+                    new_flags[det] = self.det_flag_mask
+                    continue
                 if np.absolute(local_net[idet] - net_mean) > net_std * self.sigma_NET:
                     msg = f"obs {obs.name}, det {det} has NET {local_net[idet]} "
                     msg += f" that is > {self.sigma_NET} x {net_std} from {net_mean}"

@@ -305,6 +305,12 @@ conf["install_requires"] = [
 conf["extras_require"] = {
     "mpi": ["mpi4py>=3.0"],
     "totalconvolve": ["ducc0"],
+    "interactive": [
+        "wurlitzer",
+        "ipywidgets",
+        "plotly",
+        "plotly-resampler",
+    ]
 }
 conf["packages"] = find_packages(
     "src",

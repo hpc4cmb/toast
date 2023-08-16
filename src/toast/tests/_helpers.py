@@ -141,6 +141,7 @@ def create_ground_telescope(
     pixel_per_process=1,
     fknee=None,
     freqs=None,
+    width=5.0 * u.degree,
 ):
     """Create a fake ground telescope with at least one detector per process."""
     npix = 1
@@ -157,6 +158,7 @@ def create_ground_telescope(
             psd_fmin=1.0e-5 * u.Hz,
             psd_net=0.05 * u.K * np.sqrt(1 * u.second),
             psd_fknee=fknee,
+            width=width,
         )
     else:
         fp_detdata = list()
@@ -169,6 +171,7 @@ def create_ground_telescope(
                 psd_net=0.05 * u.K * np.sqrt(1 * u.second),
                 psd_fknee=fknee,
                 bandcenter=freq,
+                width=width,
             )
             if fov is None:
                 fov = fp_freq.field_of_view
@@ -181,7 +184,7 @@ def create_ground_telescope(
             field_of_view=fov,
         )
 
-    site = GroundSite("Atacama", "-22:57:30", "-67:47:10", 5200.0 * u.meter)
+    site = GroundSite("atacama", "-22:57:30", "-67:47:10", 5200.0 * u.meter)
     return Telescope("telescope", focalplane=fp, site=site)
 
 
@@ -219,7 +222,8 @@ def create_satellite_data(
     sample_rate=10.0 * u.Hz,
     obs_time=10.0 * u.minute,
     pixel_per_process=1,
-    hwp_rpm=10.0,
+    hwp_rpm=9.0,
+    single_group=False,
 ):
     """Create a data object with a simple satellite sim.
 
@@ -238,7 +242,7 @@ def create_satellite_data(
         toast.Data: the distributed data with named observations.
 
     """
-    toastcomm = create_comm(mpicomm)
+    toastcomm = create_comm(mpicomm, single_group=single_group)
     data = Data(toastcomm)
 
     tele = create_space_telescope(
@@ -495,7 +499,7 @@ def create_healpix_ring_satellite(
 def create_fake_sky(data, dist_key, map_key):
     np.random.seed(987654321)
     dist = data[dist_key]
-    pix_data = PixelData(dist, np.float64, n_value=3, units=u.K)
+    pix_data = PixelData(dist, np.float64, n_value=3, units=defaults.det_data_units)
     # Just replicate the fake data across all local submaps
     off = 0
     for submap in range(dist.n_submap):
@@ -699,6 +703,7 @@ def fake_flags(
 def create_ground_data(
     mpicomm,
     sample_rate=10.0 * u.Hz,
+    fp_width=5.0 * u.degree,
     temp_dir=None,
     el_nod=False,
     el_nods=[-1 * u.degree, 1 * u.degree],
@@ -733,6 +738,7 @@ def create_ground_data(
         pixel_per_process=pixel_per_process,
         fknee=fknee,
         freqs=freqs,
+        width=fp_width,
     )
 
     # Create a schedule.
@@ -790,6 +796,7 @@ def create_ground_data(
         hwp_angle=defaults.hwp_angle,
         hwp_rpm=120.0,
         weather="atacama",
+        median_weather=True,
         detset_key="pixel",
         elnod_start=el_nod,
         elnods=el_nods,
@@ -980,62 +987,67 @@ def plot_wcs_maps(
         ext = max(np.absolute(minval), np.absolute(maxval))
         return -ext, ext
 
-    def sub_mono(hitdata, mdata):
-        if hitdata is None:
-            return
-        goodpix = np.logical_and((hitdata > 0), (mdata != 0))
-        mono = np.mean(mdata[goodpix])
-        print(f"Monopole = {mono}")
-        mdata[goodpix] -= mono
-        mdata[np.logical_not(goodpix)] = 0
-
     hitdata = None
+    goodhits = slice(None)
     if hitfile is not None:
         hdulist = af.open(hitfile)
         hdu = hdulist[0]
         hitdata = np.array(hdu.data[0, :, :])
         wcs = WCS(hdu.header)
         maxhits = np.amax(hdu.data[0, :, :])
+        goodhits = hdu.data[0, :, :] > 0
         plot_single(wcs, hdu, 0, 0, maxhits, f"{hitfile}.pdf")
         del hdu
         hdulist.close()
+    badhits = np.logical_not(goodhits)
 
     if mapfile is not None:
         hdulist = af.open(mapfile)
         hdu = hdulist[0]
         wcs = WCS(hdu.header)
-
         if truth is not None:
             thdulist = af.open(truth)
             thdu = thdulist[0]
 
-        sub_mono(hitdata, hdu.data[0, :, :])
-        mmin, mmax = sym_range(hdu.data[0, :, :])
+        hdu.data[0, :, :][badhits] = 0
+        mono = np.mean(hdu.data[0, :, :][goodhits])
+        print(f"Monopole = {mono}")
+        hdu.data[0, :, :][goodhits] -= mono
+
+        mmin, mmax = sym_range(hdu.data[0, :, :][goodhits])
         if range_I is not None:
             mmin, mmax = range_I
         plot_single(wcs, hdu, 0, mmin, mmax, f"{mapfile}_I.pdf")
         if truth is not None:
-            tmin, tmax = sym_range(thdu.data[0, :, :])
-            hdu.data[0, :, :] -= thdu.data[0, :, :]
+            thdu.data[0, :, :][badhits] = 0
+            tmin, tmax = sym_range(thdu.data[0, :, :][goodhits])
+            plot_single(wcs, thdu, 0, tmin, tmax, f"{mapfile}_input_I.pdf")
+            hdu.data[0, :, :][goodhits] -= thdu.data[0, :, :][goodhits]
             plot_single(wcs, hdu, 0, tmin, tmax, f"{mapfile}_resid_I.pdf")
 
         if hdu.data.shape[0] > 1:
-            mmin, mmax = sym_range(hdu.data[1, :, :])
+            hdu.data[1, :, :][badhits] = 0
+            hdu.data[2, :, :][badhits] = 0
+            mmin, mmax = sym_range(hdu.data[1, :, :][goodhits])
             if range_Q is not None:
                 mmin, mmax = range_Q
             plot_single(wcs, hdu, 1, mmin, mmax, f"{mapfile}_Q.pdf")
             if truth is not None:
-                tmin, tmax = sym_range(thdu.data[1, :, :])
-                hdu.data[1, :, :] -= thdu.data[1, :, :]
+                thdu.data[1, :, :][badhits] = 0
+                tmin, tmax = sym_range(thdu.data[1, :, :][goodhits])
+                plot_single(wcs, thdu, 1, tmin, tmax, f"{mapfile}_input_Q.pdf")
+                hdu.data[1, :, :][goodhits] -= thdu.data[1, :, :][goodhits]
                 plot_single(wcs, hdu, 1, tmin, tmax, f"{mapfile}_resid_Q.pdf")
 
-            mmin, mmax = sym_range(hdu.data[2, :, :])
+            mmin, mmax = sym_range(hdu.data[2, :, :][goodhits])
             if range_U is not None:
                 mmin, mmax = range_U
             plot_single(wcs, hdu, 2, mmin, mmax, f"{mapfile}_U.pdf")
             if truth is not None:
-                tmin, tmax = sym_range(thdu.data[2, :, :])
-                hdu.data[2, :, :] -= thdu.data[2, :, :]
+                thdu.data[2, :, :][badhits] = 0
+                tmin, tmax = sym_range(thdu.data[2, :, :][goodhits])
+                plot_single(wcs, thdu, 2, tmin, tmax, f"{mapfile}_input_U.pdf")
+                hdu.data[2, :, :][goodhits] -= thdu.data[2, :, :][goodhits]
                 plot_single(wcs, hdu, 2, tmin, tmax, f"{mapfile}_resid_U.pdf")
 
         if truth is not None:
@@ -1043,3 +1055,172 @@ def plot_wcs_maps(
             thdulist.close()
         del hdu
         hdulist.close()
+
+
+def plot_healpix_maps(
+    hitfile=None,
+    mapfile=None,
+    range_I=None,
+    range_Q=None,
+    range_U=None,
+    truth=None,
+    gnomview=False,
+):
+    """Plot Healpix projected output maps.
+
+    This is a helper function to plot typical outputs of the mapmaker.
+
+    Args:
+        hitfile (str):  Path to the hits file.
+        mapfile (str):  Path to the map file.
+        range_I (tuple):  The min / max values of the Intensity map to plot.
+        range_Q (tuple):  The min / max values of the Q map to plot.
+        range_U (tuple):  The min / max values of the U map to plot.
+        truth (str):  Path to the input truth map in the case of simulations.
+        gnomview (bool):  If True, use a gnomview projection centered on the
+            mean of hit pixel locations.
+
+    """
+    set_matplotlib_backend()
+
+    import matplotlib.pyplot as plt
+
+    figsize = (12, 6)
+    figdpi = 100
+
+    def plot_single(data, vmin, vmax, out, gnomrot=None):
+        if gnomrot is not None:
+            hp.gnomview(
+                map=data,
+                rot=gnomrot,
+                xsize=1000,
+                reso=4.0,
+                nest=True,
+                cmap="jet",
+                min=vmin,
+                max=vmax,
+            )
+        else:
+            hp.mollview(data, xsize=1600, nest=True, cmap="jet", min=vmin, max=vmax)
+        plt.savefig(out, format="pdf")
+        plt.close()
+
+    def map_range(data):
+        minval = np.amin(data)
+        maxval = np.amax(data)
+        margin = 0.05 * (maxval - minval)
+        if margin == 0:
+            margin = -1
+        minval -= margin
+        maxval += margin
+        return minval, maxval
+
+    def sym_range(data):
+        minval, maxval = map_range(data)
+        ext = max(np.absolute(minval), np.absolute(maxval))
+        return -ext, ext
+
+    hitdata = None
+    gnomrot = None
+    goodhits = slice(None)
+    if hitfile is not None:
+        hitdata = hp.read_map(hitfile, field=None, nest=True)
+        maxhits = np.amax(hitdata)
+        npix = len(hitdata)
+        goodhits = hitdata > 0
+        goodindx = np.arange(npix, dtype=np.int32)[goodhits]
+        lon, lat = hp.pix2ang(
+            hp.npix2nside(len(hitdata)),
+            goodindx,
+            nest=True,
+            lonlat=True,
+        )
+        mlon = np.mean(lon)
+        mlat = np.mean(lat)
+        gnomrot = (mlon, mlat, 0.0)
+        plot_single(hitdata, 0, maxhits, f"{hitfile}.pdf", gnomrot=gnomrot)
+    badhits = np.logical_not(goodhits)
+
+    mapdata = None
+    truthdata = None
+    if mapfile is not None:
+        mapdata = hp.read_map(mapfile, field=None, nest=True)
+        if truth is not None:
+            truthdata = hp.read_map(truth, field=None, nest=True)
+
+        # Stokes I
+        mapdata[0][badhits] = hp.UNSEEN
+        mono = np.mean(mapdata[0][goodhits])
+        print(f"Monopole = {mono}")
+        mapdata[0][goodhits] -= mono
+
+        mmin, mmax = sym_range(mapdata[0][goodhits])
+        if range_I is not None:
+            mmin, mmax = range_I
+        plot_single(mapdata[0], mmin, mmax, f"{mapfile}_I.pdf", gnomrot=gnomrot)
+        if truth is not None:
+            truthdata[0][badhits] = hp.UNSEEN
+            tmin, tmax = sym_range(truthdata[0][goodhits])
+            plot_single(
+                truthdata[0], tmin, tmax, f"{mapfile}_input_I.pdf", gnomrot=gnomrot
+            )
+            mapdata[0][goodhits] -= truthdata[0][goodhits]
+            plot_single(
+                mapdata[0], tmin, tmax, f"{mapfile}_resid_I.pdf", gnomrot=gnomrot
+            )
+
+        if len(mapdata) > 1:
+            mapdata[1][badhits] = hp.UNSEEN
+            mapdata[2][badhits] = hp.UNSEEN
+
+            # Stokes Q
+            mmin, mmax = sym_range(mapdata[1][goodhits])
+            if range_Q is not None:
+                mmin, mmax = range_Q
+            plot_single(mapdata[1], mmin, mmax, f"{mapfile}_Q.pdf", gnomrot=gnomrot)
+            if truth is not None:
+                truthdata[1][badhits] = hp.UNSEEN
+                tmin, tmax = sym_range(truthdata[1][goodhits])
+                plot_single(
+                    truthdata[1],
+                    tmin,
+                    tmax,
+                    f"{mapfile}_input_Q.pdf",
+                    gnomrot=gnomrot,
+                )
+                mapdata[1][goodhits] -= truthdata[1][goodhits]
+                plot_single(
+                    mapdata[1],
+                    tmin,
+                    tmax,
+                    f"{mapfile}_resid_Q.pdf",
+                    gnomrot=gnomrot,
+                )
+
+            # Stokes U
+            mmin, mmax = sym_range(mapdata[2][goodhits])
+            if range_U is not None:
+                mmin, mmax = range_U
+            plot_single(mapdata[2], mmin, mmax, f"{mapfile}_U.pdf", gnomrot=gnomrot)
+            if truth is not None:
+                truthdata[2][badhits] = hp.UNSEEN
+                tmin, tmax = sym_range(truthdata[2][goodhits])
+                plot_single(
+                    truthdata[2],
+                    tmin,
+                    tmax,
+                    f"{mapfile}_input_U.pdf",
+                    gnomrot=gnomrot,
+                )
+                mapdata[2][goodhits] -= truthdata[2][goodhits]
+                plot_single(
+                    mapdata[2],
+                    tmin,
+                    tmax,
+                    f"{mapfile}_resid_U.pdf",
+                    gnomrot=gnomrot,
+                )
+
+    del truthdata
+    del mapdata
+    del hitdata

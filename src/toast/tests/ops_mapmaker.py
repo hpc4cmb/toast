@@ -845,6 +845,7 @@ class MapmakerTest(MPITestCase):
         pars["precond_width_max"] = 10
         pars["use_cgprecond"] = "T"
         pars["use_fprecond"] = "F"
+        pars["info"] = 3
         pars["path_output"] = testdir
 
         madam = ops.Madam(
