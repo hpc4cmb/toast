@@ -829,7 +829,7 @@ class Offset(Template):
 
         for iob, ob in enumerate(self.data.obs):
             obs_local_amps = obs_det_amps[ob.name]
-            if self.data.comm.group_size == 0:
+            if self.data.comm.group_size == 1:
                 all_obs_amps = [obs_local_amps]
             else:
                 all_obs_amps = self.data.comm.comm_group.gather(obs_local_amps, root=0)
