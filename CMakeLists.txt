@@ -128,6 +128,7 @@ if(TOAST_STATIC_DEPS)
     set(FFTW_USE_STATIC_LIBS TRUE)
     set(AATM_USE_STATIC_LIBS TRUE)
     set(SUITESPARSE_USE_STATIC_LIBS TRUE)
+    set(FLAC_USE_STATIC_LIBS TRUE)
 endif()
 
 # First look for MKL and CUDA, since those will provide both

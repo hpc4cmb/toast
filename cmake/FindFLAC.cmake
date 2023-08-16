@@ -1,4 +1,4 @@
-# Copied without modification from libsndfile 
+# Copied without modification from libsndfile
 # (https://github.com/libsndfile/libsndfile)
 #
 # (C) Erik de Castro Lopo <erikd@mega-nerd.com>
@@ -10,10 +10,21 @@
 # - Find FLAC
 # Find the native FLAC includes and libraries
 #
+#  FLAC_USE_STATIC_LIBS:   Search for static libraries.
+#
 #  FLAC_INCLUDE_DIRS - where to find FLAC headers.
 #  FLAC_LIBRARIES    - List of libraries when using libFLAC.
 #  FLAC_FOUND        - True if libFLAC found.
-#  FLAC_DEFINITIONS  - FLAC compile definitons 
+#  FLAC_DEFINITIONS  - FLAC compile definitons
+
+# Check whether to search static or dynamic libs
+set(CMAKE_FIND_LIBRARY_SUFFIXES_SAV ${CMAKE_FIND_LIBRARY_SUFFIXES})
+
+if(${FLAC_USE_STATIC_LIBS})
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX})
+else()
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_SAV})
+endif()
 
 if (FLAC_INCLUDE_DIR)
     # Already in cache, be silent
@@ -73,3 +84,6 @@ if (FLAC_FOUND)
 endif ()
 
 mark_as_advanced(FLAC_INCLUDE_DIR FLAC_LIBRARY)
+
+# Restore library search suffix
+set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES_SAV})
