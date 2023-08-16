@@ -424,7 +424,7 @@ class Periodic(Template):
                 }
                 amp_offset += nbins
 
-        if self.data.comm.world_size == 0:
+        if self.data.comm.world_size == 1:
             all_obs_dets_amps = [obs_det_amps]
         else:
             all_obs_dets_amps = self.data.comm.comm_world.gather(obs_det_amps, root=0)

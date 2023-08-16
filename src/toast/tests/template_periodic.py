@@ -37,6 +37,14 @@ class TemplatePeriodicTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
         self.nside = 64
         np.random.seed(123456)
+        if not (
+            ("CONDA_BUILD" in os.environ)
+            or ("CIBUILDWHEEL" in os.environ)
+            or ("CI" in os.environ)
+        ):
+            self.make_plots = False
+        else:
+            self.make_plots = True
 
     def fake_hwpss(self, data, field, scale):
         # Create a fake HWP synchronous signal
@@ -518,7 +526,7 @@ class TemplatePeriodicTest(MPITestCase):
         hwpss_tmpl.write(pamps, pfile)
 
         # Plot some results
-        if data.comm.world_rank == 0:
+        if data.comm.world_rank == 0 and self.make_plots:
             perplot(pfile, out_root=pplot_root)
             for ob in data.obs:
                 offplot(
@@ -717,7 +725,7 @@ class TemplatePeriodicTest(MPITestCase):
         hwpss_tmpl.write(pamps, pfile)
 
         # Plot some results
-        if data.comm.world_rank == 0:
+        if data.comm.world_rank == 0 and self.make_plots:
             perplot(pfile, out_root=pplot_root)
             for ob in data.obs:
                 offplot(
