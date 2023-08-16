@@ -210,6 +210,8 @@ class import_obs_meta(object):
                 "site_weather_time",
                 "site_weather_max_pwv",
                 "site_weather_realization",
+                "site_weather_uid",
+                "site_weather_use_median",
             ]
         )
 
@@ -254,6 +256,8 @@ class import_obs_meta(object):
                     weather_realization = None
                     weather_max_pwv = None
                     weather_time = None
+                    weather_uid = None
+                    weather_median = None
                     if "site_weather_name" in frm:
                         weather_name = from_g3_scalar_type(frm["site_weather_name"])
                         weather_realization = from_g3_scalar_type(
@@ -266,15 +270,22 @@ class import_obs_meta(object):
                             from_g3_time(frm["site_weather_time"]),
                             tz=datetime.timezone.utc,
                         )
+                        weather_uid = from_g3_scalar_type(
+                            frm["site_weather_uid"]
+                        )
+                        weather_median = from_g3_scalar_type(
+                            frm["site_weather_use_median"]
+                        )
                     site_uid = from_g3_scalar_type(frm["site_uid"])
                     weather = None
                     if weather_name is not None:
                         weather = SimWeather(
                             name=weather_name,
                             time=weather_time,
-                            site_uid=site_uid,
+                            site_uid=weather_uid,
                             realization=weather_realization,
                             max_pwv=weather_max_pwv,
+                            median_weather=weather_median,
                         )
                     site = site_class(
                         from_g3_scalar_type(frm["site_name"]),

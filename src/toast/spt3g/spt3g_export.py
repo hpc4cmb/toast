@@ -251,6 +251,10 @@ class export_obs_meta(object):
                     else:
                         ob["site_weather_max_pwv"] = c3g.G3Double(site.weather.max_pwv)
                     ob["site_weather_time"] = to_g3_time(site.weather.time.timestamp())
+                    ob["site_weather_uid"] = c3g.G3Int(site.weather.site_uid)
+                    ob["site_weather_use_median"] = c3g.G3Bool(
+                        site.weather.median_weather
+                    )
         session = obs.session
         if session is not None:
             ob["session_name"] = c3g.G3String(session.name)
