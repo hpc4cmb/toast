@@ -1011,6 +1011,7 @@ def attempt_scan_pole(
     if args.one_scan_per_day and stop_timestamp > tstop_cooler:
         raise RuntimeError("one_scan_per_day is incompatible with cooler cycles")
     success = False
+    el = None
     for patch in visible:
         observer.date = to_DJD(tstart)
         if isinstance(patch, CoolerCyclePatch):
@@ -1949,6 +1950,7 @@ def add_cooler_cycle(
             0.005 * (moon_phase1 + moon_phase2),
             patch.hits,
             0,
+            (patch.time + t2 - t1) / 86400,
         )
     else:
         entry = fout_fmt.format(
