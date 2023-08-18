@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -2157,12 +2157,12 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
     fout = open(fname_out, "w")
 
     fout.write(
-        "#{:15} {:15} {:>15} {:>15} {:>15}\n".format(
+        "#{:14} {:15} {:>15} {:>15} {:>15}\n".format(
             "Site", "Telescope", "Latitude [deg]", "Longitude [deg]", "Elevation [m]"
         )
     )
     fout.write(
-        " {:15} {:15} {:15.3f} {:15.3f} {:15.1f}\n".format(
+        "{:15} {:15} {:15.3f} {:15.3f} {:15.1f}\n".format(
             args.site_name,
             args.telescope,
             np.degrees(observer.lat),
@@ -2173,20 +2173,22 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
 
     if args.verbose_schedule:
         fout_fmt0 = (
-            "#{:>20} {:>20} {:>14} {:>14} {:>8} "
+            "#{:>19} {:>20} {:>14} {:>14} {:>8} "
             "{:35} {:>8} {:>8} {:>8} {:>5} "
             "{:>8} {:>8} {:>8} {:>8} "
             "{:>8} {:>8} {:>8} {:>8} {:>5} "
             "{:>5} {:>3} {:>8}\n"
         )
-
         fout_fmt = (
-            " {:20} {:20} {:14.6f} {:14.6f} {:8.2f} "
+            "{:20} {:20} {:14.6f} {:14.6f} {:8.2f} "
             "{:35} {:8.2f} {:8.2f} {:8.2f} {:5} "
             "{:8.2f} {:8.2f} {:8.2f} {:8.2f} "
             "{:8.2f} {:8.2f} {:8.2f} {:8.2f} {:5.2f} "
             "{:5} {:3} {:8.3f}\n"
         )
+        if args.field_separator != "":
+            fout_fmt0.replace(" ", args.field_separator)
+            fout_fmt.replace(" ", args.field_separator)
         fout.write(
             fout_fmt0.format(
                 "Start time UTC",
@@ -2476,6 +2478,11 @@ def parse_args(opts=None):
         action="store_true",
         help="Write a 24-field verbose schedule "
         "instead of the concise 11-field schedule",
+    )
+    parser.add_argument(
+        "--field-separator",
+        default="",
+        help="String to write between fields in the schedule.",
     )
     parser.add_argument(
         "--lock-az-range",

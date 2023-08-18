@@ -219,7 +219,7 @@ class GroundSchedule(object):
         return val
 
     @function_timer
-    def read(self, file, file_split=None, comm=None, sort=False):
+    def read(self, file, file_split=None, comm=None, sort=False, field_separator="|"):
         """Load a ground observing schedule from a file.
 
         This loads scans from a file and appends them to the internal list of scans.
@@ -232,6 +232,8 @@ class GroundSchedule(object):
                 'scan index modulo nsplit == isplit' are included.
             comm (MPI.Comm):  Optional communicator to broadcast the schedule across.
             sort (bool):  If True, sort the combined scan list by name.
+            field_separator (str):  Field separator in the schedule file.  If the
+                separator is not found in the string, use white space instead
 
         Returns:
             None
@@ -243,7 +245,14 @@ class GroundSchedule(object):
             """Parse one line of the schedule file"""
             if line.startswith("#"):
                 return None
-            fields = line.split()
+            fields = line.split(field_separator)
+            if len(fields) == 1:
+                # Failed ... try with white space
+                fields = line.split()
+            else:
+                # Separating with anything but white space can
+                # leave excess space
+                fields = [field.strip() for field in fields]
             nfield = len(fields)
             if nfield == 11:
                 # Concise schedule format is default after 2023-02-13
@@ -259,7 +268,7 @@ class GroundSchedule(object):
                     el,
                     scan,
                     subscan,
-                ) = line.split()
+                ) = fields
             else:
                 # Optional (old) verbose format
                 (
@@ -286,7 +295,7 @@ class GroundSchedule(object):
                     moon_phase,
                     scan,
                     subscan,
-                ) = line.split()
+                ) = fields
             start_time = start_date + " " + start_time
             stop_time = stop_date + " " + stop_time
             try:
@@ -326,13 +335,21 @@ class GroundSchedule(object):
                     if "SPECIAL" in line:
                         continue
                     if read_header:
+                        fields = line.split(field_separator)
+                        if len(fields) == 1:
+                            # Failed ... try with white space
+                            fields = line.split()
+                        else:
+                            # Separating with anything but white space can
+                            # leave excess space
+                            fields = [field.strip() for field in fields]
                         (
                             site_name,
                             telescope_name,
                             site_lat,
                             site_lon,
                             site_alt,
-                        ) = line.split()
+                        ) = fields
                         self.site_name = site_name
                         self.telescope_name = telescope_name
                         self.site_lat = float(site_lat) * u.degree
