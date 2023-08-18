@@ -2189,8 +2189,8 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
             "{:5} {:3} {:8.3f}\n"
         )
         if args.field_separator != "":
-            fout_fmt0.replace(" ", args.field_separator)
-            fout_fmt.replace(" ", args.field_separator)
+            fout_fmt0 = fout_fmt0.replace(" ", args.field_separator)
+            fout_fmt = fout_fmt.replace(" ", args.field_separator)
         fout.write(
             fout_fmt0.format(
                 "Start time UTC",
@@ -2219,9 +2219,11 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         )
     else:
         # Concise schedule format
-        fout_fmt0 = "#{:>20} {:>20} {:>8} {:35} {:>8} {:>8} {:>8} {:>5} {:>3}\n"
-
-        fout_fmt = " {:>20} {:>20} {:8.2f} {:35} {:8.2f} {:8.2f} {:8.2f} {:5} {:3}\n"
+        fout_fmt0 = "#{:>19} {:>20} {:>8} {:35} {:>8} {:>8} {:>8} {:>5} {:>3}\n"
+        fout_fmt = "{:>20} {:>20} {:8.2f} {:35} {:8.2f} {:8.2f} {:8.2f} {:5} {:3}\n"
+        if args.field_separator != "":
+            fout_fmt0 = fout_fmt0.replace(" ", args.field_separator)
+            fout_fmt = fout_fmt.replace(" ", args.field_separator)
         fout.write(
             fout_fmt0.format(
                 "Start time UTC",
