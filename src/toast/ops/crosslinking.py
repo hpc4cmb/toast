@@ -59,7 +59,7 @@ class CrossLinking(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_proc_or_invalid, help="Bit mask value for optional detector flagging"
     )
 
     shared_flags = Unicode(
@@ -69,7 +69,7 @@ class CrossLinking(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid,
+        defaults.shared_mask_proc_or_invalid,
         help="Bit mask value for optional telescope flagging",
     )
 

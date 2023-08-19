@@ -65,11 +65,11 @@ class PolyFilter2D(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid | defaults.det_mask_processing,
+        defaults.det_mask_proc_or_invalid | defaults.det_mask_processing,
         help="Bit mask value for optional detector flagging",
     )
 
-    poly_flag_mask = Int(1, help="Bit mask value for intervals that fail to filter")
+    poly_flag_mask = Int(defaults.shared_mask_processing, help="Bit mask value for intervals that fail to filter")
 
     shared_flags = Unicode(
         defaults.shared_flags,
@@ -78,7 +78,7 @@ class PolyFilter2D(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional shared flagging"
     )
 
     view = Unicode(
@@ -447,13 +447,13 @@ class PolyFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid | defaults.det_mask_processing,
+        defaults.det_mask_proc_or_invalid | defaults.det_mask_processing,
         help="Bit mask value for optional detector flagging",
     )
 
     poly_flag_mask = Int(
-        defaults.shared_mask_invalid,
-        help="Shared flag bit mask for samples that are not filtered",
+        defaults.shared_mask_processing,
+        help="Shared flag bit mask for samples outside of filtering view",
     )
 
     shared_flags = Unicode(
@@ -463,7 +463,7 @@ class PolyFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional shared flagging"
     )
 
     view = Unicode(
@@ -650,7 +650,7 @@ class CommonModeFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid | defaults.det_mask_processing,
+        defaults.det_mask_proc_or_invalid | defaults.det_mask_processing,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -661,7 +661,7 @@ class CommonModeFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional shared flagging"
     )
 
     focalplane_key = Unicode(

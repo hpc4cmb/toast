@@ -64,18 +64,18 @@ def set_default_values(values=None):
         # flag masks
         #
         "shared_mask_invalid": 1,
-        "shared_mask_unstable_scanrate": 2,
-        "shared_mask_irregular": 4,
+        "shared_mask_processing": 2,
+        "shared_mask_proc_or_invalid": 1 + 2,
+        "shared_mask_unstable_scanrate": 4,
+        "shared_mask_irregular": 8,
         "det_mask_invalid": 1,
-        "det_mask_sso": 1 + 2,
         "det_mask_processing": 2,
+        "det_mask_proc_or_invalid": 1 + 2,
+        "det_mask_sso": 2,
         #
         # ground-specific flag masks
         #
-        # This marks the turnarounds as "invalid".  To simulate data
-        # in the turnarounds, set the turnaround mask in SimGround to
-        # just "2".
-        "turnaround": 1 + 2,
+        "turnaround": 2,
         "scan_leftright": 8,
         "scan_rightleft": 16,
         "sun_up": 32,

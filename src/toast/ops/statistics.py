@@ -36,7 +36,7 @@ class Statistics(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_proc_or_invalid, help="Bit mask value for optional detector flagging"
     )
 
     shared_flags = Unicode(
@@ -46,7 +46,7 @@ class Statistics(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional shared flagging"
     )
 
     view = Unicode(

@@ -84,18 +84,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_proc_or_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_proc_or_invalid,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
             binning=binning,
             hwp_filter_order=4,
             ground_filter_order=5,
@@ -228,18 +228,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_proc_or_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_proc_or_invalid,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -365,18 +365,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
             det_flags=defaults.det_flags,
-            det_flag_mask=0,
+            det_flag_mask=defaults.det_mask_proc_or_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin_flagged",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_proc_or_invalid,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -523,18 +523,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_proc_or_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_proc_or_invalid,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -652,7 +652,7 @@ class FilterBinTest(MPITestCase):
         data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
 
         # Create some detector pointing matrices
-        detpointing = ops.PointingDetectorSimple(shared_flag_mask=0)
+        detpointing = ops.PointingDetectorSimple()
         pixels = ops.PixelsHealpix(
             nside=self.nside,
             create_dist="pixel_dist",
@@ -705,14 +705,14 @@ class FilterBinTest(MPITestCase):
             shared_flags=defaults.shared_flags,
             shared_flag_mask=detpointing.shared_flag_mask,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_proc_or_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_proc_or_invalid,
             shared_flags=defaults.shared_flags,
             shared_flag_mask=detpointing.shared_flag_mask,
             binning=binning,

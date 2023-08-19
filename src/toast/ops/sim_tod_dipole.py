@@ -56,6 +56,16 @@ class SimDipole(Operator):
         defaults.boresight_radec, help="Observation shared key for boresight"
     )
 
+    shared_flags = Unicode(
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
+    )
+
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+    )
+
     velocity = Unicode(defaults.velocity, help="Observation shared key for velocity")
 
     subtract = Bool(
@@ -101,13 +111,6 @@ class SimDipole(Operator):
         if check is not None:
             if check not in ["E", "C", "G"]:
                 raise traitlets.TraitError("coordinate system must be 'E', 'C', or 'G'")
-        return check
-
-    @traitlets.validate("det_flag_mask")
-    def _check_det_flag_mask(self, proposal):
-        check = proposal["value"]
-        if check < 0:
-            raise traitlets.TraitError("Flag mask should be a positive integer")
         return check
 
     @traitlets.validate("shared_flag_mask")
@@ -167,7 +170,10 @@ class SimDipole(Operator):
 
             for vw in range(len(views)):
                 # Boresight pointing quaternions
-                boresight = views.shared[self.boresight][vw]
+                boresight = np.array(views.shared[self.boresight][vw])
+                flags = views.shared[self.shared_flags][vw] & self.shared_flag_mask
+                bad = flags != 0
+                boresight[bad, :] = nullquat
 
                 # Set the solar and orbital velocity inputs based on the
                 # requested mode.
@@ -215,6 +221,7 @@ class SimDipole(Operator):
             "meta": list(),
             "shared": [
                 self.boresight,
+                self.shared_flags,
             ],
             "detdata": [self.det_data],
             "intervals": list(),

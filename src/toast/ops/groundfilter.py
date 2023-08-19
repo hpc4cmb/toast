@@ -86,14 +86,15 @@ class GroundFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid | defaults.det_mask_processing,
+        defaults.det_mask_proc_or_invalid,
         help="Bit mask value for optional detector flagging",
     )
 
-    ground_flag_mask = Int(
-        defaults.det_mask_invalid,
-        help="Bit mask to use when adding flags based on ground filter failures.",
-    )
+    # FIXME:  This trait is not used anywhere.  Safe to remove?
+    # ground_flag_mask = Int(
+    #     defaults.det_mask_processing,
+    #     help="Bit mask to use when adding flags based on ground filter failures.",
+    # )
 
     azimuth = Unicode(
         defaults.azimuth, allow_none=True, help="Observation shared key for Azimuth"

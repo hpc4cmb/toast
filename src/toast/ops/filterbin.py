@@ -454,12 +454,12 @@ class FilterBin(Operator):
     )
 
     filter_flag_mask = Int(
-        defaults.shared_mask_invalid,
+        defaults.shared_mask_processing,
         help="Bit mask value for flagging samples that fail filtering",
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid | defaults.det_mask_processing,
+        defaults.det_mask_proc_or_invalid,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -470,7 +470,7 @@ class FilterBin(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid,
+        defaults.shared_mask_proc_or_invalid,
         help="Bit mask value for optional telescope flagging",
     )
 

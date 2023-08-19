@@ -83,6 +83,7 @@ class YieldCut(Operator):
             # value should be close for a large enough number of detectors.
 
             exists = obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
+            new_flags = dict()
             for det in dets:
                 key1 = obs.telescope.uid
                 if self.fixed:
@@ -104,6 +105,8 @@ class YieldCut(Operator):
                 )[0]
                 if x > self.keep_frac:
                     obs.detdata[self.det_flags][det] |= self.det_flag_mask
+                    new_flags[det] = self.det_flag_mask
+            obs.update_local_detector_flags(new_flags)
         return
 
     def _finalize(self, data, **kwargs):

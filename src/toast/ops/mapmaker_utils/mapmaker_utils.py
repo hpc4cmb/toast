@@ -60,7 +60,7 @@ class BuildHitMap(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_proc_or_invalid, help="Bit mask value for optional detector flagging"
     )
 
     shared_flags = Unicode(
@@ -70,7 +70,7 @@ class BuildHitMap(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional flagging"
     )
 
     pixels = Unicode(defaults.pixels, help="Observation detdata key for pixel indices")
@@ -272,7 +272,7 @@ class BuildInverseCovariance(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_proc_or_invalid, help="Bit mask value for optional detector flagging"
     )
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
@@ -284,7 +284,7 @@ class BuildInverseCovariance(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional flagging"
     )
 
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
@@ -564,7 +564,7 @@ class BuildNoiseWeighted(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_proc_or_invalid, help="Bit mask value for optional detector flagging"
     )
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
@@ -576,7 +576,7 @@ class BuildNoiseWeighted(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional flagging"
     )
 
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
@@ -956,7 +956,7 @@ class CovarianceAndHits(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_proc_or_invalid, help="Bit mask value for optional detector flagging"
     )
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
@@ -968,7 +968,7 @@ class CovarianceAndHits(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional flagging"
     )
 
     pixel_pointing = Instance(

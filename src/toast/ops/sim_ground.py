@@ -297,10 +297,6 @@ class SimGround(Operator):
         help="Use median weather parameters instead of sampling from the distributions",
     )
 
-    invalid_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask to raise invalid flags with"
-    )
-
     turnaround_mask = Int(
         defaults.turnaround, help="Bit mask to raise turnaround flags with"
     )
