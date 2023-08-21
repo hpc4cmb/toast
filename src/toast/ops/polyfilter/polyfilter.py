@@ -69,7 +69,10 @@ class PolyFilter2D(Operator):
         help="Bit mask value for optional detector flagging",
     )
 
-    poly_flag_mask = Int(defaults.shared_mask_processing, help="Bit mask value for intervals that fail to filter")
+    poly_flag_mask = Int(
+        defaults.shared_mask_processing,
+        help="Bit mask value for intervals that fail to filter",
+    )
 
     shared_flags = Unicode(
         defaults.shared_flags,
@@ -78,7 +81,8 @@ class PolyFilter2D(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_proc_or_invalid,
+        help="Bit mask value for optional shared flagging",
     )
 
     view = Unicode(
@@ -463,7 +467,8 @@ class PolyFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_proc_or_invalid,
+        help="Bit mask value for optional shared flagging",
     )
 
     view = Unicode(
@@ -661,7 +666,8 @@ class CommonModeFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_proc_or_invalid,
+        help="Bit mask value for optional shared flagging",
     )
 
     focalplane_key = Unicode(

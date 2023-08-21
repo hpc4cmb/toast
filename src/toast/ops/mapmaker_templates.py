@@ -61,7 +61,8 @@ class TemplateMatrix(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_proc_or_invalid,
+        help="Bit mask value for optional detector flagging",
     )
 
     @traitlets.validate("templates")
@@ -233,6 +234,8 @@ class TemplateMatrix(Operator):
             # units.
             input_units = 1.0 / self.det_data_units
             for ob in data.obs:
+                if self.det_data not in ob.detdata:
+                    print(f"detector data {self.det_data} not in obs {ob.name}", flush=True)
                 if ob.detdata[self.det_data].units != input_units:
                     msg = f"obs {ob.name} detdata {self.det_data}"
                     msg += f" does not have units of {input_units}"
@@ -279,7 +282,10 @@ class TemplateMatrix(Operator):
             # Ensure that our output detector data exists in each observation
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(selection=detectors)
+                dets = ob.select_local_detectors(
+                    selection=detectors,
+                    flagmask=0,
+                )
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue

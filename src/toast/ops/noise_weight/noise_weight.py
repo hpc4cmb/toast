@@ -50,8 +50,9 @@ class NoiseWeight(Operator):
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         for ob in data.obs:
-            # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            # Get the detectors we are using for this observation.  Since
+            # we are modifying the timestream units, we consider all detectors.
+            dets = ob.select_local_detectors(detectors, flagmask=0)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

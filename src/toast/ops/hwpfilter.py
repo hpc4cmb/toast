@@ -71,7 +71,8 @@ class HWPFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_proc_or_invalid,
+        help="Bit mask value for optional shared flagging",
     )
 
     det_flags = Unicode(

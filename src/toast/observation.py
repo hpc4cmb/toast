@@ -396,7 +396,7 @@ class Observation(MutableMapping):
     def select_local_detectors(
         self,
         selection=None,
-        flagmask=(default_values.det_mask_invalid | default_values.det_mask_processing),
+        flagmask=default_values.det_mask_proc_or_invalid,
     ):
         """Get the local detectors assigned to this process.
 

@@ -426,6 +426,18 @@ class FitNoiseModel(Operator):
         return J
 
     def _get_err_ret(self, psd_unit):
+        eret = dict()
+        eret["fit_result"] = types.SimpleNamespace()
+        eret["fit_result"].success = False
+        # Use a large value, to avoid divide by zero elsewhere
+        # in the code if the detector flags are not examined.
+        eret["NET"] = 0.0 * np.sqrt(1.0 * psd_unit)
+        eret["fmin"] = 0.0 * u.Hz
+        eret["fknee"] = 0.0 * u.Hz
+        eret["alpha"] = 0.0
+        return eret
+
+    def _get_err_ret(self, psd_unit):
         # Internal function to build a fake return result
         # when the fitting fails for some reason.
         eret = dict()

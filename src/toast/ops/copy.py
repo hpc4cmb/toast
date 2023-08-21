@@ -97,12 +97,18 @@ class Copy(Operator):
                 )
 
             if len(self.detdata) > 0:
-                # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
+                # Get the detectors we are using for this observation.
+                # We copy the full set of detectors, even if they are flagged.
+                dets = ob.select_local_detectors(
+                    detectors,
+                    flagmask=0,
+                )
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
                 for in_key, out_key in self.detdata:
+                    if in_key not in ob.detdata:
+                        continue
                     if out_key in ob.detdata:
                         # The key exists- verify that dimensions / dtype match
                         in_dtype = ob.detdata[in_key].dtype

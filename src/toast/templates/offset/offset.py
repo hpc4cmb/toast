@@ -252,34 +252,40 @@ class Offset(Template):
                     # Move this loop to compiled code if it is slow...
                     # Note:  we are building the offset amplitude *variance*, which is
                     # why the "noise weight" (inverse variance) is in the denominator.
-                    if self.det_flags is None:
-                        voff = 0
+                    if detnoise <= 0:
+                        # This detector is cut in the noise model
                         for amp in range(n_amp_view):
-                            amplen = step_length
-                            if amp == n_amp_view - 1:
-                                amplen = view_samples - voff
-                            self._offsetvar[offset + amp] = 1.0 / (detnoise * amplen)
-                            voff += step_length
+                            self._offsetvar[offset + amp] = 0.0
+                            self._amp_flags[offset + amp] = True
                     else:
-                        flags = views.detdata[self.det_flags][ivw]
-                        voff = 0
-                        for amp in range(n_amp_view):
-                            amplen = step_length
-                            if amp == n_amp_view - 1:
-                                amplen = view_samples - voff
-                            n_good = amplen - np.count_nonzero(
-                                flags[det][voff : voff + amplen] & self.det_flag_mask
-                            )
-                            if (n_good / amplen) > self.good_fraction:
-                                # Keep this
-                                self._offsetvar[offset + amp] = 1.0 / (
-                                    detnoise * n_good
+                        if self.det_flags is None:
+                            voff = 0
+                            for amp in range(n_amp_view):
+                                amplen = step_length
+                                if amp == n_amp_view - 1:
+                                    amplen = view_samples - voff
+                                self._offsetvar[offset + amp] = 1.0 / (detnoise * amplen)
+                                voff += step_length
+                        else:
+                            flags = views.detdata[self.det_flags][ivw]
+                            voff = 0
+                            for amp in range(n_amp_view):
+                                amplen = step_length
+                                if amp == n_amp_view - 1:
+                                    amplen = view_samples - voff
+                                n_good = amplen - np.count_nonzero(
+                                    flags[det][voff : voff + amplen] & self.det_flag_mask
                                 )
-                            else:
-                                # Flag it
-                                self._offsetvar[offset + amp] = 0.0
-                                self._amp_flags[offset + amp] = True
-                            voff += step_length
+                                if ((n_good / amplen) <= self.good_fraction):
+                                    # This detector is cut or too many samples flagged
+                                    self._offsetvar[offset + amp] = 0.0
+                                    self._amp_flags[offset + amp] = True
+                                else:
+                                    # Keep this
+                                    self._offsetvar[offset + amp] = 1.0 / (
+                                        detnoise * n_good
+                                    )
+                                voff += step_length
                     offset += n_amp_view
 
         # Compute the amplitude noise filter and preconditioner for each detector
@@ -380,7 +386,8 @@ class Offset(Template):
                                 )
                             )
                             icenter = preconditioner.size // 2
-                            preconditioner[icenter] += 1.0 / detnoise
+                            if detnoise != 0:
+                                preconditioner[icenter] += 1.0 / detnoise
                         else:
                             # We are using a banded matrix for the preconditioner.
                             # This contains a Toeplitz component from the inverse
@@ -398,7 +405,8 @@ class Offset(Template):
                             preconditioner = np.zeros(
                                 [precond_width, n_amp_view], dtype=np.float64
                             )
-                            preconditioner[0, :] = 1.0 / offsetvar_slice
+                            if detnoise != 0:
+                                preconditioner[0, :] = 1.0 / offsetvar_slice
                             preconditioner[:wband, :] += np.repeat(
                                 noisefilter[icenter : icenter + wband, np.newaxis],
                                 n_amp_view,
@@ -657,10 +665,16 @@ class Offset(Template):
                     n_amp_view = self._obs_views[iob][ivw]
                     amp_slice = slice(offset, offset + n_amp_view, 1)
                     amps_in = amplitudes_in.local[amp_slice]
+                    amp_flags_in = amplitudes_in.local_flags[amp_slice]
                     amps_out = amplitudes_out.local[amp_slice]
-                    amps_out[:] += scipy.signal.convolve(
-                        amps_in, self._filters[iob][det][ivw], mode="same"
-                    )
+                    if det in self._filters[iob]:
+                        # There is some contribution from this detector
+                        amps_out[:] += scipy.signal.convolve(
+                            amps_in, self._filters[iob][det][ivw], mode="same"
+                        )
+                        amps_out[amp_flags_in != 0] = 0.0
+                    else:
+                        amps_out[:] = 0.0
                     offset += n_amp_view
 
     @function_timer
@@ -693,24 +707,31 @@ class Offset(Template):
                         amp_slice = slice(offset, offset + n_amp_view, 1)
 
                         amps_in = amplitudes_in.local[amp_slice]
+                        amp_flags_in = amplitudes_in.local_flags[amp_slice]
                         amps_out = None
-                        if self.precond_width <= 1:
-                            # We are using a Toeplitz preconditioner.
-                            # scipy.signal.convolve will use either `convolve` or
-                            # `fftconvolve` depending on the size of the inputs
-                            amps_out = scipy.signal.convolve(
-                                amps_in, self._precond[iob][det][ivw][0], mode="same"
-                            )
+                        if det in self._precond[iob]:
+                            # We have a contribution from this detector
+                            if self.precond_width <= 1:
+                                # We are using a Toeplitz preconditioner.
+                                # scipy.signal.convolve will use either `convolve` or
+                                # `fftconvolve` depending on the size of the inputs
+                                amps_out = scipy.signal.convolve(
+                                    amps_in, self._precond[iob][det][ivw][0], mode="same"
+                                )
+                            else:
+                                # Use pre-computed Cholesky decomposition.  Note that this
+                                # is the decomposition of the actual preconditioner (not
+                                # its inverse), since we are solving Mx=b.
+                                amps_out = scipy.linalg.cho_solve_banded(
+                                    self._precond[iob][det][ivw],
+                                    amps_in,
+                                    overwrite_b=False,
+                                    check_finite=True,
+                                )
+                            amps_out[amp_flags_in != 0] = 0.0
                         else:
-                            # Use pre-computed Cholesky decomposition.  Note that this
-                            # is the decomposition of the actual preconditioner (not
-                            # its inverse), since we are solving Mx=b.
-                            amps_out = scipy.linalg.cho_solve_banded(
-                                self._precond[iob][det][ivw],
-                                amps_in,
-                                overwrite_b=False,
-                                check_finite=True,
-                            )
+                            # This detector is cut
+                            amps_out = np.zeros_like(amps_in)
                         amplitudes_out.local[amp_slice] = amps_out
         else:
             # Since we do not have a noise filter term in our LHS, our diagonal

@@ -36,7 +36,8 @@ class Statistics(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_proc_or_invalid,
+        help="Bit mask value for optional detector flagging",
     )
 
     shared_flags = Unicode(
@@ -46,7 +47,8 @@ class Statistics(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_proc_or_invalid,
+        help="Bit mask value for optional shared flagging",
     )
 
     view = Unicode(
@@ -87,6 +89,13 @@ class Statistics(Operator):
         """
         log = Logger.get()
         nstat = 3  # Variance, Skewness, Kurtosis
+
+        if self.output_dir is not None:
+            if data.comm.world_rank == 0:
+                if not os.path.isdir(self.output_dir):
+                    os.makedirs(self.output_dir)
+            if data.comm.comm_world is not None:
+                data.comm.comm_world.barrier()
 
         for obs in data.obs:
             # NOTE:  We could use the session name / uid in the filename
