@@ -556,6 +556,7 @@ class Offset(Template):
                 amp_offset,
                 n_amp_views,
                 amplitudes.local,
+                amplitudes.local_flags,
                 det_indx[0],
                 ob.detdata[self.det_data].data,
                 ob.intervals[self.view].data,
@@ -628,6 +629,7 @@ class Offset(Template):
                 amp_offset,
                 n_amp_views,
                 amplitudes.local,
+                amplitudes.local_flags,
                 ob.intervals[self.view].data,
                 impl=implementation,
                 use_accel=use_accel,
@@ -670,9 +672,12 @@ class Offset(Template):
                     if det in self._filters[iob]:
                         # There is some contribution from this detector
                         amps_out[:] += scipy.signal.convolve(
-                            amps_in, self._filters[iob][det][ivw], mode="same"
+                            amps_in, self._filters[iob][det][ivw], mode="same", method="direct"
                         )
                         amps_out[amp_flags_in != 0] = 0.0
+                        print(f"DBG filter: {self._filters[iob][det][ivw]}")
+                        print(f"DBG amps_in: {amps_in}")
+                        print(f"DBG amps_out: {amps_out}", flush=True)
                     else:
                         amps_out[:] = 0.0
                     offset += n_amp_view
@@ -743,6 +748,7 @@ class Offset(Template):
             offset_apply_diag_precond(
                 self._offsetvar,
                 amplitudes_in.local,
+                amplitudes_in.local_flags,
                 amplitudes_out.local,
                 impl=implementation,
                 use_accel=use_accel,

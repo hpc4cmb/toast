@@ -13,6 +13,7 @@ def offset_add_to_signal_numpy(
     amp_offset,
     n_amp_views,
     amplitudes,
+    amplitude_flags,
     data_index,
     det_data,
     intervals,
@@ -39,8 +40,10 @@ def offset_add_to_signal_numpy(
     for interval, view_offset in zip(intervals, n_amp_views):
         samples = slice(interval.first, interval.last + 1, 1)
         sampidx = np.arange(0, interval.last - interval.first + 1, dtype=np.int64)
-        amp_vals = np.array([amplitudes[offset + x] for x in (sampidx // step_length)])
-        det_data[data_index, samples] += amp_vals
+        amp_idx = sampidx // step_length
+        amp_vals = np.array([amplitudes[offset + x] for x in amp_idx])
+        amp_flags = np.array([amplitude_flags[offset + x] for x in amp_idx])
+        det_data[data_index, samples] += amp_vals[amp_flags == 0]
         offset += view_offset
 
 
@@ -55,6 +58,7 @@ def offset_project_signal_numpy(
     amp_offset,
     n_amp_views,
     amplitudes,
+    amplitude_flags,
     intervals,
     use_accel,
 ):
@@ -94,6 +98,7 @@ def offset_project_signal_numpy(
                 ((flag_data[flag_index] & flag_mask) == 0), dtype=np.float64
             )[samples]
             ddata *= det_data[data_index][samples]
+        ddata[amplitude_flags[ampidx] != 0] = 0.0
         # updates amplitude
         # using np.add to insure atomicity
         np.add.at(amplitudes, ampidx, ddata)
@@ -102,7 +107,7 @@ def offset_project_signal_numpy(
 
 @kernel(impl=ImplementationType.NUMPY, name="offset_apply_diag_precond")
 def offset_apply_diag_precond_numpy(
-    offset_var, amplitudes_in, amplitudes_out, use_accel
+    offset_var, amplitudes_in, amplitude_flags, amplitudes_out, use_accel
 ):
     """
     Args:
@@ -114,7 +119,10 @@ def offset_apply_diag_precond_numpy(
     Returns:
         None (the result is put in amplitudes_out).
     """
-    amplitudes_out[:] = amplitudes_in * offset_var
+    good = amplitude_flags != 0
+    bad = np.logical_not(good)
+    amplitudes_out[good] = amplitudes_in[good] * offset_var[good]
+    amplitudes_out[bad] = 0.0
 
 
 # To test:
