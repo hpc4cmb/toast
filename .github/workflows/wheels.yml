@@ -82,19 +82,19 @@ jobs:
         TOAST_BUILD_AATM_ROOT=/usr/local
         TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include
         TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib
-      CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
-      CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh ${{ matrix.platform_id }}
+      CIBW_BEFORE_BUILD_LINUX: ./packaging/wheels/install_deps_linux.sh
+      CIBW_BEFORE_BUILD_MACOS: ./packaging/wheels/install_deps_osx.sh ${{ matrix.platform_id }}
       CIBW_BEFORE_TEST: export OMP_NUM_THREADS=2
       CIBW_TEST_COMMAND_LINUX: >
         tst=$(dirname $(python -c 'import toast; print(toast.__file__)')) &&
         echo "Toast test install at ${tst}" &&
         ldd ${tst}/_libtoast.cpython* &&
-        source {project}/wheels/cibw_run_tests.sh
+        source {project}/packaging/wheels/cibw_run_tests.sh
       CIBW_TEST_COMMAND_MACOS: >
         tst=$(dirname $(python -c 'import toast; print(toast.__file__)')) &&
         echo "Toast test install at ${tst}" &&
         otool -L ${tst}/_libtoast.cpython* &&
-        source {project}/wheels/cibw_run_tests.sh
+        source {project}/packaging/wheels/cibw_run_tests.sh
       CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_universal2:arm64"
     steps:
       - name: Cancel Previous Runs

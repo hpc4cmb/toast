@@ -37,6 +37,12 @@ if [ "x${pyversion}" = "x" ]; then
     pyversion=3.10
 fi
 
+# Optionally skip install of build tools
+buildtools=$4
+if [ "x${buildtools}" = "x" ]; then
+    buildtools=yes
+fi
+
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
 scriptdir=$(pwd)
@@ -71,7 +77,11 @@ conda activate base
 pkgfile="${scriptdir}/conda_dev_pkgs.txt"
 pkglist=$(cat "${pkgfile}" | xargs -I % echo -n '"%" ')
 platform=$(python -c 'import sys; print(sys.platform)')
-pkglist="python=${pyversion} ${pkglist} compilers conda-build libopenblas=*=*openmp* libblas=*=*openblas"
+if [ "$buildtools" = "yes" ]; then
+    pkglist="python=${pyversion} ${pkglist} compilers conda-build libopenblas=*=*openmp* libblas=*=*openblas"
+else
+    pkglist="python=${pyversion} ${pkglist} libopenblas=*=*openmp* libblas=*=*openblas"
+fi
 
 # Determine whether the environment is a name or a
 # full path.
