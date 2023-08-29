@@ -35,6 +35,9 @@ scriptdir=$(pwd)
 popd >/dev/null 2>&1
 echo "Wheel script directory = ${scriptdir}"
 
+# Location of dependency scripts
+depsdir="${scriptdir}/deps"
+
 # Build options
 
 if [ "x${toolchain}" = "xgcc" ]; then
