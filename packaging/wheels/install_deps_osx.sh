@@ -10,13 +10,13 @@
 set -e
 
 arch=$1
-PREFIX=$2
+prefix=$2
 
-MAKEJ=2
-
-if [ "x${PREFIX}" = "x" ]; then
-    PREFIX=/usr/local
+if [ "x${prefix}" = "x" ]; then
+    prefix=/usr/local
 fi
+
+export PREFIX="${prefix}"
 
 # Cross compile option needed for autoconf builds.
 cross=""
@@ -29,6 +29,9 @@ pushd $(dirname $0) >/dev/null 2>&1
 scriptdir=$(pwd)
 popd >/dev/null 2>&1
 echo "Wheel script directory = ${scriptdir}"
+
+# Location of dependency scripts
+depsdir=$(dirname ${scriptdir})/deps
 
 # Are we using gcc?  Useful for OpenMP.
 # use_gcc=yes
@@ -44,7 +47,7 @@ if [ "x${use_gcc}" = "xyes" ]; then
     CFLAGS="-O3 -fPIC"
     FCFLAGS="-O3 -fPIC"
     CXXFLAGS="-O3 -fPIC -std=c++11"
-    LIBGFORTRAN="-lgfortran"
+    FCLIBS="-lgfortran"
 else
     CC=clang
     CXX=clang++
@@ -52,6 +55,7 @@ else
     CFLAGS="-O3 -fPIC"
     CXXFLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
     FCFLAGS=""
+    FCLIBS=""
     if [ "${arch}" = "macosx_arm64" ]; then
         # We are cross compiling
         CFLAGS="${CFLAGS} -arch arm64"
@@ -60,7 +64,6 @@ else
 fi
 
 # Install any pre-built dependencies with homebrew
-brew install cmake
 if [ "x${use_gcc}" = "xyes" ]; then
     brew install gcc@${gcc_version}
 fi
@@ -69,7 +72,7 @@ fi
 pip install --upgrade pip
 
 # Install a couple of base packages that are always required
-pip install -v wheel
+pip install -v cmake wheel
 
 # In order to maximize ABI compatibility with numpy, build with the newest numpy
 # version containing the oldest ABI version compatible with the python we are using.
@@ -90,47 +93,14 @@ fi
 # Install build requirements.
 CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdir}/build_requirements.txt"
 
-# OpenBLAS- Kept here for reference, but for clang compilation it requires
-# using gfortran and then later convincing clang to link to libgfortran...
-
-# openblas_version=0.3.21
-# openblas_dir=OpenBLAS-${openblas_version}
-# openblas_pkg=${openblas_dir}.tar.gz
-
-# echo "Fetching OpenBLAS"
-
-# if [ ! -e ${openblas_pkg} ]; then
-#     curl -SL https://github.com/xianyi/OpenBLAS/archive/v${openblas_version}.tar.gz -o ${openblas_pkg}
-# fi
-
-# echo "Building OpenBLAS..."
-
-# omp_opt="0"
-# ld_opt="-lm ${LIBGFORTRAN}"
-# if [ "x${use_gcc}" = "xyes" ]; then
-#     omp_opt="1"
-#     ld_opt="-fopenmp -lm ${LIBGFORTRAN}"
-# fi
-
-# rm -rf ${openblas_dir}
-# tar xzf ${openblas_pkg} \
-#     && pushd ${openblas_dir} >/dev/null 2>&1 \
-#     && make USE_OPENMP=${omp_opt} NO_SHARED=1 \
-#     MAKE_NB_JOBS=${MAKEJ} \
-#     CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
-#     COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
-#     LDFLAGS="${ld_opt}" libs netlib \
-#     && make NO_SHARED=1 DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
-#     && popd >/dev/null 2>&1
-
 # Install openblas from the multilib package- the same one numpy uses.
 
 if [ "${arch}" = "macosx_arm64" ]; then
-    openblas_pkg="openblas-v0.3.21-macosx_11_0_arm64-gf_5272328.tar.gz"
+    openblas_pkg="openblas-v0.3.23-246-g3d31191b-macosx_11_0_arm64-gf_5272328.tar.gz"
 else
-    openblas_pkg="openblas-v0.3.21-macosx_10_9_x86_64-gf_1becaaa.tar.gz"
+    openblas_pkg="openblas-v0.3.23-246-g3d31191b-macosx_10_9_x86_64-gf_c469a42.tar.gz"
 fi
-openblas_url="https://anaconda.org/multibuild-wheels-staging/openblas-libs/v0.3.21/download/${openblas_pkg}"
+openblas_url="https://anaconda.org/multibuild-wheels-staging/openblas-libs/v0.3.23-246-g3d31191b/download/${openblas_pkg}"
 
 if [ ! -e ${openblas_pkg} ]; then
     echo "Fetching OpenBLAS..."
@@ -142,166 +112,42 @@ tar -x -z -v -C "${PREFIX}" --strip-components 2 -f ${openblas_pkg}
 
 # Install the gfortran (and libgcc) that was used for openblas compilation
 
-curl -L https://github.com/MacPython/gfortran-install/raw/master/archives/gfortran-4.9.0-Mavericks.dmg -o gfortran.dmg
-GFORTRAN_SHA256=$(shasum -a 256 gfortran.dmg)
-KNOWN_SHA256="d2d5ca5ba8332d63bbe23a07201c4a0a5d7e09ee56f0298a96775f928c3c4b30  gfortran.dmg"
-if [ "$GFORTRAN_SHA256" != "$KNOWN_SHA256" ]; then
-    echo sha256 mismatch
+if [ "${arch}" = "macosx_arm64" ]; then
+    gfortran_arch=arm64
+    known_hash="0d5c118e5966d0fb9e7ddb49321f63cac1397ce8"
+else
+    gfortran_arch=x86_64
+    known_hash="c469a420d2d003112749dcdcbe3c684eef42127e"
+fi
+gfortran_pkg="gfortran-darwin-${gfortran_arch}-native.tar.gz"
+gfortran_url="https://github.com/isuruf/gcc/releases/download/gcc-11.3.0-2/${gfortran_pkg}"
+
+curl -L -O ${gfortran_url}
+gfortran_hash=$(shasum ${gfortran_pkg} | awk '{print $1}')
+
+if [ "${gfortran_hash}" != "${known_hash}" ]; then
+    echo "gfortran sha256 mismatch: ${gfortran_hash} != ${known_hash}"
     exit 1
 fi
 
-hdiutil attach -mountpoint /Volumes/gfortran gfortran.dmg
-sudo installer -pkg /Volumes/gfortran/gfortran.pkg -target /
-otool -L /usr/local/gfortran/lib/libgfortran.3.dylib
+mkdir -p /opt
+mv ${gfortran_pkg} /opt/
+pushd /opt
+tar -xvf ${gfortran_pkg}
+rm ${gfortran_pkg}
 
-# Install FFTW
+for f in libgfortran.dylib libgfortran.5.dylib libgcc_s.1.dylib libgcc_s.1.1.dylib libquadmath.dylib libquadmath.0.dylib; do
+    ln -sf "/opt/gfortran-darwin-${gfortran_arch}-native/lib/$f" "/usr/local/lib/$f"
+done
+ln -sf "/opt/gfortran-darwin-${gfortran_arch}-native/bin/gfortran" "/usr/local/bin/gfortran"
 
-fftw_version=3.3.10
-fftw_dir=fftw-${fftw_version}
-fftw_pkg=${fftw_dir}.tar.gz
+# Build compiled dependencies
 
-echo "Fetching FFTW..."
+export MAKEJ=2
+export DEPSDIR="${depsdir}"
+export STATIC=no
+export CLEANUP=yes
 
-if [ ! -e ${fftw_pkg} ]; then
-    curl -SL http://www.fftw.org/${fftw_pkg} -o ${fftw_pkg}
-fi
-
-echo "Building FFTW..."
-
-thread_opt="--enable-threads"
-if [ "x${use_gcc}" = "xyes" ]; then
-    thread_opt="--enable-openmp"
-fi
-
-rm -rf ${fftw_dir}
-tar xzf ${fftw_pkg} \
-    && pushd ${fftw_dir} >/dev/null 2>&1 \
-    && CC="${CC}" CFLAGS="${CFLAGS}" \
-    ./configure ${cross} ${thread_opt} \
-    --disable-fortran \
-    --enable-shared \
-    --disable-static \
-    --prefix="${PREFIX}" \
-    && make -j ${MAKEJ} \
-    && make install \
-    && popd >/dev/null 2>&1
-
-# Install libaatm
-
-aatm_version=1.0.9
-aatm_dir=libaatm-${aatm_version}
-aatm_pkg=${aatm_dir}.tar.gz
-
-echo "Fetching libaatm..."
-
-if [ ! -e ${aatm_pkg} ]; then
-    curl -SL "https://github.com/hpc4cmb/libaatm/archive/${aatm_version}.tar.gz" -o "${aatm_pkg}"
-fi
-
-echo "Building libaatm..."
-
-rm -rf ${aatm_dir}
-tar xzf ${aatm_pkg} \
-    && pushd ${aatm_dir} >/dev/null 2>&1 \
-    && mkdir -p build \
-    && pushd build >/dev/null 2>&1 \
-    && cmake \
-    -DCMAKE_C_COMPILER="${CC}" \
-    -DCMAKE_CXX_COMPILER="${CXX}" \
-    -DCMAKE_C_FLAGS="${CFLAGS}" \
-    -DCMAKE_CXX_FLAGS="${CXXFLAGS}" \
-    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
-    .. \
-    && make -j ${MAKEJ} install \
-    && popd >/dev/null 2>&1 \
-    && popd >/dev/null 2>&1
-
-# Install libFLAC
-
-flac_version=1.4.3
-flac_dir=flac-${flac_version}
-flac_pkg=${flac_dir}.tar.gz
-
-echo "Fetching libFLAC..."
-
-if [ ! -e ${flac_pkg} ]; then
-    curl -SL "https://github.com/xiph/flac/archive/refs/tags/${flac_version}.tar.gz" -o "${flac_pkg}"
-fi
-
-echo "Building libFLAC..."
-
-rm -rf ${flac_dir}
-tar xzf ${flac_pkg} \
-    && pushd ${flac_dir} >/dev/null 2>&1 \
-    && mkdir -p build \
-    && pushd build >/dev/null 2>&1 \
-    && cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER="${CC}" \
-    -DCMAKE_CXX_COMPILER="${CXX}" \
-    -DCMAKE_C_FLAGS="${CFLAGS}" \
-    -DCMAKE_CXX_FLAGS="${CXXFLAGS}" \
-    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DWITH_OGG=OFF \
-    -DINSTALL_MANPAGES=OFF \
-    -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
-    .. \
-    && make -j ${MAKEJ} install \
-    && popd >/dev/null 2>&1 \
-    && popd >/dev/null 2>&1
-
-# Install SuiteSparse - only the pieces we need.
-
-ssparse_version=7.1.0
-ssparse_dir=SuiteSparse-${ssparse_version}
-ssparse_pkg=${ssparse_dir}.tar.gz
-
-echo "Fetching SuiteSparse..."
-
-if [ ! -e ${ssparse_pkg} ]; then
-    curl -SL https://github.com/DrTimothyAldenDavis/SuiteSparse/archive/v${ssparse_version}.tar.gz -o ${ssparse_pkg}
-fi
-
-echo "Building SuiteSparse..."
-
-if [ "x${use_gcc}" = "xyes" ]; then
-    blas_extra="-lgomp ${LIBGFORTRAN}"
-else
-    blas_extra=""
-fi
-
-blas_opt="-L${PREFIX}/lib -lopenblas -lm ${blas_extra}"
-
-cmake_opts=" \
-    -DCMAKE_C_COMPILER=\"${CC}\" \
-    -DCMAKE_CXX_COMPILER=\"${CXX}\" \
-    -DCMAKE_Fortran_COMPILER=\"${FC}\" \
-    -DCMAKE_C_FLAGS=\"${CFLAGS}\" \
-    -DCMAKE_CXX_FLAGS=\"${CXXFLAGS}\" \
-    -DCMAKE_Fortran_FLAGS=\"${FCFLAGS}\" \
-    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
-    -DCMAKE_INSTALL_PATH=\"${PREFIX}\" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBLA_VENDOR=OpenBLAS \
-    -DNSTATIC:BOOL=ON \
-    -DBLA_STATIC:BOOL=OFF \
-    -DBLAS_LIBRARIES=\"${blas_opt}\" \
-    -DLAPACK_LIBRARIES=\"${blas_opt}\" \
-    "
-
-rm -rf ${ssparse_dir}
-tar xzf ${ssparse_pkg} \
-    && pushd ${ssparse_dir} >/dev/null 2>&1 \
-    && patch -p1 < "${scriptdir}/suitesparse.patch" \
-    && for pkg in SuiteSparse_config AMD CAMD CCOLAMD COLAMD CHOLMOD; do \
-    pushd ${pkg} >/dev/null 2>&1; \
-    CC="${CC}" CX="${CXX}" JOBS=${MAKEJ} \
-    CMAKE_OPTIONS=${cmake_opts} \
-    make local; \
-    make install; \
-    popd >/dev/null 2>&1; \
-    done \
-    && cp ./lib/*.dylib "${PREFIX}/lib/" \
-    && cp ./include/* "${PREFIX}/include/" \
-    && popd >/dev/null 2>&1
+for pkg in fftw libflac suitesparse libaatm; do
+    source "${depsdir}/${pkg}.sh"
+done

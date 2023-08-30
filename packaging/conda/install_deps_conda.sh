@@ -22,10 +22,10 @@ fi
 pushd $(dirname $0) >/dev/null 2>&1
 scriptdir=$(pwd)
 popd >/dev/null 2>&1
-depdir=$(dirname ${scriptdir})/deps
+depsdir=$(dirname ${scriptdir})/deps
 
 echo "scripts in ${scriptdir}"
-echo "deps in ${depdir}"
+echo "deps in ${depsdir}"
 
 if [ "x${CONDA_EXE}" = "x" ]; then
     export CONDA_EXE=$(which conda)
@@ -102,12 +102,13 @@ export CXXFLAGS="-O3 -g -fPIC"
 export FCFLAGS="-O3 -g -fPIC"
 export MPFCLIBS="-L${CONDA_PREFIX}/lib -lfmpich -lgfortran"
 
+export DEPSDIR="${depsdir}"
 export PREFIX="${CONDA_PREFIX}"
 export MAKEJ=2
 export STATIC=no
 export CLEANUP=no
 
 for pkg in "libmadam" "libconviqt"; do
-    . "${depdir}/${pkg}.sh"
+    . "${depsdir}/${pkg}.sh"
 done
 

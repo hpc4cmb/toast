@@ -22,10 +22,10 @@ fi
 pushd $(dirname $0) >/dev/null 2>&1
 scriptdir=$(pwd)
 popd >/dev/null 2>&1
-depdir=$(dirname ${scriptdir})/deps
+depsdir=$(dirname ${scriptdir})/deps
 
 echo "scripts in ${scriptdir}"
-echo "deps in ${depdir}"
+echo "deps in ${depsdir}"
 
 if [ "x${CONDA_EXE}" = "x" ]; then
     export CONDA_EXE=$(which conda)
@@ -122,13 +122,12 @@ if [ "x${MAKEJ}" = "x" ]; then
     export MAKEJ=2
 fi
 
-export DEPSDIR="${depdir}"
+export DEPSDIR="${depsdir}"
 export STATIC=no
 export CLEANUP=no
 
-#for pkg in openblas cfitsio fftw libflac suitesparse libaatm; do
-for pkg in suitesparse; do
-    . "${depdir}/${pkg}.sh"
+for pkg in openblas cfitsio fftw libflac suitesparse libaatm; do
+    . "${depsdir}/${pkg}.sh"
 done
 
 if [ "x${optional}" != "xyes" ]; then
@@ -158,7 +157,7 @@ fi
 . "${scriptdir}/install_mpi.sh"
 
 for pkg in "libmadam" "libconviqt"; do
-    . "${depdir}/${pkg}.sh"
+    . "${depsdir}/${pkg}.sh"
 done
 
 echo "====================================================================="
