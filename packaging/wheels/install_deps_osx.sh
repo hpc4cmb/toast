@@ -135,6 +135,7 @@ sudo mv ${gfortran_pkg} /opt/
 pushd /opt
 sudo tar -xvf ${gfortran_pkg}
 sudo rm ${gfortran_pkg}
+popd
 
 for f in libgfortran.dylib libgfortran.5.dylib libgcc_s.1.dylib libgcc_s.1.1.dylib libquadmath.dylib libquadmath.0.dylib; do
     sudo ln -sf "/opt/gfortran-darwin-${gfortran_arch}-native/lib/$f" "/usr/local/lib/$f"
