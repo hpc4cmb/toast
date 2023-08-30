@@ -7,14 +7,14 @@
 
 name:  Run Test Suite
 
-on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
-      - toast3
+# on:
+#   push:
+#     branches:
+#       - master
+#   pull_request:
+#     branches:
+#       - master
+#       - toast3
 
 jobs:
   test:

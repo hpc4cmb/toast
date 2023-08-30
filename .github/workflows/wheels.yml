@@ -1,7 +1,15 @@
 
 name:  Test Binary Wheels
 
-on: workflow_dispatch
+# on: workflow_dispatch
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+      - toast3
 
 jobs:
   build_wheels:
