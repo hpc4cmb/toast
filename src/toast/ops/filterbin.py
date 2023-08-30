@@ -213,10 +213,13 @@ def coadd_observation_matrix(
     double_precision=False,
     comm=None,
 ):
-    """Co-add noise-weighted or unweighted observation matrices
+    """Co-add noise-weighted observation matrices
 
     Args:
-        inmatrix(iterable) : One or more noise-weighted observation matrix files
+        inmatrix(iterable) : One or more noise-weighted observation
+            matrix files.  If a matrix is used to model several similar
+            observations, append `+N` to the file name to indicate the
+             multiplicity.
         outmatrix(string) : Name of output file
         file_invcov(string) : Name of output inverse covariance file
         file_cov(string) : Name of output covariance file
@@ -267,9 +270,19 @@ def coadd_observation_matrix(
                 f"noise-weighted: '{infile_matrix}'"
             )
             raise RuntimeError(msg)
+        if "+" in infile_matrix:
+            infile_matrix, N = infile_matrix.split("+")
+            N = float(N)
+        else:
+            N = 1
+        if not os.path.isfile(infile_matrix):
+            msg = f"Matrix not found: {infile_matrix}"
+            raise RuntimeError(msg)
         prefix = ""
         log.info(f"{prefix}Loading {infile_matrix}")
         obs_matrix = scipy.sparse.load_npz(infile_matrix)
+        if N != 1:
+            obs_matrix *= N
         if obs_matrix_sum is None:
             obs_matrix_sum = obs_matrix
         else:
@@ -292,6 +305,8 @@ def coadd_observation_matrix(
         invcov = read_healpix(
             infile_invcov, None, nest=True, dtype=float, verbose=False
         )
+        if N != 1:
+            invcov *= N
         if invcov_sum is None:
             invcov_sum = invcov
             nnzcov, npix = invcov.shape
