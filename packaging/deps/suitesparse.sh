@@ -8,6 +8,7 @@
 # - FC
 # - FCFLAGS
 # - FCLIBS
+# - OMPFLAGS
 # - PREFIX
 # - DEPSDIR (to find patches)
 # - MAKEJ
@@ -42,8 +43,8 @@ cmake_opts=" \
     -DCMAKE_INSTALL_PATH=\"${PREFIX}\" \
     -DCMAKE_BUILD_TYPE=Release \
     -DBLA_VENDOR=OpenBLAS ${shr} \
-    -DBLAS_LIBRARIES=\"-L${PREFIX}/lib -lopenblas -lm ${FCLIBS}\" \
-    -DLAPACK_LIBRARIES=\"-L${PREFIX}/lib -lopenblas -lm ${FCLIBS}\" \
+    -DBLAS_LIBRARIES=\"-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}\" \
+    -DLAPACK_LIBRARIES=\"-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}\" \
     "
 
 rm -rf ${ssparse_dir}

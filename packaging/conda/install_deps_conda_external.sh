@@ -118,6 +118,15 @@ if [ "x${FCFLAGS}" = "x" ]; then
     export FCFLAGS="-O3 -g -fPIC"
 fi
 
+if [ "x${OMPFLAGS}" = "x" ]; then
+    platform=$(python -c 'import sys; print(sys.platform)')
+    if [ ${platform} = "linux" ]; then
+        export OMPFLAGS="-fopenmp"
+    else
+        export OMPFLAGS=""
+    fi
+fi
+
 if [ "x${MAKEJ}" = "x" ]; then
     export MAKEJ=2
 fi

@@ -5,6 +5,7 @@
 # - CFLAGS
 # - FC
 # - FCFLAGS
+# - OMPFLAGS
 # - PREFIX
 # - STATIC (yes/no)
 # - MAKEJ
@@ -27,6 +28,11 @@ if [ "${STATIC}" = "yes" ]; then
     shr="--enable-static --disable-shared"
 fi
 
+threads="--enable-openmp"
+if [ "x${OMPFLAGS}" = "x" ]; then
+    threads="--enable-threads"
+fi
+
 rm -rf ${fftw_dir}
 tar xzf ${fftw_pkg} \
     && pushd ${fftw_dir} >/dev/null 2>&1 \
@@ -34,7 +40,7 @@ tar xzf ${fftw_pkg} \
     FC="${FC}" FCFLAGS="${FCFLAGS}" \
     ./configure \
     --enable-fortran \
-    --enable-openmp ${shr} \
+    ${threads} ${shr} \
     --prefix="${PREFIX}" \
     && make -j ${MAKEJ} \
     && make install \

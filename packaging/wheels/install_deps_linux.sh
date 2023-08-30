@@ -45,6 +45,7 @@ if [ "x${toolchain}" = "xgcc" ]; then
     export FCFLAGS="-O3 -fPIC -pthread"
     export CXXFLAGS="-O3 -fPIC -pthread -std=c++11"
     export FCLIBS="-lgfortran"
+    export OMPFLAGS="-fopenmp"
 else
     if [ "x${toolchain}" = "xllvm" ]; then
         export CC=clang-17
@@ -55,6 +56,7 @@ else
         export FCFLAGS="-O3 -fPIC -pthread"
         export CXXFLAGS="-O3 -fPIC -pthread -std=c++11 -stdlib=libc++"
         export FCLIBS="-L/usr/lib/llvm-17/lib /usr/lib/x86_64-linux-gnu/libgfortran.so.5"
+        export OMPFLAGS="-fopenmp"
     else
         echo "Unsupported toolchain \"${toolchain}\""
         exit 1

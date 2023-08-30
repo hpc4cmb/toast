@@ -41,25 +41,27 @@ gcc_version=12
 # Build options.
 
 if [ "x${use_gcc}" = "xyes" ]; then
-    CC=gcc-${gcc_version}
-    CXX=g++-${gcc_version}
-    FC=gfortran-${gcc_version}
-    CFLAGS="-O3 -fPIC"
-    FCFLAGS="-O3 -fPIC"
-    CXXFLAGS="-O3 -fPIC -std=c++11"
-    FCLIBS="-lgfortran"
+    export CC=gcc-${gcc_version}
+    export CXX=g++-${gcc_version}
+    export FC=gfortran-${gcc_version}
+    export CFLAGS="-O3 -fPIC"
+    export FCFLAGS="-O3 -fPIC"
+    export CXXFLAGS="-O3 -fPIC -std=c++11"
+    export FCLIBS="-lgfortran"
+    export OMPFLAGS="-fopenmp"
 else
-    CC=clang
-    CXX=clang++
-    FC=
-    CFLAGS="-O3 -fPIC"
-    CXXFLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
-    FCFLAGS=""
-    FCLIBS=""
+    export CC=clang
+    export CXX=clang++
+    export FC=
+    export CFLAGS="-O3 -fPIC"
+    export CXXFLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
+    export FCFLAGS=""
+    export FCLIBS=""
+    export OMPFLAGS=""
     if [ "${arch}" = "macosx_arm64" ]; then
         # We are cross compiling
-        CFLAGS="${CFLAGS} -arch arm64"
-        CXXFLAGS="${CXXFLAGS} -arch arm64"
+        export CFLAGS="${CFLAGS} -arch arm64"
+        export CXXFLAGS="${CXXFLAGS} -arch arm64"
     fi
 fi
 

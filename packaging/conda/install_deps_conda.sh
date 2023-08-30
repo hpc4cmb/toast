@@ -96,11 +96,18 @@ if [ "x${MPICC}" = "x" ]; then
     export MPICC=mpicc
     export MPICXX=mpicxx
     export MPIFC=mpif90
+    export MPFCLIBS="-L${CONDA_PREFIX}/lib -lfmpich -lgfortran"
 fi
 export CFLAGS="-O3 -g -fPIC"
 export CXXFLAGS="-O3 -g -fPIC"
 export FCFLAGS="-O3 -g -fPIC"
-export MPFCLIBS="-L${CONDA_PREFIX}/lib -lfmpich -lgfortran"
+
+platform=$(python -c 'import sys; print(sys.platform)')
+if [ ${platform} = "linux" ]; then
+    export OMPFLAGS="-fopenmp"
+else
+    export OMPFLAGS=""
+fi
 
 export DEPSDIR="${depsdir}"
 export PREFIX="${CONDA_PREFIX}"

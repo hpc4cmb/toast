@@ -6,6 +6,7 @@
 # - FC
 # - FCFLAGS
 # - FCLIBS
+# - OMPFLAGS
 # - PREFIX
 # - STATIC (yes/no)
 # - MAKEJ
@@ -34,7 +35,7 @@ tar xzf ${openblas_pkg} \
     MAKE_NB_JOBS=${MAKEJ} \
     CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
     COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
-    EXTRALIB="-fopenmp -lm ${FCLIBS}" all \
+    EXTRALIB="${OMPFLAGS} -lm ${FCLIBS}" all \
     && make ${shr} DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
     && popd >/dev/null 2>&1
 
