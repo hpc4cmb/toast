@@ -122,8 +122,10 @@ if [ "x${OMPFLAGS}" = "x" ]; then
     platform=$(python -c 'import sys; print(sys.platform)')
     if [ ${platform} = "linux" ]; then
         export OMPFLAGS="-fopenmp"
+        export SHLIBEXT="so"
     else
         export OMPFLAGS=""
+        export SHLIBEXT="dylib"
     fi
 fi
 

@@ -96,6 +96,7 @@ export MAKEJ=2
 export PREFIX="${prefix}"
 export DEPSDIR="${depsdir}"
 export STATIC="${static}"
+export SHLIBEXT="so"
 export CLEANUP=yes
 
 for pkg in openblas fftw libflac suitesparse libaatm; do

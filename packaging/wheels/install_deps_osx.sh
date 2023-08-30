@@ -150,6 +150,7 @@ sudo ln -sf "/opt/gfortran-darwin-${gfortran_arch}-native/bin/gfortran" "/usr/lo
 export MAKEJ=2
 export DEPSDIR="${depsdir}"
 export STATIC=no
+export SHLIBEXT="dylib"
 export CLEANUP=yes
 
 for pkg in fftw libflac suitesparse libaatm; do
