@@ -130,16 +130,16 @@ if [ "${gfortran_hash}" != "${known_hash}" ]; then
     exit 1
 fi
 
-mkdir -p /opt
-mv ${gfortran_pkg} /opt/
+sudo mkdir -p /opt
+sudo mv ${gfortran_pkg} /opt/
 pushd /opt
-tar -xvf ${gfortran_pkg}
-rm ${gfortran_pkg}
+sudo tar -xvf ${gfortran_pkg}
+sudo rm ${gfortran_pkg}
 
 for f in libgfortran.dylib libgfortran.5.dylib libgcc_s.1.dylib libgcc_s.1.1.dylib libquadmath.dylib libquadmath.0.dylib; do
-    ln -sf "/opt/gfortran-darwin-${gfortran_arch}-native/lib/$f" "/usr/local/lib/$f"
+    sudo ln -sf "/opt/gfortran-darwin-${gfortran_arch}-native/lib/$f" "/usr/local/lib/$f"
 done
-ln -sf "/opt/gfortran-darwin-${gfortran_arch}-native/bin/gfortran" "/usr/local/bin/gfortran"
+sudo ln -sf "/opt/gfortran-darwin-${gfortran_arch}-native/bin/gfortran" "/usr/local/bin/gfortran"
 
 # Build compiled dependencies
 
