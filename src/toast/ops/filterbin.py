@@ -171,8 +171,8 @@ def combine_observation_matrix(rootname):
             current_row = row_start
         log.info(f"Loading {datafile}")
         data = np.load(datafile)
-        indices = np.load(datafile.replace(".data.", ".indices."))
-        indptr = np.load(datafile.replace(".data.", ".indptr."))
+        indices = np.load(datafile.replace(".data.", ".indices.")).astype(np.int64)
+        indptr = np.load(datafile.replace(".data.", ".indptr.")).astype(np.int64)
         all_data.append(data)
         all_indices.append(indices)
         indptr += current_offset
@@ -191,6 +191,9 @@ def combine_observation_matrix(rootname):
     all_indices = np.hstack(all_indices)
     all_indptr = np.hstack(all_indptr)
     obs_matrix = scipy.sparse.csr_matrix((all_data, all_indices, all_indptr), shape)
+    if obs_matrix.nnz < 0:
+        msg = f"Overflow in csr_matrix: nnz = {obs_matrix.nnz}.\n"
+        raise RuntimeError(msg)
 
     log.info_rank(f"Constructed in", timer=timer, comm=None)
 
@@ -281,6 +284,9 @@ def coadd_observation_matrix(
         prefix = ""
         log.info(f"{prefix}Loading {infile_matrix}")
         obs_matrix = scipy.sparse.load_npz(infile_matrix)
+        if obs_matrix.nnz < 0:
+            msg = f"Overflow in {infile_matrix}: nnz = {obs_matrix.nnz}.\n"
+            raise RuntimeError(msg)
         if N != 1:
             obs_matrix *= N
         if obs_matrix_sum is None:
@@ -1446,14 +1452,14 @@ class FilterBin(Operator):
                         self.comm.Recv(
                             data_recv, source=receive_from, tag=factor + self.ntask
                         )
-                        indices_recv = np.zeros(size_recv, dtype=np.int32)
+                        indices_recv = np.zeros(size_recv, dtype=np.int64)
                         self.comm.Recv(
                             indices_recv,
                             source=receive_from,
                             tag=factor + 2 * self.ntask,
                         )
                         indptr_recv = np.zeros(
-                            obs_matrix_slice.indptr.size, dtype=np.int32
+                            obs_matrix_slice.indptr.size, dtype=np.int64
                         )
                         self.comm.Recv(
                             indptr_recv,
@@ -1473,12 +1479,12 @@ class FilterBin(Operator):
                         obs_matrix_slice.data, dest=send_to, tag=factor + self.ntask
                     )
                     self.comm.Send(
-                        obs_matrix_slice.indices,
+                        obs_matrix_slice.indices.astype(np.int64),
                         dest=send_to,
                         tag=factor + 2 * self.ntask,
                     )
                     self.comm.Send(
-                        obs_matrix_slice.indptr,
+                        obs_matrix_slice.indptr.astype(np.int64),
                         dest=send_to,
                         tag=factor + 3 * self.ntask,
                     )
