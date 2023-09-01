@@ -23,20 +23,6 @@
 
 envname=$1
 
-# Install optional dependencies if desired
-optional=$2
-if [ "x${optional}" = "xyes" ]; then
-    echo "Optional dependencies set to 'yes'"
-else
-    echo "Optional dependencies set to 'no' or unspecified"
-fi
-
-# Explicit python version to use
-pyversion=$3
-if [ "x${pyversion}" = "x" ]; then
-    pyversion=3.10
-fi
-
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
 scriptdir=$(pwd)
@@ -55,7 +41,7 @@ usage () {
     echo ""
     echo "Usage:  $0 <name of conda env or path>"
     echo ""
-    echo "The named environment will be activated (and created)"
+    echo "The named environment will be activated (and created if needed)"
     echo ""
 }
 
@@ -64,4 +50,4 @@ if [ "x${envname}" = "x" ]; then
     exit 1
 fi
 
-eval "${condapkgdir}/install_deps_conda.sh" "${envname}" "${pyversion}" "${optional}"
+eval "${condapkgdir}/install_deps_conda.sh" "${envname}"
