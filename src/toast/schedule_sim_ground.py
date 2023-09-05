@@ -2158,13 +2158,16 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         os.makedirs(dir_out, exist_ok=True)
     fout = open(fname_out, "w")
 
-    fout.write(
-        "#{:14} {:15} {:>15} {:>15} {:>15}\n".format(
+    header_fmt = "#{:14} {:15} {:>15} {:>15} {:>15}\n"
+    header_data_fmt = "{:15} {:15} {:15.3f} {:15.3f} {:15.1f}\n"
+    if args.field_separator != "":
+        header_fmt = header_fmt.replace(" ", args.field_separator)
+        header_data_fmt = header_data_fmt.replace(" ", args.field_separator)
+    fout.write(header_fmt.format(
             "Site", "Telescope", "Latitude [deg]", "Longitude [deg]", "Elevation [m]"
         )
     )
-    fout.write(
-        "{:15} {:15} {:15.3f} {:15.3f} {:15.1f}\n".format(
+    fout.write(header_data_fmt.format(
             args.site_name,
             args.telescope,
             np.degrees(observer.lat),

@@ -254,7 +254,20 @@ class GroundSchedule(object):
                 # leave excess space
                 fields = [field.strip() for field in fields]
             nfield = len(fields)
-            if nfield == 11:
+            if nfield == 9:
+                # Concise schedule format with correct date/time parsing
+                (
+                    start_time,
+                    stop_time,
+                    boresight_angle,
+                    name,
+                    azmin,
+                    azmax,
+                    el,
+                    scan,
+                    subscan,
+                ) = fields
+            elif nfield == 11:
                 # Concise schedule format is default after 2023-02-13
                 (
                     start_date,
@@ -269,12 +282,12 @@ class GroundSchedule(object):
                     scan,
                     subscan,
                 ) = fields
-            else:
-                # Optional (old) verbose format
+                start_time = start_date + " " + start_time
+                stop_time = stop_date + " " + stop_time
+            elif nfield == 21:
+                # Verbose format with correct date/time parsing
                 (
-                    start_date,
                     start_time,
-                    stop_date,
                     stop_time,
                     mjdstart,
                     mjdstop,
@@ -296,8 +309,8 @@ class GroundSchedule(object):
                     scan,
                     subscan,
                 ) = fields
-            start_time = start_date + " " + start_time
-            stop_time = stop_date + " " + stop_time
+                start_time = start_date + " " + start_time
+                stop_time = stop_date + " " + stop_time
             try:
                 start_time = dateutil.parser.parse(start_time + " +0000")
                 stop_time = dateutil.parser.parse(stop_time + " +0000")
