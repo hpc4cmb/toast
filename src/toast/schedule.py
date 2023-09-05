@@ -284,7 +284,7 @@ class GroundSchedule(object):
                 ) = fields
                 start_time = start_date + " " + start_time
                 stop_time = stop_date + " " + stop_time
-            elif nfield == 21:
+            elif nfield == 22:
                 # Verbose format with correct date/time parsing
                 (
                     start_time,
@@ -308,6 +308,35 @@ class GroundSchedule(object):
                     moon_phase,
                     scan,
                     subscan,
+                    cumulative_fraction,
+                ) = fields
+            else:
+                # Old (verbose) schedule
+                (
+                    start_date,
+                    start_time,
+                    stop_date,
+                    stop_time,
+                    mjdstart,
+                    mjdstop,
+                    boresight_angle,
+                    name,
+                    azmin,
+                    azmax,
+                    el,
+                    rs,
+                    sun_el1,
+                    sun_az1,
+                    sun_el2,
+                    sun_az2,
+                    moon_el1,
+                    moon_az1,
+                    moon_el2,
+                    moon_az2,
+                    moon_phase,
+                    scan,
+                    subscan,
+                    cumulative_fraction,
                 ) = fields
                 start_time = start_date + " " + start_time
                 stop_time = stop_date + " " + stop_time
