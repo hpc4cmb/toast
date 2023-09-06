@@ -414,13 +414,15 @@ def coadd_observation_matrix(
 
     # Write out the co-added and de-weighted matrix
 
+    if not outmatrix.endswith(".npz"):
+        outmatrix += ".npz"
     log.info_rank(f"Writing {outmatrix}", comm=comm)
     scipy.sparse.save_npz(outmatrix, obs_matrix_sum.astype(dtype))
-    log.info_rank(f"Wrote {outmatrix}.npz in", timer=timer1, comm=comm)
+    log.info_rank(f"Wrote {outmatrix} in", timer=timer1, comm=comm)
 
     log.info_rank(f"Co-added and de-weighted obs matrix in", timer=timer0, comm=comm)
 
-    return outmatrix + ".npz"
+    return outmatrix
 
 
 @trait_docs
