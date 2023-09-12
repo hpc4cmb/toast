@@ -429,8 +429,6 @@ class FitNoiseModel(Operator):
         eret = dict()
         eret["fit_result"] = types.SimpleNamespace()
         eret["fit_result"].success = False
-        # Use a large value, to avoid divide by zero elsewhere
-        # in the code if the detector flags are not examined.
         eret["NET"] = 0.0 * np.sqrt(1.0 * psd_unit)
         eret["fmin"] = 0.0 * u.Hz
         eret["fknee"] = 0.0 * u.Hz
@@ -665,6 +663,9 @@ class FlagNoiseFit(Operator):
             net_std = None
             fknee_mean = None
             fknee_std = None
+            # If the noise model came from fitting, then detectors with a bad
+            # fit are already flagged in addition to NET being set to zero.
+            # This check is just an additional safeguard.
             good_fit = local_net > 0.0
             if obs.comm_col is None:
                 all_net = np.array(local_net[good_fit])
@@ -718,7 +719,7 @@ class FlagNoiseFit(Operator):
                         msg = f"obs {obs.name}, det {det} has fknee "
                         msg += f"{local_fknee[idet]} that is > {self.sigma_fknee} "
                         msg += f"x {fknee_std} from {fknee_mean}"
-                        log.info(msg)
+                        log.debug(msg)
                         obs.detdata[self.det_flags][det, :] |= self.det_flag_mask
                         new_flags[det] = cur_flag | self.det_flag_mask
             obs.update_local_detector_flags(new_flags)
