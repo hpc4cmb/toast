@@ -424,8 +424,10 @@ class FitNoiseModel(Operator):
             f_alpha * log_freqs + fmin_alpha * np.log(fmin)
         ) / fmalpha
         return J
-    
+
     def _get_err_ret(self, psd_unit):
+        # Internal function to build a fake return result
+        # when the fitting fails for some reason.
         eret = dict()
         eret["fit_result"] = types.SimpleNamespace()
         eret["fit_result"].success = False
@@ -596,7 +598,7 @@ class FlagNoiseFit(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid | defaults.det_mask_processing, 
+        defaults.det_mask_invalid | defaults.det_mask_processing,
         help="Bit mask for considering detectors",
     )
 
