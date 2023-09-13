@@ -1,16 +1,70 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 # Pointing utility functions used by templates and operators
 
-
 import numpy as np
 from astropy import units as u
 
 from . import qarray as qa
+from .instrument_coords import quat_to_xieta
 from .mpi import MPI
 from .timing import GlobalTimers, Timer, function_timer
+
+
+def center_offset_lonlat(
+    quats,
+    center_offset=None,
+    degrees=False,
+    is_azimuth=False,
+):
+    """Compute relative longitude / latitude from a dynamic center position.
+
+    Args:
+        quats (array):  Input pointing quaternions
+        center_offset (array):  Center longitude, latitude in radians for each sample
+        degrees (bool):  If True, return longitude / latitude values in degrees
+        is_azimuth (bool):  If True, we are using azimuth and the sign of the
+            longitude values should be negated
+
+    Returns:
+        (tuple):  The (longitude, latitude) arrays
+
+    """
+    if center_offset is None:
+        lon_rad, lat_rad, _ = qa.to_lonlat_angles(quats)
+    else:
+        if len(quats.shape) == 2:
+            n_samp = quats.shape[0]
+        else:
+            n_samp = 1
+        if center_offset.shape[0] != n_samp:
+            msg = f"center_offset dimensions {center_offset.shape}"
+            msg += f" not compatible with {n_samp} quaternion values"
+            raise ValueError(msg)
+        q_center = qa.from_lonlat_angles(
+            center_offset[:, 0],
+            center_offset[:, 1],
+            np.zeros_like(center_offset[:, 0]),
+        )
+        q_final = qa.mult(qa.inv(q_center), quats)
+        lon_rad, lat_rad, _ = quat_to_xieta(q_final)
+    if is_azimuth:
+        lon_rad = 2 * np.pi - lon_rad
+    # Normalize range
+    shift = lon_rad >= 2 * np.pi
+    lon_rad[shift] -= 2 * np.pi
+    shift = lon_rad < 0
+    lon_rad[shift] += 2 * np.pi
+    # Convert units
+    if degrees:
+        lon = np.degrees(lon_rad)
+        lat = np.degrees(lat_rad)
+    else:
+        lon = lon_rad
+        lat = lat_rad
+    return (lon, lat)
 
 
 @function_timer
@@ -50,20 +104,36 @@ def scan_range_lonlat(
         fov = obs.telescope.focalplane.field_of_view
     fp_radius = 0.5 * fov.to_value(u.radian)
 
+    # The observation samples we are considering
     if samples is None:
         slc = slice(0, obs.n_local_samples, 1)
     else:
         slc = samples
 
-    # Get the flags if needed.
-    fdata = None
+    # Apply the flags to boresight pointing if needed.
+    bore_quats = np.array(obs.shared[boresight].data[slc, :])
     if flags is not None:
-        fdata = np.array(obs.shared[flags][slc])
+        fdata = np.array(obs.shared[flags].data[slc])
         fdata &= flag_mask
+        bore_quats = bore_quats[fdata == 0, :]
 
-    # work in parallel
+    # The remaining good samples we have left
+    n_good = bore_quats.shape[0]
+
+    # Check that the top of the focalplane is below the zenith
+    _, el_bore, _ = qa.to_lonlat_angles(bore_quats)
+    elmax_bore = np.amax(el_bore)
+    if elmax_bore + fp_radius > np.pi / 2:
+        msg = f"The scan range includes the zenith."
+        msg += f" Max boresight elevation is {np.degrees(elmax_bore)} deg"
+        msg += f" and focalplane radius is {np.degrees(fp_radius)} deg."
+        msg += " Scan range facility cannot handle this case."
+        raise RuntimeError(msg)
+
+    # Work in parallel
     rank = obs.comm.group_rank
     ntask = obs.comm.group_size
+    rank_slice = slice(rank, n_good, ntask)
 
     # Create a fake focalplane of detectors in a circle around the boresight
     xaxis, yaxis, zaxis = np.eye(3)
@@ -76,52 +146,29 @@ def scan_range_lonlat(
         detquat = qa.mult(phirot, thetarot)
         detquats.append(detquat)
 
-    # Get fake detector pointing
-
+    # Get source center positions if needed
     center_lonlat = None
     if center_offset is not None:
-        center_lonlat = np.array(obs.shared[center_offset][slc, :])
+        center_lonlat = np.array(
+            (obs.shared[center_offset].data[slc, :])[rank_slice, :]
+        )
+        # center_offset is in degrees
         center_lonlat[:, :] *= np.pi / 180.0
 
-    lon = []
-    lat = []
-    quats = obs.shared[boresight][slc, :][rank::ntask].copy()
-    rank_good = slice(None)
-    if fdata is not None:
-        rank_good = fdata[rank::ntask] == 0
-
-    # Check that the top of the focalplane is below the zenith
-    theta_bore, _, _ = qa.to_iso_angles(quats)
-    el_bore = np.pi / 2 - theta_bore[rank_good]
-    elmax_bore = np.amax(el_bore)
-    if elmax_bore + fp_radius > np.pi / 2:
-        msg = f"The scan range includes the zenith."
-        msg += f" Max boresight elevation is {np.degrees(elmax_bore)} deg"
-        msg += f" and focalplane radius is {np.degrees(fp_radius)} deg."
-        msg += " Scan range facility cannot handle this case."
-        raise RuntimeError(msg)
-
+    # Compute pointing of fake detectors
+    lon = list()
+    lat = list()
     for idet, detquat in enumerate(detquats):
-        theta, phi, _ = qa.to_iso_angles(qa.mult(quats, detquat))
-        if center_lonlat is None:
-            if is_azimuth:
-                lon.append(2 * np.pi - phi[rank_good])
-            else:
-                lon.append(phi[rank_good])
-            lat.append(np.pi / 2 - theta[rank_good])
-        else:
-            if is_azimuth:
-                lon.append(
-                    2 * np.pi
-                    - phi[rank_good]
-                    - center_lonlat[rank::ntask, 0][rank_good]
-                )
-            else:
-                lon.append(phi[rank_good] - center_lonlat[rank::ntask, 0][rank_good])
-            lat.append(
-                (np.pi / 2 - theta[rank_good])
-                - center_lonlat[rank::ntask, 1][rank_good]
-            )
+        dquats = qa.mult(bore_quats, detquat)
+        det_lon, det_lat = center_offset_lonlat(
+            dquats,
+            center_offset=center_lonlat,
+            degrees=False,
+            is_azimuth=is_azimuth,
+        )
+        lon.append(det_lon)
+        lat.append(det_lat)
+
     lon = np.unwrap(np.hstack(lon))
     lat = np.hstack(lat)
 
@@ -130,13 +177,6 @@ def scan_range_lonlat(
     lonmax = np.amax(lon)
     latmin = np.amin(lat)
     latmax = np.amax(lat)
-
-    if lonmin < -2 * np.pi:
-        lonmin += 2 * np.pi
-        lonmax += 2 * np.pi
-    elif lonmax > 2 * np.pi:
-        lonmin -= 2 * np.pi
-        lonmax -= 2 * np.pi
 
     # Combine results
     if obs.comm.comm_group is not None:
