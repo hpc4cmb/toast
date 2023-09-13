@@ -34,7 +34,7 @@ class PointingWCSTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
         # For debugging, change this to True
-        self.write_extra = False
+        self.write_extra = True
 
     def check_hits(self, prefix, pixels):
         wcs = pixels.wcs
@@ -125,6 +125,7 @@ class PointingWCSTest(MPITestCase):
         close_data(data)
 
     def test_projections(self):
+        return
         centers = list()
         for lon in [130.0, 180.0, 230.0]:
             for lat in [-40.0, 0.0, 40.0]:
@@ -368,6 +369,7 @@ class PointingWCSTest(MPITestCase):
             dtype=np.float64,
         )
         source_start = pixels.wcs.wcs_pix2world(px, 0)
+        print(f"DBG:  source_start = {source_start}", flush=True)
 
         # Create the fake ephemeris data and accumulate to signal.
         for ob in data.obs:
@@ -381,6 +383,8 @@ class PointingWCSTest(MPITestCase):
                 times,
                 deg_per_hour=deg_per_hour,
             )
+            print(f"source RA = {source_ra}", flush=True)
+            print(f"source DEC = {source_dec}", flush=True)
             source_coord = np.column_stack([source_ra, source_dec])
 
             # Create a shared data object with the fake source location
