@@ -270,9 +270,7 @@ class import_obs_meta(object):
                             from_g3_time(frm["site_weather_time"]),
                             tz=datetime.timezone.utc,
                         )
-                        weather_uid = from_g3_scalar_type(
-                            frm["site_weather_uid"]
-                        )
+                        weather_uid = from_g3_scalar_type(frm["site_weather_uid"])
                         weather_median = from_g3_scalar_type(
                             frm["site_weather_use_median"]
                         )
