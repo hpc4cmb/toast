@@ -90,6 +90,7 @@ prepend_env "PATH" "${PREFIX}/bin"
 prepend_env "CPATH" "${PREFIX}/include"
 prepend_env "LIBRARY_PATH" "${PREFIX}/lib"
 prepend_env "LD_LIBRARY_PATH" "${PREFIX}/lib"
+ln -s "${PREFIX}/lib" "${PREFIX}/lib64"
 
 # Compile dependencies with variables optionally set in the calling environment
 
@@ -131,11 +132,15 @@ export DEPSDIR="${depsdir}"
 export STATIC=no
 export CLEANUP=no
 
-#for pkg in openblas cfitsio fftw libflac suitesparse libaatm; do
-for pkg in suitesparse; do
+if [ "x${LAPACK_LIBRARIES}" = "x" ]; then
+    export BLAS_LIBRARIES="-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}"
+    export LAPACK_LIBRARIES="-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}"
+    . "${depsdir}/openblas.sh"
+fi
+
+for pkg in cfitsio fftw libflac suitesparse libaatm; do
     . "${depsdir}/${pkg}.sh"
 done
-exit 0
 
 if [ "x${optional}" != "xyes" ]; then
     # we are done

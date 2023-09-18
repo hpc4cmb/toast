@@ -99,6 +99,9 @@ export STATIC="${static}"
 export SHLIBEXT="so"
 export CLEANUP=yes
 
+export BLAS_LIBRARIES="-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}"
+export LAPACK_LIBRARIES="-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}"
+
 for pkg in openblas fftw libflac suitesparse libaatm; do
     source "${depsdir}/${pkg}.sh"
 done

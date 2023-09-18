@@ -9,6 +9,8 @@
 # - FCFLAGS
 # - FCLIBS
 # - OMPFLAGS
+# - BLAS_LIBRARIES
+# - LAPACK_LIBRARIES
 # - PREFIX
 # - DEPSDIR (to find patches)
 # - MAKEJ
@@ -41,15 +43,15 @@ cmake_opts=" \
     -DCMAKE_Fortran_FLAGS=\"${FCFLAGS}\" \
     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
     -DCMAKE_INSTALL_PATH=\"${PREFIX}\" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DBLA_VENDOR=OpenBLAS ${shr} \
-    -DBLAS_LIBRARIES=\"-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}\" \
-    -DLAPACK_LIBRARIES=\"-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}\" \
+    -DCMAKE_BUILD_TYPE=Release ${shr} \
+    -DBLAS_LIBRARIES=\"${BLAS_LIBRARIES}\" \
+    -DLAPACK_LIBRARIES=\"${LAPACK_LIBRARIES}\" \
     "
 
 rm -rf ${ssparse_dir}
 tar xzf ${ssparse_pkg} \
     && pushd ${ssparse_dir} >/dev/null 2>&1 \
+    && topsdir=$(pwd) \
     && patch -p1 < "${DEPSDIR}/suitesparse.patch" \
     && for pkg in SuiteSparse_config AMD CAMD CCOLAMD COLAMD CHOLMOD; do \
     pushd ${pkg} >/dev/null 2>&1; \
@@ -58,10 +60,10 @@ tar xzf ${ssparse_pkg} \
     make local; \
     make install; \
     popd >/dev/null 2>&1; \
-    done \
-    && cp ./lib/* "${PREFIX}/lib/" \
-    && cp ./include/* "${PREFIX}/include/" \
-    && popd >/dev/null 2>&1
+    done; \
+    cp ./lib/* "${PREFIX}/lib/"; \
+    cp ./include/* "${PREFIX}/include/"; \
+    popd >/dev/null 2>&1
 
 if [ "x${CLEANUP}" = "xyes" ]; then
     rm -rf ${ssparse_dir}

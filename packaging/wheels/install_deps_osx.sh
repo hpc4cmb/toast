@@ -153,6 +153,9 @@ export STATIC=no
 export SHLIBEXT="dylib"
 export CLEANUP=yes
 
+export BLAS_LIBRARIES="-L${PREFIX}/lib -lopenblas"
+export LAPACK_LIBRARIES="-L${PREFIX}/lib -lopenblas"
+
 for pkg in fftw libflac suitesparse libaatm; do
     source "${depsdir}/${pkg}.sh"
 done
