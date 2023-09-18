@@ -147,7 +147,7 @@ def parse_arguments():
         toast.ops.TimeConstant(
             name="convolve_time_constant", deconvolve=False, tau=5 * u.ms
         ),
-        toast.ops.PixelsHealpix(name="pixels", view="scanning"),
+        toast.ops.PixelsHealpix(name="pixels"),
         toast.ops.StokesWeights(name="weights", mode="IQU"),
         toast.ops.FlagSSO(name="flag_sso"),
         toast.ops.Statistics(name="raw_statistics"),
@@ -178,7 +178,7 @@ def parse_arguments():
             save_cleaned=True,
             overwrite_cleaned=True,
         ),
-        toast.ops.PixelsHealpix(name="pixels_final", view="scanning", enabled=False),
+        toast.ops.PixelsHealpix(name="pixels_final", enabled=False),
         toast.ops.BinMap(
             name="binner_final", enabled=False, pixel_dist="pix_dist_final"
         ),
@@ -424,7 +424,6 @@ def main():
     # Create the Elevation modulated noise model
     job_ops.elevation_model.noise_model = job_ops.default_model.noise_model
     job_ops.elevation_model.detector_pointing = job_ops.det_pointing_azel
-    job_ops.elevation_model.view = job_ops.det_pointing_azel.view
     job_ops.elevation_model.apply(data)
     log.info_rank("Created elevation noise model in", comm=world_comm, timer=timer)
 
@@ -434,8 +433,6 @@ def main():
     job_ops.weights.detector_pointing = job_ops.det_pointing_radec
     job_ops.pixels_final.nside = args.nside
     job_ops.pixels_final.detector_pointing = job_ops.det_pointing_radec
-    job_ops.pixels.view = "scanning"
-    job_ops.pixels_final.view = "scanning"
 
     # If we are not using a different pointing matrix for our final binning, then
     # use the same one as the solve.

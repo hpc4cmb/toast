@@ -38,6 +38,7 @@ prepend_ext_env "PATH" "${ext_path}/bin"
 prepend_ext_env "CPATH" "${ext_path}/include"
 prepend_ext_env "LIBRARY_PATH" "${ext_path}/lib"
 prepend_ext_env "LD_LIBRARY_PATH" "${ext_path}/lib"
+prepend_ext_env "PKG_CONFIG_PATH" "${ext_path}/lib/pkgconfig"
 
 PREFIX="${ext_path}"
 LIBDIR="${PREFIX}/lib"
@@ -68,6 +69,7 @@ cmake \
     -DCMAKE_PREFIX_PATH="${CONDA_PREFIX}" \
     -DFFTW_ROOT="${PREFIX}" \
     -DAATM_ROOT="${PREFIX}" \
+    -DFLAC_ROOT="${PREFIX}" \
     -DBLAS_LIBRARIES="${LIBDIR}/libopenblas.so" \
     -DLAPACK_LIBRARIES="${LIBDIR}/libopenblas.so" \
     -DSUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include" \

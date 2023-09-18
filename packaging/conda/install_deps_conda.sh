@@ -24,9 +24,6 @@ scriptdir=$(pwd)
 popd >/dev/null 2>&1
 depsdir=$(dirname ${scriptdir})/deps
 
-echo "scripts in ${scriptdir}"
-echo "deps in ${depsdir}"
-
 if [ "x${CONDA_EXE}" = "x" ]; then
     export CONDA_EXE=$(which conda)
 fi
@@ -34,8 +31,6 @@ if [ "x${CONDA_EXE}" = "x" ]; then
     echo "No conda executable found"
     exit 1
 fi
-
-echo "${CONDA_EXE}"
 
 usage () {
     echo ""

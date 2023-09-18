@@ -24,9 +24,6 @@ scriptdir=$(pwd)
 popd >/dev/null 2>&1
 depsdir=$(dirname ${scriptdir})/deps
 
-echo "scripts in ${scriptdir}"
-echo "deps in ${depsdir}"
-
 if [ "x${CONDA_EXE}" = "x" ]; then
     export CONDA_EXE=$(which conda)
 fi
@@ -34,8 +31,6 @@ if [ "x${CONDA_EXE}" = "x" ]; then
     echo "No conda executable found"
     exit 1
 fi
-
-echo "${CONDA_EXE}"
 
 usage () {
     echo ""
@@ -118,15 +113,14 @@ if [ "x${FCFLAGS}" = "x" ]; then
     export FCFLAGS="-O3 -g -fPIC"
 fi
 
-if [ "x${OMPFLAGS}" = "x" ]; then
-    platform=$(python -c 'import sys; print(sys.platform)')
-    if [ ${platform} = "linux" ]; then
+platform=$(python -c 'import sys; print(sys.platform)')
+if [ ${platform} = "linux" ]; then
+    if [ "x${OMPFLAGS}" = "x" ]; then
         export OMPFLAGS="-fopenmp"
-        export SHLIBEXT="so"
-    else
-        export OMPFLAGS=""
-        export SHLIBEXT="dylib"
     fi
+    export SHLIBEXT="so"
+else
+    export SHLIBEXT="dylib"
 fi
 
 if [ "x${MAKEJ}" = "x" ]; then
@@ -137,9 +131,11 @@ export DEPSDIR="${depsdir}"
 export STATIC=no
 export CLEANUP=no
 
-for pkg in openblas cfitsio fftw libflac suitesparse libaatm; do
+#for pkg in openblas cfitsio fftw libflac suitesparse libaatm; do
+for pkg in suitesparse; do
     . "${depsdir}/${pkg}.sh"
 done
+exit 0
 
 if [ "x${optional}" != "xyes" ]; then
     # we are done

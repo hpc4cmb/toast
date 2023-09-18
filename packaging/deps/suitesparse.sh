@@ -13,7 +13,6 @@
 # - DEPSDIR (to find patches)
 # - MAKEJ
 # - STATIC (yes/no)
-# - SHLIBEXT
 # - CLEANUP (yes/no)
 
 ssparse_version=7.1.0
@@ -60,8 +59,7 @@ tar xzf ${ssparse_pkg} \
     make install; \
     popd >/dev/null 2>&1; \
     done \
-    && if [ "${STATIC}" = "yes" ]; then cp ./lib/*.a "${PREFIX}/lib/"; \
-    else cp ./lib/*.${SHLIBEXT} "${PREFIX}/lib/"; fi \
+    && cp ./lib/* "${PREFIX}/lib/" \
     && cp ./include/* "${PREFIX}/include/" \
     && popd >/dev/null 2>&1
 
