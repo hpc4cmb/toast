@@ -22,6 +22,8 @@
 # Now only the basename of the environment will show up.
 
 envname=$1
+pyversion=$2
+optional=$3
 
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
@@ -50,4 +52,4 @@ if [ "x${envname}" = "x" ]; then
     exit 1
 fi
 
-eval "${condapkgdir}/install_deps_conda.sh" "${envname}"
+eval "${condapkgdir}/install_deps_conda.sh" "${envname}" ${pyversion} ${optional}
