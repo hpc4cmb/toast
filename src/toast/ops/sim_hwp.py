@@ -213,7 +213,14 @@ class PerturbHWP(Operator):
                     raise RuntimeError("Simulated timing error causes time travel")
 
                 # Simulate rate drift
-                nominal_rate = (hwp_angle[-1] - hwp_angle[0]) / time_delta
+                unwrapped = np.unwrap(hwp_angle)
+                median_step = np.median(np.diff(unwrapped))
+                if np.abs(median_step) < 1e-10:
+                    # This was a stepped HWP, not continuously rotating
+                    msg = f"Don't know now to perturb a stepped HWP.  "
+                    msg += f"Median step size is {np.degrees(median_step)} deg"
+                    raise ValueError(msg)
+                nominal_rate = (unwrapped[-1] - unwrapped[0]) / time_delta
                 if self.drift_sigma is None:
                     begin_rate = nominal_rate
                     accel = 0
