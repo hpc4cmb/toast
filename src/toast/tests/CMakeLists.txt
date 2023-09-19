@@ -59,6 +59,7 @@ install(FILES
     ops_sim_cosmic_rays.py
     ops_time_constant.py
     spt3g.py
+    ops_pixels_healpix.py
     ops_cadence_map.py
     ops_crosslinking.py
     ops_sss.py
