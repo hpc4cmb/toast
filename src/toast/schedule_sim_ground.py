@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -1011,6 +1011,7 @@ def attempt_scan_pole(
     if args.one_scan_per_day and stop_timestamp > tstop_cooler:
         raise RuntimeError("one_scan_per_day is incompatible with cooler cycles")
     success = False
+    el = None
     for patch in visible:
         observer.date = to_DJD(tstart)
         if isinstance(patch, CoolerCyclePatch):
@@ -1949,6 +1950,7 @@ def add_cooler_cycle(
             0.005 * (moon_phase1 + moon_phase2),
             patch.hits,
             0,
+            (patch.time + t2 - t1) / 86400,
         )
     else:
         entry = fout_fmt.format(
@@ -2156,13 +2158,16 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         os.makedirs(dir_out, exist_ok=True)
     fout = open(fname_out, "w")
 
-    fout.write(
-        "#{:15} {:15} {:>15} {:>15} {:>15}\n".format(
+    header_fmt = "#{:14} {:15} {:>15} {:>15} {:>15}\n"
+    header_data_fmt = "{:15} {:15} {:15.3f} {:15.3f} {:15.1f}\n"
+    if args.field_separator != "":
+        header_fmt = header_fmt.replace(" ", args.field_separator)
+        header_data_fmt = header_data_fmt.replace(" ", args.field_separator)
+    fout.write(header_fmt.format(
             "Site", "Telescope", "Latitude [deg]", "Longitude [deg]", "Elevation [m]"
         )
     )
-    fout.write(
-        " {:15} {:15} {:15.3f} {:15.3f} {:15.1f}\n".format(
+    fout.write(header_data_fmt.format(
             args.site_name,
             args.telescope,
             np.degrees(observer.lat),
@@ -2173,20 +2178,22 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
 
     if args.verbose_schedule:
         fout_fmt0 = (
-            "#{:>20} {:>20} {:>14} {:>14} {:>8} "
+            "#{:>19} {:>20} {:>14} {:>14} {:>8} "
             "{:35} {:>8} {:>8} {:>8} {:>5} "
             "{:>8} {:>8} {:>8} {:>8} "
             "{:>8} {:>8} {:>8} {:>8} {:>5} "
             "{:>5} {:>3} {:>8}\n"
         )
-
         fout_fmt = (
-            " {:20} {:20} {:14.6f} {:14.6f} {:8.2f} "
+            "{:20} {:20} {:14.6f} {:14.6f} {:8.2f} "
             "{:35} {:8.2f} {:8.2f} {:8.2f} {:5} "
             "{:8.2f} {:8.2f} {:8.2f} {:8.2f} "
             "{:8.2f} {:8.2f} {:8.2f} {:8.2f} {:5.2f} "
             "{:5} {:3} {:8.3f}\n"
         )
+        if args.field_separator != "":
+            fout_fmt0 = fout_fmt0.replace(" ", args.field_separator)
+            fout_fmt = fout_fmt.replace(" ", args.field_separator)
         fout.write(
             fout_fmt0.format(
                 "Start time UTC",
@@ -2215,9 +2222,11 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         )
     else:
         # Concise schedule format
-        fout_fmt0 = "#{:>20} {:>20} {:>8} {:35} {:>8} {:>8} {:>8} {:>5} {:>3}\n"
-
-        fout_fmt = " {:>20} {:>20} {:8.2f} {:35} {:8.2f} {:8.2f} {:8.2f} {:5} {:3}\n"
+        fout_fmt0 = "#{:>19} {:>20} {:>8} {:35} {:>8} {:>8} {:>8} {:>5} {:>3}\n"
+        fout_fmt = "{:>20} {:>20} {:8.2f} {:35} {:8.2f} {:8.2f} {:8.2f} {:5} {:3}\n"
+        if args.field_separator != "":
+            fout_fmt0 = fout_fmt0.replace(" ", args.field_separator)
+            fout_fmt = fout_fmt.replace(" ", args.field_separator)
         fout.write(
             fout_fmt0.format(
                 "Start time UTC",
@@ -2476,6 +2485,11 @@ def parse_args(opts=None):
         action="store_true",
         help="Write a 24-field verbose schedule "
         "instead of the concise 11-field schedule",
+    )
+    parser.add_argument(
+        "--field-separator",
+        default="",
+        help="String to write between fields in the schedule.",
     )
     parser.add_argument(
         "--lock-az-range",

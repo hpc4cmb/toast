@@ -75,6 +75,8 @@ class SimGroundTest(MPITestCase):
                     "2020-01-01 12:00:00",
                     "--out",
                     sch_file,
+                    "--field-separator",
+                    "|",
                 ]
             )
             schedule = GroundSchedule()
@@ -203,6 +205,7 @@ class SimGroundTest(MPITestCase):
                     "2020-01-01 12:00:00",
                     "--out",
                     sch_file,
+                    "--verbose",
                 ]
             )
             schedule = GroundSchedule()
