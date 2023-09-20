@@ -71,6 +71,10 @@ environment created above:
     $> ${HOME}/git/toast/platforms/conda_dev_nvhpc.sh
     $> make -j 4 install
 
+NOTE:  if you get an error about GLIBC symbols not found in libstdc++, unload
+the `gcc` module at this point.  You cannot unload it before installing mpi4py
+with the cray `cc` compiler (which uses this gcc under the hood).
+
 As always, run the unit tests to verify the installation. You can enable GPU
 use by setting `TOAST_GPU_OPENMP=1` and `OMP_TARGET_OFFLOAD=MANDATORY` in your
 shell environment.
