@@ -80,3 +80,22 @@ class PerturbHWPTest(MPITestCase):
         assert rms > 1e-6, "HWP angle does not change enough when perturbed"
 
         close_data(data)
+
+    def test_perturbhwp_stepped(self):
+        # Create fake observing of a small patch
+        data = create_ground_data(self.comm)
+
+        times = data.obs[0].shared[defaults.times].data.copy()
+        orig = data.obs[0].shared[defaults.hwp_angle]
+        orig[:] = np.round(np.linspace(0, 10, times.size)) * np.pi / 8
+
+        perturb = ops.PerturbHWP(
+            drift_sigma=0.1 / u.h,
+            time_sigma=1e-3 * u.s,
+            realization=1,
+        )
+
+        with self.assertRaises(ValueError):
+            perturb.apply(data)
+
+        close_data(data)
