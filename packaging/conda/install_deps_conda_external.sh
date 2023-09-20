@@ -90,7 +90,9 @@ prepend_env "PATH" "${PREFIX}/bin"
 prepend_env "CPATH" "${PREFIX}/include"
 prepend_env "LIBRARY_PATH" "${PREFIX}/lib"
 prepend_env "LD_LIBRARY_PATH" "${PREFIX}/lib"
-ln -s "${PREFIX}/lib" "${PREFIX}/lib64"
+if [ ! -e "${PREFIX}/lib64" ]; then
+    ln -s "${PREFIX}/lib" "${PREFIX}/lib64"
+fi
 
 # Compile dependencies with variables optionally set in the calling environment
 

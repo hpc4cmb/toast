@@ -61,8 +61,8 @@ tar xzf ${ssparse_pkg} \
     make install; \
     popd >/dev/null 2>&1; \
     done; \
-    cp ./lib/* "${PREFIX}/lib/"; \
-    cp ./include/* "${PREFIX}/include/"; \
+    cp -r ./lib/* "${PREFIX}/lib/"; \
+    cp -r ./include/* "${PREFIX}/include/"; \
     popd >/dev/null 2>&1
 
 if [ "x${CLEANUP}" = "xyes" ]; then
