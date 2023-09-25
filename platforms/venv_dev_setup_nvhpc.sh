@@ -48,6 +48,5 @@ export OMPFLAGS="-fopenmp"
 export FCLIBS="-lnvf -lrt"
 export BLAS_LIBRARIES="-L${nvlibs} -lblas -lnvf -mp -lrt"
 export LAPACK_LIBRARIES="-L${nvlibs} -llapack -lnvf -mp -lrt"
-export MPICC="$(which mpicc) -noswitcherror"
 
 eval "${venvpkgdir}/install_deps_venv.sh" "${envname}" ${optional}
