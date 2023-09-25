@@ -1,18 +1,11 @@
 #!/bin/bash
 
-# This configures toast using cmake directly (not pip), but uses the
-# conda compilers and other dependencies provided by conda.  It is
-# useful for building toast in parallel repeatedly for debugging
-# in situations where clean un-install is not a concern.
+# This configures toast using cmake directly (not pip) and the NVHPC
+# compilers
 
 set -e
 
 opts="$@"
-
-if [ "x${CONDA_PREFIX}" = "x" ]; then
-    echo "You must activate a conda environment before using this script."
-    exit 1
-fi
 
 if [ "x$(which nvc++)" = "x" ]; then
     echo "The nvc++ compiler is not in your PATH"
@@ -26,22 +19,18 @@ scriptdir=$(pwd)
 popd >/dev/null 2>&1
 topdir=$(dirname "${scriptdir}")
 
-# Use the helper shell functions to load the sidecar
-# directory of compiled packages.
-ext_path="${CONDA_PREFIX}_ext"
-if [ ! -d "${ext_path}" ]; then
-    echo "External package directory '${ext_path}' does not exist."
-    echo "Did you use conda_dev_setup_nvhpc.sh to create the env?"
-    exit 1
-fi
-source "${topdir}/packaging/conda/load_conda_external.sh"
-prepend_ext_env "PATH" "${ext_path}/bin"
-prepend_ext_env "CPATH" "${ext_path}/include"
-prepend_ext_env "LIBRARY_PATH" "${ext_path}/lib"
-prepend_ext_env "LD_LIBRARY_PATH" "${ext_path}/lib"
-prepend_ext_env "PKG_CONFIG_PATH" "${ext_path}/lib/pkgconfig"
+# Use the helper shell functions to load the venv path
+# into the library search paths
+venv_path=$(dirname $(dirname $(which python3)))
 
-PREFIX="${ext_path}"
+source "${topdir}/packaging/conda/load_conda_external.sh"
+prepend_ext_env "PATH" "${venv_path}/bin"
+prepend_ext_env "CPATH" "${venv_path}/include"
+prepend_ext_env "LIBRARY_PATH" "${venv_path}/lib"
+prepend_ext_env "LD_LIBRARY_PATH" "${venv_path}/lib"
+prepend_ext_env "PKG_CONFIG_PATH" "${venv_path}/lib/pkgconfig"
+
+PREFIX="${venv_path}"
 LIBDIR="${PREFIX}/lib"
 
 if [ "x${DEBUG}" = "x1" ]; then
@@ -67,7 +56,7 @@ cmake \
     -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11" \
     -DCMAKE_VERBOSE_MAKEFILE=1 \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
-    -DCMAKE_PREFIX_PATH="${CONDA_PREFIX}" \
+    -DCMAKE_PREFIX_PATH="${PREFIX}" \
     -DFFTW_ROOT="${PREFIX}" \
     -DAATM_ROOT="${PREFIX}" \
     -DFLAC_ROOT="${PREFIX}" \

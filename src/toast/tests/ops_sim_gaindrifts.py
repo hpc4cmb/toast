@@ -222,7 +222,11 @@ class SimGainTest(MPITestCase):
                 oldmap[mask], newmap[mask], decimal=np.log10(drifter.sigma_drift)
             )
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
-            assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
+            if np.log10(rel_res.std()) > np.log10(drifter.sigma_drift):
+                msg = f"log(rel_res)={np.log10(rel_res.std())} > "
+                msg += f"{np.log10(drifter.sigma_drift)}"
+                print(msg, flush=True)
+                self.assertTrue(False)
         close_data(data)
 
     def test_slow_drift_commonmode(self):
@@ -292,7 +296,11 @@ class SimGainTest(MPITestCase):
                 oldmap[mask], newmap[mask], decimal=np.log10(drifter.sigma_drift)
             )
             rel_res = (oldmap[mask] - newmap[mask]) / oldmap[mask]
-            assert np.log10(rel_res.std()) <= np.log10(drifter.sigma_drift)
+            if np.log10(rel_res.std()) > np.log10(drifter.sigma_drift):
+                msg = f"log(rel_res)={np.log10(rel_res.std())} > "
+                msg += f"{np.log10(drifter.sigma_drift)}"
+                print(msg, flush=True)
+                self.assertTrue(False)
         close_data(data)
 
     def test_responsivity_function(self):

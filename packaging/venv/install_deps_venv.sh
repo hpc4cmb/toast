@@ -4,14 +4,8 @@ set -e
 
 envname=$1
 
-# Explicit python version to use
-pyversion=$2
-if [ "x${pyversion}" = "x" ]; then
-    pyversion=3.10
-fi
-
 # Install optional dependencies if desired
-optional=$3
+optional=$2
 if [ "x${optional}" = "xyes" ]; then
     echo "Optional dependencies set to 'yes'"
 else
@@ -24,19 +18,17 @@ scriptdir=$(pwd)
 popd >/dev/null 2>&1
 depsdir=$(dirname ${scriptdir})/deps
 
-if [ "x${CONDA_EXE}" = "x" ]; then
-    export CONDA_EXE=$(which conda)
-fi
-if [ "x${CONDA_EXE}" = "x" ]; then
-    echo "No conda executable found"
+PY_EXE=$(which python3)
+if [ "x${PY_EXE}" = "x" ]; then
+    echo "No python3 executable found"
     exit 1
 fi
 
 usage () {
     echo ""
-    echo "Usage:  $0 <name of conda env or path> <python version> <extra deps (yes/no)>"
+    echo "Usage:  $0 <path to virtualenv> <extra deps (yes/no)>"
     echo ""
-    echo "The named environment will be created or activated"
+    echo "The named environment will be created and / or activated"
     echo ""
 }
 
@@ -45,28 +37,28 @@ if [ "x${envname}" = "x" ]; then
     exit 1
 fi
 
-export ENVNAME=${envname}
+if [ ! -d "${envname}" ]; then
+    # Create it
+    python3 -m venv "${envname}"
+fi
 
-# Create / activate env
-. "${scriptdir}/create_env.sh"
+if [ ! -e "${envname}/bin/activate" ]; then
+    echo "Environment \"${envname}\" exists, but activate script not found"
+    exit 1
+fi
 
-# Install conda packages.  We only install the things needed from python.
+. "${envname}/bin/activate"
+python3 -m pip install install --upgrade pip setuptools wheel
 
-pkgfiles="${scriptdir}/deps.txt"
-pkglist=""
-for pfile in ${pkgfiles}; do
-    plist=$(cat "${pfile}" | xargs -I % echo -n '"%" ')
-    pkglist="${pkglist} ${plist}"
-done
-pkglist="python=${pyversion} ${pkglist}"
-echo "Installing conda packages:  ${pkglist}"
-conda install --yes --update-all ${pkglist}
+# Install packages
 
-# Reload the environment to pick up any environment variables
-conda deactivate
-conda activate "${ENVNAME}"
+pkglist=$(cat "${scriptdir}/deps.txt" | xargs -I % echo -n '% ')
+echo "Installing pip packages:  ${pkglist}"
+python3 -m pip install --no-input ${pkglist}
 
 # Add our compiled prefix into our search environment
+
+export PREFIX="${envname}"
 
 prepend_env () {
     # This function is needed since trailing colons
@@ -82,8 +74,6 @@ prepend_env () {
     fi
 }
 
-export PREFIX="${CONDA_PREFIX}_ext"
-mkdir -p "${PREFIX}/bin"
 mkdir -p "${PREFIX}/include"
 mkdir -p "${PREFIX}/lib"
 prepend_env "PATH" "${PREFIX}/bin"
@@ -149,47 +139,26 @@ if [ "x${optional}" != "xyes" ]; then
     exit 0
 fi
 
-if [ "x${MPICC}" = "x" ]; then
-    # The user did not specify MPI compilers- try to use generic
-    # defaults.
-    echo "====================================================================="
-    echo ""
-    echo "WARNING:  If using custom compilers, you should have an"
-    echo "MPI installation with C, C++, and Fortran compiler wrappers."
-    echo "Set the MPICC, MPICXX, MPIFC, and MPIFCLIBS environment"
-    echo "variables before using this script.  Assuming GNU compilers"
-    echo "and MPICH for now..."
-    export MPICC=mpicc
-    export MPICXX=mpicxx
-    export MPIFC=mpif90
-    export MPFCLIBS="-L${CONDA_PREFIX}/lib -lfmpich -lgfortran"
-    echo ""
-    echo "====================================================================="
-fi
-
 # Install mpi4py, needed by some optional dependencies
 . "${depsdir}/mpi4py.sh"
+
+# Now build the packages
+
+if [ "x${MPICC}" = "x" ]; then
+    # This should have already raised an error installing mpi4py...
+    export MPICC=mpicc
+fi
+if [ "x${MPICC}" = "x" ]; then
+    export MPICXX=mpicxx
+fi
+if [ "x${MPIFC}" = "x" ]; then
+    export MPIFC=mpif90
+fi
+if [ "x${MPFCLIBS}" = "x" ]; then
+    export MPFCLIBS="-lfmpich -lgfortran"
+fi
 
 for pkg in "libmadam" "libconviqt"; do
     . "${depsdir}/${pkg}.sh"
 done
-
-echo "====================================================================="
-echo ""
-echo "Additional compiled dependencies installed next to conda"
-echo "environment at '${PREFIX}'.  You should prepend the following"
-echo "locations to your environment before compiling toast:"
-echo ""
-echo "   PATH --> '${PREFIX}/bin'"
-echo "   CPATH --> '${PREFIX}/include'"
-echo "   LIBRARY_PATH --> '${PREFIX}/lib'"
-echo "   LD_LIBRARY_PATH --> '${PREFIX}/lib'"
-echo "   PYTHONPATH --> '${PREFIX}/lib/python${pyversion}/site-packages'"
-echo ""
-echo "You can use the helper function in this directory:"
-echo ""
-echo "  %> source packaging/conda/load_conda_external.sh"
-echo "  %> load_conda_ext ${ENVNAME}"
-echo ""
-echo "====================================================================="
 

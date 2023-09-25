@@ -77,8 +77,8 @@ fi
 conda deactivate
 conda activate "${ENVNAME}"
 
-# Install MPI, needed by some optional dependencies
-. "${scriptdir}/install_mpi.sh"
+# Install mpi4py, needed by some optional dependencies
+. "${depsdir}/mpi4py.sh"
 
 # Now build the packages not available through conda
 
