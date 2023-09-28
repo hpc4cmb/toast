@@ -121,7 +121,7 @@ if [ "x${MAKEJ}" = "x" ]; then
 fi
 
 export DEPSDIR="${depsdir}"
-export STATIC=no
+export STATIC=yes
 export CLEANUP=no
 
 if [ "x${LAPACK_LIBRARIES}" = "x" ]; then

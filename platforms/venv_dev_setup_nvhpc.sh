@@ -41,9 +41,9 @@ fi
 export CC=nvc
 export CXX=nvc++
 export FC=nvfortran
-export CFLAGS="-O3 -g -fPIC -pthread"
-export FCFLAGS="-O3 -g -fPIC -pthread"
-export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11"
+export CFLAGS="-O3 -g -fPIC -pthread -noswitcherror"
+export FCFLAGS="-O3 -g -fPIC -pthread -noswitcherror"
+export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11 -noswitcherror"
 export OMPFLAGS="-fopenmp"
 export FCLIBS="-lnvf -lrt"
 export BLAS_LIBRARIES="-L${nvlibs} -lblas -lnvf -mp -lrt"

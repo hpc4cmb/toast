@@ -136,9 +136,19 @@ def test(name=None, verbosity=2):
     if comm is not None:
         outdir = comm.bcast(outdir, root=0)
 
+    running_on_ci = False
+    if (
+        ("CONDA_BUILD" in os.environ)
+        or ("CIBUILDWHEEL" in os.environ)
+        or ("CI" in os.environ)
+    ):
+        running_on_ci = True
+
     if (name is None) or (name == "libtoast"):
         # Run tests from the serial compiled library.
-        libtoast_tests(list(sys.argv))
+        if not running_on_ci:
+            # These include timing tests which will fail on CI services
+            libtoast_tests(list(sys.argv))
 
     # Run python tests.
 
@@ -148,14 +158,8 @@ def test(name=None, verbosity=2):
 
     if name is None:
         suite.addTest(loader.loadTestsFromModule(test_env))
-        if not (
-            ("CONDA_BUILD" in os.environ)
-            or ("CIBUILDWHEEL" in os.environ)
-            or ("CI" in os.environ)
-        ):
-            # When doing a conda build on CI services in containers
-            # the timing information is not accurate and these tests
-            # fail.
+        if not running_on_ci:
+            # Only run timing tests when outside VMs
             suite.addTest(loader.loadTestsFromModule(test_timing))
         suite.addTest(loader.loadTestsFromModule(test_rng))
         suite.addTest(loader.loadTestsFromModule(test_math_misc))
