@@ -1,17 +1,16 @@
 #!/bin/bash
 
-# This configures toast using cmake directly (not pip) and the NVHPC
+# This configures toast using cmake directly (not pip) and the GNU
 # compilers
 
 set -e
 
 opts="$@"
 
-if [ "x$(which nvc++)" = "x" ]; then
-    echo "The nvc++ compiler is not in your PATH"
+if [ "x$(which g++)" = "x" ]; then
+    echo "The g++ compiler is not in your PATH"
     exit 1
 fi
-nvlibs=$(dirname $(dirname $(which nvc++)))/lib
 
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
@@ -33,12 +32,12 @@ else
 fi
 
 # Set our compiler flags
-export CC=nvc
-export CXX=nvc++
-export FC=nvfortran
-export CFLAGS="-O3 -g -fPIC -pthread -noswitcherror"
-export FCFLAGS="-O3 -g -fPIC -pthread -noswitcherror"
-export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11 -noswitcherror"
+export CC=gcc
+export CXX=g++
+export FC=gfortran
+export CFLAGS="-O3 -g -fPIC -pthread"
+export FCFLAGS="-O3 -g -fPIC -pthread"
+export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11"
 
 cmake \
     -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" \
@@ -53,8 +52,7 @@ cmake \
     -DFFTW_ROOT="${PREFIX}" \
     -DAATM_ROOT="${PREFIX}" \
     -DFLAC_ROOT="${PREFIX}" \
-    -DBLAS_LIBRARIES="${nvlibs}/libblas_lp64.a;${nvlibs}/libnvf.a" \
-    -DLAPACK_LIBRARIES="${nvlibs}/liblapack_lp64.a" \
+    -DBLAS_LIBRARIES="${LIBDIR}/libopenblas.a" \
     -DSUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include" \
     -DSUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}" \
     ${opts} ..
