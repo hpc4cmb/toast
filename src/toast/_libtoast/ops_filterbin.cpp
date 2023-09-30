@@ -19,7 +19,7 @@ void apply_flags_to_pixels(py::array_t <unsigned char> common_flags,
     auto fast_pixels = pixels.mutable_unchecked <1>();
 
     size_t nsamp = pixels.size();
-    #pragma omp parallel for schedule(static, 64)
+    //#pragma omp parallel for schedule(static, 64)
     for (size_t i = 0; i < nsamp; ++i) {
         unsigned char common_flag = fast_common_flags(i);
         unsigned char detector_flag = fast_detector_flags(i);
@@ -124,7 +124,7 @@ void add_matrix(
     std::vector <std::vector <double> > row_data(nrow);
     std::vector <std::vector <int64_t> > row_indices(nrow);
 
-    #pragma omp parallel for schedule(static, 4)
+    //#pragma omp parallel for schedule(static, 4)
     for (size_t row = 0; row < nrow; ++row) {
         const size_t start1 = fast_indptr1[row];
         const size_t stop1 = fast_indptr1[row + 1];
@@ -194,7 +194,7 @@ void add_matrix(
     }
 
     // Pack the row vectors into the output arrays
-    #pragma omp parallel for schedule(static, 4)
+    //#pragma omp parallel for schedule(static, 4)
     for (size_t row = 0; row < nrow; ++row) {
         size_t n = row_data[row].size();
         if (n == 0) continue;
@@ -287,7 +287,7 @@ void build_template_covariance(std::vector <int64_t> & starts,
 
     size_t ntemplate = templates.size();
 
-    #pragma omp parallel for schedule(static, 1)
+    //#pragma omp parallel for schedule(static, 1)
     for (size_t row = 0; row < ntemplate; ++row) {
         auto rowtemplate = templates[row].unchecked <1>();
         size_t rowoffset = starts[row];
@@ -356,7 +356,7 @@ void accumulate_observation_matrix(py::array_t <double,
 
     // Build lists of non-zeros for each row of the template matrix
     std::vector <std::vector <size_t> > nonzeros(nsample);
-    #pragma omp parallel for schedule(static, 1)
+    //#pragma omp parallel for schedule(static, 1)
     for (size_t isample = 0; isample < nsample; ++isample) {
         for (size_t itemplate = ndense; itemplate < ntemplate; ++itemplate) {
             if (fast_templates(isample, itemplate) != 0) {

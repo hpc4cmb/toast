@@ -119,7 +119,7 @@ void toast::vfast_erfinv(int n, double const * in, double * out) {
 
 void toast::vsin(int n, double const * ang, double * sinout) {
     if (toast::is_aligned(ang) && toast::is_aligned(sinout)) {
-        # pragma omp simd
+        //DEBUG # pragma omp simd
         for (int i = 0; i < n; ++i) {
             sinout[i] = ::sin(ang[i]);
         }
@@ -133,7 +133,7 @@ void toast::vsin(int n, double const * ang, double * sinout) {
 
 void toast::vcos(int n, double const * ang, double * cosout) {
     if (toast::is_aligned(ang) && toast::is_aligned(cosout)) {
-        # pragma omp simd
+        //DEBUG # pragma omp simd
         for (int i = 0; i < n; ++i) {
             cosout[i] = ::cos(ang[i]);
         }
@@ -149,7 +149,7 @@ void toast::vsincos(int n, double const * ang, double * sinout,
                     double * cosout) {
     if (toast::is_aligned(ang) && toast::is_aligned(sinout) &&
         toast::is_aligned(cosout)) {
-        # pragma omp simd
+        //DEBUG # pragma omp simd
         for (int i = 0; i < n; ++i) {
             sinout[i] = ::sin(ang[i]);
             cosout[i] = ::cos(ang[i]);
@@ -167,7 +167,7 @@ void toast::vatan2(int n, double const * y, double const * x,
                    double * ang) {
     if (toast::is_aligned(ang) && toast::is_aligned(x) &&
         toast::is_aligned(y)) {
-        # pragma omp simd
+        //DEBUG # pragma omp simd
         for (int i = 0; i < n; ++i) {
             ang[i] = ::atan2(y[i], x[i]);
         }
@@ -181,7 +181,7 @@ void toast::vatan2(int n, double const * y, double const * x,
 
 void toast::vsqrt(int n, double const * in, double * out) {
     if (toast::is_aligned(in) && toast::is_aligned(out)) {
-        # pragma omp simd
+        //DEBUG # pragma omp simd
         for (int i = 0; i < n; ++i) {
             out[i] = ::sqrt(in[i]);
         }
@@ -195,7 +195,7 @@ void toast::vsqrt(int n, double const * in, double * out) {
 
 void toast::vrsqrt(int n, double const * in, double * out) {
     if (toast::is_aligned(in) && toast::is_aligned(out)) {
-        # pragma omp simd
+        //DEBUG # pragma omp simd
         for (int i = 0; i < n; ++i) {
             out[i] = 1.0 / ::sqrt(in[i]);
         }
@@ -209,7 +209,7 @@ void toast::vrsqrt(int n, double const * in, double * out) {
 
 void toast::vexp(int n, double const * in, double * out) {
     if (toast::is_aligned(in) && toast::is_aligned(out)) {
-        # pragma omp simd
+        //DEBUG # pragma omp simd
         for (int i = 0; i < n; ++i) {
             out[i] = ::exp(in[i]);
         }
@@ -223,7 +223,7 @@ void toast::vexp(int n, double const * in, double * out) {
 
 void toast::vlog(int n, double const * in, double * out) {
     if (toast::is_aligned(in) && toast::is_aligned(out)) {
-        # pragma omp simd
+        //DEBUG # pragma omp simd
         for (int i = 0; i < n; ++i) {
             out[i] = ::log(in[i]);
         }
@@ -580,7 +580,7 @@ void toast::vfast_erfinv(int n, double const * in, double * out) {
     toast::AlignedVector <double> lg(n);
 
     if (toast::is_aligned(in)) {
-        # pragma omp simd
+        //DEBUG # pragma omp simd
         for (int i = 0; i < n; ++i) {
             double ab = ::fabs(in[i]);
             arg[i] = (1.0 - ab) * (1.0 + ab);
@@ -595,7 +595,7 @@ void toast::vfast_erfinv(int n, double const * in, double * out) {
     toast::vfast_log(n, arg.data(), lg.data());
 
     if (toast::is_aligned(out)) {
-        # pragma omp simd
+        //DEBUG # pragma omp simd
         for (int i = 0; i < n; ++i) {
             double w = -lg[i];
             double p;

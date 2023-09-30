@@ -18,7 +18,7 @@ void toast::qa_list_dot(size_t n, size_t m, size_t d, double const * a,
                         double const * b, double * dotprod) {
     if (toast::is_aligned(a) && toast::is_aligned(b) &&
         toast::is_aligned(dotprod)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             dotprod[i] = 0.0;
             size_t off = m * i;
@@ -42,7 +42,7 @@ void toast::qa_list_dot(size_t n, size_t m, size_t d, double const * a,
 
 void toast::qa_inv(size_t n, double * q) {
     if (toast::is_aligned(q)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             for (size_t j = 0; j < 3; ++j) {
                 q[4 * i + j] *= -1;
@@ -105,7 +105,7 @@ void toast::qa_normalize(size_t n, size_t m, size_t d,
     toast::qa_amplitude(n, m, d, q_in, norm.data());
 
     if (toast::is_aligned(q_in) && toast::is_aligned(q_out)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             size_t off = m * i;
             for (size_t j = 0; j < d; ++j) {
@@ -145,7 +145,7 @@ void toast::qa_normalize_inplace(size_t n, size_t m, size_t d, double * q) {
     toast::qa_amplitude(n, m, d, q, norm.data());
 
     if (toast::is_aligned(q)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             for (size_t j = 0; j < d; ++j) {
                 q[m * i + j] /= norm[i];
@@ -204,7 +204,7 @@ void toast::qa_rotate_many_one(size_t nq, double const * q,
     toast::qa_normalize(nq, 4, 4, q, q_unit.data());
 
     if (toast::is_aligned(v_in) && toast::is_aligned(v_out)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < nq; ++i) {
             size_t vfout = 3 * i;
             size_t qf = 4 * i;
@@ -278,7 +278,7 @@ void toast::qa_rotate_one_many(double const * q, size_t nv,
     double z2 = -q_unit[2] * q_unit[2];
 
     if (toast::is_aligned(v_in) && toast::is_aligned(v_out)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < nv; ++i) {
             size_t vf = 3 * i;
             v_out[vf + 0] = 2 *
@@ -322,7 +322,7 @@ void toast::qa_rotate_many_many(size_t n, double const * q,
     toast::qa_normalize(n, 4, 4, q, q_unit.data());
 
     if (toast::is_aligned(v_in) && toast::is_aligned(v_out)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             size_t vf = 3 * i;
             size_t qf = 4 * i;
@@ -416,7 +416,7 @@ void toast::qa_mult_one_one(double const * p, double const * q,
 void toast::qa_mult_one_many(double const * p, size_t nq,
                              double const * q, double * r) {
     if (toast::is_aligned(p) && toast::is_aligned(q) && toast::is_aligned(r)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < nq; ++i) {
             size_t f = 4 * i;
             r[f + 0] =  p[0] * q[f + 3] + p[1] * q[f + 2] - p[2] * q[f + 1] +
@@ -448,7 +448,7 @@ void toast::qa_mult_one_many(double const * p, size_t nq,
 void toast::qa_mult_many_one(size_t np, double const * p,
                              double const * q, double * r) {
     if (toast::is_aligned(p) && toast::is_aligned(q) && toast::is_aligned(r)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < np; ++i) {
             size_t f = 4 * i;
             r[f + 0] =  p[f + 0] * q[3] + p[f + 1] * q[2] -
@@ -480,7 +480,7 @@ void toast::qa_mult_many_one(size_t np, double const * p,
 void toast::qa_mult_many_many(size_t np, double const * p, size_t nq,
                               double const * q, double * r) {
     if (toast::is_aligned(p) && toast::is_aligned(q) && toast::is_aligned(r)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < np; ++i) {
             size_t f = 4 * i;
             r[f + 0] =  p[f + 0] * q[f + 3] + p[f + 1] * q[f + 2] -
@@ -604,7 +604,7 @@ void toast::qa_exp(size_t n, double const * q_in, double * q_out) {
     toast::qa_amplitude(n, 4, 3, q_in, normv.data());
 
     if (toast::is_aligned(q_in) && toast::is_aligned(q_out)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             size_t off = 4 * i;
             double exp_q_w = ::exp(q_in[off + 3]);
@@ -641,7 +641,7 @@ void toast::qa_ln(size_t n, double const * q_in, double * q_out) {
     toast::qa_normalize(n, 4, 3, q_in, q_out);
 
     if (toast::is_aligned(q_in) && toast::is_aligned(q_out)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             size_t off = 4 * i;
             q_out[off + 3] = ::log(normq[i]);
@@ -673,7 +673,7 @@ void toast::qa_pow(size_t nq, size_t np, double const * p, double const * q_in,
     toast::qa_ln(nq, q_in, q_tmp.data());
 
     if (np == 1) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < nq; ++i) {
             size_t off = 4 * i;
             q_tmp[off] *= p[0];
@@ -683,7 +683,7 @@ void toast::qa_pow(size_t nq, size_t np, double const * p, double const * q_in,
         }
     } else if (np == nq) {
         if (toast::is_aligned(p)) {
-            #pragma omp simd
+            //DEBUG #pragma omp simd
             for (size_t i = 0; i < nq; ++i) {
                 size_t off = 4 * i;
                 q_tmp[off] *= p[i];
@@ -734,7 +734,7 @@ void toast::qa_from_axisangle_one_many(size_t nang, double const * axis,
                                        double const * angle, double * q_out) {
     toast::AlignedVector <double> a(nang);
     if (toast::is_aligned(angle)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < nang; ++i) {
             a[i] = 0.5 * angle[i];
         }
@@ -750,7 +750,7 @@ void toast::qa_from_axisangle_one_many(size_t nang, double const * axis,
     toast::vsincos(nang, a.data(), sin_a.data(), cos_a.data());
 
     if (toast::is_aligned(axis) && toast::is_aligned(q_out)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < nang; ++i) {
             size_t off = 4 * i;
             q_out[off] = axis[0] * sin_a[i];
@@ -776,7 +776,7 @@ void toast::qa_from_axisangle_many_one(size_t naxis, double const * axis,
     double cos_a = ::cos(0.5 * angle);
 
     if (toast::is_aligned(axis) && toast::is_aligned(q_out)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < naxis; ++i) {
             size_t off = 4 * i;
             size_t voff = 3 * i;
@@ -803,7 +803,7 @@ void toast::qa_from_axisangle_many_many(size_t n, double const * axis,
     toast::AlignedVector <double> a(n);
 
     if (toast::is_aligned(angle)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             a[i] = 0.5 * angle[i];
         }
@@ -819,7 +819,7 @@ void toast::qa_from_axisangle_many_many(size_t n, double const * axis,
     toast::vsincos(n, a.data(), sin_a.data(), cos_a.data());
 
     if (toast::is_aligned(axis) && toast::is_aligned(q_out)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             size_t off = 4 * i;
             size_t voff = 3 * i;
@@ -889,7 +889,7 @@ void toast::qa_to_axisangle(size_t n, double const * q, double * axis,
                             double * angle) {
     if (toast::is_aligned(q) && toast::is_aligned(axis) &&
         toast::is_aligned(angle)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             size_t qf = 4 * i;
             size_t vf = 3 * i;
@@ -996,7 +996,7 @@ void toast::qa_from_vectors(size_t n, double const * vec1,
                             double const * vec2, double * q) {
     if (toast::is_aligned(vec1) && toast::is_aligned(vec2) &&
         toast::is_aligned(q)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             size_t vf = 3 * i;
             size_t qf = 4 * i;
@@ -1066,7 +1066,7 @@ void toast::qa_from_angles(size_t n, double const * theta,
                            double * quat, bool IAU) {
     if (toast::is_aligned(theta) && toast::is_aligned(phi) &&
         toast::is_aligned(pa) && toast::is_aligned(quat)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             size_t qf = 4 * i;
             double qR[4];
@@ -1167,7 +1167,7 @@ void toast::qa_to_angles(size_t n, double const * quat, double * theta,
                          double * phi, double * pa, bool IAU) {
     if (toast::is_aligned(theta) && toast::is_aligned(phi) &&
         toast::is_aligned(pa) && toast::is_aligned(quat)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             double const xaxis[3] = {1.0, 0.0, 0.0};
             double const zaxis[3] = {0.0, 0.0, 1.0};
@@ -1249,7 +1249,7 @@ void toast::qa_from_position(size_t n, double const * theta,
                              double const * phi, double * quat) {
     if (toast::is_aligned(theta) && toast::is_aligned(phi)
         && toast::is_aligned(quat)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             size_t qf = 4 * i;
             double qR[4];
@@ -1312,7 +1312,7 @@ void toast::qa_to_position(size_t n, double const * quat, double * theta,
                            double * phi) {
     if (toast::is_aligned(theta) && toast::is_aligned(phi) &&
         toast::is_aligned(quat)) {
-        #pragma omp simd
+        //DEBUG #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             double const zaxis[3] = {0.0, 0.0, 1.0};
             size_t qf = 4 * i;
