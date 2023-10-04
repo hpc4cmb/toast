@@ -38,10 +38,8 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/math_rng.cpp
     _libtoast/math_qarray.cpp
     _libtoast/math_fft.cpp
-    _libtoast/math_healpix.cpp
     _libtoast/fod_psd.cpp
     _libtoast/tod_filter.cpp
-    _libtoast/tod_pointing.cpp
     _libtoast/tod_simnoise.cpp
     _libtoast/todmap_scanning.cpp
     _libtoast/map_cov.cpp

@@ -32,11 +32,9 @@ PYBIND11_MODULE(_libtoast, m) {
     init_math_sf(m);
     init_math_rng(m);
     init_math_qarray(m);
-    init_math_healpix(m);
     init_math_fft(m);
     init_fod_psd(m);
     init_tod_filter(m);
-    init_tod_pointing(m);
     init_tod_simnoise(m);
     init_todmap_scanning(m);
     init_map_cov(m);

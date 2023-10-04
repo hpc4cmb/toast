@@ -69,9 +69,9 @@ def stokes_weights_IQU_numpy(
             else:
                 ang = 2.0 * (alpha + 2.0 * (hwp - gamma[idet]))
 
-            weights[widx][samples, 0] = cal
-            weights[widx][samples, 1] = cal * eta * np.cos(ang)
-            weights[widx][samples, 2] = -cal * eta * np.sin(ang) * U_sign
+            weights[widx][samples, 0] = cal[idet]
+            weights[widx][samples, 1] = cal[idet] * eta * np.cos(ang)
+            weights[widx][samples, 2] = -cal[idet] * eta * np.sin(ang) * U_sign
 
 
 @kernel(impl=ImplementationType.NUMPY, name="stokes_weights_I")
@@ -80,4 +80,4 @@ def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accel):
         widx = weight_index[idet]
         for vw in intervals:
             samples = slice(vw.first, vw.last + 1, 1)
-            weights[widx][samples] = cal
+            weights[widx][samples] = cal[idet]

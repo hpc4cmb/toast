@@ -26,7 +26,6 @@ from . import io_hdf5 as test_io_hdf5
 from . import math_misc as test_math_misc
 from . import noise as test_noise
 from . import observation as test_observation
-from . import ops_pixels_healpix as test_ops_pixels_healpix
 from . import ops_cadence_map as test_ops_cadence_map
 from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_crosslinking as test_ops_crosslinking
@@ -45,6 +44,7 @@ from . import ops_mapmaker_utils as test_ops_mapmaker_utils
 from . import ops_memory_counter as test_ops_memory_counter
 from . import ops_noise_estim as test_ops_noise_estim
 from . import ops_perturbhwp as test_ops_perturbhwp
+from . import ops_pixels_healpix as test_ops_pixels_healpix
 from . import ops_pointing_healpix as test_ops_pointing_healpix
 from . import ops_pointing_wcs as test_ops_pointing_wcs
 from . import ops_polyfilter as test_ops_polyfilter

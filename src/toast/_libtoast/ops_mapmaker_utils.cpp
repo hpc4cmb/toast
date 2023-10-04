@@ -238,6 +238,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                 )
                 {
                     # pragma omp target teams distribute parallel for collapse(3) \
+                    schedule(static,1)                                            \
                     is_device_ptr(                                                \
                     dev_pixels,                                                   \
                     dev_weights,                                                  \
@@ -293,7 +294,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         #pragma omp parallel default(shared)
                         {
-                            #pragma omp for
+                            #pragma omp for schedule(static)
                             for (
                                 int64_t isamp = raw_intervals[iview].first;
                                 isamp <= raw_intervals[iview].last;

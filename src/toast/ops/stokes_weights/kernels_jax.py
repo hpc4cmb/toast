@@ -112,7 +112,7 @@ def stokes_weights_IQU_interval(
         hwp (array, float64):  The HWP angles (size n_samp).
         epsilon (array, float):  The cross polar response (size n_det).
         gamma (array, float):  The polarization orientation angle of each detector.
-        cal (float):  A constant to apply to the pointing weights.
+        cal (array):  A constant to apply to the pointing weights.
         IAU (bool):  Whether to use IAU convention.
         interval_starts (array, int): size n_view
         interval_ends (array, int): size n_view
@@ -188,7 +188,7 @@ def stokes_weights_IQU_jax(
         intervals (array, Interval): The intervals to modify (size n_view)
         epsilon (array, float):  The cross polar response (size n_det).
         gamma (array, float):  The polarization orientation angle of each detector.
-        cal (float):  A constant to apply to the pointing weights.
+        cal (array):  A constant to apply to the pointing weights.
         IAU (bool):  If True, use IAU convention.
         use_accel (bool): should we use the accelerator
 
@@ -204,6 +204,7 @@ def stokes_weights_IQU_jax(
     hwp_input = MutableJaxArray.to_array(hwp)
     epsilon_input = MutableJaxArray.to_array(epsilon)
     gamma_input = MutableJaxArray.to_array(gamma)
+    cal_input = MutableJaxArray.to_array(cal)
 
     # runs computation
     weights[:] = stokes_weights_IQU_interval(
@@ -214,7 +215,7 @@ def stokes_weights_IQU_jax(
         hwp_input,
         epsilon_input,
         gamma_input,
-        cal,
+        cal_input,
         IAU,
         intervals.first,
         intervals.last,
@@ -236,7 +237,7 @@ def stokes_weights_I_interval(
     Args:
         weight_index (array, int): The indexes of the weights (size n_det)
         weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp)
-        cal (float):  A constant to apply to the pointing weights.
+        cal (array):  A constant to apply to the pointing weights.
         interval_starts (array, int): size n_view
         interval_ends (array, int): size n_view
         intervals_max_length (int): maximum length of an interval
@@ -255,6 +256,8 @@ def stokes_weights_I_interval(
 
     # updates results and returns
     # weights[weight_index,intervals] = cal
+    #
+    # FIXME: cal is an array
     weights = JaxIntervals.set(weights, (weight_index, intervals), cal)
     return weights
 
@@ -276,7 +279,7 @@ def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
         weight_index (array, int): The indexes of the weights (size n_det)
         weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp)
         intervals (array, Interval): The intervals to modify (size n_view)
-        cal (float):  A constant to apply to the pointing weights.
+        cal (array):  A constant to apply to the pointing weights.
         use_accel (bool): should we use the accelerator
 
     Returns:

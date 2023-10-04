@@ -14,13 +14,11 @@
 #include <toast/math_rng.hpp>
 #include <toast/math_qarray.hpp>
 #include <toast/math_fft.hpp>
-#include <toast/math_healpix.hpp>
 #include <toast/fod_psd.hpp>
 #include <toast/map_pixels.hpp>
 #include <toast/map_cov.hpp>
 #include <toast/tod_mapscan.hpp>
 #include <toast/tod_filter.hpp>
-#include <toast/tod_pointing.hpp>
 #include <toast/tod_simnoise.hpp>
 #include <toast/atm_utils.hpp>
 #include <toast/template_offset.hpp>
