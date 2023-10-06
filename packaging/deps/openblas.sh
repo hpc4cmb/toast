@@ -37,6 +37,7 @@ tar xzf ${openblas_pkg} \
     COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
     EXTRALIB="${OMPFLAGS} -lm ${FCLIBS}" all \
     && make ${shr} DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
+    && if [ "${STATIC}" = "yes" ]; then cp libopenblas* "${PREFIX}/lib/"; fi \
     && popd >/dev/null 2>&1
 
 if [ "x${CLEANUP}" = "xyes" ]; then
