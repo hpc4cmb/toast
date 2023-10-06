@@ -14,7 +14,7 @@ cmake \
     -DCMAKE_C_FLAGS="-O3 -g -fPIC -pthread -I${venv_path}/include" \
     -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11 -stdlib=libc++ -I${venv_path}/include" \
     -DUSE_OPENMP_TARGET=TRUE \
-    -DOPENMP_TARGET_FLAGS="-fopenmp=libomp -fopenmp-targets=nvptx64 -fopenmp-target-debug=3 --offload-arch=sm_86 -Wl,-lomp,-lomptarget,-lomptarget.rtl.cuda" \
+    -DOPENMP_TARGET_FLAGS="-fopenmp -fopenmp-targets=nvptx64 -fopenmp-target-debug=3 --offload-arch=sm_86 -Wl,-lomp,-lomptarget,-lomptarget.rtl.cuda" \
     -DPYTHON_EXECUTABLE:FILEPATH=$(which python3) \
     -DCMAKE_VERBOSE_MAKEFILE=ON \
     -DCMAKE_LIBRARY_PATH="${venv_path}/lib" \
