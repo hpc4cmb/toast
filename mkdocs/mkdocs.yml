@@ -1,0 +1,25 @@
+site_name: TOAST
+
+theme:
+  name: "material"
+  features:
+    - navigation.expand
+    - navigation.path
+
+plugins:
+  - mkdocstrings
+  - mkdocs-jupyter:
+      execute: True
+      include_source: True
+
+nav:
+  - Introduction: index.md
+  - Installation: install.md
+  - Tutorials:
+    - tutorials/index.md
+    - tutorials/data_model.ipynb
+  - Recipes: recipes.md
+  - Design: design.md
+  - API Reference: reference.md
+  - For Developers: develop.md
+
