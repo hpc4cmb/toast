@@ -2163,11 +2163,13 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
     if args.field_separator != "":
         header_fmt = header_fmt.replace(" ", args.field_separator)
         header_data_fmt = header_data_fmt.replace(" ", args.field_separator)
-    fout.write(header_fmt.format(
+    fout.write(
+        header_fmt.format(
             "Site", "Telescope", "Latitude [deg]", "Longitude [deg]", "Elevation [m]"
         )
     )
-    fout.write(header_data_fmt.format(
+    fout.write(
+        header_data_fmt.format(
             args.site_name,
             args.telescope,
             np.degrees(observer.lat),

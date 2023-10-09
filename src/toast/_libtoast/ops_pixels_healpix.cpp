@@ -9,18 +9,13 @@
 #include <qarray.hpp>
 #include <intervals.hpp>
 #include <accelerator.hpp>
+#include <cmath>
 
-// PI
-#define PI 3.14159265358979323846
-
-// 2*PI
-#define TWOPI 6.28318530717958647693
-
-// 2/PI
-#define TWOINVPI 0.63661977236758134308
+// 2 * Pi
+const double TWOPI = 2.0 * M_PI;
 
 // 2/3
-#define TWOTHIRDS 0.66666666666666666667
+const double TWOTHIRDS = 2.0 / 3.0;
 
 const int64_t hpix_jr[] = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
 const int64_t hpix_jp[] = {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7};
@@ -139,7 +134,7 @@ void hpix_zphi2nest(
     if ((phi_mod < tol) && (phi_mod > -tol)) {
         phi_mod = 0.0;
     }
-    double tt = (phi_mod >= 0.0) ? phi_mod * TWOINVPI : phi_mod * TWOINVPI + 4.0;
+    double tt = (phi_mod >= 0.0) ? phi_mod * M_2_PI : phi_mod * M_2_PI + 4.0;
     int64_t x;
     int64_t y;
     double temp1;
@@ -226,7 +221,7 @@ void hpix_zphi2ring(
     if ((phi_mod < tol) && (phi_mod > -tol)) {
         phi_mod = 0.0;
     }
-    double tt = (phi_mod >= 0.0) ? phi_mod * TWOINVPI : phi_mod * TWOINVPI + 4.0;
+    double tt = (phi_mod >= 0.0) ? phi_mod * M_2_PI : phi_mod * M_2_PI + 4.0;
     double tp;
     int64_t longpart;
     double temp1;
@@ -297,7 +292,7 @@ void hpix_vec2ang(
     );
     theta = ::acos(vec[2] * norm);
     bool small_theta = (::fabs(theta) <= eps) ? true : false;
-    bool big_theta = (::fabs(PI - theta) <= eps) ? true : false;
+    bool big_theta = (::fabs(M_PI - theta) <= eps) ? true : false;
     double phitemp = ::atan2(vec[1], vec[0]);
     phi = (phitemp < 0) ? phitemp + TWOPI : phitemp;
     phi = (small_theta || big_theta) ? 0.0 : phi;
