@@ -50,4 +50,4 @@ export FCLIBS=""
 
 export LD_LIBRARY_PATH="/usr/lib/llvm-17/lib:${envname}/lib"
 
-eval "${venvpkgdir}/install_deps_venv.sh" "${envname}" ${optional} no
+eval "${venvpkgdir}/install_deps_venv.sh" "${envname}" ${optional} yes

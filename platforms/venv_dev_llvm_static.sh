@@ -52,6 +52,7 @@ cmake \
     -DCMAKE_CXX_COMPILER="${CXX}" \
     -DCMAKE_C_FLAGS="${CFLAGS}" \
     -DCMAKE_CXX_FLAGS="${CXXFLAGS}" \
+    -DTOAST_STATIC_DEPS=ON \
     -DUSE_OPENMP_TARGET=TRUE \
     -DOPENMP_TARGET_FLAGS="-fopenmp -fopenmp-targets=nvptx64 -fopenmp-target-debug=3 --offload-arch=sm_86 -Wl,-lomp,-lomptarget,-lomptarget.rtl.cuda" \
     -DCMAKE_VERBOSE_MAKEFILE=1 \
@@ -60,8 +61,8 @@ cmake \
     -DFFTW_ROOT="${PREFIX}" \
     -DAATM_ROOT="${PREFIX}" \
     -DFLAC_ROOT="${PREFIX}" \
-    -DBLAS_LIBRARIES="${LIBDIR}/libopenblas.so" \
-    -DLAPACK_LIBRARIES="${LIBDIR}/libopenblas.so" \
+    -DBLAS_LIBRARIES="${LIBDIR}/libopenblas.a;/usr/lib/llvm-17/lib/libFortranDecimal.a;/usr/lib/llvm-17/lib/libFortranRuntime.a" \
+    -DLAPACK_LIBRARIES="${LIBDIR}/libopenblas.a;/usr/lib/llvm-17/lib/libFortranDecimal.a;/usr/lib/llvm-17/lib/libFortranRuntime.a" \
     -DSUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include" \
     -DSUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}" \
     ${opts} ..

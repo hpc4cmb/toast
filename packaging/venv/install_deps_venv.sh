@@ -12,6 +12,14 @@ else
     echo "Optional dependencies set to 'no' or unspecified"
 fi
 
+# Static linking?
+static=$3
+if [ "x${optional}" = "xyes" ]; then
+    echo "Static linking set to 'yes'"
+else
+    echo "Static linking set to 'no' or unspecified"
+fi
+
 # Location of this script and dependencies
 pushd $(dirname $0) >/dev/null 2>&1
 scriptdir=$(pwd)
@@ -121,7 +129,7 @@ if [ "x${MAKEJ}" = "x" ]; then
 fi
 
 export DEPSDIR="${depsdir}"
-export STATIC=yes
+export STATIC=${static}
 export CLEANUP=no
 
 if [ "x${LAPACK_LIBRARIES}" = "x" ]; then
