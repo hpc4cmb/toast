@@ -102,6 +102,7 @@ class FilterBinTest(MPITestCase):
             split_ground_template=True,
             poly_filter_order=2,
             output_dir=self.outdir,
+            write_binmap=True,
             write_hdf5=True,
         )
         filterbin.apply(data)
