@@ -171,8 +171,8 @@ def combine_observation_matrix(rootname):
             current_row = row_start
         log.info(f"Loading {datafile}")
         data = np.load(datafile)
-        indices = np.load(datafile.replace(".data.", ".indices."))
-        indptr = np.load(datafile.replace(".data.", ".indptr."))
+        indices = np.load(datafile.replace(".data.", ".indices.")).astype(np.int64)
+        indptr = np.load(datafile.replace(".data.", ".indptr.")).astype(np.int64)
         all_data.append(data)
         all_indices.append(indices)
         indptr += current_offset
@@ -191,6 +191,9 @@ def combine_observation_matrix(rootname):
     all_indices = np.hstack(all_indices)
     all_indptr = np.hstack(all_indptr)
     obs_matrix = scipy.sparse.csr_matrix((all_data, all_indices, all_indptr), shape)
+    if obs_matrix.nnz < 0:
+        msg = f"Overflow in csr_matrix: nnz = {obs_matrix.nnz}.\n"
+        raise RuntimeError(msg)
 
     log.info_rank(f"Constructed in", timer=timer, comm=None)
 
@@ -213,10 +216,13 @@ def coadd_observation_matrix(
     double_precision=False,
     comm=None,
 ):
-    """Co-add noise-weighted or unweighted observation matrices
+    """Co-add noise-weighted observation matrices
 
     Args:
-        inmatrix(iterable) : One or more noise-weighted observation matrix files
+        inmatrix(iterable) : One or more noise-weighted observation
+            matrix files.  If a matrix is used to model several similar
+            observations, append `+N` to the file name to indicate the
+             multiplicity.
         outmatrix(string) : Name of output file
         file_invcov(string) : Name of output inverse covariance file
         file_cov(string) : Name of output covariance file
@@ -267,9 +273,22 @@ def coadd_observation_matrix(
                 f"noise-weighted: '{infile_matrix}'"
             )
             raise RuntimeError(msg)
+        if "+" in infile_matrix:
+            infile_matrix, N = infile_matrix.split("+")
+            N = float(N)
+        else:
+            N = 1
+        if not os.path.isfile(infile_matrix):
+            msg = f"Matrix not found: {infile_matrix}"
+            raise RuntimeError(msg)
         prefix = ""
         log.info(f"{prefix}Loading {infile_matrix}")
         obs_matrix = scipy.sparse.load_npz(infile_matrix)
+        if obs_matrix.nnz < 0:
+            msg = f"Overflow in {infile_matrix}: nnz = {obs_matrix.nnz}.\n"
+            raise RuntimeError(msg)
+        if N != 1:
+            obs_matrix *= N
         if obs_matrix_sum is None:
             obs_matrix_sum = obs_matrix
         else:
@@ -292,6 +311,8 @@ def coadd_observation_matrix(
         invcov = read_healpix(
             infile_invcov, None, nest=True, dtype=float, verbose=False
         )
+        if N != 1:
+            invcov *= N
         if invcov_sum is None:
             invcov_sum = invcov
             nnzcov, npix = invcov.shape
@@ -393,13 +414,15 @@ def coadd_observation_matrix(
 
     # Write out the co-added and de-weighted matrix
 
+    if not outmatrix.endswith(".npz"):
+        outmatrix += ".npz"
     log.info_rank(f"Writing {outmatrix}", comm=comm)
     scipy.sparse.save_npz(outmatrix, obs_matrix_sum.astype(dtype))
-    log.info_rank(f"Wrote {outmatrix}.npz in", timer=timer1, comm=comm)
+    log.info_rank(f"Wrote {outmatrix} in", timer=timer1, comm=comm)
 
     log.info_rank(f"Co-added and de-weighted obs matrix in", timer=timer0, comm=comm)
 
-    return outmatrix + ".npz"
+    return outmatrix
 
 
 @trait_docs
@@ -524,11 +547,18 @@ class FilterBin(Operator):
         help="Write output data products to this directory",
     )
 
-    write_map = Bool(True, help="If True, write the projected map")
+    write_binmap = Bool(False, help="If True, write the unfiltered map")
+
+    write_map = Bool(True, help="If True, write the filtered map")
+
+    write_noiseweighted_binmap = Bool(
+        False,
+        help="If True, write the noise-weighted unfiltered map",
+    )
 
     write_noiseweighted_map = Bool(
         False,
-        help="If True, write the noise-weighted map",
+        help="If True, write the noise-weighted filtered map",
     )
 
     write_hits = Bool(True, help="If True, write the hits map")
@@ -794,8 +824,8 @@ class FilterBin(Operator):
                     )
                     t1 = time()
 
-                memreport.prefix = "After detector templates"
-                memreport.apply(data)
+                # memreport.prefix = "After detector templates"
+                # memreport.apply(data)
 
                 if template_covariance is None or np.any(last_good_fit != good_fit):
                     template_covariance = self._build_template_covariance(
@@ -1424,14 +1454,14 @@ class FilterBin(Operator):
                         self.comm.Recv(
                             data_recv, source=receive_from, tag=factor + self.ntask
                         )
-                        indices_recv = np.zeros(size_recv, dtype=np.int32)
+                        indices_recv = np.zeros(size_recv, dtype=np.int64)
                         self.comm.Recv(
                             indices_recv,
                             source=receive_from,
                             tag=factor + 2 * self.ntask,
                         )
                         indptr_recv = np.zeros(
-                            obs_matrix_slice.indptr.size, dtype=np.int32
+                            obs_matrix_slice.indptr.size, dtype=np.int64
                         )
                         self.comm.Recv(
                             indptr_recv,
@@ -1451,12 +1481,12 @@ class FilterBin(Operator):
                         obs_matrix_slice.data, dest=send_to, tag=factor + self.ntask
                     )
                     self.comm.Send(
-                        obs_matrix_slice.indices,
+                        obs_matrix_slice.indices.astype(np.int64),
                         dest=send_to,
                         tag=factor + 2 * self.ntask,
                     )
                     self.comm.Send(
-                        obs_matrix_slice.indptr,
+                        obs_matrix_slice.indptr.astype(np.int64),
                         dest=send_to,
                         tag=factor + 3 * self.ntask,
                     )
@@ -1555,17 +1585,23 @@ class FilterBin(Operator):
                 mc_root += f"_{self.mc_index:05d}"
 
         binned = not filtered  # only write hits and covariance once
+        if binned:
+            write_map = self.write_binmap
+            write_noiseweighted_map = self.write_noiseweighted_binmap
+        else:
+            write_map = self.write_map
+            write_noiseweighted_map = self.write_noiseweighted_map
         for key, write, keep, force, rootname in [
             (hits_name, self.write_hits and binned, False, False, self.name),
             (rcond_name, self.write_rcond and binned, False, False, self.name),
             (
                 noiseweighted_map_name,
-                self.write_noiseweighted_map,
+                write_noiseweighted_map,
                 False,
                 True,
                 mc_root,
             ),
-            (map_name, self.write_map, False, True, mc_root),
+            (map_name, write_map, False, True, mc_root),
             (invcov_name, self.write_invcov and binned, False, False, self.name),
             (cov_name, self.write_cov and binned, True, False, self.name),
         ]:

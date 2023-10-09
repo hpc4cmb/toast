@@ -162,7 +162,7 @@ def main():
         if noiseweighted:
             mapstring = f"noiseweighted_{mapstring}"
 
-        infile_invcov = infile_map.replace(mapstring, "invcov")
+        infile_invcov = infile_map.replace(f"_{mapstring}.", "_invcov.")
         if os.path.isfile(infile_invcov):
             log.info(f"{prefix}Loading {infile_invcov}")
             invcov = read_healpix(
@@ -172,8 +172,10 @@ def main():
         else:
             # Inverse covariance does not exist. Load and invert the
             # covariance matrix
-            infile_cov = infile_map.replace(mapstring, "cov")
+            log.info(f"{prefix}Inverse covariance not available: {infile_invcov}")
+            infile_cov = infile_map.replace(f"_{mapstring}.", "_cov.")
             if not os.path.isfile(infile_cov):
+                log.info(f"{prefix}Covariance not available: {infile_cov}")
                 msg = (
                     f"Could not find covariance or inverse covariance for {infile_map}"
                 )

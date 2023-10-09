@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-"""This script converts HEALPiX maps between FITS and HDF5
+"""This script concatenates observation matrix slices written by FilterBin
 """
 
 import argparse
@@ -32,7 +32,7 @@ def main():
     timer.start()
 
     parser = argparse.ArgumentParser(
-        description="Convert HEALPiX maps between FITS and HDF5"
+        description="Concatenate observation matrix slices from FilterBin"
     )
 
     parser.add_argument(
