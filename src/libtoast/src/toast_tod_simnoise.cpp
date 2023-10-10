@@ -54,7 +54,7 @@ void tod_sim_noise_psd_interp(double rate, int64_t samples, int64_t oversample,
 
     double freqshift = increment;
     if (toast::is_aligned(binned_freq)) {
-        //DEBUG #pragma omp simd
+        #pragma omp simd
         for (int64_t i = 0; i < n_binned; ++i) {
             logfreq[i] = ::log10(binned_freq[i] + freqshift);
         }
@@ -106,7 +106,7 @@ void tod_sim_noise_psd_interp(double rate, int64_t samples, int64_t oversample,
             double psdshift = 0.01 * psdmin;
 
             if (toast::is_aligned(binned_psds)) {
-                //DEBUG #pragma omp simd
+                #pragma omp simd
                 for (int64_t i = 0; i < n_binned; ++i) {
                     logpsd[i] = ::log10(::sqrt(
                                             binned_psds[offset_binned + i] * norm) +
@@ -120,7 +120,7 @@ void tod_sim_noise_psd_interp(double rate, int64_t samples, int64_t oversample,
                 }
             }
 
-            //DEBUG #pragma omp simd
+            #pragma omp simd
             for (int64_t i = 0; i < psdlen; ++i) {
                 interp_psds[offset_psd +
                             i] = ::log10(
@@ -129,7 +129,7 @@ void tod_sim_noise_psd_interp(double rate, int64_t samples, int64_t oversample,
 
             int64_t ibin = 0;
 
-            //DEBUG #pragma omp simd
+            #pragma omp simd
             for (int64_t i = 0; i < psdlen; ++i) {
                 double loginterp_freq = interp_psds[offset_psd + i];
                 while ((ibin < (n_binned - 2)) &&

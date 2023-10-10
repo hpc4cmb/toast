@@ -62,10 +62,10 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
         for (size_t iorder = 0; iorder < norder; ++iorder) {
             current = &full_templates[iorder * scanlen];
             if (iorder == 0) {
-                //DEBUG #pragma omp simd
+                #pragma omp simd
                 for (size_t i = 0; i < scanlen; ++i) current[i] = 1;
             } else if (iorder == 1) {
-                //DEBUG #pragma omp simd
+                #pragma omp simd
                 for (size_t i = 0; i < scanlen; ++i) {
                     const double x = xstart + i * dx;
                     current[i] = x;
@@ -74,7 +74,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 last = &full_templates[(iorder - 1) * scanlen];
                 lastlast = &full_templates[(iorder - 2) * scanlen];
                 double orderinv = 1. / iorder;
-                //DEBUG #pragma omp simd
+                #pragma omp simd
                 for (size_t i = 0; i < scanlen; ++i) {
                     const double x = xstart + i * dx;
                     current[i] =
@@ -154,7 +154,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 double * signal = &signals[isignal][start];
                 double amp = proj[iorder + isignal * norder];
                 if (toast::is_aligned(signal) && toast::is_aligned(temp)) {
-                    //DEBUG #pragma omp simd
+                    #pragma omp simd
                     for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
                 } else {
                     for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];

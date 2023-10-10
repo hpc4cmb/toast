@@ -26,7 +26,7 @@ void toast::rng_dist_uint64(size_t n, uint64_t key1, uint64_t key2,
     RNG::ukey_type uk = {{key1, key2}};
 
     if (toast::is_aligned(data)) {
-        //DEBUG #pragma omp simd
+        #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             data[i] = rng(
                 RNG::ctr_type({{counter1, counter2 + i}}),
@@ -51,7 +51,7 @@ void toast::rng_dist_uniform_01(size_t n,
     RNG::ukey_type uk = {{key1, key2}};
 
     if (toast::is_aligned(data)) {
-        //DEBUG #pragma omp simd
+        #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             data[i] = r123::u01 <double, uint64_t> (
                 rng(RNG::ctr_type({{counter1, counter2 + i}}),
@@ -77,7 +77,7 @@ void toast::rng_dist_uniform_11(size_t n,
     RNG::ukey_type uk = {{key1, key2}};
 
     if (toast::is_aligned(data)) {
-        //DEBUG #pragma omp simd
+        #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             data[i] = r123::uneg11 <double, uint64_t> (
                 rng(RNG::ctr_type({{counter1, counter2 + i}}),
@@ -104,7 +104,7 @@ void toast::rng_dist_normal(size_t n,
     toast::rng_dist_uniform_01(n, key1, key2, counter1, counter2,
                                uni.data());
 
-    //DEBUG #pragma omp simd
+    #pragma omp simd
     for (size_t i = 0; i < n; ++i) {
         uni[i] = 2.0 * uni[i] - 1.0;
     }
@@ -118,7 +118,7 @@ void toast::rng_dist_normal(size_t n,
     double rttwo = ::sqrt(2.0);
 
     if (toast::is_aligned(data)) {
-        //DEBUG #pragma omp simd
+        #pragma omp simd
         for (size_t i = 0; i < n; ++i) {
             data[i] *= rttwo;
         }

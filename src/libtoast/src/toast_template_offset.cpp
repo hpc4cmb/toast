@@ -14,7 +14,7 @@ void toast::template_offset_add_to_signal(int64_t step_length, int64_t n_amp,
                                           int64_t n_data, double * data) {
     // All but the last amplitude have the same number of samples.
     if (toast::is_aligned(amplitudes) && toast::is_aligned(data)) {
-        //DEBUG #pragma omp simd
+        #pragma omp simd
         for (int64_t i = 0; i < n_amp - 1; ++i) {
             int64_t doff = i * step_length;
             for (int64_t j = 0; j < step_length; ++j) {
@@ -42,7 +42,7 @@ void toast::template_offset_project_signal(int64_t step_length, int64_t n_data,
                                            double * amplitudes) {
     // All but the last amplitude have the same number of samples.
     if (toast::is_aligned(amplitudes) && toast::is_aligned(data)) {
-        //DEBUG #pragma omp simd
+        #pragma omp simd
         for (int64_t i = 0; i < n_amp - 1; ++i) {
             int64_t doff = i * step_length;
 
