@@ -41,13 +41,13 @@ fi
 # Set our compiler flags
 export CC=clang-17
 export CXX=clang++-17
-export FC=flang-new-17
+export FC=gfortran
 export CFLAGS="-O3 -g -fPIC -pthread"
 export FCFLAGS="-O3 -g -fPIC -pthread"
 export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11 -stdlib=libc++"
 export OMPFLAGS="-fopenmp"
-export FCLIBS=""
+export FCLIBS="-L/usr/lib/gcc/x86_64-linux-gnu/11 -lgfortran"
 
-export LD_LIBRARY_PATH="/usr/lib/llvm-17/lib:${envname}/lib"
+export LD_LIBRARY_PATH="/usr/lib/llvm-17/lib:/usr/lib/gcc/x86_64-linux-gnu/11:${envname}/lib"
 
 eval "${venvpkgdir}/install_deps_venv.sh" "${envname}" ${optional} no

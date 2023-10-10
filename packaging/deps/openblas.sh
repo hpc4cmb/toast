@@ -24,10 +24,13 @@ fi
 echo "Building OpenBLAS..."
 
 shr="NO_STATIC=1"
+targ="libs netlib shared"
 if [ "${STATIC}" = "yes" ]; then
     shr="NO_SHARED=1"
+    targ="libs netlib"
 fi
 
+start_dir=$(pwd)
 rm -rf ${openblas_dir}
 tar xzf ${openblas_pkg} \
     && pushd ${openblas_dir} >/dev/null 2>&1 \
@@ -35,10 +38,10 @@ tar xzf ${openblas_pkg} \
     MAKE_NB_JOBS=${MAKEJ} \
     CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
     COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
-    EXTRALIB="${OMPFLAGS} -lm ${FCLIBS}" all \
+    EXTRALIB="${OMPFLAGS} -lm ${FCLIBS}" ${targ} \
     && make ${shr} DYNAMIC_ARCH=1 TARGET=GENERIC PREFIX="${PREFIX}" install \
-    && if [ "${STATIC}" = "yes" ]; then cp libopenblas* "${PREFIX}/lib/"; fi \
     && popd >/dev/null 2>&1
+pushd "${start_dir}" >/dev/null 2>&1
 
 if [ "x${CLEANUP}" = "xyes" ]; then
     rm -rf ${openblas_dir}

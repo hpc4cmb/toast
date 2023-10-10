@@ -144,11 +144,6 @@ for pkg in cfitsio fftw libflac suitesparse libaatm; do
     . "${depsdir}/${pkg}.sh"
 done
 
-if [ "x${optional}" != "xyes" ]; then
-    # we are done
-    exit 0
-fi
-
 if [ "x${MPICC}" = "x" ]; then
     # The user did not specify MPI compilers- try to use generic
     # defaults.
@@ -169,6 +164,11 @@ fi
 
 # Install mpi4py, needed by some optional dependencies
 . "${depsdir}/mpi4py.sh"
+
+if [ "x${optional}" != "xyes" ]; then
+    # we are done
+    exit 0
+fi
 
 for pkg in "libmadam" "libconviqt"; do
     . "${depsdir}/${pkg}.sh"

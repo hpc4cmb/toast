@@ -45,8 +45,8 @@ export CFLAGS="-O3 -g -fPIC -pthread -noswitcherror"
 export FCFLAGS="-O3 -g -fPIC -pthread -noswitcherror"
 export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11 -noswitcherror"
 export OMPFLAGS="-mp"
-export FCLIBS="-lnvf -lrt"
-export BLAS_LIBRARIES="-L${nvlibs} -lblas -lnvf -mp -lrt"
-export LAPACK_LIBRARIES="-L${nvlibs} -llapack -lnvf -mp -lrt"
+export FCLIBS="${nvlibs}/libnvf.a -lrt"
+export BLAS_LIBRARIES="${nvlibs}/libblas_lp.a ${nvlibs}/libnvf.a -mp -lrt"
+export LAPACK_LIBRARIES="${nvlibs}/liblapack_lp.a ${nvlibs}/libnvf.a -mp -lrt"
 
-eval "${venvpkgdir}/install_deps_venv.sh" "${envname}" ${optional} no
+eval "${venvpkgdir}/install_deps_venv.sh" "${envname}" ${optional} yes

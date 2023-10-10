@@ -68,17 +68,17 @@ conda install --yes --update-all ${pkglist}
 # The "cc" symlink breaks Crays...
 rm -f "${CONDA_PREFIX}/bin/cc"
 
-if [ "x${optional}" != "xyes" ]; then
-    # we are done
-    exit 0
-fi
-
 # Reload the environment to pick up compiler environment variables
 conda deactivate
 conda activate "${ENVNAME}"
 
 # Install mpi4py, needed by some optional dependencies
 . "${depsdir}/mpi4py.sh"
+
+if [ "x${optional}" != "xyes" ]; then
+    # we are done
+    exit 0
+fi
 
 # Now build the packages not available through conda
 

@@ -46,15 +46,14 @@ cmake \
     -DCMAKE_CXX_COMPILER="${CXX}" \
     -DCMAKE_C_FLAGS="${CFLAGS}" \
     -DCMAKE_CXX_FLAGS="${CXXFLAGS}" \
-    -DTOAST_STATIC_DEPS=ON \
     -DCMAKE_VERBOSE_MAKEFILE=1 \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DCMAKE_PREFIX_PATH="${PREFIX}" \
     -DFFTW_ROOT="${PREFIX}" \
     -DAATM_ROOT="${PREFIX}" \
     -DFLAC_ROOT="${PREFIX}" \
-    -DBLAS_LIBRARIES="${nvlibs}/libblas_lp64.a;${nvlibs}/libnvf.a" \
-    -DLAPACK_LIBRARIES="${nvlibs}/liblapack_lp64.a" \
+    -DBLAS_LIBRARIES="-L${nvlibs} -lblas -lnvf -mp -lrt" \
+    -DLAPACK_LIBRARIES="-L${nvlibs} -llapack -lnvf -mp -lrt" \
     -DSUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include" \
     -DSUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}" \
     ${opts} ..

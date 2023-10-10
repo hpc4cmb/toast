@@ -35,7 +35,7 @@ fi
 # Set our compiler flags
 export CC=clang-17
 export CXX=clang++-17
-export FC=flang-new-17
+export FC=gfortran
 export CFLAGS="-O3 -g -fPIC -pthread"
 export FCFLAGS="-O3 -g -fPIC -pthread"
 export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11 -stdlib=libc++ -I${INCDIR}"
@@ -61,8 +61,8 @@ cmake \
     -DFFTW_ROOT="${PREFIX}" \
     -DAATM_ROOT="${PREFIX}" \
     -DFLAC_ROOT="${PREFIX}" \
-    -DBLAS_LIBRARIES="${LIBDIR}/libopenblas.a;/usr/lib/llvm-17/lib/libFortranDecimal.a;/usr/lib/llvm-17/lib/libFortranRuntime.a" \
-    -DLAPACK_LIBRARIES="${LIBDIR}/libopenblas.a;/usr/lib/llvm-17/lib/libFortranDecimal.a;/usr/lib/llvm-17/lib/libFortranRuntime.a" \
+    -DBLAS_LIBRARIES="${LIBDIR}/libopenblas.a;/usr/lib/gcc/x86_64-linux-gnu/11/libgfortran.a" \
+    -DLAPACK_LIBRARIES="${LIBDIR}/libopenblas.a;/usr/lib/gcc/x86_64-linux-gnu/11/libgfortran.a" \
     -DSUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include" \
     -DSUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}" \
     ${opts} ..

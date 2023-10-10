@@ -142,15 +142,15 @@ for pkg in cfitsio fftw libflac suitesparse libaatm; do
     . "${depsdir}/${pkg}.sh"
 done
 
+# Install mpi4py, needed by some optional dependencies
+. "${depsdir}/mpi4py.sh"
+
 if [ "x${optional}" != "xyes" ]; then
     # we are done
     exit 0
 fi
 
-# Install mpi4py, needed by some optional dependencies
-. "${depsdir}/mpi4py.sh"
-
-# Now build the packages
+# Now build the extra packages
 
 if [ "x${MPICC}" = "x" ]; then
     # This should have already raised an error installing mpi4py...
