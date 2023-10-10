@@ -38,7 +38,11 @@ def pixels_healpix_numpy(
                 dir[:, 2],
                 nest,
             )
-            good = (shared_flags[samples] & shared_flag_mask) == 0
+            if len(shared_flags) == 1:
+                # Placeholder value, no real flags
+                good = np.ones(pixels[pidx][samples].shape, dtype=bool)
+            else:
+                good = (shared_flags[samples] & shared_flag_mask) == 0
             bad = np.logical_not(good)
             sub_maps = pixels[pidx][samples][good] // n_pix_submap
             hit_submaps[sub_maps] = 1

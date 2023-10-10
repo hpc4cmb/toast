@@ -133,7 +133,7 @@ class Spt3gTest(MPITestCase):
 
     def create_data(self):
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, single_group=True)
 
         # Delete some problematic intervals that prevent us from getting a
         # round-trip result that matches the original

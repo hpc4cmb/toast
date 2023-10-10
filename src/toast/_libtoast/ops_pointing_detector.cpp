@@ -158,6 +158,7 @@ void init_ops_pointing_detector(py::module & m) {
                 )
                 {
                     # pragma omp target teams distribute parallel for collapse(3) \
+                    schedule(static,1)                                            \
                     is_device_ptr(                                                \
                     dev_boresight,                                                \
                     dev_quats,                                                    \
@@ -197,7 +198,7 @@ void init_ops_pointing_detector(py::module & m) {
             } else {
                 for (int64_t idet = 0; idet < n_det; idet++) {
                     for (int64_t iview = 0; iview < n_view; iview++) {
-                        #pragma omp parallel for default(shared)
+                        #pragma omp parallel for default(shared) schedule(static)
                         for (
                             int64_t isamp = raw_intervals[iview].first;
                             isamp <= raw_intervals[iview].last;

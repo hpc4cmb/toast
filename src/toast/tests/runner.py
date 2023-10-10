@@ -44,6 +44,7 @@ from . import ops_mapmaker_utils as test_ops_mapmaker_utils
 from . import ops_memory_counter as test_ops_memory_counter
 from . import ops_noise_estim as test_ops_noise_estim
 from . import ops_perturbhwp as test_ops_perturbhwp
+from . import ops_pixels_healpix as test_ops_pixels_healpix
 from . import ops_pointing_healpix as test_ops_pointing_healpix
 from . import ops_pointing_wcs as test_ops_pointing_wcs
 from . import ops_polyfilter as test_ops_polyfilter
@@ -201,6 +202,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_crosstalk))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_cosmic_rays))
         suite.addTest(loader.loadTestsFromModule(test_ops_time_constant))
+        suite.addTest(loader.loadTestsFromModule(test_ops_pixels_healpix))
         suite.addTest(loader.loadTestsFromModule(test_ops_cadence_map))
         suite.addTest(loader.loadTestsFromModule(test_ops_crosslinking))
         suite.addTest(loader.loadTestsFromModule(test_ops_sss))

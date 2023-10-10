@@ -6,7 +6,6 @@ import numpy as np
 import traitlets
 
 from ...accelerator import ImplementationType
-from ...healpix import Pixels
 from ...observation import default_values as defaults
 from ...pixels import PixelDistribution
 from ...timing import function_timer
@@ -130,7 +129,6 @@ class PixelsHealpix(Operator):
         self._set_hpix(nside, nside_submap)
 
     def _set_hpix(self, nside, nside_submap):
-        self.hpix = Pixels(nside)
         self._n_pix = 12 * nside**2
         self._n_pix_submap = 12 * nside_submap**2
         self._n_submap = (nside // nside_submap) ** 2

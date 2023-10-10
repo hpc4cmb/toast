@@ -31,11 +31,9 @@ set(toast_SOURCES
     src/toast_math_fft_mkl.cpp
     src/toast_math_fft_cufft.cpp
     src/toast_math_fft.cpp
-    src/toast_math_healpix.cpp
     src/toast_map_cov.cpp
     src/toast_fod_psd.cpp
     src/toast_tod_filter.cpp
-    src/toast_tod_pointing.cpp
     src/toast_tod_simnoise.cpp
     src/toast_atm_utils.cpp
     src/toast_atm.cpp
@@ -49,7 +47,6 @@ set(toast_SOURCES
     tests/toast_test_rng.cpp
     tests/toast_test_qarray.cpp
     tests/toast_test_fft.cpp
-    tests/toast_test_healpix.cpp
     tests/toast_test_cov.cpp
     tests/toast_test_polyfilter.cpp
 )

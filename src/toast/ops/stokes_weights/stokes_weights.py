@@ -33,12 +33,12 @@ class StokesWeights(Operator):
     The timestream model without a HWP in COSMO convention is:
 
     .. math::
-        d = cal \\left[I + \\frac{1 - \\epsilon}{1 + \\epsilon} \\left[Q \\cos\\left(2\\alpha\\right) - U \\sin\\left(2\\alpha\\right) \\right] \\right]
+        d = cal \\left[I + \\frac{1 - \\epsilon}{1 + \\epsilon} \\left[Q \\cos\\left(2\\alpha\\right) + U \\sin\\left(2\\alpha\\right) \\right] \\right]
 
     When a HWP is present, we have:
 
     .. math::
-        d = cal \\left[I + \\frac{1 - \\epsilon}{1 + \\epsilon} \\left[Q \\cos\\left(2(\\alpha - 2\\omega) \\right) + U \\sin\\left(2(\\alpha - 2\\omega) \\right) \\right] \\right]
+        d = cal \\left[I + \\frac{1 - \\epsilon}{1 + \\epsilon} \\left[Q \\cos\\left(2(\\alpha - 2\\omega) \\right) - U \\sin\\left(2(\\alpha - 2\\omega) \\right) \\right] \\right]
 
     The detector orientation angle "alpha" in COSMO convention is measured in a
     right-handed sense from the local meridian and the HWP angle "omega" is also
@@ -174,10 +174,6 @@ class StokesWeights(Operator):
         self.detector_pointing.quats = quats_name
         self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
 
-        cal = self.cal
-        if cal is None:
-            cal = 1.0
-
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
@@ -243,6 +239,12 @@ class StokesWeights(Operator):
             if "pol_leakage" in focalplane.detector_data.colnames:
                 for idet, d in enumerate(dets):
                     det_epsilon[idet] = focalplane[d]["pol_leakage"]
+
+            # Get the per-detector calibration
+            if self.cal is None:
+                cal = np.array([1.0 for x in dets], np.float64)
+            else:
+                cal = np.array([ob[self.cal][x] for x in dets], np.float64)
 
             if self.mode == "IQU":
                 det_gamma = np.zeros(len(dets), dtype=np.float64)

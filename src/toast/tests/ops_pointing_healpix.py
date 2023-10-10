@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -9,9 +9,8 @@ import numpy as np
 
 from .. import ops as ops
 from .. import qarray as qa
-from .._libtoast import healpix_pixels, stokes_weights
+from .._libtoast import pixels_healpix, stokes_weights_IQU
 from ..accelerator import ImplementationType, accel_enabled
-from ..healpix import HealpixPixels
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
 from ._helpers import close_data, create_outdir, create_satellite_data
@@ -23,19 +22,23 @@ class PointingHealpixTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
 
-    def test_pointing_matrix_healpix2(self):
+    def test_pointing_matrix_bounds(self):
         nside = 64
         npix = 12 * nside**2
-        hpix = HealpixPixels(64)
         nest = True
         phivec = np.radians(
             [-360, -270, -180, -135, -90, -45, 0, 45, 90, 135, 180, 270, 360]
         )
         nsamp = phivec.size
-        eps = 0.0
-        cal = 1.0
+        faketimes = -1.0 * np.ones(nsamp, dtype=np.float64)
+        intervals = IntervalList(faketimes, samplespans=[(0, nsamp - 1)])
+
+        eps = np.array([0.0])
+        gamma = np.array([0.0])
+        cal = np.array([1.0])
         mode = "IQU"
         nnz = 3
+
         hwpang = np.zeros(nsamp)
         flags = np.zeros(nsamp, dtype=np.uint8)
         pixels = np.zeros(nsamp, dtype=np.int64)
@@ -44,53 +47,75 @@ class PointingHealpixTest(MPITestCase):
         psi = np.radians(135)
         quats = []
         xaxis, yaxis, zaxis = np.eye(3)
+
         for phi in phivec:
             phirot = qa.rotation(zaxis, phi)
             quats.append(qa.from_iso_angles(theta, phi, psi))
         quats = np.vstack(quats)
-        healpix_pixels(
-            hpix,
-            nest,
-            quats.reshape(-1),
-            flags,
-            pixels,
+
+        zero_index = np.array([0], dtype=np.int32)
+        zero_flags = np.zeros(nsamp, dtype=np.uint8)
+
+        n_pix_submap = npix
+        hit_submaps = np.zeros(1, dtype=np.uint8)
+        pixels_healpix(
+            zero_index,
+            quats.reshape(1, nsamp, 4),
+            zero_flags,
+            0,
+            zero_index,
+            pixels.reshape(1, nsamp),
+            intervals.data,
+            hit_submaps,
+            n_pix_submap,
+            nside,
+            True,
+            False,
         )
-        stokes_weights(
-            eps,
-            cal,
-            mode,
-            quats.reshape(-1),
+        stokes_weights_IQU(
+            zero_index,
+            quats.reshape(1, nsamp, 4),
+            zero_index,
+            weights.reshape(1, nsamp, nnz),
             hwpang,
-            flags,
-            weights.reshape(-1),
+            intervals.data,
+            eps,
+            gamma,
+            cal,
+            False,
+            False,
         )
         failed = False
         bad = np.logical_or(pixels < 0, pixels > npix - 1)
         nbad = np.sum(bad)
         if nbad > 0:
-            print(
-                "{} pixels are outside of the map. phi = {} deg".format(
-                    nbad, np.degrees(phivec[bad])
-                )
-            )
+            print(f"{nbad} pixels are outside of the map.")
+            print(f"phi = {np.degrees(phivec[bad])} deg, pix = {pixels[bad]}")
             failed = True
         self.assertFalse(failed)
         return
 
-    def test_pointing_matrix_healpix(self):
+    def test_pointing_matrix_weights(self):
         nside = 64
-        hpix = HealpixPixels(64)
         nest = True
         psivec = np.radians([-180, -135, -90, -45, 0, 45, 90, 135, 180])
         # psivec = np.radians([-180, 180])
         nsamp = psivec.size
-        eps = 0.0
-        cal = 1.0
+
+        eps = np.array([0.0])
+        gamma = np.array([0.0])
+        cal = np.array([1.0])
         mode = "IQU"
         nnz = 3
+
         hwpang = np.zeros(nsamp)
         flags = np.zeros(nsamp, dtype=np.uint8)
         weights = np.zeros([nsamp, nnz], dtype=np.float64)
+        zero_index = np.array([0], dtype=np.int32)
+        zero_flags = np.zeros(nsamp, dtype=np.uint8)
+        faketimes = -1.0 * np.ones(nsamp, dtype=np.float64)
+        intervals = IntervalList(faketimes, samplespans=[(0, nsamp - 1)])
+
         pix = 49103
         theta, phi = hp.pix2ang(nside, pix, nest=nest)
         xaxis, yaxis, zaxis = np.eye(3)
@@ -102,14 +127,18 @@ class PointingHealpixTest(MPITestCase):
             psirot = qa.rotation(zaxis, psi)
             quats.append(qa.mult(pixrot, psirot))
         quats = np.vstack(quats)
-        stokes_weights(
-            eps,
-            cal,
-            mode,
-            quats.reshape(-1),
+        stokes_weights_IQU(
+            zero_index,
+            quats.reshape(1, nsamp, 4),
+            zero_index,
+            weights.reshape(1, nsamp, nnz),
             hwpang,
-            flags,
-            weights.reshape(-1),
+            intervals.data,
+            eps,
+            gamma,
+            cal,
+            False,
+            False,
         )
         weights_ref = []
         for quat in quats:
@@ -121,7 +150,8 @@ class PointingHealpixTest(MPITestCase):
             # print("\npsi = {}, quat = {} : ".format(psi, quat), end="")
             if not np.allclose(w1, w2):
                 print(
-                    "Pointing weights do not agree: {} != {}".format(w1, w2), flush=True
+                    f"Pointing weights do not agree: {w2} != {w1} ({psi}, {quat})",
+                    flush=True,
                 )
                 failed = True
             else:
@@ -130,17 +160,26 @@ class PointingHealpixTest(MPITestCase):
         self.assertFalse(failed)
         return
 
-    def test_pointing_matrix_healpix_hwp(self):
+    def test_pointing_matrix_weights_hwp(self):
         nside = 64
-        hpix = HealpixPixels(64)
         nest = True
         psivec = np.radians([-180, -135, -90, -45, 0, 45, 90, 135, 180])
+        expected_Q = np.array([1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0])
+        expected_U = np.array([0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0])
         nsamp = len(psivec)
-        eps = 0.0
-        cal = 1.0
+
+        eps = np.array([0.0])
+        gamma = np.array([0.0])
+        cal = np.array([1.0])
         mode = "IQU"
         nnz = 3
+
         flags = np.zeros(nsamp, dtype=np.uint8)
+        zero_index = np.array([0], dtype=np.int32)
+        zero_flags = np.zeros(nsamp, dtype=np.uint8)
+        faketimes = -1.0 * np.ones(nsamp, dtype=np.float64)
+        intervals = IntervalList(faketimes, samplespans=[(0, nsamp - 1)])
+
         pix = 49103
         theta, phi = hp.pix2ang(nside, pix, nest=nest)
         xaxis, yaxis, zaxis = np.eye(3)
@@ -156,53 +195,58 @@ class PointingHealpixTest(MPITestCase):
         # First with HWP angle == 0.0
         hwpang = np.zeros(nsamp)
         weights_zero = np.zeros([nsamp, nnz], dtype=np.float64)
-        stokes_weights(
-            eps,
-            cal,
-            mode,
-            quats.reshape(-1),
+
+        stokes_weights_IQU(
+            zero_index,
+            quats.reshape(1, nsamp, 4),
+            zero_index,
+            weights_zero.reshape(1, nsamp, nnz),
             hwpang,
-            flags,
-            weights_zero.reshape(-1),
+            intervals.data,
+            eps,
+            gamma,
+            cal,
+            False,
+            False,
         )
 
         # Now passing hwpang == None
         weights_none = np.zeros([nsamp, nnz], dtype=np.float64)
-        stokes_weights(
+        stokes_weights_IQU(
+            zero_index,
+            quats.reshape(1, nsamp, 4),
+            zero_index,
+            weights_none.reshape(1, nsamp, nnz),
+            np.zeros(1),
+            intervals.data,
             eps,
+            gamma,
             cal,
-            mode,
-            quats.reshape(-1),
-            None,
-            flags,
-            weights_none.reshape(-1),
+            False,
+            False,
         )
-        # print("")
-        # for i in range(nsamp):
-        #     print(
-        #         "HWP zero:  {} {} | {} {} {}".format(
-        #             psivec[i],
-        #             pixels_zero[i],
-        #             weights_zero[i][0],
-        #             weights_zero[i][1],
-        #             weights_zero[i][2],
-        #         )
-        #     )
-        #     print(
-        #         "    none:  {} {} | {} {} {}".format(
-        #             psivec[i],
-        #             pixels_none[i],
-        #             weights_none[i][0],
-        #             weights_none[i][1],
-        #             weights_none[i][2],
-        #         )
-        #     )
-        failed = False
 
-        if not np.allclose(weights_zero, weights_none):
-            print(
-                "HWP weights do not agree {} != {}".format(weights_zero, weights_none)
-            )
+        failed = False
+        if not np.allclose(weights_zero[:, 1], expected_Q):
+            msg = f"Q weights_zero do not match expected values {weights_zero[:, 1]}"
+            msg += f" != {expected_Q}"
+            print(msg)
+            failed = True
+        if not np.allclose(weights_zero[:, 2], expected_U):
+            msg = f"U weights_zero do not match expected values {weights_zero[:, 1]}"
+            msg += f" != {expected_U}"
+            print(msg)
+            failed = True
+
+        if not np.allclose(weights_none[:, 1], expected_Q):
+            msg = f"Q weights_none do not match expected values {weights_none[:, 1]}"
+            msg += f" != {expected_Q}"
+            print(msg)
+            failed = True
+        if not np.allclose(weights_none[:, 2], expected_U):
+            msg = f"U weights_none do not match expected values {weights_none[:, 1]}"
+            msg += f" != {expected_U}"
+            print(msg)
             failed = True
 
         self.assertFalse(failed)
