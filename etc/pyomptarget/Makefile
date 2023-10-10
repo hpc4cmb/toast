@@ -10,10 +10,16 @@
 # CXX_OMP_FLAGS = -mp=gpu -Minfo=mp -gpu=cc86
 
 # AMD LLVM
-CXX := amdclang++
+#CXX := amdclang++
+#CXXFLAGS := -O3 -g -fPIC -std=c++11
+#CXX_OMP_FLAGS := -fPIC -fopenmp -fopenmp-target-debug=3 -fopenmp-targets=amdgcn-amd-amdhsa -Xopenmp-target=amdgcn-amd-amdhsa -march=gfx1030
+#CXX_LD_FLAGS := -lomp -lomptarget -lomptarget.rtl.amdgpu
+
+# Stock LLVM
+CXX := clang++
 CXXFLAGS := -O3 -g -fPIC -std=c++11
-CXX_OMP_FLAGS := -fPIC -fopenmp -fopenmp-target-debug=3 -fopenmp-targets=amdgcn-amd-amdhsa -Xopenmp-target=amdgcn-amd-amdhsa -march=gfx1030
-CXX_LD_FLAGS := -lomp -lomptarget -lomptarget.rtl.amdgpu
+CXX_OMP_FLAGS := -fPIC -fopenmp -fopenmp-targets=nvptx64 -fopenmp-target-debug=3
+CXX_LD_FLAGS :=  -lomp -lomptarget -lomptarget.rtl.cuda
 
 pybind := ../../src/toast/pybind11
 modext := $(shell python3-config --extension-suffix)

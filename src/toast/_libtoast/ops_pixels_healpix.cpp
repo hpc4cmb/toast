@@ -11,14 +11,9 @@
 #include <accelerator.hpp>
 #include <cmath>
 
-// 2 * Pi
-const double TWOPI = 2.0 * M_PI;
 
 // 2/3
-const double TWOTHIRDS = 2.0 / 3.0;
-
-const int64_t hpix_jr[] = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
-const int64_t hpix_jp[] = {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7};
+#define TWOTHIRDS 0.66666666666666666667
 
 // Helper table initialization, performed on host.
 
@@ -45,6 +40,12 @@ void hpix_init_ctab(int64_t * ctab) {
 #endif // ifdef HAVE_OPENMP_TARGET
 
 // Functions working with a single sample.  We use hpix_* prefix for these.
+
+void hpix_fmod(double const & in, double const & mod, double & result) {
+    double div = in / mod;
+    result = mod * (div - (double)((int64_t)div));
+    return;
+}
 
 void hpix_qa_rotate(
     double const * q_in,
@@ -130,7 +131,8 @@ void hpix_zphi2nest(
 ) {
     static const double eps = std::numeric_limits <double>::epsilon();
     double tol = 10.0 * eps;
-    double phi_mod = ::fmod(phi, TWOPI);
+    double phi_mod;
+    hpix_fmod(phi, 2 * M_PI, phi_mod);
     if ((phi_mod < tol) && (phi_mod > -tol)) {
         phi_mod = 0.0;
     }
@@ -148,7 +150,6 @@ void hpix_zphi2nest(
     double tp;
 
     double dnside = static_cast <double> (nside);
-    int64_t twonside = 2 * nside;
     double halfnside = 0.5 * dnside;
     double tqnside = 0.75 * dnside;
     int64_t nsideminusone = nside - 1;
@@ -217,7 +218,8 @@ void hpix_zphi2ring(
 ) {
     static const double eps = std::numeric_limits <double>::epsilon();
     double tol = 10.0 * eps;
-    double phi_mod = ::fmod(phi, TWOPI);
+    double phi_mod;
+    hpix_fmod(phi, 2 * M_PI, phi_mod);
     if ((phi_mod < tol) && (phi_mod > -tol)) {
         phi_mod = 0.0;
     }
@@ -294,7 +296,7 @@ void hpix_vec2ang(
     bool small_theta = (::fabs(theta) <= eps) ? true : false;
     bool big_theta = (::fabs(M_PI - theta) <= eps) ? true : false;
     double phitemp = ::atan2(vec[1], vec[0]);
-    phi = (phitemp < 0) ? phitemp + TWOPI : phitemp;
+    phi = (phitemp < 0) ? phitemp + 2 * M_PI : phitemp;
     phi = (small_theta || big_theta) ? 0.0 : phi;
     return;
 }
@@ -398,6 +400,9 @@ void hpix_ring2nest(
     int64_t ire, irm;
     int64_t ifm, ifp;
     int64_t irt, ipt;
+    const int64_t hpix_jr[] = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
+    const int64_t hpix_jp[] = {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7};
+
     if (ringpix < ncap) {
         iring = static_cast <int64_t> (
             0.5 * (
@@ -483,6 +488,9 @@ void hpix_nest2ring(
     int64_t nr;
     int64_t kshift;
     int64_t n_before;
+    const int64_t hpix_jr[] = {2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4};
+    const int64_t hpix_jp[] = {1, 3, 5, 7, 0, 2, 4, 6, 1, 3, 5, 7};
+
     fc = nestpix >> (2 * factor);
     hpix_pix2xy(ctab, nestpix & (nside * nside - 1), x, y);
     jr = (hpix_jr[fc] * nside) - x - y - 1;

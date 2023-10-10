@@ -1,0 +1,6 @@
+libopenblas=*=*openmp*
+libblas=*=*openblas
+fftw
+libaatm
+suitesparse
+libflac

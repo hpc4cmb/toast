@@ -78,7 +78,7 @@ jobs:
 
       - name: Create Conda Env
         run: |
-          ./platforms/conda_dev_setup.sh toast yes ${{ matrix.python }}
+          ./platforms/conda_dev_setup.sh toast ${{ matrix.python }} yes
 
       - name: Install
         run: |

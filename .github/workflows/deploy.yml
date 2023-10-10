@@ -90,10 +90,10 @@ jobs:
         TOAST_BUILD_AATM_ROOT=/usr/local
         TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include
         TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib
-      CIBW_BEFORE_BUILD_LINUX: ./wheels/install_deps_linux.sh
-      CIBW_BEFORE_BUILD_MACOS: ./wheels/install_deps_osx.sh ${{ matrix.platform_id }}
+      CIBW_BEFORE_BUILD_LINUX: ./packaging/wheels/install_deps_linux.sh
+      CIBW_BEFORE_BUILD_MACOS: ./packaging/wheels/install_deps_osx.sh ${{ matrix.platform_id }}
       CIBW_BEFORE_TEST: export OMP_NUM_THREADS=1
-      CIBW_TEST_COMMAND: source {project}/wheels/cibw_run_tests.sh
+      CIBW_TEST_COMMAND: source {project}/packaging/wheels/cibw_run_tests.sh
       CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_universal2:arm64"
     steps:
       - name: Cancel Previous Runs

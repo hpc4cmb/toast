@@ -1,10 +1,10 @@
 cmake
+autoconf
+libtool
+automake
 psutil
 cython
 pytest
-fftw
-libaatm
-suitesparse
 tomlkit
 traitlets
 h5py
@@ -17,4 +17,3 @@ pytest
 coveralls
 pytest-cov
 ducc0
-libflac
