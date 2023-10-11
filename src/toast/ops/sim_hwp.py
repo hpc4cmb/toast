@@ -10,6 +10,7 @@ from astropy import units as u
 
 from .. import rng
 from ..observation import default_values as defaults
+from ..mpi import MPI
 from ..timing import Timer, function_timer
 from ..traits import Int, Quantity, Unicode, trait_docs
 from ..utils import GlobalTimers, Logger, Timer, dtype_to_aligned, name_UID
@@ -164,6 +165,7 @@ class PerturbHWP(Operator):
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
+        all_failed = 0
         for iobs, obs in enumerate(data.obs):
             offset = obs.local_index_offset
             nlocal = obs.n_local_samples
@@ -182,8 +184,12 @@ class PerturbHWP(Operator):
             ):
                 msg = f"obs {obs.name}: expected shared fields {self.times} and "
                 msg += f"{self.hwp_angle} to be on the column communicator."
-                raise RuntimeError(msg)
+                log.error(msg)
+                all_failed += 1
+                continue
 
+            failed = 0
+            new_angle = None
             if obs.comm_col_rank == 0:
                 times = obs.shared[self.times].data
                 hwp_angle = obs.shared[self.hwp_angle].data
@@ -217,39 +223,49 @@ class PerturbHWP(Operator):
                 median_step = np.median(np.diff(unwrapped))
                 if np.abs(median_step) < 1e-10:
                     # This was a stepped HWP, not continuously rotating
-                    msg = f"Don't know now to perturb a stepped HWP.  "
+                    msg = f"obs {obs.name}: Don't know now to perturb a stepped HWP. "
                     msg += f"Median step size is {np.degrees(median_step)} deg"
-                    raise ValueError(msg)
-                nominal_rate = (unwrapped[-1] - unwrapped[0]) / time_delta
-                if self.drift_sigma is None:
-                    begin_rate = nominal_rate
-                    accel = 0
+                    log.error(msg)
+                    failed += 1
                 else:
-                    # This random number is for the uniform drift across the whole
-                    # observation.  All processes along the row of the grid should
-                    # use the same value here.
-                    counter2 = 0
-                    component = 1
-                    rngdata = rng.random(
-                        1,
-                        sampler="gaussian",
-                        key=(key1, key2 + component),
-                        counter=(counter1, counter2),
-                    )
-                    sigma = self.drift_sigma.to_value(1 / u.s) * time_delta
-                    drift = rngdata[0] * sigma
-                    begin_rate = nominal_rate * (1 - drift)
-                    end_rate = nominal_rate * (1 + drift)
-                    accel = (end_rate - begin_rate) / time_delta
-
-                # Now calculcate the HWP angle subject to jitter and drift
-                t = new_times - new_times[0]
-                new_angle = 0.5 * accel * t**2 + begin_rate * t + hwp_angle[0]
+                    nominal_rate = (unwrapped[-1] - unwrapped[0]) / time_delta
+                    if self.drift_sigma is None:
+                        begin_rate = nominal_rate
+                        accel = 0
+                    else:
+                        # This random number is for the uniform drift across the whole
+                        # observation.  All processes along the row of the grid should
+                        # use the same value here.
+                        counter2 = 0
+                        component = 1
+                        rngdata = rng.random(
+                            1,
+                            sampler="gaussian",
+                            key=(key1, key2 + component),
+                            counter=(counter1, counter2),
+                        )
+                        sigma = self.drift_sigma.to_value(1 / u.s) * time_delta
+                        drift = rngdata[0] * sigma
+                        begin_rate = nominal_rate * (1 - drift)
+                        end_rate = nominal_rate * (1 + drift)
+                        accel = (end_rate - begin_rate) / time_delta
+                    # Now calculcate the HWP angle subject to jitter and drift
+                    t = new_times - new_times[0]
+                    new_angle = 0.5 * accel * t**2 + begin_rate * t + hwp_angle[0]
+            if obs.comm_col_size > 1:
+                failed = obs.comm_col.allreduce(failed, op=MPI.SUM)
+            if failed == 0:
+                # Set the new HWP angle values
+                obs.shared[self.hwp_angle].set(new_angle, offset=(0,), fromrank=0)
             else:
-                new_angle = None
+                all_failed += 1
 
-            # Set the new HWP angle values
-            obs.shared[self.hwp_angle].set(new_angle, offset=(0,), fromrank=0)
+        # All processes raise ValueError or not.
+        if data.comm.comm_world is not None:
+            all_failed = data.comm.comm_world.allreduce(all_failed, op=MPI.SUM)
+        if all_failed > 0:
+            msg = "One or more observations had incompatible HWP values"
+            raise ValueError(msg)
 
     def _finalize(self, data, **kwargs):
         return

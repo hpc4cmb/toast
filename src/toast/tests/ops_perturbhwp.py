@@ -27,8 +27,8 @@ class PerturbHWPTest(MPITestCase):
         # Create fake observing of a small patch
         data = create_ground_data(self.comm)
 
-        times = data.obs[0].shared[defaults.times].data.copy()
-        orig = data.obs[0].shared[defaults.hwp_angle].data.copy()
+        # Copy original HWP to a different field for later comparison
+        ops.Copy(shared=[(defaults.hwp_angle, "hwp_orig"),]).apply(data)
 
         perturb = ops.PerturbHWP(
             drift_sigma=0.1 / u.h,
@@ -37,47 +37,56 @@ class PerturbHWPTest(MPITestCase):
         )
         perturb.apply(data)
 
-        perturbed = data.obs[0].shared[defaults.hwp_angle].data.copy()
-        rms = np.std(perturbed - orig)
-
-        if data.comm.world_rank == 0:
-            set_matplotlib_backend()
-            import matplotlib.pyplot as plt
-
-            orig = np.unwrap(orig)
-            perturbed = np.unwrap(perturbed)
+        for ob in data.obs:
+            times = ob.shared[defaults.times].data
+            perturbed = np.unwrap(
+                ob.shared[defaults.hwp_angle].data
+            )
+            orig = np.unwrap(
+                ob.shared["hwp_orig"].data
+            )
             rms = np.std(perturbed - orig)
 
-            fig = plt.figure(figsize=[18, 12])
-            nrow, ncol = 2, 3
+            if data.comm.group_rank == 0:
+                set_matplotlib_backend()
+                import matplotlib.pyplot as plt
 
-            ax = fig.add_subplot(nrow, ncol, 1)
-            ax.plot(times, orig, label="Ideal HWP")
-            ax.plot(times, perturbed, label="Perturbed HWP")
-            ax.legend(loc="best")
-            ax.set_xlabel("Time [s]")
-            ax.set_ylabel("HWP angle [rad]")
+                fig = plt.figure(figsize=[18, 12])
+                nrow, ncol = 2, 3
 
-            ax = fig.add_subplot(nrow, ncol, 2)
-            resid = perturbed - orig
-            ax.plot(times, resid, label="Diff")
-            ax.legend(loc="best")
-            ax.set_xlabel("Time [s]")
-            ax.set_ylabel("HWP angle [rad]")
+                ax = fig.add_subplot(nrow, ncol, 1)
+                ax.plot(times, orig, label="Ideal HWP")
+                ax.plot(times, perturbed, label="Perturbed HWP")
+                ax.legend(loc="best")
+                ax.set_xlabel("Time [s]")
+                ax.set_ylabel("HWP angle [rad]")
 
-            ax = fig.add_subplot(nrow, ncol, 3)
-            rate = data.obs[0].telescope.focalplane.sample_rate
-            psd = np.abs(np.fft.rfft(resid))
-            freq = np.fft.rfftfreq(resid.size, 1 / rate)
-            ax.loglog(psd, label="PSD Diff")
-            ax.legend(loc="best")
-            ax.set_xlabel("Frequency [Hz]")
-            ax.set_ylabel("PSD [Rad / Hz^1/2]")
+                ax = fig.add_subplot(nrow, ncol, 2)
+                resid = perturbed - orig
+                ax.plot(times, resid, label="Diff")
+                ax.legend(loc="best")
+                ax.set_xlabel("Time [s]")
+                ax.set_ylabel("HWP angle [rad]")
 
-            outfile = os.path.join(self.outdir, "HWP_comparison.png")
-            fig.savefig(outfile)
+                ax = fig.add_subplot(nrow, ncol, 3)
+                rate = data.obs[0].telescope.focalplane.sample_rate
+                psd = np.abs(np.fft.rfft(resid))
+                freq = np.fft.rfftfreq(resid.size, 1 / rate)
+                ax.loglog(psd, label="PSD Diff")
+                ax.legend(loc="best")
+                ax.set_xlabel("Frequency [Hz]")
+                ax.set_ylabel("PSD [Rad / Hz^1/2]")
 
-        assert rms > 1e-6, "HWP angle does not change enough when perturbed"
+                outfile = os.path.join(
+                    self.outdir,
+                    f"HWP_comparison_{ob.name}.png"
+                )
+                fig.savefig(outfile)
+
+            self.assertTrue(
+                rms > 1e-6,
+                msg="HWP angle does not change enough when perturbed",
+            )
 
         close_data(data)
 
@@ -85,9 +94,18 @@ class PerturbHWPTest(MPITestCase):
         # Create fake observing of a small patch
         data = create_ground_data(self.comm)
 
-        times = data.obs[0].shared[defaults.times].data.copy()
-        orig = data.obs[0].shared[defaults.hwp_angle]
-        orig[:] = np.round(np.linspace(0, 10, times.size)) * np.pi / 8
+        for ob in data.obs:
+            # Only one process in column communicator should
+            # set shared objects with a non-None value.
+            new_val = None
+            if ob.comm_col_rank == 0:
+                new_val = np.round(
+                    np.linspace(0, 10, ob.n_local_samples)
+                ) * np.pi / 8
+            ob.shared[defaults.hwp_angle].set(new_val, offset=(0,), fromrank=0)
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
 
         perturb = ops.PerturbHWP(
             drift_sigma=0.1 / u.h,
