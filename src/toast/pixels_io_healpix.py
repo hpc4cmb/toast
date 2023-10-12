@@ -758,5 +758,13 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
             else:
                 dset.attrs["ORDERING"] = "RING"
             dset.attrs["NSIDE"] = nside
+            if "column_units" in kwargs:
+                units = kwargs["column_units"]
+                # Only one units attribute is supported
+                if not isinstance(units, str):
+                    msg = f"ERROR: HDF5 map units must be a single string, "
+                    msg += f"not {units}"
+                    raise RuntimeError(msg)
+                dset.attrs["UNITS"] = units
 
     return
