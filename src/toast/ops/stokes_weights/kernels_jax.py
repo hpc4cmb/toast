@@ -53,7 +53,7 @@ def stokes_weights_IQU_inner(eps, cal, gamma, pin, hwpang, IAU):
     )
     alpha_x = vm_x * vo[0] + vm_y * vo[1] + vm_z * vo[2]
     alpha = jnp.arctan2(alpha_y, alpha_x)
-    ang = 2.0 * (alpha + 2.0 * (hwpang - gamma))
+    ang = 2.0 * (2.0 * (gamma - hwpang) - alpha)
     weights = jnp.array(
         [cal, jnp.cos(ang) * eta * cal, -jnp.sin(ang) * eta * cal * IAU]
     )
