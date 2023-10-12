@@ -67,7 +67,8 @@ def stokes_weights_IQU_numpy(
             if hwp is None:
                 ang = 2.0 * alpha
             else:
-                ang = 2.0 * (alpha + 2.0 * (hwp - gamma[idet]))
+                ang = 2.0 * (2.0 * (gamma[idet] - hwp) - alpha)
+
 
             weights[widx][samples, 0] = cal[idet]
             weights[widx][samples, 1] = cal[idet] * eta * np.cos(ang)
