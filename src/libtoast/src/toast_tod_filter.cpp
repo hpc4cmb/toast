@@ -34,7 +34,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     double fone = 1.0;
 
     #pragma \
-    omp parallel for schedule(static) default(none) shared(order, signals, flags, n, nsignal, starts, stops, nscan, norder, upper, lower, notrans, trans, fzero, fone)
+    omp parallel for schedule(static) shared(order, signals, flags, n, nsignal, starts, stops, nscan, norder, upper, lower, notrans, trans, fzero, fone)
     for (size_t iscan = 0; iscan < nscan; ++iscan) {
         int64_t start = starts[iscan];
         int64_t stop = stops[iscan];
@@ -137,7 +137,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
         // Fit the templates against the data.
         // DGELSS minimizes the norm of the difference and the solution vector
         // and overwrites proj with the fitting coefficients.
-        int rank, info;
+        int rank, info=0;
         double rcond_limit = 1e-3;
         int LWORK = toast::LinearAlgebra::gelss_buffersize(norder, norder, nsignal,
                                                            norder, norder, rcond_limit);
@@ -147,6 +147,9 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             norder, norder, nsignal, invcov.data(), norder,
             proj.data(), norder, singular_values.data(), rcond_limit,
             &rank, WORK.data(), LWORK, &info);
+        if (info != 0) {
+            std::cerr << "ERROR: DGELLS info = " << info << std::endl;
+        }
 
         for (int iorder = 0; iorder < norder; ++iorder) {
             double * temp = &full_templates[iorder * scanlen];
