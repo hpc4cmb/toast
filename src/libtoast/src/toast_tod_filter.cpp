@@ -1,5 +1,5 @@
 
-// Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
@@ -99,14 +99,6 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             }
         }
 
-        // Square the template matrix for A^T.A
-        toast::AlignedVector <double> invcov(norder * norder);
-        toast::LinearAlgebra::syrk(upper, trans, norder, ngood, fone,
-                                   masked_templates.data(), ngood, fzero, invcov.data(),
-                                   norder);
-
-        // Project the signals against the templates
-
         toast::AlignedVector <double> masked_signals(ngood * nsignal);
 
         for (size_t isignal = 0; isignal < nsignal; ++isignal) {
@@ -118,44 +110,22 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             }
         }
 
-        toast::AlignedVector <double> proj(norder * nsignal);
-
-        toast::LinearAlgebra::gemm(trans, notrans, norder, nsignal, ngood,
-                                   fone, masked_templates.data(), ngood,
-                                   masked_signals.data(), ngood,
-                                   fzero, proj.data(), norder);
-
-        // Symmetrize the covariance matrix, dgells is written for
-        // generic matrices
-
-        for (size_t row = 0; row < norder; ++row) {
-            for (size_t col = row + 1; col < norder; ++col) {
-                invcov[col + row * norder] = invcov[row + col * norder];
-            }
-        }
-
-        // Fit the templates against the data.
-        // DGELSS minimizes the norm of the difference and the solution vector
-        // and overwrites proj with the fitting coefficients.
         int rank, info=0;
-        double rcond_limit = 1e-3;
-        int LWORK = toast::LinearAlgebra::gelss_buffersize(norder, norder, nsignal,
-                                                           norder, norder, rcond_limit);
-        toast::AlignedVector <double> WORK(LWORK);
+        double rcond_limit = -1;  // Use machine precision
         toast::AlignedVector <double> singular_values(norder);
-        toast::LinearAlgebra::gelss(
-            norder, norder, nsignal, invcov.data(), norder,
-            proj.data(), norder, singular_values.data(), rcond_limit,
-            &rank, WORK.data(), LWORK, &info);
-        if (info != 0) {
-            std::cerr << "ERROR: DGELLS info = " << info << std::endl;
-        }
+
+        int LWORK = toast::LinearAlgebra::gelss_buffersize(ngood, norder, nsignal,
+                                                           ngood, ngood, rcond_limit);
+        toast::AlignedVector <double> WORK(LWORK);
+        toast::LinearAlgebra::gelss(ngood, norder, nsignal, masked_templates.data(), ngood,
+                                    masked_signals.data(), ngood, singular_values.data(), rcond_limit,
+                                    &rank, WORK.data(), LWORK, &info);
 
         for (int iorder = 0; iorder < norder; ++iorder) {
             double * temp = &full_templates[iorder * scanlen];
             for (int isignal = 0; isignal < nsignal; ++isignal) {
                 double * signal = &signals[isignal][start];
-                double amp = proj[iorder + isignal * norder];
+                double amp = masked_signals[iorder + isignal * ngood];
                 if (toast::is_aligned(signal) && toast::is_aligned(temp)) {
                     #pragma omp simd
                     for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
@@ -164,6 +134,11 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 }
             }
         }
+
+        if (info != 0) {
+            std::cerr << "ERROR: DGELLS info = " << info << std::endl;
+        }
+
     }
 }
 
