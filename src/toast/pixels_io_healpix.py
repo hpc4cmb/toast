@@ -790,10 +790,40 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
         mode = "w-"
         if "overwrite" in kwargs and kwargs["overwrite"] == True:
             mode = "w"
+        elif os.path.isfile(filename):
+            raise FileExistsError(f"'{filename}' exists and `overwrite` is False")
 
         dtype = mapdata.dtype
         if "dtype" in kwargs and kwargs["dtype"] is not None:
             dtype = kwargs["dtype"]
+
+        if "fits_IDL" in kwargs and kwargs["fits_IDL"]:
+            raise ValueError("HDF5 does not support fits_IDL")
+
+        if "partial" in kwargs and kwargs["partial"]:
+            raise ValueError(
+                "HDF5 does not support partial; map is always chunked."
+            )
+
+        if "column_names" in kwargs and kwargs["column_names"] is not None:
+            raise ValueError("HDF5 does not support column_names")
+
+        ordering = "RING"
+        if "nest" in kwargs and kwargs["nest"] == True:
+            ordering = "NESTED"
+
+        coord = None
+        if "coord" in kwargs:
+            coord = kwargs["coord"]
+
+        units = None
+        if "column_units" in kwargs:
+            units = kwargs["column_units"]
+            # Only one units attribute is supported
+            if not isinstance(units, str):
+                msg = f"ERROR: HDF5 map units must be a single string, "
+                msg += f"not {units}"
+                raise RuntimeError(msg)
 
         with h5py.File(filename, mode) as f:
             dset = f.create_dataset(
@@ -809,34 +839,11 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
                 for key, value in header:
                     dset.attrs[key] = value
 
-            if "nest" in kwargs and kwargs["nest"] == True:
-                dset.attrs["ORDERING"] = "NESTED"
-            else:
-                dset.attrs["ORDERING"] = "RING"
-
+            dset.attrs["ORDERING"] = ordering
             dset.attrs["NSIDE"] = nside
-
-            if "column_units" in kwargs:
-                units = kwargs["column_units"]
-                # Only one units attribute is supported
-                if not isinstance(units, str):
-                    msg = f"ERROR: HDF5 map units must be a single string, "
-                    msg += f"not {units}"
-                    raise RuntimeError(msg)
+            if units is not None:
                 dset.attrs["UNITS"] = units
-
-            if "coord" in kwargs:
-                dset.attrs["COORDSYS"] = kwargs["coord"]
-
-            if "fits_IDL" in kwargs and kwargs["fits_IDL"]:
-                raise ValueError("HDF5 does not support fits_IDL")
-
-            if "partial" in kwargs and kwargs["partial"]:
-                raise ValueError(
-                    "HDF5 does not support partial; map is always chunked."
-                )
-
-            if "column_names" in kwargs and kwargs["column_names"] is not None:
-                raise ValueError("HDF5 does not support column_names")
+            if coord is not None:
+                dset.attrs["COORDSYS"] = coord
 
     return
