@@ -534,13 +534,18 @@ class PolyFilter(Operator):
                 shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
             signals = []
+            idets = []
             last_flags = None
+            in_place = True
             for idet, det in enumerate(dets):
                 # Test the detector pattern
                 if pat.match(det) is None:
                     continue
 
-                signal = obs.detdata[self.det_data][idet]
+                ref = obs.detdata[self.det_data][idet]
+                signal = ref.astype(np.float64, copy=False)
+                if not signal is ref:
+                    in_place = False
                 if self.det_flags is not None:
                     det_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
                     flags = shared_flags | det_flags
@@ -549,6 +554,7 @@ class PolyFilter(Operator):
 
                 if last_flags is None or np.all(last_flags == flags):
                     signals.append(signal)
+                    idets.append(idet)
                 else:
                     filter_polynomial(
                         self.order,
@@ -559,7 +565,11 @@ class PolyFilter(Operator):
                         impl=implementation,
                         use_accel=use_accel,
                     )
+                    if not in_place:
+                        for i, x in zip(idets, signals):
+                            obs.detdata[self.det_data][i] = x
                     signals = [signal]
+                    idets = [idet]
                 last_flags = flags.copy()
 
             if len(signals) > 0:
@@ -572,6 +582,9 @@ class PolyFilter(Operator):
                     impl=implementation,
                     use_accel=use_accel,
                 )
+                if not in_place:
+                    for i, x in zip(idets, signals):
+                        obs.detdata[self.det_data][i] = x
 
             # Optionally flag unfiltered data
             if self.shared_flags is not None and self.poly_flag_mask is not None:
