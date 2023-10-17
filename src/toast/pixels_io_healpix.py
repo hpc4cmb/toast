@@ -644,11 +644,67 @@ def read_healpix(filename, *args, **kwargs):
         result = hp.read_map(filename, *args, **kwargs)
 
     elif filename_is_hdf5(filename):
-        if "verbose" in kwargs and kwargs["verbose"] == False:
-            verbose = False
+        # Translate positional arguments to keyword arguments
+        if len(args) == 0:
+            if "field" not in kwargs:
+                kwargs["field"] = (0,)
+        else:
+            if "field" in kwargs:
+                raise ValueError("'field' defined twice")
+            field = args[0]
+            if field is not None and not hasattr(field, "__len__"):
+                field = (field,)
+            kwargs["field"] = field
+
+        if len(args) > 1:
+            if "dtype" in kwargs:
+                raise ValueError("'dtype' defined twice")
+            kwargs["dtype"] = args[1]
+
+        if len(args) > 2:
+            if "nest" in kwargs:
+                raise ValueError("'nest' defined twice")
+            kwargs["nest"] = args[2]
+        if "nest" in kwargs:
+            nest = kwargs["nest"]
+        else:
+            nest = False
+
+        if len(args) > 3:
+            if "partial" in kwargs:
+                raise ValueError("'partial' defined twice")
+            kwargs["partial"] = args[3]
+        if "partial" in kwargs and kwargs["partial"]:
+            raise ValueError("HDF5 maps are never explicitly indexed")
+
+        if len(args) > 4:
+            if "hdu" in kwargs:
+                raise ValueError("'hdu' defined twice")
+            kwargs["hdu"] = args[4]
+        if "hdu" in kwargs and kwargs["hdu"] != 1:
+            raise ValueError("HDF5 maps do not have HDUs")
+
+        if len(args) > 5:
+            if "h" in kwargs:
+                raise ValueError("'h' defined twice")
+            kwargs["h"] = args[5]
+
+        if len(args) > 6:
+            if "verbose" in kwargs:
+                raise ValueError("'verbose' defined twice")
+            kwargs["verbose"] = args[6]
+        if "verbose" in kwargs:
+            verbose = kwargs["verbose"]
         else:
             # healpy default
             verbose = True
+
+        if len(args) > 7:
+            if "memmap" in kwargs:
+                raise ValueError("'memmap' defined twice")
+            kwargs["memmap"] = args[7]
+        if "memmap" in kwargs and kwargs["memmap"]:
+            raise ValueError("HDF5 maps do not have explicit memmap")
 
         # Load an HDF5 map
         try:
@@ -669,27 +725,24 @@ def read_healpix(filename, *args, **kwargs):
         header = dict(dset.attrs)
         if "ORDERING" not in header or header["ORDERING"] not in ["NESTED", "RING"]:
             raise RuntimeError("Cannot determine pixel ordering")
-        if verbose:
-            print("")
-        if "nest" in kwargs:
-            nest = kwargs["nest"]
-        else:
-            nest = False
         if header["ORDERING"] == "NESTED" and nest == False:
             if verbose:
-                print(f"Reordering {filename} to RING")
+                print(f"\nReordering {filename} to RING")
             mapdata = hp.reorder(mapdata, n2r=True)
         elif header["ORDERING"] == "RING" and nest == True:
             if verbose:
-                print(f"Reordering {filename} to NESTED")
+                print(f"\nReordering {filename} to NESTED")
             mapdata = hp.reorder(mapdata, r2n=True)
         else:
             if verbose:
-                print(f"{filename} is already {header['ORDERING']}")
+                print(f"\n{filename} is already {header['ORDERING']}")
         f.close()
 
         if "dtype" in kwargs and kwargs["dtype"] is not None:
             mapdata = mapdata.astype(kwargs["dtype"])
+
+        if mapdata.shape[0] == 1:
+            mapdata = mapdata[0]
 
         if "h" in kwargs and kwargs["h"] == True:
             result = mapdata, header
