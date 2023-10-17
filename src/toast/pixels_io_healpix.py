@@ -760,7 +760,6 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
     """Write a FITS or HDF5 map serially.
 
     This writes the map data from a simple numpy array on the calling process.
-    No units are written to the file.
 
     Args:
         filename (str):  The path to the file.
@@ -777,6 +776,9 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
         return hp.write_map(filename, mapdata, *args, **kwargs)
 
     elif filename_is_hdf5(filename):
+        if len(args) != 0:
+            raise ValueError("No positional arguments supported")
+
         # Write an HDF5 map
         mapdata = np.atleast_2d(mapdata)
         n_value, n_pix = mapdata.shape
@@ -806,11 +808,14 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
                 header = kwargs["extra_header"]
                 for key, value in header:
                     dset.attrs[key] = value
+
             if "nest" in kwargs and kwargs["nest"] == True:
                 dset.attrs["ORDERING"] = "NESTED"
             else:
                 dset.attrs["ORDERING"] = "RING"
+
             dset.attrs["NSIDE"] = nside
+
             if "column_units" in kwargs:
                 units = kwargs["column_units"]
                 # Only one units attribute is supported
@@ -819,5 +824,19 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
                     msg += f"not {units}"
                     raise RuntimeError(msg)
                 dset.attrs["UNITS"] = units
+
+            if "coord" in kwargs:
+                dset.attrs["COORDSYS"] = kwargs["coord"]
+
+            if "fits_IDL" in kwargs and kwargs["fits_IDL"]:
+                raise ValueError("HDF5 does not support fits_IDL")
+
+            if "partial" in kwargs and kwargs["partial"]:
+                raise ValueError(
+                    "HDF5 does not support partial; map is always chunked."
+                )
+
+            if "column_names" in kwargs and kwargs["column_names"] is not None:
+                raise ValueError("HDF5 does not support column_names")
 
     return
