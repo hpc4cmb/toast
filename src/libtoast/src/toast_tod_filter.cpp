@@ -5,6 +5,7 @@
 
 #include <string.h>
 #include <algorithm>
+#include <sstream>
 
 #ifdef _OPENMP
 # include <omp.h>
@@ -34,7 +35,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     double fone = 1.0;
 
     #pragma \
-    omp parallel for schedule(static) shared(order, signals, flags, n, nsignal, starts, stops, nscan, norder, upper, lower, notrans, trans, fzero, fone)
+    omp parallel for schedule(static) default(none) shared(order, signals, flags, n, nsignal, starts, stops, nscan, norder, upper, lower, notrans, trans, fzero, fone)
     for (size_t iscan = 0; iscan < nscan; ++iscan) {
         int64_t start = starts[iscan];
         int64_t stop = stops[iscan];
@@ -136,7 +137,12 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
         }
 
         if (info != 0) {
-            std::cerr << "ERROR: DGELLS info = " << info << std::endl;
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "DGELLS:  " << ngood << "/" << scanlen << " good samples, order " << norder;
+            o << " failed with info " << info;
+            log.error(o.str().c_str(), TOAST_HERE());
+            throw std::runtime_error(o.str().c_str());
         }
 
     }
