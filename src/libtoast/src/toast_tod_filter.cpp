@@ -154,6 +154,16 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 }
             }
         }
+
+        if (info != 0) {
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "DGELLS:  " << ngood << "/" << scanlen << " good samples, order " << norder;
+            o << " failed with info " << info;
+            log.error(o.str().c_str(), TOAST_HERE());
+            throw std::runtime_error(o.str().c_str());
+        }
+
     }
 }
 
