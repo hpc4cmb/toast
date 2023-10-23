@@ -34,6 +34,7 @@ from ..pixels_io_healpix import (
     write_healpix_fits,
     write_healpix_hdf5,
 )
+from ..pixels_io_wcs import write_wcs_fits
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
@@ -1608,25 +1609,8 @@ class FilterBin(Operator):
             if write:
                 product = key.replace(f"{self.name}_", "")
                 try:
-                    if self.write_hdf5:
-                        # Non-standard HDF5 output
-                        fname = os.path.join(
-                            self.output_dir, f"{rootname}_{product}.h5"
-                        )
-                        if self.mc_mode and not force:
-                            if os.path.isfile(fname):
-                                log.info_rank(
-                                    f"Skipping existing file: {fname}", comm=self.comm
-                                )
-                                continue
-                        write_healpix_hdf5(
-                            data[key],
-                            fname,
-                            nest=self.binning.pixel_pointing.nest,
-                            force_serial=self.write_hdf5_serial,
-                        )
-                    else:
-                        # Standard FITS output
+                    if hasattr(self.binning.pixel_pointing, "wcs"):
+                        # WCS pixelization
                         fname = os.path.join(
                             self.output_dir, f"{rootname}_{product}.fits"
                         )
@@ -1636,9 +1620,39 @@ class FilterBin(Operator):
                                     f"Skipping existing file: {fname}", comm=self.comm
                                 )
                                 continue
-                        write_healpix_fits(
-                            data[key], fname, nest=self.binning.pixel_pointing.nest
-                        )
+                        write_wcs_fits(data[key], fname)
+                    else:
+                        if self.write_hdf5:
+                            # Non-standard HEALPix HDF5 output
+                            fname = os.path.join(
+                                self.output_dir, f"{rootname}_{product}.h5"
+                            )
+                            if self.mc_mode and not force:
+                                if os.path.isfile(fname):
+                                    log.info_rank(
+                                        f"Skipping existing file: {fname}", comm=self.comm
+                                    )
+                                    continue
+                            write_healpix_hdf5(
+                                data[key],
+                                fname,
+                                nest=self.binning.pixel_pointing.nest,
+                                force_serial=self.write_hdf5_serial,
+                            )
+                        else:
+                            # Standard HEALPix FITS output
+                            fname = os.path.join(
+                                self.output_dir, f"{rootname}_{product}.fits"
+                            )
+                            if self.mc_mode and not force:
+                                if os.path.isfile(fname):
+                                    log.info_rank(
+                                        f"Skipping existing file: {fname}", comm=self.comm
+                                    )
+                                    continue
+                            write_healpix_fits(
+                                data[key], fname, nest=self.binning.pixel_pointing.nest
+                            )
                 except Exception as e:
                     msg = f"ERROR: failed to write {fname} : {e}"
                     raise RuntimeError(msg)
