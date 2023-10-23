@@ -324,6 +324,7 @@ class MapMaker(Operator):
                 rcond=self.rcond_name,
                 det_flags=map_binning.det_flags,
                 det_flag_mask=map_binning.det_flag_mask,
+                det_data_units=map_binning.det_data_units,
                 shared_flags=map_binning.shared_flags,
                 shared_flag_mask=map_binning.shared_flag_mask,
                 pixel_pointing=map_binning.pixel_pointing,
