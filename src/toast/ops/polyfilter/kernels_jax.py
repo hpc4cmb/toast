@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -154,16 +154,9 @@ def filter_polynomial_interval(flags_interval, signals_interval, order):
         valid_rows[:, jnp.newaxis], full_templates, 0.0
     )  # nb_zero_flags*norder
 
-    # Square the template matrix for A^T.A
-    invcov = jnp.dot(masked_templates.T, masked_templates)  # norder*norder
-
-    # Project the signals against the templates
-    # we do not mask flagged signals as they are multiplied with zeros anyway
-    proj = jnp.dot(masked_templates.T, signals_interval)  # norder*nsignal
-
     # Fit the templates against the data
     (x, _residue, _rank, _singular_values) = jnp.linalg.lstsq(
-        invcov, proj, rcond=1e-3
+        masked_templates, signals_interval, rcond=-1
     )  # norder*nsignal
 
     # computes the value to be subtracted from the signals
