@@ -576,6 +576,9 @@ def simulate_ces_scan(
 
     n_repeat = int((t_stop - t_start) / scan_pair_time)
     n_repeat += 2  # Margin for incomplete scans and randomized phase
+    # Trim the last sample to avoid duplicated time stamps
+    tvec = tvec[:-1]
+    azvec = azvec[:-1]
     t = []
     az = []
     for i in range(n_repeat):
@@ -587,6 +590,10 @@ def simulate_ces_scan(
 
     # Update the scan range.  We use the high resolution azimuth so the
     # actual sampling rate will not change the range.
+    # These values will be slightly off in the case of an az-tracking
+    # scan because we are not considering the possible randomized phase
+    # offset and we include the extra half-scan pair that partially gets
+    # trimmed
 
     new_min_az = min(scan_min_az, np.min(azvec))
     new_max_az = max(scan_max_az, np.max(azvec))
