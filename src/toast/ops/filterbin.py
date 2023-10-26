@@ -825,6 +825,10 @@ class FilterBin(Operator):
                     )
                     t1 = time()
 
+                if det_templates.ntemplate == 0:
+                    # No templates to fit
+                    continue
+
                 # memreport.prefix = "After detector templates"
                 # memreport.apply(data)
 
