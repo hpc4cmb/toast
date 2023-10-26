@@ -68,17 +68,13 @@ def filter_polynomial_numpy(order, flags, signals_list, starts, stops, use_accel
         # Assemble the flagged template matrix used in the linear regression
         masked_templates = full_templates[zero_flags]  # nb_zero_flags*norder
 
-        # Square the template matrix for A^T.A
-        invcov = np.dot(masked_templates.T, masked_templates)  # norder*norder
-
-        # Project the signals against the templates
+        # Assemble the flagged signals
         masked_signals = signals_interval[zero_flags]  # nb_zero_flags*nsignal
-        proj = np.dot(masked_templates.T, masked_signals)  # norder*nsignal
 
         # Fit the templates against the data
         # by minimizing the norm2 of the difference and the solution vector
         (x, _residue, _rank, _singular_values) = np.linalg.lstsq(
-            invcov, proj, rcond=1e-3
+            masked_templates, masked_signals, rcond=-1
         )  # norder*nsignal
         signals_interval -= np.dot(full_templates, x)
 

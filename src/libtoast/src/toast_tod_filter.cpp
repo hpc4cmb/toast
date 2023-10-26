@@ -25,7 +25,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     if (order < 0) return;
 
     int nsignal = signals.size();
-    int norder = order + 1;
+    int norder_max = order + 1;
 
     char upper = 'U';
     char lower = 'L';
@@ -35,7 +35,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     double fone = 1.0;
 
     #pragma \
-    omp parallel for schedule(static) default(none) shared(order, signals, flags, n, nsignal, starts, stops, nscan, norder, upper, lower, notrans, trans, fzero, fone)
+    omp parallel for schedule(static) default(none) shared(order, signals, flags, n, nsignal, starts, stops, nscan, norder_max, upper, lower, notrans, trans, fzero, fone)
     for (size_t iscan = 0; iscan < nscan; ++iscan) {
         int64_t start = starts[iscan];
         int64_t stop = stops[iscan];
@@ -49,6 +49,12 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             if (flags[start + i] == 0) ngood++;
         }
         if (ngood == 0) continue;
+
+        // ngood is not typically smaller than norder_max but
+        // it can happen.  This will likely result in the filter
+        // completely eliminating the signal.
+
+        int64_t norder = std::min(ngood, norder_max);
 
         // Build the full template matrix used to clean the signal.
         // We subtract the template value even from flagged samples to
