@@ -10,6 +10,7 @@ from astropy import units as u
 
 from ..intervals import IntervalList
 from ..timing import Timer, function_timer
+from ..coordinates import to_DJD
 
 
 @function_timer
@@ -402,6 +403,7 @@ def step_el(
 
 @function_timer
 def simulate_ces_scan(
+    site,
     t_start,
     t_stop,
     rate,
@@ -417,21 +419,12 @@ def simulate_ces_scan(
     cosecant_modulation=False,
     nstep=10000,
     randomize_phase=False,
+    track_azimuth=False,
 ):
     """Simulate a constant elevation scan."""
 
-    # if samples <= 0:
-    #     raise RuntimeError("CES requires a positive number of samples")
-    #
-    # if len(self._times) == 0:
-    #     self._CES_start = self._firsttime
-    # else:
-    #     self._CES_start = self._times[-1] + 1 / self._rate
-
     # Begin by simulating one full scan with turnarounds at high sampling
     # It will be used to interpolate the full CES.
-
-    ##azmin, azmax = [self._azmin_ces, self._azmax_ces]
 
     mirror_cosecant = False
     if cosecant_modulation:
@@ -448,11 +441,6 @@ def simulate_ces_scan(
     elif az_max < az_min:
         az_max += 2 * np.pi
 
-    # The lists of data arrays, to be concatenated at the end.
-    all_t = list()
-    all_az = list()
-    all_flags = list()
-
     if fix_rate_on_sky:
         # translate scan rate from sky to mount coordinates
         base_rate = az_rate / np.cos(el)
@@ -462,70 +450,106 @@ def simulate_ces_scan(
     # scan acceleration is already in the mount coordinates
     scan_accel = az_accel
 
+    # figure out the scan and turnaround times
+    if cosecant_modulation:
+        scan_time = (np.cos(az_min) - np.cos(az_max)) / base_rate
+        # Scan rate at the beginning of a turnaround
+        dazdt = base_rate / np.abs(np.sin(az_min))
+    else:
+        # Constant scanning rate, only requires two data points
+        scan_time = (az_max - az_min) / base_rate
+        dazdt = base_rate
+    turnaround_time = 2 * dazdt / scan_accel
+    scan_pair_time = 2 * scan_time + 2 * turnaround_time
+
+    if track_azimuth:
+        if cosecant_modulation:
+            msg = "Azimuth tracking and cosecant modulation are incompatible"
+            raise RuntimeError(msg)
+        # Determine the rate at which Celestial coordinates travel in
+        # azimuth due to Earth's rotation
+        observer = ephem.Observer()
+        observer.lon = site.earthloc.lon.to_value(u.radian)
+        observer.lat = site.earthloc.lat.to_value(u.radian)
+        observer.elevation = site.earthloc.height.to_value(u.meter)
+        observer.epoch = ephem.J2000
+        observer.compute_pressure()
+        observer.date = to_DJD(t_start)
+        observer.pressure = 0
+        az = 0.5 * (az_min + az_max)
+        ra, dec = observer.radec_of(az, el)
+        center = ephem.FixedBody()
+        center._ra = ra
+        center._dec = dec
+        observer.date = to_DJD(t_start + 1)
+        center.compute(observer)
+        az2, el2 = center.az, center.alt
+        az_drift_rate = az2 - az
+        # Get drift during one half-scan and turnaround
+        az_drift = az_drift_rate * (scan_time + turnaround_time)
+        # Extra scan time needed to compensate for the drift
+        drift_time = az_drift / base_rate
+    else:
+        az_drift = 0
+        drift_time = 0
+
+    # The lists of data arrays, to be concatenated at the end.
+    all_t = list()
+    all_az = list()
+    all_flags = list()
+
     # left-to-right
 
-    t = t_start
     tvec = None
     azvec = None
-    t0 = t
+    t0 = t_start
+    t1 = t0 + scan_time + drift_time
     if cosecant_modulation:
-        t1 = t0 + (np.cos(az_min) - np.cos(az_max)) / base_rate
         tvec = np.linspace(t0, t1, nstep, endpoint=True)
         azvec = np.arccos(np.cos(az_min) + base_rate * t0 - base_rate * tvec)
     else:
         # Constant scanning rate, only requires two data points
-        t1 = t0 + (az_max - az_min) / base_rate
-        tvec = np.array([t0, t1])
-        azvec = np.array([az_min, az_max])
+        tvec = np.array([t0, t1 + drift_time])
+        azvec = np.array([az_min, az_max + az_drift])
     all_t.append(np.array(tvec))
     all_az.append(np.array(azvec))
     range_scan_leftright = (t0, t1)
 
     # turnaround
 
-    t = t1
-    t0 = t
-    if cosecant_modulation:
-        dazdt = base_rate / np.abs(np.sin(az_max))
-    else:
-        dazdt = base_rate
-    t1 = t0 + 2 * dazdt / scan_accel
+    t0 = t1
+    az0 = az_max + az_drift
+    t1 = t0 + turnaround_time
     tvec = np.linspace(t0, t1, nstep, endpoint=True)[1:]
-    azvec = az_max + (tvec - t0) * dazdt - 0.5 * scan_accel * (tvec - t0) ** 2
+    azvec = az0 + (tvec - t0) * dazdt - 0.5 * scan_accel * (tvec - t0) ** 2
     all_t.append(np.array(tvec[:-1]))
     all_az.append(np.array(azvec[:-1]))
     range_turn_leftright = (t0, t1)
 
     # right-to-left
 
-    t = t1
     tvec = []
     azvec = []
-    t0 = t
+    t0 = t1
+    t1 = t0 + scan_time - drift_time
     if cosecant_modulation:
-        t1 = t0 + (np.cos(az_min) - np.cos(az_max)) / base_rate
         tvec = np.linspace(t0, t1, nstep, endpoint=True)
         azvec = np.arccos(np.cos(az_max) - base_rate * t0 + base_rate * tvec)
     else:
         # Constant scanning rate, only requires two data points
-        t1 = t0 + (az_max - az_min) / base_rate
         tvec = np.array([t0, t1])
-        azvec = np.array([az_max, az_min])
+        azvec = np.array([az_max + az_drift, az_min + 2 * az_drift])
     all_t.append(np.array(tvec))
     all_az.append(np.array(azvec))
     range_scan_rightleft = (t0, t1)
 
     # turnaround
 
-    t = t1
-    t0 = t
-    if cosecant_modulation:
-        dazdt = base_rate / np.abs(np.sin(az_min))
-    else:
-        dazdt = base_rate
-    t1 = t0 + 2 * dazdt / scan_accel
+    t0 = t1
+    az0 = az_min + 2 * az_drift
+    t1 = t0 + turnaround_time
     tvec = np.linspace(t0, t1, nstep, endpoint=True)[1:]
-    azvec = az_min - (tvec - t0) * dazdt + 0.5 * scan_accel * (tvec - t0) ** 2
+    azvec = az0 - (tvec - t0) * dazdt + 0.5 * scan_accel * (tvec - t0) ** 2
     all_t.append(np.array(tvec))
     all_az.append(np.array(azvec))
     range_turn_rightleft = (t0, t1)
@@ -548,8 +572,28 @@ def simulate_ces_scan(
         # mirror it if necessary
         azvec += np.pi
 
+    # Duplicate the first scan enough times to cover the entire observation
+
+    n_repeat = int((t_stop - t_start) / scan_pair_time)
+    n_repeat += 2  # Margin for incomplete scans and randomized phase
+    # Trim the last sample to avoid duplicated time stamps
+    tvec = tvec[:-1]
+    azvec = azvec[:-1]
+    t = []
+    az = []
+    for i in range(n_repeat):
+        t.append(tvec + i * scan_pair_time)
+        az.append(azvec + i * 2 * az_drift)
+
+    tvec = np.hstack(t)
+    azvec = np.hstack(az)
+
     # Update the scan range.  We use the high resolution azimuth so the
     # actual sampling rate will not change the range.
+    # These values will be slightly off in the case of an az-tracking
+    # scan because we are not considering the possible randomized phase
+    # offset and we include the extra half-scan pair that partially gets
+    # trimmed
 
     new_min_az = min(scan_min_az, np.min(azvec))
     new_max_az = max(scan_max_az, np.max(azvec))
@@ -561,20 +605,14 @@ def simulate_ces_scan(
     samples = int((t_stop - t_start) * rate)
     times = t_start + np.arange(samples) / rate
 
-    tmin, tmax = tvec[0], tvec[-1]
-    tdelta = tmax - tmin
-
     if randomize_phase:
         np.random.seed(int(t_start % 2**32))
-        t_off = -tdelta * np.random.rand()
+        t_off = scan_pair_time * np.random.rand()
     else:
         t_off = 0
 
-    # For interpolation, shift the times to zero
-    tvec -= tmin
-    t_interp = (times - tmin - t_off) % tdelta
-
-    az_sample = np.interp(t_interp, tvec, azvec)
+    # Interpolate to sample times
+    az_sample = np.interp(times + t_off, tvec, azvec)
     el_sample = np.zeros_like(az_sample) + el
 
     # The time intervals for various types of motion.  These are returned
@@ -588,7 +626,7 @@ def simulate_ces_scan(
     ival_scan = list()
 
     # Repeat time intervals to cover the timestamps
-    n_repeat = 1 + int((times[-1] - tmin) / tdelta)
+    t_off = -t_off
     for rp in range(n_repeat):
         ival_scan_leftright.append(
             (range_scan_leftright[0] + t_off, range_scan_leftright[1] + t_off)
@@ -616,7 +654,7 @@ def simulate_ces_scan(
                 range_scan_rightleft[1] + t_off + half_turn_rightleft,
             )
         )
-        t_off += tdelta
+        t_off += scan_pair_time
 
     # Trim off the intervals if they extend past the timestamps
     for ival in [

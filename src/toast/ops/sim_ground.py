@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -91,13 +91,14 @@ class SimGround(Operator):
         klass=GroundSchedule, allow_none=True, help="Instance of a GroundSchedule"
     )
 
-    timezone = Int(
-        0, help="The (integer) timezone offset in hours from UTC to apply to schedule"
-    )
-
     randomize_phase = Bool(
         False,
         help="If True, the Constant Elevation Scan will begin at a randomized phase.",
+    )
+
+    track_azimuth = Bool(
+        False,
+        help="If True, the azimuth throw is continually adjusted to center the field.",
     )
 
     use_ephem = Bool(
@@ -519,6 +520,7 @@ class SimGround(Operator):
             # session as the previous observation, just re-use the pointing.
 
             if sname != last_session:
+                site = self.telescope.site
                 (
                     times,
                     az,
@@ -536,12 +538,11 @@ class SimGround(Operator):
                     ival_turn_leftright,
                     ival_turn_rightleft,
                 ) = self._simulate_scanning(
-                    scan, obs_info[obindx]["samples"], rate, comm, samp_ranks
+                    site, scan, obs_info[obindx]["samples"], rate, comm, samp_ranks
                 )
 
                 # Create weather realization common to all observations in the session
                 weather = None
-                site = self.telescope.site
                 if self.weather is not None:
                     # Every session has a unique site with unique weather
                     # realization.
@@ -815,7 +816,7 @@ class SimGround(Operator):
         )
         flag_intervals.apply(data, detectors=None)
 
-    def _simulate_scanning(self, scan, n_samples, rate, comm, samp_ranks):
+    def _simulate_scanning(self, site, scan, n_samples, rate, comm, samp_ranks):
         """Simulate the boresight Az/El pointing for one session."""
         log = Logger.get()
 
@@ -918,6 +919,7 @@ class SimGround(Operator):
             ival_throw_leftright,
             ival_throw_rightleft,
         ) = simulate_ces_scan(
+            site,
             start_time.timestamp(),
             stop_time.timestamp(),
             rate,
@@ -932,6 +934,7 @@ class SimGround(Operator):
             scan_max_az,
             cosecant_modulation=self.scan_cosecant_modulation,
             randomize_phase=self.randomize_phase,
+            track_azimuth=self.track_azimuth,
         )
 
         # Do any adjustments to the El motion
