@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import argparse
 import ast
 import copy
 import json
@@ -41,6 +42,59 @@ def build_config(objects):
             raise RuntimeError("Cannot buid config from objects without a name")
         conf = o.get_config(input=conf)
     return conf
+
+
+class TraitAction(argparse.Action):
+    """Custom argparse action to check for valid use of None.
+
+    Some traits support a None value even though they have a specific
+    type.  This custom action checks for that None value and validates
+    that it is an acceptable value.
+
+    """
+
+    def __init__(
+        self,
+        option_strings,
+        dest,
+        nargs=None,
+        const=None,
+        default=None,
+        type=None,
+        choices=None,
+        required=False,
+        help=None,
+        metavar=None,
+    ):
+        super(TraitAction, self).__init__(
+            option_strings=option_strings,
+            dest=dest,
+            nargs=nargs,
+            const=const,
+            default=default,
+            type=None,
+            choices=choices,
+            required=required,
+            help=help,
+            metavar=metavar,
+        )
+        self.trait_type = type
+        return
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if isinstance(values, list):
+            realval = list()
+            for v in values:
+                if v == "None" or v is None:
+                    realval.append(None)
+                else:
+                    realval.append(self.trait_type(v))
+        else:
+            if values == "None" or values is None:
+                realval = None
+            else:
+                realval = self.trait_type(values)
+        setattr(namespace, self.dest, realval)
 
 
 def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="."):
@@ -222,6 +276,7 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
                 # )
                 parser.add_argument(
                     option,
+                    action=TraitAction,
                     required=False,
                     default=default,
                     type=typ,

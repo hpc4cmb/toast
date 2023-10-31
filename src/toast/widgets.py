@@ -272,7 +272,7 @@ class ObservationWidget(object):
             )
             with w_plot:
                 clear_output(wait=True)
-                fig.show_dash(mode="inline", host="localhost")
+                fig.show_dash(mode="inline_persistent", host="localhost")
 
         response(None)
         w_times.observe(response, names="value")
