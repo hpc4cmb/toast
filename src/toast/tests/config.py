@@ -137,7 +137,7 @@ class ConfigOperator(ops.Operator):
                 continue
             if tname == "API":
                 continue
-            if trait.get(self) is None:
+            if tname == "instance_none":
                 continue
             if isinstance(trait, Bool):
                 # toggle value
@@ -191,9 +191,6 @@ class ConfigOperator(ops.Operator):
         # Make an argparse list
         targs = list()
         for k, v in tmod.items():
-            if v is None:
-                # Skip this
-                continue
             if isinstance(v, bool):
                 # Special case...
                 if v:
@@ -202,7 +199,9 @@ class ConfigOperator(ops.Operator):
                     targs.append(f"--{self.name}.no_{k}")
             else:
                 targs.append(f"--{self.name}.{k}")
-                if isinstance(v, set):
+                if v is None:
+                    targs.append("None")
+                elif isinstance(v, set):
                     if len(v) == 0:
                         targs.append("{}")
                     else:
