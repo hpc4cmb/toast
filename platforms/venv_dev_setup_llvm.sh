@@ -20,9 +20,15 @@ popd >/dev/null 2>&1
 # Location of build helper tools
 venvpkgdir=$(dirname "${scriptdir}")/packaging/venv
 
-if [ "x$(which clang++-17)" = "x" ]; then
-    echo "The clang++-17 compiler is not in your PATH"
-    exit 1
+suf="-17"
+if [ "x$(which clang++${suf})" = "x" ]; then
+    echo "The clang++${suf} compiler is not in your PATH, trying clang++"
+    if [ "x$(which clang++)" = "x" ]; then
+	echo "No clang++ found"
+	exit 1
+    else
+	suf=""
+    fi
 fi
 
 usage () {
@@ -39,8 +45,8 @@ if [ "x${envname}" = "x" ]; then
 fi
 
 # Set our compiler flags
-export CC=clang-17
-export CXX=clang++-17
+export CC=clang${suf}
+export CXX=clang++${suf}
 export FC=gfortran
 export CFLAGS="-O3 -g -fPIC -pthread"
 export FCFLAGS="-O3 -g -fPIC -pthread"

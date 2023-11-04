@@ -20,14 +20,16 @@ popd >/dev/null 2>&1
 # Location of build helper tools
 venvpkgdir=$(dirname "${scriptdir}")/packaging/venv
 
-suf="-17"
+# No suffix names on perlmutter
+suf=""
+
 if [ "x$(which clang++${suf})" = "x" ]; then
     echo "The clang++${suf} compiler is not in your PATH, trying clang++"
     if [ "x$(which clang++)" = "x" ]; then
-        echo "No clang++ found"
-        exit 1
+	echo "No clang++ found"
+	exit 1
     else
-        suf=""
+	suf=""
     fi
 fi
 
@@ -50,10 +52,9 @@ export CXX=clang++${suf}
 export FC=gfortran
 export CFLAGS="-O3 -g -fPIC -pthread"
 export FCFLAGS="-O3 -g -fPIC -pthread"
-export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11 -stdlib=libc++"
+export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11"
 export OMPFLAGS="-fopenmp"
-export FCLIBS="-L/usr/lib/gcc/x86_64-linux-gnu/11 -lgfortran"
+export FCLIBS="-lgfortran"
+# Note:  LD_LIBRARY_PATH already setup
 
-export LD_LIBRARY_PATH="/usr/lib/llvm-17/lib:/usr/lib/gcc/x86_64-linux-gnu/11:${envname}/lib"
-
-eval "${venvpkgdir}/install_deps_venv.sh" "${envname}" ${optional} yes
+eval "${venvpkgdir}/install_deps_venv.sh" "${envname}" ${optional} no

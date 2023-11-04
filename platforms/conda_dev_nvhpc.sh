@@ -75,4 +75,4 @@ cmake \
     -DLAPACK_LIBRARIES="${nvlibs}/liblapack.so;${nvlibs}/libnvf.so" \
     -DSUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include" \
     -DSUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}" \
-    ${opts} ..
+    ${opts} ${topdir}
