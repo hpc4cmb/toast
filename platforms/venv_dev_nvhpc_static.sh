@@ -57,4 +57,4 @@ cmake \
     -DLAPACK_LIBRARIES="${nvlibs}/liblapack_lp64.a" \
     -DSUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include" \
     -DSUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}" \
-    ${opts} ..
+    ${opts} ${topdir}

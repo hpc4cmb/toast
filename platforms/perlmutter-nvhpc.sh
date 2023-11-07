@@ -25,6 +25,7 @@ venv_path=$(dirname $(dirname $(which python3)))
 
 PREFIX="${venv_path}"
 LIBDIR="${PREFIX}/lib"
+INCDIR="${PREFIX}/include"
 
 if [ "x${DEBUG}" = "x1" ]; then
     CMAKE_BUILD_TYPE=Debug
@@ -38,7 +39,7 @@ export CXX=nvc++
 export FC=nvfortran
 export CFLAGS="-O3 -g -fPIC -pthread -noswitcherror"
 export FCFLAGS="-O3 -g -fPIC -pthread -noswitcherror"
-export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11 -noswitcherror"
+export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11 -noswitcherror -I${INCDIR}"
 
 cmake \
     -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" \
@@ -58,5 +59,3 @@ cmake \
     -DSUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}" \
     ${opts} ${topdir}
 
-#    -DBLAS_LIBRARIES="${nvlibs}/libblas.so;${nvlibs}/libnvf.so;-lrt" \
-#    -DLAPACK_LIBRARIES="${nvlibs}/liblapack.so;${nvlibs}/libnvf.so;-lrt" \

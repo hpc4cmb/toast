@@ -7,9 +7,15 @@ set -e
 
 opts="$@"
 
-if [ "x$(which clang++-17)" = "x" ]; then
-    echo "The clang++-17 compiler is not in your PATH"
-    exit 1
+suf="-17"
+if [ "x$(which clang++${suf})" = "x" ]; then
+    echo "The clang++${suf} compiler is not in your PATH, trying clang++"
+    if [ "x$(which clang++)" = "x" ]; then
+        echo "No clang++ found"
+        exit 1
+    else
+        suf=""
+    fi
 fi
 
 # Location of this script
@@ -33,8 +39,8 @@ else
 fi
 
 # Set our compiler flags
-export CC=clang-17
-export CXX=clang++-17
+export CC=clang${suf}
+export CXX=clang++${suf}
 export FC=gfortran
 export CFLAGS="-O3 -g -fPIC -pthread"
 export FCFLAGS="-O3 -g -fPIC -pthread"
@@ -65,4 +71,4 @@ cmake \
     -DLAPACK_LIBRARIES="${LIBDIR}/libopenblas.a;/usr/lib/gcc/x86_64-linux-gnu/11/libgfortran.a" \
     -DSUITESPARSE_INCLUDE_DIR_HINTS="${PREFIX}/include" \
     -DSUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}" \
-    ${opts} ..
+    ${opts} ${topdir}
