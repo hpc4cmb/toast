@@ -107,6 +107,8 @@ class SparseTemplates:
         provided mask"""
         masked = SparseTemplates()
         for start, stop, template in zip(self.starts, self.stops, self.templates):
+            # test = template * good[start:stop]
+            # if np.count_nonzero(test) > 0:
             if np.any(good[start:stop]):
                 masked.starts.append(start)
                 masked.stops.append(stop)
@@ -121,7 +123,13 @@ class SparseTemplates:
                 norm = np.sum(template**2) ** 0.5
             else:
                 norm = np.sum((template * good[start:stop]) ** 2) ** 0.5
-            template /= norm
+            # If the template and the "good" array have disjoint elements which are
+            # non-zero, then the norm might end up being zero.  In that case, just
+            # zero the template.
+            if norm == 0:
+                template[:] = 0
+            else:
+                template /= norm
         return
 
 
@@ -454,12 +462,12 @@ class FilterBin(Operator):
     )
 
     filter_flag_mask = Int(
-        defaults.shared_mask_processing,
+        defaults.shared_mask_invalid,
         help="Bit mask value for flagging samples that fail filtering",
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -470,7 +478,7 @@ class FilterBin(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional telescope flagging",
     )
 
@@ -524,11 +532,13 @@ class FilterBin(Operator):
     )
 
     leftright_mask = Int(
-        defaults.scan_leftright, help="Bit mask value for left-to-right scans"
+        defaults.shared_mask_scan_leftright,
+        help="Bit mask value for left-to-right scans",
     )
 
     rightleft_mask = Int(
-        defaults.scan_rightleft, help="Bit mask value for right-to-left scans"
+        defaults.shared_mask_scan_rightleft,
+        help="Bit mask value for right-to-left scans",
     )
 
     poly_filter_order = Int(1, allow_none=True, help="Polynomial order")
@@ -739,7 +749,7 @@ class FilterBin(Operator):
 
         t1 = time()
         for iobs, obs in enumerate(data.obs):
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
             if self.grank == 0:
                 log.debug(
                     f"{self.group:4} : FilterBin: Processing observation "
@@ -1078,6 +1088,18 @@ class FilterBin(Operator):
         final map.
         """
         log = Logger.get()
+        # ntemplate = templates.ntemplate
+        # invcov = np.zeros([ntemplate, ntemplate])
+        # array_starts = np.array(templates.starts, dtype=np.int64)
+        # array_stops = np.array(templates.stops, dtype=np.int64)
+        # fgood = good.astype(np.float64)
+        # build_template_covariance(
+        #     array_starts,
+        #     array_stops,
+        #     templates.templates,
+        #     fgood,
+        #     invcov,
+        # )
         ntemplate = templates.ntemplate
         invcov = np.zeros([ntemplate, ntemplate])
         build_template_covariance(
@@ -1087,7 +1109,17 @@ class FilterBin(Operator):
             good.astype(np.float64),
             invcov,
         )
-        rcond = 1 / np.linalg.cond(invcov)
+        try:
+            rcond = 1 / np.linalg.cond(invcov)
+        except np.linalg.LinAlgError:
+            print(
+                f"Failed condition number calculation for {ntemplate}x{ntemplate} matrix:"
+            )
+            print(f"{invcov}", flush=True)
+            print(f"Diagonal:")
+            for row in range(ntemplate):
+                print(f"{row:03d} {invcov[row, row]}")
+            raise
         if self.grank == 0:
             log.debug(
                 f"{self.group:4} : FilterBin: Template covariance matrix "

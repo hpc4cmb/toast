@@ -192,7 +192,7 @@ class Demodulate(Operator):
         timer = Timer()
         timer.start()
         for obs in demodulate_obs:
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
 
             offset = obs.local_index_offset
             nsample = obs.n_local_samples

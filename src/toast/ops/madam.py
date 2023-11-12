@@ -132,7 +132,7 @@ class Madam(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -143,7 +143,7 @@ class Madam(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -520,7 +520,7 @@ class Madam(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
             all_dets.update(dets)
 
             # Check that the timestamps exist.

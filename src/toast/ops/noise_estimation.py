@@ -75,7 +75,7 @@ class NoiseEstim(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -85,10 +85,9 @@ class NoiseEstim(Operator):
         help="Observation detdata key for processing mask flags",
     )
 
-    # FIXME:  This trait is unused, ok to remove?
-    # mask_flag_mask = Int(
-    #     defaults.det_mask_processing, help="Bit mask for raising processing mask flags"
-    # )
+    mask_flag_mask = Int(
+        defaults.det_mask_processing, help="Bit mask for raising processing mask flags"
+    )
 
     shared_flags = Unicode(
         defaults.shared_flags,
@@ -97,7 +96,7 @@ class NoiseEstim(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -317,7 +316,7 @@ class NoiseEstim(Operator):
             scan_mask = ScanHealpixMask(
                 file=self.maskfile,
                 det_flags=self.mask_flags,
-                def_flags_value=self.mask_bit,
+                def_flags_value=self.mask_flag_mask,
                 pixel_dist=self.pixel_dist,
                 pixel_pointing=self.pixel_pointing,
             )

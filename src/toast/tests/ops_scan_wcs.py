@@ -131,7 +131,7 @@ class ScanWCSTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMask(
             det_flags=defaults.det_flags,
-            det_flags_mask=defaults.det_mask_invalid,
+            det_flags_value=defaults.det_mask_invalid,
             pixels=pixels.pixels,
             mask_key="fake_mask",
         )

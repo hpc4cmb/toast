@@ -61,7 +61,7 @@ class TemplateMatrix(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -600,7 +600,7 @@ class SolveAmplitudes(Operator):
             # Verify that our flags exist
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
+                dets = ob.select_local_detectors(detectors, flagmask=save_det_flag_mask)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -627,7 +627,7 @@ class SolveAmplitudes(Operator):
 
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
+                dets = ob.select_local_detectors(detectors, flagmask=save_det_flag_mask)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -782,7 +782,7 @@ class SolveAmplitudes(Operator):
             local_cut = 0
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
+                dets = ob.select_local_detectors(detectors, flagmask=save_det_flag_mask)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue

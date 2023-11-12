@@ -33,7 +33,7 @@ class BuildHitMap(Operator):
 
     Although individual detector flags do not impact the pointing per se, they can be
     used with this operator in order to produce a hit map that is consistent with other
-    pixel space products.
+    pixel space products.  The detector mask defaults to cutting "non-science" samples.
 
     """
 
@@ -60,7 +60,7 @@ class BuildHitMap(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -71,7 +71,7 @@ class BuildHitMap(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional flagging",
     )
 
@@ -145,7 +145,9 @@ class BuildHitMap(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(selection=detectors)
+            dets = ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_flag_mask
+            )
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -245,7 +247,8 @@ class BuildInverseCovariance(Operator):
     If any samples have compromised telescope pointing, those pixel indices should
     have already been set to a negative value by the operator that generated the
     pointing matrix.  Individual detector flags can optionally be applied to
-    timesamples when accumulating data.
+    timesamples when accumulating data.  The detector mask defaults to cutting
+    "non-science" samples.
 
     """
 
@@ -274,7 +277,7 @@ class BuildInverseCovariance(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -287,7 +290,7 @@ class BuildInverseCovariance(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional flagging",
     )
 
@@ -377,7 +380,9 @@ class BuildInverseCovariance(Operator):
             weight_nnz = 0
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(selection=detectors)
+                dets = ob.select_local_detectors(
+                    selection=detectors, flagmask=self.det_flag_mask
+                )
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -401,7 +406,9 @@ class BuildInverseCovariance(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(selection=detectors)
+            dets = ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_flag_mask
+            )
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -535,7 +542,8 @@ class BuildNoiseWeighted(Operator):
     If any samples have compromised telescope pointing, those pixel indices should
     have already been set to a negative value by the operator that generated the
     pointing matrix.  Individual detector flags can optionally be applied to
-    timesamples when accumulating data.
+    timesamples when accumulating data.  The detector mask defaults to cutting 
+    "non-science" samples.
 
     """
 
@@ -568,7 +576,7 @@ class BuildNoiseWeighted(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -581,7 +589,7 @@ class BuildNoiseWeighted(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional flagging",
     )
 
@@ -673,7 +681,9 @@ class BuildNoiseWeighted(Operator):
             weight_nnz = 0
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(selection=detectors)
+                dets = ob.select_local_detectors(
+                    selection=detectors, flagmask=self.det_flag_mask
+                )
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -742,7 +752,9 @@ class BuildNoiseWeighted(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(selection=detectors)
+            dets = ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_flag_mask
+            )
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -916,7 +928,8 @@ class CovarianceAndHits(Operator):
     This operator runs the pointing operator and builds the PixelDist instance
     describing how submaps are distributed among processes.  It builds the hit map
     and the inverse covariance and then inverts this with a threshold on the condition
-    number in each pixel.
+    number in each pixel.  The detector flag mask defaults to cutting "non-science"
+    samples.
 
     NOTE:  The pixel pointing operator must have the "pixels", "create_dist"
     traits, which will be set by this operator during execution.
@@ -962,7 +975,7 @@ class CovarianceAndHits(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -975,7 +988,7 @@ class CovarianceAndHits(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional flagging",
     )
 

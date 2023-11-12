@@ -64,7 +64,7 @@ class BinMap(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -75,7 +75,7 @@ class BinMap(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional telescope flagging",
     )
 

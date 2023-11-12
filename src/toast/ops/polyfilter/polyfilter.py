@@ -65,13 +65,13 @@ class PolyFilter2D(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid | defaults.det_mask_processing,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
     poly_flag_mask = Int(
-        defaults.shared_mask_processing,
-        help="Bit mask value for intervals that fail to filter",
+        defaults.det_mask_invalid,
+        help="Bit mask value for samples that fail to filter",
     )
 
     shared_flags = Unicode(
@@ -81,7 +81,7 @@ class PolyFilter2D(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -155,9 +155,12 @@ class PolyFilter2D(Operator):
 
             gt.start("Poly2D:  Detector setup")
 
-            # Detectors to process
+            # Detectors to process.  We apply the detector flag mask to this
+            # selection, in order to avoid bad detectors in the fit.
             detectors = []
-            for det in temp_ob.all_detectors:
+            for det in temp_ob.select_local_detectors(
+                selection=None, flagmask=self.det_flag_mask
+            ):
                 if pat.match(det) is None:
                     continue
                 detectors.append(det)
@@ -258,6 +261,8 @@ class PolyFilter2D(Operator):
             detector_templates = np.zeros([ndet, nmode])
             for det in temp_ob.local_detectors:
                 if det not in detector_index:
+                    # Skip detectors that were cut by per-detector flags or
+                    # pattern match.
                     continue
                 idet = detector_index[det]
                 theta, phi = detector_position[det]
@@ -392,6 +397,8 @@ class PolyFilter2D(Operator):
             # Copy data to original observation
             gt.start("Poly2D:  Copy output")
             obs.detdata[self.det_data][:] = temp_ob.detdata[self.det_data][:]
+            if self.det_flags is not None:
+                obs.detdata[self.det_flags][:] = temp_ob.detdata[self.det_flags][:]
             gt.stop("Poly2D:  Copy output")
 
             # Free data copy
@@ -451,12 +458,12 @@ class PolyFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid | defaults.det_mask_processing,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
     poly_flag_mask = Int(
-        defaults.shared_mask_processing,
+        defaults.shared_mask_invalid,
         help="Shared flag bit mask for samples outside of filtering view",
     )
 
@@ -467,7 +474,7 @@ class PolyFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -507,7 +514,7 @@ class PolyFilter(Operator):
 
         for obs in data.obs:
             # Get the detectors we are using for this observation
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -655,7 +662,7 @@ class CommonModeFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid | defaults.det_mask_processing,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -666,7 +673,7 @@ class CommonModeFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -701,8 +708,8 @@ class CommonModeFilter(Operator):
     @function_timer
     def _redistribute(self, data, obs, timer, log):
         if self.redistribute:
-            # Redistribute the data so each process has all detectors for some sample range
-            # Duplicate just the fields of the observation we will use
+            # Redistribute the data so each process has all detectors for some sample
+            # range.  Duplicate just the fields of the observation we will use.
             dup_shared = list()
             if self.shared_flags is not None:
                 dup_shared.append(self.shared_flags)
@@ -733,7 +740,6 @@ class CommonModeFilter(Operator):
         else:
             comm = obs.comm_col
             temp_ob = obs
-            proc_rows = None
 
         return comm, temp_ob
 

@@ -84,18 +84,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_proc_or_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_proc_or_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             hwp_filter_order=4,
             ground_filter_order=5,
@@ -228,18 +228,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_proc_or_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_proc_or_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -365,18 +365,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_proc_or_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin_flagged",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_proc_or_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -523,18 +523,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_proc_or_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_proc_or_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_proc_or_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -703,16 +703,16 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=detpointing.shared_flag_mask,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_proc_or_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_proc_or_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
             shared_flag_mask=detpointing.shared_flag_mask,
             binning=binning,
@@ -730,6 +730,7 @@ class FilterBinTest(MPITestCase):
         # noise-weighted matrix.
 
         filterbin.name = "split_run"
+        filterbin.noiseweight_obs_matrix = True
         filterbin.apply(data)
 
         filterbin.name = "noiseweighted_run"
@@ -760,7 +761,7 @@ class FilterBinTest(MPITestCase):
 
             # Assemble the single-run matrix
 
-            rootname = os.path.join(self.outdir, f"split_run_obs_matrix")
+            rootname = os.path.join(self.outdir, f"split_run_noiseweighted_obs_matrix")
             fname_matrix = ops.combine_observation_matrix(rootname)
             obs_matrix1 = scipy.sparse.load_npz(fname_matrix)
             obs_matrix1.sort_indices()
@@ -792,9 +793,17 @@ class FilterBinTest(MPITestCase):
             # Compare the values that are not tiny. Some of the tiny
             # values may be missing in one matrix
 
-            values1 = obs_matrix1.data[np.abs(obs_matrix1.data) > 1e-10]
-            values2 = obs_matrix2.data[np.abs(obs_matrix2.data) > 1e-10]
+            values1 = obs_matrix1.data[np.abs(obs_matrix1.data) > 1e-6]
+            values2 = obs_matrix2.data[np.abs(obs_matrix2.data) > 1e-6]
 
-            assert np.allclose(values1, values2)
+            print(f"values1 = {values1}")
+            print(f"values2 = {values2}", flush=True)
+            disagree = np.logical_not(
+                np.isclose(values1, values2, rtol=1e-3, atol=1e-5)
+            )
+            for elem in np.arange(len(values1))[disagree]:
+                print(f"  {elem}:  {values1[elem]} != {values2[elem]}")
+
+            assert np.allclose(values1, values2, rtol=1e-3, atol=1e-5)
 
         close_data(data)

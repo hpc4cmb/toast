@@ -50,7 +50,7 @@ class CadenceMap(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -61,7 +61,7 @@ class CadenceMap(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional telescope flagging",
     )
 
@@ -155,7 +155,9 @@ class CadenceMap(Operator):
             buf[:, :] = False
             for obs in data.obs:
                 obs_data = data.select(obs_uid=obs.uid)
-                dets = obs.select_local_detectors(detectors)
+                dets = obs.select_local_detectors(
+                    detectors, flagmask=self.det_flag_mask
+                )
                 times = obs.shared[self.times].data
                 days = to_MJD(times).astype(int)
                 if days[0] >= day_stop or days[-1] < day_start:

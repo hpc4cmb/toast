@@ -23,7 +23,8 @@ class PixelsHealpix(Operator):
     view as the detector pointing operator when computing the pointing matrix pixels.
 
     Any samples with "bad" pointing should have already been set to a "safe" quaternion
-    value by the detector pointing operator.
+    value by the detector pointing operator.  We use the same shared flags as the
+    detector pointing operator.
 
     """
 

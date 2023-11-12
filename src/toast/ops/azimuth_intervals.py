@@ -88,7 +88,7 @@ class AzimuthIntervals(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_invalid,
         help="Bit mask value for bad azimuth pointing",
     )
 

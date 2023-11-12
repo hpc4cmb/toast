@@ -71,7 +71,7 @@ class HWPFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -82,15 +82,14 @@ class HWPFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
-    # FIXME:  this trait is not used, safe to remove?
-    # hwp_flag_mask = Int(
-    #     defaults.det_mask_processing,
-    #     help="Bit mask to use when adding flags based on HWP filter failures.",
-    # )
+    hwp_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask to use when adding flags based on HWP filter failures.",
+    )
 
     hwp_angle = Unicode(
         defaults.hwp_angle, allow_none=True, help="Observation shared key for HWP angle"
@@ -290,7 +289,9 @@ class HWPFilter(Operator):
             last_cov = None
             last_rcond = None
             ndet = len(obs.local_detectors)
-            for idet, det in enumerate(obs.local_detectors):
+            for idet, det in enumerate(
+                obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            ):
                 if data.comm.group_rank == 0:
                     msg = (
                         f"{log_prefix} OpHWPFilter: "

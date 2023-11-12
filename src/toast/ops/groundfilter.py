@@ -76,7 +76,8 @@ class GroundFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_nonscience,
+        help="Bit mask value for optional shared flagging",
     )
 
     det_flags = Unicode(
@@ -86,15 +87,14 @@ class GroundFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
-    # FIXME:  This trait is not used anywhere.  Safe to remove?
-    # ground_flag_mask = Int(
-    #     defaults.det_mask_processing,
-    #     help="Bit mask to use when adding flags based on ground filter failures.",
-    # )
+    ground_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask to use when adding flags based on ground filter failures.",
+    )
 
     azimuth = Unicode(
         defaults.azimuth, allow_none=True, help="Observation shared key for Azimuth"
@@ -127,11 +127,13 @@ class GroundFilter(Operator):
     )
 
     leftright_mask = Int(
-        defaults.scan_leftright, help="Bit mask value for left-to-right scans"
+        defaults.shared_mask_scan_leftright,
+        help="Bit mask value for left-to-right scans",
     )
 
     rightleft_mask = Int(
-        defaults.scan_rightleft, help="Bit mask value for right-to-left scans"
+        defaults.shared_mask_scan_rightleft,
+        help="Bit mask value for right-to-left scans",
     )
 
     @traitlets.validate("det_flag_mask")
@@ -348,7 +350,9 @@ class GroundFilter(Operator):
             last_cov = None
             last_rcond = None
             ndet = len(obs.local_detectors)
-            for idet, det in enumerate(obs.local_detectors):
+            for idet, det in enumerate(
+                obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            ):
                 if data.comm.group_rank == 0:
                     msg = (
                         f"{log_prefix} OpGroundFilter: "

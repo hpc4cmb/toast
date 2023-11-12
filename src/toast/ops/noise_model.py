@@ -610,7 +610,7 @@ class FlagNoiseFit(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid | defaults.det_mask_processing,
+        defaults.det_mask_nonscience,
         help="Bit mask for considering detectors",
     )
 

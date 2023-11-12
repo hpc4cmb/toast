@@ -19,7 +19,8 @@ class NoiseWeight(Operator):
     """Apply diagonal noise weighting to detector data.
 
     This simple operator takes the detector weight from the specified noise model and
-    applies it to the timestream values.
+    applies it to the timestream values.  We ignore all detector flags in this operator,
+    since there is no harm in multiplying the noise weight by values in invalid samples.
 
     """
 

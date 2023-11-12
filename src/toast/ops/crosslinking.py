@@ -59,7 +59,7 @@ class CrossLinking(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_proc_or_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -70,7 +70,7 @@ class CrossLinking(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_proc_or_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional telescope flagging",
     )
 
@@ -212,7 +212,7 @@ class CrossLinking(Operator):
 
         for obs in data.obs:
             obs_data = data.select(obs_uid=obs.uid)
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
             for det in dets:
                 # Pointing weights
                 self._get_weights(obs_data, det)
