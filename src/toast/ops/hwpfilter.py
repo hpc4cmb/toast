@@ -71,7 +71,7 @@ class HWPFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_nonscience,
+        defaults.shared_mask_invalid,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -82,7 +82,7 @@ class HWPFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_nonscience,
+        defaults.det_mask_invalid,
         help="Bit mask value for optional detector flagging",
     )
 

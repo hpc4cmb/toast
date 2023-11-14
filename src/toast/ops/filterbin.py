@@ -467,7 +467,7 @@ class FilterBin(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_nonscience,
+        defaults.det_mask_invalid,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -478,7 +478,7 @@ class FilterBin(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_nonscience,
+        defaults.shared_mask_invalid,
         help="Bit mask value for optional telescope flagging",
     )
 

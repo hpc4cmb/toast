@@ -65,7 +65,7 @@ class PolyFilter2D(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_nonscience,
+        defaults.det_mask_invalid,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -81,7 +81,7 @@ class PolyFilter2D(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_nonscience,
+        defaults.shared_mask_invalid,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -458,7 +458,7 @@ class PolyFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_nonscience,
+        defaults.det_mask_invalid,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -474,7 +474,7 @@ class PolyFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_nonscience,
+        defaults.shared_mask_invalid,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -662,7 +662,7 @@ class CommonModeFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_nonscience,
+        defaults.det_mask_invalid,
         help="Bit mask value for optional detector flagging",
     )
 
@@ -673,7 +673,7 @@ class CommonModeFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_nonscience,
+        defaults.shared_mask_invalid,
         help="Bit mask value for optional shared flagging",
     )
 
