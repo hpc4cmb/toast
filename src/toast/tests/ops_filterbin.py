@@ -733,7 +733,7 @@ class FilterBinTest(MPITestCase):
         filterbin.apply(data)
 
         filterbin.name = "noiseweighted_run"
-        filterbin.write_invcov = True
+        filterbin.reset_pix_dist = True
         filterbin.det_data = "signal_copy"
         filterbin.noiseweight_obs_matrix = True
 
@@ -746,7 +746,6 @@ class FilterBinTest(MPITestCase):
             obs_data = data.select(obs_uid=obs.uid)
             # Replace comm_world with the group communicator
             obs_data._comm = new_comm
-            filterbin.reset_pix_dist = True
             filterbin.name = f"{orig_name_filterbin}_{obs.name}"
             filterbin.apply(obs_data)
             del obs_data
