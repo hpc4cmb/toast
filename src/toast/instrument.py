@@ -327,7 +327,7 @@ class Bandpass(object):
         self._bandpass = {}
         self._kcmb2jysr = {}
         self._kcmb2krj = {}
-        self._kcmb2pw = {}
+        self._kcmb2w = {}
 
     @function_timer
     def get_range(self, det=None):
@@ -382,6 +382,8 @@ class Bandpass(object):
         """
 
         bandpass = self.bandpass(det)
+        # Normalize the bandpass to peak at 1
+        bandpass = bandpass / np.amax(bandpass)
         freqs = self.freqs(det).to_value(u.Hz)
 
         # Power spectral density
@@ -396,7 +398,7 @@ class Bandpass(object):
     def _get_unit_conversion_coefficients(self, det):
         """Compute and cache the unit conversion coefficients for one detector"""
 
-        if det not in self._kcmb2jysr or det not in self._kcmb2krj or det not in self._kcmb2pw:
+        if det not in self._kcmb2jysr or det not in self._kcmb2krj or det not in self._kcmb2w:
             # The calculation is a copy from the Hildebrandt and Macias-Perez IDL module for Planck
 
             nu_cmb = k * TCMB / h
@@ -419,10 +421,11 @@ class Bandpass(object):
                 freqs, db_dt * bandpass
             ) / integrate_simpson(freqs, db_dt_rj * bandpass)
 
-            # K_CMB->pW conversion is from the BoloCalc paper, arXiv:1806.04316
-            self._kcmb2pw[det] = integrate_simpson(
+            # K_CMB->W conversion is from the BoloCalc paper, arXiv:1806.04316
+            bandpass = bandpass / np.amax(bandpass)
+            self._kcmb2w[det] = integrate_simpson(
                 freqs, k * (x / (np.exp(x) - 1))**2 * np.exp(x) * bandpass,
-            ) * 1e12
+            )
 
         return
 
@@ -470,10 +473,10 @@ class Bandpass(object):
         return self._kcmb2krj[det]
 
     @function_timer
-    def kcmb2pw(self, det):
-        """Return the unit conversion between K_CMB and pW"""
+    def kcmb2w(self, det):
+        """Return the unit conversion between K_CMB and W"""
         self._get_unit_conversion_coefficients(det)
-        return self._kcmb2pw[det]
+        return self._kcmb2w[det]
 
     @function_timer
     def convolve(self, det, freqs, spectrum, rj=False):
