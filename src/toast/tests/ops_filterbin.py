@@ -599,7 +599,9 @@ class FilterBinTest(MPITestCase):
         data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
 
         # Create some detector pointing matrices
-        detpointing = ops.PointingDetectorSimple()
+        detpointing = ops.PointingDetectorSimple(
+            shared_flag_mask=0,
+        )
         pixels = ops.PixelsHealpix(
             nside=self.nside,
             create_dist="pixel_dist",
@@ -650,20 +652,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_nonscience,
+            shared_flag_mask=0,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_nonscience,
+            det_flag_mask=255,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_invalid,
-            # det_flag_mask=defaults.det_mask_nonscience,
+            det_flag_mask=255,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_invalid,
-            # shared_flag_mask=defaults.shared_mask_nonscience,
+            shared_flag_mask=0,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -754,30 +754,14 @@ class FilterBinTest(MPITestCase):
 
             input_map = hp.read_map(input_map_file, None, nest=pixels.nest)
 
-            test_map1 = obs_matrix1.dot(input_map.ravel()).reshape([3, -1])
-            test_map2 = obs_matrix2.dot(input_map.ravel()).reshape([3, -1])
+            test_map1 = obs_matrix1.dot(input_map.ravel())
+            test_map2 = obs_matrix2.dot(input_map.ravel())
             disagree = np.logical_not(
                 np.isclose(test_map1, test_map2, rtol=1e-3, atol=1e-5)
             )
             for elem in np.arange(len(test_map1))[disagree]:
                 print(f"obs x input {elem}:  {test_map1[elem]} != {test_map2[elem]}")
 
-            # Compare the values that are not tiny. Some of the tiny
-            # values may be missing in one matrix
-
-            # values1 = obs_matrix1.data[np.abs(obs_matrix1.data) > 1e-10]
-            # values2 = obs_matrix2.data[np.abs(obs_matrix2.data) > 1e-10]
-            values1 = obs_matrix1.data
-            values2 = obs_matrix2.data
-
-            print(f"values1 = {values1}")
-            print(f"values2 = {values2}", flush=True)
-            disagree = np.logical_not(
-                np.isclose(values1, values2, rtol=1e-3, atol=1e-5)
-            )
-            for elem in np.arange(len(values1))[disagree]:
-                print(f"  {elem}:  {values1[elem]} != {values2[elem]}")
-
-            assert np.allclose(values1, values2, rtol=1e-3, atol=1e-5)
+            assert np.allclose(test_map1, test_map2, rtol=1e-5, atol=1e-6)
 
         close_data(data)
