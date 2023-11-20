@@ -86,16 +86,16 @@ class FilterBinTest(MPITestCase):
             shared_flags=defaults.shared_flags,
             shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_nonscience,
+            det_flag_mask=defaults.det_mask_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             hwp_filter_order=4,
             ground_filter_order=5,
@@ -277,16 +277,16 @@ class FilterBinTest(MPITestCase):
             shared_flags=defaults.shared_flags,
             shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_nonscience,
+            det_flag_mask=defaults.det_mask_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -373,16 +373,16 @@ class FilterBinTest(MPITestCase):
             shared_flags=defaults.shared_flags,
             shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_nonscience,
+            det_flag_mask=255,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin_flagged",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -472,16 +472,16 @@ class FilterBinTest(MPITestCase):
             shared_flags=defaults.shared_flags,
             shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_nonscience,
+            det_flag_mask=defaults.det_mask_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=defaults.det_mask_invalid,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=defaults.shared_mask_invalid,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
