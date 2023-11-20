@@ -599,9 +599,7 @@ class FilterBinTest(MPITestCase):
         data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
 
         # Create some detector pointing matrices
-        detpointing = ops.PointingDetectorSimple(
-            shared_flag_mask=0,
-        )
+        detpointing = ops.PointingDetectorSimple(shared_flag_mask=0)
         pixels = ops.PixelsHealpix(
             nside=self.nside,
             create_dist="pixel_dist",
@@ -652,7 +650,7 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=0,
+            shared_flag_mask=detpointing.shared_flag_mask,
             det_flags=defaults.det_flags,
             det_flag_mask=255,
         )
@@ -663,7 +661,7 @@ class FilterBinTest(MPITestCase):
             det_flags=defaults.det_flags,
             det_flag_mask=255,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=0,
+            shared_flag_mask=detpointing.shared_flag_mask,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -754,6 +752,7 @@ class FilterBinTest(MPITestCase):
 
             input_map = hp.read_map(input_map_file, None, nest=pixels.nest)
 
+            # Compare the results from application of the observation matrix
             test_map1 = obs_matrix1.dot(input_map.ravel())
             test_map2 = obs_matrix2.dot(input_map.ravel())
             disagree = np.logical_not(
@@ -761,7 +760,12 @@ class FilterBinTest(MPITestCase):
             )
             for elem in np.arange(len(test_map1))[disagree]:
                 print(f"obs x input {elem}:  {test_map1[elem]} != {test_map2[elem]}")
+            self.assertTrue(np.allclose(test_map1, test_map2, rtol=1e-5, atol=1e-6))
 
-            assert np.allclose(test_map1, test_map2, rtol=1e-5, atol=1e-6)
+            # Compare the values that are not tiny. Some of the tiny
+            # values may be missing in one matrix
+            values1 = obs_matrix1.data[np.abs(obs_matrix1.data) > 1e-10]
+            values2 = obs_matrix2.data[np.abs(obs_matrix2.data) > 1e-10]
+            self.assertTrue(np.allclose(values1, values2))
 
         close_data(data)
