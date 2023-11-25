@@ -199,14 +199,21 @@ class FitNoiseModel(Operator):
             nse_alpha = dict()
             nse_NET = dict()
             nse_indx = dict()
-            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
-            for det in dets:
+
+            # We are building a noise model with entries for all local detectors,
+            # even ones that are flagged.
+            for det in ob.local_detectors:
                 freqs = in_model.freq(det)
                 in_psd = in_model.psd(det)
                 cur_flag = ob.local_detector_flags[det]
+                nse_indx[det] = in_model.index(det)
+                nse_rate[det] = 2.0 * freqs[-1]
+                nse_NET[det] = 0.0 * np.sqrt(1.0 * in_psd.unit)
+                nse_fmin[det] = 0.0 * u.Hz
+                nse_fknee[det] = 0.0 * u.Hz
+                nse_alpha[det] = 0.0
+                if cur_flag & self.det_flag_mask != 0:
+                    continue
                 props = self._fit_log_psd(freqs, in_psd, guess=params)
                 if props["fit_result"].success:
                     # This was a good fit
@@ -220,8 +227,7 @@ class FitNoiseModel(Operator):
                     log.verbose(msg)
                     new_flag = cur_flag | self.bad_fit_mask
                     ob.update_local_detector_flags({det: new_flag})
-                nse_indx[det] = in_model.index(det)
-                nse_rate[det] = 2.0 * freqs[-1]
+
                 nse_fmin[det] = props["fmin"]
                 nse_fknee[det] = props["fknee"]
                 nse_alpha[det] = props["alpha"]

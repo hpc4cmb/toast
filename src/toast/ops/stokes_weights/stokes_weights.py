@@ -248,7 +248,7 @@ class StokesWeights(Operator):
 
             if self.mode == "IQU":
                 det_gamma = np.zeros(len(dets), dtype=np.float64)
-                if self.hwp_angle is None:
+                if self.hwp_angle is None or self.hwp_angle not in ob.shared:
                     hwp_data = np.zeros(1, dtype=np.float64)
                 else:
                     hwp_data = ob.shared[self.hwp_angle].data

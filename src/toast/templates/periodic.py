@@ -102,6 +102,7 @@ class Periodic(Template):
         self._obs_max = list()
         self._obs_incr = list()
         self._obs_nbins = list()
+        total_bins = 0
         for ob in new_data.obs:
             if self.is_detdata_key:
                 if self.key not in ob.detdata:
@@ -147,6 +148,10 @@ class Periodic(Template):
             else:
                 oincr = float(self.increment)
                 obins = int((omax - omin) / oincr)
+            if obins == 0 and ob.comm.group_rank == 0:
+                msg = f"Template {self.name}, obs {ob.name} has zero amplitude bins"
+                log.warning(msg)
+            total_bins += obins
             self._obs_nbins.append(obins)
             self._obs_incr.append(oincr)
             # Build up detector list
@@ -155,6 +160,11 @@ class Periodic(Template):
                     all_dets[d] = None
 
         self._all_dets = list(all_dets.keys())
+
+        if total_bins == 0:
+            msg = f"Template {self.name} process group {new_data.comm.group}"
+            msg += f" has zero amplitude bins- change the binning size."
+            raise RuntimeError(msg)
 
         # During application of the template, we will be looping over detectors
         # in the outer loop.  So we pack the amplitudes by detector and then by

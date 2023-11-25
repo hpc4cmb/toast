@@ -211,6 +211,8 @@ class TemplateMatrix(Operator):
                     "You cannot currently initialize templates on device (please disable accel for this operator/pipeline)."
                 )
             for tmpl in self.templates:
+                if not tmpl.enabled:
+                    continue
                 if tmpl.view is None:
                     tmpl.view = self.view
                 tmpl.det_data_units = self.det_data_units
@@ -223,7 +225,8 @@ class TemplateMatrix(Operator):
 
         # Set the data we are using for this execution
         for tmpl in self.templates:
-            tmpl.det_data = self.det_data
+            if tmpl.enabled:
+                tmpl.det_data = self.det_data
 
         # We loop over detectors.  Internally, each template loops over observations
         # and ignores observations where the detector does not exist.
@@ -309,15 +312,16 @@ class TemplateMatrix(Operator):
 
             for d in all_dets:
                 for tmpl in self.templates:
-                    log.verbose(
-                        f"TemplateMatrix {d} add to signal {tmpl.name} (use_accel={use_accel})"
-                    )
-                    tmpl.add_to_signal(
-                        d,
-                        data[self.amplitudes][tmpl.name],
-                        use_accel=use_accel,
-                        **kwargs,
-                    )
+                    if tmpl.enabled:
+                        log.verbose(
+                            f"TemplateMatrix {d} add to signal {tmpl.name} (use_accel={use_accel})"
+                        )
+                        tmpl.add_to_signal(
+                            d,
+                            data[self.amplitudes][tmpl.name],
+                            use_accel=use_accel,
+                            **kwargs,
+                        )
         return
 
     def _finalize(self, data, use_accel=None, **kwargs):
