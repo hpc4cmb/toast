@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -21,9 +21,6 @@ from .operator import Operator
 from .pipeline import Pipeline
 from .sim_tod_atm_generate import GenerateAtmosphere
 from .sim_tod_atm_observe import ObserveAtmosphere
-
-if available_atm:
-    from ..atm import AtmSim
 
 if available_utils:
     from ..atm import atm_absorption_coefficient_vec, atm_atmospheric_loading_vec

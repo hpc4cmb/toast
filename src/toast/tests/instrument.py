@@ -270,6 +270,13 @@ class InstrumentTest(MPITestCase):
         result1 = newfp.bandpass.convolve(names[-1], freqs, values, rj=False)
         result2 = newfp.bandpass.convolve(names[-1], freqs, values, rj=True)
 
+        # Test unit conversion and optical loading
+        det = names[-1]
+        result1 = newfp.bandpass.optical_loading(det, 270)
+        print(f"\noptical_loading: {result1*1e12} pW", flush=True)
+        result2 = newfp.bandpass.kcmb2w(det)
+        print(f"\nunit conversion: {result2*1e12/1e6} pW/uK_CMB", flush=True)
+
         with H5File(check_file, "w", comm=self.comm) as f:
             newfp.save_hdf5(f.handle, comm=self.comm)
 

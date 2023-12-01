@@ -327,6 +327,7 @@ class Bandpass(object):
         self._bandpass = {}
         self._kcmb2jysr = {}
         self._kcmb2krj = {}
+        self._kcmb2w = {}
 
     @function_timer
     def get_range(self, det=None):
@@ -366,10 +367,38 @@ class Bandpass(object):
         return eff * u.Hz
 
     @function_timer
+    def optical_loading(self, det, T):
+        """Return the optical loading of a blackbody source.
+        Assumes a diffraction-limited, single-moded polarimeter
+        and perfect optical efficiency
+        arXiv:1806.04316
+
+        Args:
+            det(str) : detector name
+            T(float) : Source temperature in Kelvin
+
+        Returns:
+            (float) : The optical loading in Watts
+        """
+
+        bandpass = self.bandpass(det)
+        # Normalize the bandpass to peak at 1
+        bandpass = bandpass / np.amax(bandpass)
+        freqs = self.freqs(det).to_value(u.Hz)
+
+        # Power spectral density
+        S = h * freqs / (np.exp(h * freqs / k / T) - 1)
+
+        # Integrate over frequency to get power
+        power = integrate_simpson(freqs, S * bandpass)
+
+        return power
+
+    @function_timer
     def _get_unit_conversion_coefficients(self, det):
         """Compute and cache the unit conversion coefficients for one detector"""
 
-        if det not in self._kcmb2jysr or det not in self._kcmb2krj:
+        if det not in self._kcmb2jysr or det not in self._kcmb2krj or det not in self._kcmb2w:
             # The calculation is a copy from the Hildebrandt and Macias-Perez IDL module for Planck
 
             nu_cmb = k * TCMB / h
@@ -391,6 +420,12 @@ class Bandpass(object):
             self._kcmb2krj[det] = integrate_simpson(
                 freqs, db_dt * bandpass
             ) / integrate_simpson(freqs, db_dt_rj * bandpass)
+
+            # K_CMB->W conversion is from the BoloCalc paper, arXiv:1806.04316
+            bandpass = bandpass / np.amax(bandpass)
+            self._kcmb2w[det] = integrate_simpson(
+                freqs, k * (x / (np.exp(x) - 1))**2 * np.exp(x) * bandpass,
+            )
 
         return
 
@@ -436,6 +471,12 @@ class Bandpass(object):
         """Return the unit conversion between K_CMB and K_RJ"""
         self._get_unit_conversion_coefficients(det)
         return self._kcmb2krj[det]
+
+    @function_timer
+    def kcmb2w(self, det):
+        """Return the unit conversion between K_CMB and W"""
+        self._get_unit_conversion_coefficients(det)
+        return self._kcmb2w[det]
 
     @function_timer
     def convolve(self, det, freqs, spectrum, rj=False):
