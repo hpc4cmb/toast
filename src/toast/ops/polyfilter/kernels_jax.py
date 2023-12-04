@@ -60,6 +60,7 @@ def filter_poly2D_coeffs(ngroup, det_groups, templates, signals, masks):
         coeff (numpy array, float64):  The N_sample x N_group x N_mode output coefficients.
     """
     # batch on group and sample dimenssions
+    # TODO port to our xmap
     filter_poly2D_sample_group_batched = jax_xmap(
         filter_poly2D_sample_group,
         in_axes=[
@@ -193,7 +194,7 @@ def filter_polynomial_jax(order, flags, signals_list, starts, stops, use_accel):
     signals = np.array(signals_list).T  # n*nsignal
 
     # loop over intervals, this is fine as long as there are only few intervals
-    # TODO port to JaxIntervals, could be done with vmap and setting padding of flags_interval to 1
+    # TODO port to imap
     for start, stop in zip(starts, stops):
         # validates interval
         start = np.maximum(0, start)
