@@ -288,6 +288,7 @@ def set_in_pytree(data, key, value):
         return data_leaf.at[key_leaf].set(value_leaf) if is_valid_key(key_leaf) else data_leaf
 
     return map2_pytree_leaves(set_leaf, data, value_keys)
+
 def get_index_from_pytree(data, data_axes, index, index_axis):
     """
     Generates a key by setting the index_axis to index, and retrieves the corresponding element from the pytree.
@@ -402,6 +403,7 @@ def set_documentation(func, in_axes, out_axes, reference_func=None):
     parameters = [Parameter(name, Parameter.POSITIONAL_OR_KEYWORD) for name in in_axes.keys()]
     func.__signature__ = Signature(parameters)
     return func
+
 #----------------------------------------------------------------------------------------
 # XMAP
 
@@ -464,40 +466,54 @@ def xmap(f, in_axes, out_axes):
 #----------------------------------------------------------------------------------------
 # IMAP
 
-def imap(f, in_axes, interval_axis, interval_starts, interval_ends, interval_max_length,
+def imap(f, in_axes, interval_axis, 
+         interval_starts, interval_ends, interval_max_length,
          output_name, output_as_input=False):
     """
     Extends xmap to handle intervals with padding and reshaping.
 
     Args:
-        f (callable): The function to be mapped.
+        f (callable): The function to be mapped over the intervals.
         in_axes (dict): The axes mappings for the input of `f`.
-        interval_axis (str): Axis name used for the interval.
-        interval_starts (str): Input name containing the starts of the interval.
-        interval_ends (str): Input name containing the ends (exclusive) of the interval.
-        interval_max_length (str): Input name containing the max length of the interval (static if jitted).
+        interval_axis (str): Axis name used for identifying the interval.
+        interval_starts (str): Input name containing the starts of each interval.
+        interval_ends (str): Input name containing the ends (exclusive) of each interval.
+        interval_max_length (str): Input name containing the maximum length of intervals (static if jitted).
         output_name (str): Input name containing the output value.
-        output_as_input (bool): Whether the output value should be used as an input to f.
+        output_as_input (bool): If True, the output value is also used as an input to `f`.
 
     Returns:
-        callable: The transformed function.
+        callable: A transformed function that applies `f` over specified intervals in the input data.
     """
+    # TODO run assertions to insure that inputs are correct
+
+    # Define the output axes based on the specified output name in the input axes.
     out_axes = in_axes[output_name]
+
+    # Create unique axis names for internal processing.
     interval_length_axis = f"{interval_axis}_length"
     num_intervals_axis = in_axes[interval_starts][0]
 
+    # Filter the input and output axes to include only relevant dimensions.
     in_axes_inner = filter_pytree(lambda a: isinstance(a, EllipsisType) or a == interval_axis, in_axes)
     in_axes_inner[interval_max_length] = []
     out_axes_inner_interval = filter_pytree(lambda a: isinstance(a, EllipsisType) or a == interval_axis, out_axes)
     out_axes_inner = filter_pytree(lambda a: isinstance(a, EllipsisType), out_axes)
 
     def inner_function(*args):
+        """
+        Inner function that operates on each interval, applying `f` or retrieving existing output data.
+
+        This function computes the output for each interval index, either by applying `f`
+        or by using the existing output, depending on whether the index is within the interval bounds.
+        """
         kwargs = args_to_kwargs(args, in_axes_inner.keys())
         start, end = kwargs[interval_starts], kwargs[interval_ends]
         absolute_index, output_data = kwargs[interval_max_length], kwargs[output_name]
         index = start + absolute_index
 
         def compute_within_interval():
+            # Computes the result of function `f` for indices within the interval.
             input_at_index = get_index_from_pytree(kwargs, in_axes_inner, index, interval_axis)
             for key in [interval_starts, interval_ends, interval_max_length]:
                 input_at_index.pop(key, None)
@@ -506,22 +522,30 @@ def imap(f, in_axes, interval_axis, interval_starts, interval_ends, interval_max
             return f(*kwargs_to_args(input_at_index))
 
         def compute_outside_interval():
+            # Retrieves existing output data for indices outside the interval.
             return get_index_from_pytree(output_data, out_axes_inner_interval, index, interval_axis)
 
         output_at_index = lax.cond(index < end, compute_within_interval, compute_outside_interval)
         return output_at_index
-
     inner_function = runtime_check_axis(inner_function, in_axes_inner, out_axes_inner)
 
+    # Prepare axes for batch processing.
     in_axes_batched = replace_in_pytree(interval_axis, (...), in_axes)
     in_axes_batched[interval_max_length] = [interval_length_axis]
     out_axes_batched = replace_in_pytree(interval_axis, (num_intervals_axis, interval_length_axis), out_axes)
     batched_function = xmap(inner_function, in_axes_batched, out_axes_batched)
 
+    # Define outer function axes based on the original input and output axes.
     in_axes_outer = deepcopy(in_axes)
     out_axes_outer = deepcopy(out_axes)
 
     def outer_function(*args):
+        """
+        Outer function that orchestrates the overall interval processing.
+
+        This function sets up the interval indexing and invokes the batched inner function
+        to process the entire data structure.
+        """
         kwargs = args_to_kwargs(args, in_axes_outer.keys())
         max_length, starts, output = kwargs[interval_max_length], kwargs[interval_starts], kwargs[output_name]
         kwargs[interval_max_length] = jnp.arange(max_length)
@@ -530,6 +554,6 @@ def imap(f, in_axes, interval_axis, interval_starts, interval_ends, interval_max
         indices_interval = starts[:, None] + jnp.arange(max_length)
         output = set_index_in_pytree(output, out_axes_outer, indices_interval, interval_axis, output_interval)
         return output
-
     outer_function = runtime_check_axis(outer_function, in_axes_outer, out_axes_outer)
+
     return set_documentation(outer_function, in_axes, out_axes, reference_func=f)
