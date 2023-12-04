@@ -453,7 +453,7 @@ def xmap(f, in_axes, out_axes):
         out_axes: The output axes mappings.
 
     Returns:
-        The batched and documented version of 'f'.
+        callable: The batched and documented version of 'f'.
     """
     # TODO run assertions to insure that inputs are correct
 
