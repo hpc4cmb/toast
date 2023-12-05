@@ -125,7 +125,7 @@ def pixels_healpix_interval(
 
     # uses out of index submap indices for out of interval values
     dummy_sub_map = jnp.ones_like(pixels_indexed) * (hit_submaps.size+1) # purposefully illegal index, jax will ignore it
-    dummy_hit_submaps = jnp.zeros_like(dummy_sub_map, dtype=hit_submaps.dtype)
+    dummy_hit_submaps = jnp.empty_like(dummy_sub_map, dtype=hit_submaps.dtype)
 
     # does the computation
     outputs = (pixels_indexed, dummy_sub_map, dummy_hit_submaps)
