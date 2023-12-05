@@ -525,7 +525,8 @@ def imap(f, in_axes, interval_axis,
             # Retrieves existing output data for indices outside the interval.
             return get_index_from_pytree(output_data, out_axes_inner_interval, index, interval_axis)
 
-        output_at_index = lax.cond(index < end, compute_within_interval, compute_outside_interval)
+        # NOTE: <= because toast intervals are inclusive
+        output_at_index = lax.cond(index <= end, compute_within_interval, compute_outside_interval)
         return output_at_index
     inner_function = runtime_check_axis(inner_function, in_axes_inner, out_axes_inner)
 
