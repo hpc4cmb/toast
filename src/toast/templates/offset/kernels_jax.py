@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 
 from ...accelerator import ImplementationType, kernel
-from ...jax.intervals import INTERVALS_JAX, ALL, JaxIntervals
+from ...jax.intervals import INTERVALS_JAX
 from ...jax.maps import imap
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
@@ -158,6 +158,55 @@ def offset_add_to_signal_jax(
 #----------------------------------------------------------------------------------------
 # offset_project_signal
 
+def offset_project_signal_inner(step_length, det_data, use_flag, flag_data, flag_mask, amplitude_offset, amplitude_view_offset, sample_index):
+    """
+    Args:
+        step_length (int64):  The minimum number of samples for each offset.
+        det_data (double): timestream value
+        use_flag (bool): should we use flags
+        flag_data (bool),
+        flag_mask (int),
+        amplitude_offset (int): starting offset
+        amplitude_view_offset (int): offset for the view
+        sample_index (int): index of the sample within the interval
+
+    Returns:
+        (amplitude_index, contribution) (int,double): index in amplitude and value to add (atomically) there
+    """
+    # computes contribution
+    if use_flag:
+        valid_sample = (flag_data & flag_mask) == 0
+        contribution = jnp.where(valid_sample, det_data, 0.0)
+    else:
+        contribution = det_data
+
+    # computes amplitude index
+    amplitude_index = amplitude_offset + amplitude_view_offset + (sample_index // step_length)
+
+    return (amplitude_index, contribution)
+
+# maps over intervals and detectors
+offset_project_signal_inner = imap(offset_project_signal_inner, 
+                    in_axes={
+                        'step_length': int,
+                        'det_data': ["n_samp"],
+                        'use_flag': bool,
+                        'flag_data': ["n_samp"],
+                        'flag_mask': int,
+                        'amplitude_offset': int,
+                        'amplitude_view_offset': ["n_intervals"],
+                        'sample_index': ["n_samp_length"], # NOTE: n_samp_length == intervals_max_length
+                        'interval_starts': ["n_intervals"],
+                        'interval_ends': ["n_intervals"],
+                        'intervals_max_length': int,
+                        'outputs': (["n_samp"],["n_samp"])
+                    },
+                    interval_axis='n_samp', 
+                    interval_starts='interval_starts', 
+                    interval_ends='interval_ends', 
+                    interval_max_length='intervals_max_length', 
+                    output_name='outputs')
+
 def offset_project_signal_intervals(
     data_index,
     det_data,
@@ -202,56 +251,23 @@ def offset_project_signal_intervals(
     log = Logger.get()
     log.debug(f"offset_project_signal: jit-compiling.")
 
-    # computes offsets
-    # a cumulative sums of the n_amp_views starting at amp_offset
-    offsets = jnp.roll(n_amp_views, 1)
-    offsets = offsets.at[0].set(amp_offset)
-    offsets = jnp.cumsum(offsets)
-    # prepare offsets intervals
-    offset_starts = offsets
-    offset_ends = offsets + (interval_ends - interval_starts) // step_length
-    # end+1 as the interval is inclusive
-    offsets_max_length = 1 + (intervals_max_length - 1) // step_length
+    # get inputs
+    det_data_indexed = det_data[data_index,:]
+    flag_data_indexed = flag_data[flag_index,:] if use_flag else jnp.empty_like(det_data_indexed)
+    amp_view_off = jnp.roll(n_amp_views, shift=1)
+    amp_view_off = amp_view_off.at[0].set(0)
+    sample_indices = jnp.arange(start=0, stop=intervals_max_length)
 
-    # gets interval information
-    nb_amplitudes = offsets_max_length
-    nb_intervals = interval_starts.size
+    # runs computation
+    outputs = (jnp.empty_like(det_data_indexed, dtype=int), jnp.zeros_like(det_data_indexed))
+    (amplitude_indices, contributions) = offset_project_signal_inner(step_length,det_data_indexed,
+                                                                     use_flag,flag_data_indexed,flag_mask,
+                                                                     amp_offset,amp_view_off,sample_indices,
+                                                                     interval_starts,interval_ends,intervals_max_length,
+                                                                     outputs)
 
-    # pad the intervals to insure that are exactly nb_amplitudes*step_length long
-    # meaning that we do not have to deal with leftovers
-    intervals_max_length = nb_amplitudes * step_length
-
-    # computes interval data
-    intervals = JaxIntervals(
-        interval_starts, interval_ends + 1, intervals_max_length
-    )  # end+1 as the interval is inclusive
-    offsets = JaxIntervals(
-        offset_starts, offset_ends + 1, offsets_max_length
-    )  # end+1 as the interval is inclusive
-    amplitudes_interval = JaxIntervals.get(amplitudes, offsets)  # amplitudes[offsets]
-    det_data_interval = JaxIntervals.get(
-        det_data, (data_index, intervals), padding_value=0.0
-    )  # det_data[data_index,intervals]
-
-    # skip flagged samples
-    if use_flag:
-        flags_interval = JaxIntervals.get(
-            flag_data, (flag_index, intervals)
-        )  # flag_data[flag_index,intervals]
-        flagged = (flags_interval & flag_mask) != 0
-        det_data_interval = jnp.where(flagged, 0.0, det_data_interval)
-
-    # Reshape such that all amplitudes have step_length samples.
-    det_data_interval = jnp.reshape(
-        det_data_interval, newshape=(nb_intervals, -1, step_length)
-    )
-    # amplitudes += np.sum(det_data_interval, axis=-1)
-    amplitudes_interval = amplitudes_interval + jnp.sum(det_data_interval, axis=-1)
-
-    # updates amplitudes and returns
-    amplitudes = JaxIntervals.set(
-        amplitudes, offsets, amplitudes_interval
-    )  # amplitudes[offsets] = amplitudes_interval
+    # updates det_data and returns
+    amplitudes = amplitudes.at[amplitude_indices].add(contributions)
     return amplitudes
 
 
