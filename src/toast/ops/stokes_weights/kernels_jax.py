@@ -13,16 +13,16 @@ from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
 
-def stokes_weights_IQU_inner(eps, cal, gamma, pin, hwpang, IAU):
+def stokes_weights_IQU_inner(pin, hwpang, eps, gamma, cal, IAU):
     """
     Compute the Stokes weights for one detector.
 
     Args:
-        eps (float):  The cross polar response.
-        cal (float):  A constant to apply to the pointing weights.
-        gamma (float):  Detector polarization angle.
         pin (array, float64):  The array of detector quaternions (size 4).
         hwpang (float64):  The HWP angle.
+        eps (float):  The cross polar response.
+        gamma (float):  Detector polarization angle.
+        cal (float):  A constant to apply to the pointing weights.
         IAU (int):  Sign factor for U stokes term.
 
     Returns:
@@ -61,31 +61,24 @@ def stokes_weights_IQU_inner(eps, cal, gamma, pin, hwpang, IAU):
 
 
 # maps over samples, intervals and detectors
-# stokes_weights_IQU_inner = jax_xmap(
-#    stokes_weights_IQU_inner,
-#    in_axes=[
-#        ["detectors"],  # epsilon
-#        ["detectors"],  # cal
-#        ["detectors"],  # gamma
-#        ["detectors", "intervals", "interval_size", ...],  # quats
-#        ["intervals", "interval_size"], # hwp
-#        [...], # IAU
-#    ],
-#    out_axes=["detectors", "intervals", "interval_size", ...],
-# )
-# using vmap as the static arguments triggers the following error:
-# "ShardingContext cannot be used with xmap"
-# TODO revisit once this issue is solved [bug with static argnum](https://github.com/google/jax/issues/10741)
-stokes_weights_IQU_inner = jax.vmap(
-    stokes_weights_IQU_inner, in_axes=[None, None, None, 0, 0, None], out_axes=0
-)  # interval_size
-stokes_weights_IQU_inner = jax.vmap(
-    stokes_weights_IQU_inner, in_axes=[None, None, None, 0, 0, None], out_axes=0
-)  # intervals
-stokes_weights_IQU_inner = jax.vmap(
-    stokes_weights_IQU_inner, in_axes=[0, 0, 0, 0, None, None], out_axes=0
-)  # detectors
-
+stokes_weights_IQU_inner = imap(stokes_weights_IQU_inner, 
+                    in_axes={
+                        'quats': ["n_det","n_samp",...],
+                        'weights': ["n_det","n_samp",...],
+                        'hwp': ["n_samp"],
+                        'eps': ["n_det"],
+                        'gamma': ["n_det"],
+                        'cal': ["n_det"],
+                        'IAU': int,
+                        'interval_starts': ["n_intervals"],
+                        'interval_ends': ["n_intervals"],
+                        'intervals_max_length': int
+                    },
+                    interval_axis='n_samp', 
+                    interval_starts='interval_starts', 
+                    interval_ends='interval_ends', 
+                    interval_max_length='intervals_max_length', 
+                    output_name='weights')
 
 def stokes_weights_IQU_interval(
     quat_index,
@@ -111,7 +104,7 @@ def stokes_weights_IQU_interval(
         weights (array, float64): The flat packed detectors weights for the specified mode (size n_det*n_samp*3)
         hwp (array, float64):  The HWP angles (size n_samp).
         epsilon (array, float):  The cross polar response (size n_det).
-        gamma (array, float):  The polarization orientation angle of each detector.
+        gamma (array, float):  The polarization orientation angle of each detector (size n_det).
         cal (array, float64):  An array to apply to the pointing weights (size n_det).
         IAU (bool):  Whether to use IAU convention.
         interval_starts (array, int): size n_view
@@ -125,32 +118,26 @@ def stokes_weights_IQU_interval(
     log = Logger.get()
     log.debug(f"stokes_weights_IQU: jit-compiling.")
 
-    # extract interval slices
-    intervals = JaxIntervals(
-        interval_starts, interval_ends + 1, intervals_max_length
-    )  # end+1 as the interval is inclusive
-    quats_interval = JaxIntervals.get(
-        quats, (quat_index, intervals, ALL)
-    )  # quats[quat_index,intervals,:]
+    # extract indexes
+    quats_indexed = quats[quat_index,:,:]
+    weights_indexed = weights[weight_index,:,:]
 
     # Are we using a half wave plate?
     if hwp.size == 0:
         # No half wave plate
-        hwp_interval = jnp.zeros_like(intervals.indices)
+        n_samp = weights.shape()[1]
+        hwp = jnp.zeros(shape=(n_samp,), dtype=float)
         gamma = jnp.zeros_like(gamma)
-    else:
-        hwp_interval = JaxIntervals.get(hwp, intervals)  # hwp[intervals]
 
+    # convert IAU to an integer for easier handling
     IAU_sign = -1 if IAU else 1
-    new_weights_interval = stokes_weights_IQU_inner(
-        epsilon, cal, gamma, quats_interval, hwp_interval, IAU_sign
-    )
+
+    # does the computation
+    new_weights_indexed = stokes_weights_IQU_inner(quats_indexed, weights_indexed, hwp, epsilon, gamma, cal, IAU_sign,
+                                                   interval_starts, interval_ends, intervals_max_length)
 
     # updates results and returns
-    # weights[weight_index,intervals,:] = new_weights_interval
-    weights = JaxIntervals.set(
-        weights, (weight_index, intervals, ALL), new_weights_interval
-    )
+    weights = weights.at[weight_index,:,:].set(new_weights_indexed)
     return weights
 
 
