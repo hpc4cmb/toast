@@ -5,6 +5,12 @@ from copy import deepcopy
 from types import EllipsisType
 from inspect import Signature, Parameter
 
+# TODO: common error that should be caught with a nice error message
+# - passing the wrong number of arguments to the functions (missing some)
+#
+# can I catch:
+# - errors with the order of inputs?
+
 #----------------------------------------------------------------------------------------
 # PYTREE FUNCTIONS
 

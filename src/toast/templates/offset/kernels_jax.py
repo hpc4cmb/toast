@@ -4,10 +4,10 @@
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 from ...accelerator import ImplementationType, kernel
-from ...jax.intervals import INTERVALS_JAX, JaxIntervals
+from ...jax.intervals import INTERVALS_JAX, ALL, JaxIntervals
+from ...jax.maps import imap
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
