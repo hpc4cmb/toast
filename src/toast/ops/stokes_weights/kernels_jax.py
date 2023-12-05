@@ -6,12 +6,15 @@ import jax
 import jax.numpy as jnp
 
 from ...accelerator import ImplementationType, kernel
-from ...jax.intervals import INTERVALS_JAX, ALL, JaxIntervals
+from ...jax.intervals import INTERVALS_JAX
 from ...jax.maps import imap
 from ...jax.math import qarray
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
+
+#----------------------------------------------------------------------------------------
+# IQU
 
 def stokes_weights_IQU_inner(pin, hwpang, eps, gamma, cal, IAU):
     """
@@ -209,6 +212,35 @@ def stokes_weights_IQU_jax(
         intervals_max_length,
     )
 
+#----------------------------------------------------------------------------------------
+# I
+
+def stokes_weights_I_inner(cal):
+    """
+    Compute the Stokes weights for one detector.
+
+    Args:
+        cal (float):  A constant to apply to the pointing weights.
+
+    Returns:
+        weights (float64):  The detector weights for the specified mode
+    """
+    return cal
+
+# maps over samples, intervals and detectors
+stokes_weights_I_inner = imap(stokes_weights_I_inner, 
+                    in_axes={
+                        'weights': ["n_det","n_samp"],
+                        'cal': ["n_det"],
+                        'interval_starts': ["n_intervals"],
+                        'interval_ends': ["n_intervals"],
+                        'intervals_max_length': int
+                    },
+                    interval_axis='n_samp', 
+                    interval_starts='interval_starts', 
+                    interval_ends='interval_ends', 
+                    interval_max_length='intervals_max_length', 
+                    output_name='weights')
 
 def stokes_weights_I_interval(
     weight_index,
@@ -236,14 +268,15 @@ def stokes_weights_I_interval(
     log = Logger.get()
     log.debug(f"stokes_weights_I: jit-compiling.")
 
-    # extract interval slices
-    intervals = JaxIntervals(
-        interval_starts, interval_ends + 1, intervals_max_length
-    )  # end+1 as the interval is inclusive
+    # extract indexed values
+    weights_indexed = weights[weight_index,:]
+
+    # does computation
+    new_weights_indexed = stokes_weights_I_inner(weights_indexed, cal,
+                                                 interval_starts, interval_ends, intervals_max_length)
 
     # updates results and returns
-    # weights[weight_index,intervals] = cal
-    weights = JaxIntervals.set(weights, (weight_index, intervals), cal[:, jnp.newaxis, jnp.newaxis])
+    weights = weights.at[weight_index, :].set(new_weights_indexed)
     return weights
 
 
