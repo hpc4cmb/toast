@@ -8,6 +8,9 @@ from inspect import Signature, Parameter
 # TODO: common error that should be caught with a nice error message
 # - passing the wrong number of arguments to the functions (missing some)
 #
+# set f"{interval_axis}_length" to the iterval_max_length axis name for easier use?
+# (used int he template offset operator)
+#
 # can I catch:
 # - errors with the order of inputs? -> we can at least catch inputs with incorect shape / type
 
