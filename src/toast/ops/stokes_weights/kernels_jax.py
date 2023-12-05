@@ -300,4 +300,4 @@ def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
 
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_tod_dipole"); toast.tests.run("ops_stokes_weights")'
+# export TOAST_GPU_JAX=true; export TOAST_GPU_HYBRID_PIPELINES=true; export TOAST_LOGLEVEL=DEBUG; python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_tod_dipole"); toast.tests.run("ops_stokes_weights");'

@@ -368,7 +368,4 @@ def cov_accum_diag_invnpp_jax(
 
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_mapmaker_utils"); toast.tests.run("covariance");'
-
-# To test:
-# python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt", "ops_mapmaker_utils", "ops_mapmaker_binning", "ops_sim_tod_dipole", "ops_demodulate");'
+# export TOAST_GPU_JAX=true; export TOAST_GPU_HYBRID_PIPELINES=true; export TOAST_LOGLEVEL=DEBUG; python -c 'import toast.tests; toast.tests.run("ops_sim_tod_conviqt"); toast.tests.run("ops_mapmaker_utils"); toast.tests.run("covariance"); toast.tests.run("ops_mapmaker_binning"); toast.tests.run("ops_sim_tod_dipole"); toast.tests.run("ops_demodulate");'

@@ -267,4 +267,5 @@ def scan_map_jax(
 
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_mapmaker_solve", "ops_scan_map")'
+# export TOAST_GPU_JAX=true; export TOAST_GPU_HYBRID_PIPELINES=true; export TOAST_LOGLEVEL=DEBUG; python -c 'import toast.tests; toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_scan_map");'
+

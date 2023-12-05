@@ -9,7 +9,7 @@ from inspect import Signature, Parameter
 # - passing the wrong number of arguments to the functions (missing some)
 #
 # can I catch:
-# - errors with the order of inputs?
+# - errors with the order of inputs? -> we can at least catch inputs with incorect shape / type
 
 #----------------------------------------------------------------------------------------
 # PYTREE FUNCTIONS
