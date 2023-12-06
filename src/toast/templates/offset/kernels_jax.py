@@ -38,7 +38,7 @@ offset_add_to_signal_inner = imap(offset_add_to_signal_inner,
                         'det_data': ["n_samp"],
                         'amplitude_offset': int,
                         'amplitude_view_offset': ["n_intervals"],
-                        'sample_index': ["n_samp_length"], # NOTE: n_samp_length == intervals_max_length
+                        'sample_index': ["intervals_max_length"],
                         'interval_starts': ["n_intervals"],
                         'interval_ends': ["n_intervals"],
                         'intervals_max_length': int
@@ -195,7 +195,7 @@ offset_project_signal_inner = imap(offset_project_signal_inner,
                         'flag_mask': int,
                         'amplitude_offset': int,
                         'amplitude_view_offset': ["n_intervals"],
-                        'sample_index': ["n_samp_length"], # NOTE: n_samp_length == intervals_max_length
+                        'sample_index': ["intervals_max_length"],
                         'interval_starts': ["n_intervals"],
                         'interval_ends': ["n_intervals"],
                         'intervals_max_length': int,
@@ -267,6 +267,7 @@ def offset_project_signal_intervals(
                                                                      outputs)
 
     # updates det_data and returns
+    # NOTE: add is atomic
     amplitudes = amplitudes.at[amplitude_indices].add(contributions)
     return amplitudes
 

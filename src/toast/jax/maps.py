@@ -8,9 +8,6 @@ from inspect import Signature, Parameter
 # TODO: common error that should be caught with a nice error message
 # - passing the wrong number of arguments to the functions (missing some)
 #
-# set f"{interval_axis}_length" to the iterval_max_length axis name for easier use?
-# (used int he template offset operator)
-#
 # can I catch:
 # - errors with the order of inputs? -> we can at least catch inputs with incorect shape / type
 
@@ -464,8 +461,6 @@ def xmap(f, in_axes, out_axes):
     Returns:
         callable: The batched and documented version of 'f'.
     """
-    # TODO run assertions to insure that inputs are correct
-
     # Batch the function
     f_batched = recursive_xmap(f, in_axes, out_axes)
 
@@ -494,13 +489,11 @@ def imap(f, in_axes, interval_axis,
     Returns:
         callable: A transformed function that applies `f` over specified intervals in the input data.
     """
-    # TODO run assertions to insure that inputs are correct
-
     # Define the output axes based on the specified output name in the input axes.
     out_axes = in_axes[output_name]
 
     # Create unique axis names for internal processing.
-    interval_length_axis = f"{interval_axis}_length"
+    interval_length_axis = interval_max_length # same name as the input that contains it
     num_intervals_axis = in_axes[interval_starts][0]
 
     # Filter the input and output axes to include only relevant dimensions.
