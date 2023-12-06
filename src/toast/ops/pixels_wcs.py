@@ -50,7 +50,9 @@ class PixelsWCS(Operator):
         help="Operator that translates boresight pointing into detector frame",
     )
 
-    coord_frame = Unicode("EQU", help="Supported values are AZEL, EQU, GAL, ECL")
+    coord_frame = Unicode(
+        "EQU", help="Supported values are AZEL, EQU, GAL, ECL"
+    )
 
     projection = Unicode(
         "CAR", help="Supported values are CAR, CEA, MER, ZEA, TAN, SFL"
@@ -89,10 +91,14 @@ class PixelsWCS(Operator):
     )
 
     view = Unicode(
-        None, allow_none=True, help="Use this view of the data in all observations"
+        None,
+        allow_none=True,
+        help="Use this view of the data in all observations",
     )
 
-    pixels = Unicode("pixels", help="Observation detdata key for output pixel indices")
+    pixels = Unicode(
+        "pixels", help="Observation detdata key for output pixel indices"
+    )
 
     submaps = Int(10, help="Number of submaps to use")
 
@@ -104,7 +110,9 @@ class PixelsWCS(Operator):
 
     single_precision = Bool(False, help="If True, use 32bit int in output")
 
-    use_astropy = Bool(True, help="If True, use astropy for world to pix conversion")
+    use_astropy = Bool(
+        True, help="If True, use astropy for world to pix conversion"
+    )
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
@@ -142,6 +150,7 @@ class PixelsWCS(Operator):
         # have been called yet.
         if not hasattr(self, "_local_submaps"):
             self._set_wcs(
+                self.coord_frame,
                 self.projection,
                 self.center,
                 self.bounds,
@@ -167,7 +176,12 @@ class PixelsWCS(Operator):
                 self._done_auto = False
 
     @traitlets.observe(
-        "coord_frame", "projection", "center", "bounds", "dimensions", "resolution"
+        "coord_frame",
+        "projection",
+        "center",
+        "bounds",
+        "dimensions",
+        "resolution",
     )
     def _reset_wcs(self, change):
         # (Re-)initialize the WCS projection when one of these traits change.
@@ -259,9 +273,8 @@ class PixelsWCS(Operator):
                 center_deg = np.array([0.0, 0.0])
         else:
             # Using bounds
-            bounds_deg = np.array(
-                x.to_value(u.degree) for x in bounds
-            )
+            bounds_deg = np.array([x.to_value(u.degree) for x in bounds])
+            bounds_deg = np.reshape(bounds_deg, (2, 2)).T
             # Exactly one of resolution or dimensions specified
             if (len(res) > 0) and (len(dims) > 0):
                 # Cannot calculate yet
@@ -269,12 +282,12 @@ class PixelsWCS(Operator):
             if (len(res) == 0) and (len(dims) == 0):
                 # Cannot calculate yet
                 return
-            
+
             if self.center_offset is None:
                 center_deg = np.array(
                     [
-                        0.5 * (bounds_deg[0] + bounds_deg[1]),
-                        0.5 * (bounds_deg[2] + bounds_deg[3]),
+                        0.5 * (bounds_deg[0, 0] + bounds_deg[1, 0]),
+                        0.5 * (bounds_deg[0, 1] + bounds_deg[1, 1]),
                     ]
                 )
             else:
@@ -321,7 +334,6 @@ class PixelsWCS(Operator):
         else:
             msg = f"Invalid WCS projection name '{proj}'"
             raise ValueError(msg)
-        print(f"DBG: ctype set to {self.wcs.wcs.ctype}", flush=True)
 
         # self.wcs.wcs.crpix = [1, 1]
         if len(res) == 0:
@@ -334,29 +346,17 @@ class PixelsWCS(Operator):
                 ]
             )
             self.wcs.wcs.cdelt = res_deg
-            print(
-                f"DBG: len(res)=0, cdelt={self.wcs.wcs.cdelt}, crpix={self.wcs.wcs.crpix}",
-                flush=True,
-            )
         else:
             # Use resolution for CDELT
             self.wcs.wcs.cdelt = res_deg
-            # if bounds_deg is not None:
-            #     self.wcs.wcs.cdelt[bounds_deg[1] < bounds_deg[0]] *= -1
-            print(
-                f"DBG: len(res)!=0, cdelt={self.wcs.wcs.cdelt}, crpix={self.wcs.wcs.crpix}",
-                flush=True,
-            )
         if len(center) > 0:
             # We have the center position, and hence also the resolution and dims
             off = self.wcs.wcs_world2pix(center_deg[None], 0)[0]
             self.wcs.wcs.crpix = grid_dims / 2.0 + 0.5 - off
-            print(f"DBG: using center, crpix set to {self.wcs.wcs.crpix}", flush=True)
         else:
             # Compute the center from the bounding box
-            off = self.wcs.wcs_world2pix(bounds_deg[0, None], 0)[0] + 0.5
+            off = self.wcs.wcs_world2pix(bounds_deg, 0)[0] + 0.5
             self.wcs.wcs.crpix -= off
-            print(f"DBG: using bounds, crpix set to {self.wcs.wcs.crpix}", flush=True)
 
         if len(dims) == 0:
             # Compute from the bounding box corners
@@ -366,15 +366,10 @@ class PixelsWCS(Operator):
             upper_right = self.wcs.wcs_world2pix(
                 np.array([[bounds_deg[1, 0], bounds_deg[1, 1]]]), 0
             )[0]
-            print(
-                f"DBG: compute wcs shape from bounding box {bounds_deg} : {upper_right} - {lower_left}",
-                flush=True,
-            )
             self.wcs_shape = tuple(
                 np.round(np.abs(upper_right - lower_left)).astype(int)
             )
         else:
-            print(f"DBG: using wcs shape {grid_dims}", flush=True)
             self.wcs_shape = tuple(grid_dims)
         log.verbose(f"PixelsWCS: wcs_shape = {self.wcs_shape}")
 
@@ -396,7 +391,9 @@ class PixelsWCS(Operator):
             raise RuntimeError("The detector_pointing trait must be set")
 
         if not self.use_astropy:
-            raise NotImplementedError("Only astropy conversion is currently supported")
+            raise NotImplementedError(
+                "Only astropy conversion is currently supported"
+            )
 
         if self.auto_bounds and not self._done_auto:
             # Pass through the boresight pointing for every observation and build
@@ -428,8 +425,12 @@ class PixelsWCS(Operator):
                 lonlatmax[1] = latmax.to_value(u.radian)
                 all_lonlatmin = np.zeros(2, dtype=np.float64)
                 all_lonlatmax = np.zeros(2, dtype=np.float64)
-                data.comm.comm_world.Allreduce(lonlatmin, all_lonlatmin, op=MPI.MIN)
-                data.comm.comm_world.Allreduce(lonlatmax, all_lonlatmax, op=MPI.MAX)
+                data.comm.comm_world.Allreduce(
+                    lonlatmin, all_lonlatmin, op=MPI.MIN
+                )
+                data.comm.comm_world.Allreduce(
+                    lonlatmax, all_lonlatmax, op=MPI.MAX
+                )
                 lonmin = all_lonlatmin[0] * u.radian
                 latmin = all_lonlatmin[1] * u.radian
                 lonmax = all_lonlatmax[0] * u.radian
@@ -440,10 +441,8 @@ class PixelsWCS(Operator):
                 latmin.to(u.degree),
                 latmax.to(u.degree),
             )
-            if self.center_offset is None:
-                log.verbose(f"PixelsWCS auto_bounds set to {new_bounds}")
-                self.bounds = new_bounds
-            else:
+            log.verbose(f"PixelsWCS auto_bounds set to {new_bounds}")
+            self.bounds = new_bounds
 
             self._done_auto = True
 
@@ -459,7 +458,9 @@ class PixelsWCS(Operator):
             view = self.detector_pointing.view
 
         # Once this supports accelerator, pass that instead of False
-        self.detector_pointing.apply(data, detectors=detectors, use_accel=False)
+        self.detector_pointing.apply(
+            data, detectors=detectors, use_accel=False
+        )
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -472,11 +473,18 @@ class PixelsWCS(Operator):
             # detector_pointing view is None, then it has all samples.  If our own
             # view was None, then it would have been set to the detector_pointing
             # view above.
-            if (view is not None) and (self.detector_pointing.view is not None):
-                if ob.intervals[view] != ob.intervals[self.detector_pointing.view]:
+            if (view is not None) and (
+                self.detector_pointing.view is not None
+            ):
+                if (
+                    ob.intervals[view]
+                    != ob.intervals[self.detector_pointing.view]
+                ):
                     # We need to check intersection
                     intervals = ob.intervals[self.view]
-                    detector_intervals = ob.intervals[self.detector_pointing.view]
+                    detector_intervals = ob.intervals[
+                        self.detector_pointing.view
+                    ]
                     intersection = detector_intervals & intervals
                     if intersection != intervals:
                         msg = (
@@ -490,14 +498,22 @@ class PixelsWCS(Operator):
 
             if self.single_precision:
                 exists = ob.detdata.ensure(
-                    self.pixels, sample_shape=(), dtype=np.int32, detectors=dets
+                    self.pixels,
+                    sample_shape=(),
+                    dtype=np.int32,
+                    detectors=dets,
                 )
             else:
                 exists = ob.detdata.ensure(
-                    self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
+                    self.pixels,
+                    sample_shape=(),
+                    dtype=np.int64,
+                    detectors=dets,
                 )
 
-            view_slices = [slice(x.first, x.last + 1, 1) for x in ob.intervals[view]]
+            view_slices = [
+                slice(x.first, x.last + 1, 1) for x in ob.intervals[view]
+            ]
 
             # Do we already have pointing for all requested detectors?
             if exists:
@@ -574,7 +590,9 @@ class PixelsWCS(Operator):
                     ob.detdata[self.pixels][det, vslice] = (
                         rdpix[:, 0] * self.pix_dec + rdpix[:, 1]
                     )
-                    bad_pointing = ob.detdata[self.pixels][det, vslice] >= self._n_pix
+                    bad_pointing = (
+                        ob.detdata[self.pixels][det, vslice] >= self._n_pix
+                    )
                     (ob.detdata[self.pixels][det, vslice])[bad_pointing] = -1
 
                     if self.create_dist is not None:
