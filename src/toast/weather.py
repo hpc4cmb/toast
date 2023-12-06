@@ -268,7 +268,7 @@ def load_package_weather(name):
     if name in package_weather_data:
         return package_weather_data[name]
 
-    weather_dir = resource_filename("toast", os.path.join("aux", "weather"))
+    weather_dir = resource_filename("toast", os.path.join("_aux", "weather"))
     weather_file = os.path.join(weather_dir, "{}.h5".format(name))
     if not os.path.isfile(weather_file):
         msg = "package weather file {} does not exist".format(weather_file)
