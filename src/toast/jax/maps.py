@@ -134,8 +134,21 @@ def check_pytree_axis(data, axis, info=""):
         for i, (d, a) in enumerate(zip(data, axis)):
             check_pytree_axis(d, a, f"{info}[{i}]")
     elif isinstance(axis, type):
-        assert isinstance(data, type), f"{info} type ({type(data).__name__}) does not match provided axis ({pytree_to_string(axis)})"
-    # we do not cover the case of single values as they are assumed to be matching
+        is_single_number_tracer = isinstance(data, jnp.ndarray) and (data.size == 1)
+        data_type = data.dtype if is_single_number_tracer else type(data) # deals with JAX tracers being sorts of arrays
+        if jnp.issubdtype(axis, jnp.integer):
+            # integer types all batched together to simplify axis writing
+            assert jnp.issubdtype(data_type, jnp.integer), f"{info} type ({data_type.__name__}) does not match provided axis ({pytree_to_string(axis)})"
+        elif jnp.issubdtype(axis, jnp.floating):
+            # float types all batched together to simplify axis writing
+            assert jnp.issubdtype(data_type, jnp.floating), f"{info} type ({data_type.__name__}) does not match provided axis ({pytree_to_string(axis)})"
+        elif jnp.issubdtype(axis, bool):
+            # bool types all batched together to simplify axis writing
+            assert jnp.issubdtype(data_type, bool), f"{info} type ({data_type.__name__}) does not match provided axis ({pytree_to_string(axis)})"
+        else:
+            # other, more general, types
+            assert isinstance(data, axis), f"{info} type ({data_type.__name__}) does not match provided axis ({pytree_to_string(axis)})"
+    # we do not cover the case of other single values as they are assumed to be matching
 
 def find_in_pytree(condition, structure):
     """
