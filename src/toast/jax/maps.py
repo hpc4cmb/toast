@@ -5,12 +5,6 @@ from copy import deepcopy
 from types import EllipsisType
 from inspect import Signature, Parameter
 
-# TODO: common error that should be caught with a nice error message
-# - passing the wrong number of arguments to the functions (missing some)
-#
-# can I catch:
-# - errors with the order of inputs? -> we can at least catch inputs with incorect shape / type
-
 #----------------------------------------------------------------------------------------
 # PYTREE FUNCTIONS
 
@@ -129,17 +123,19 @@ def check_pytree_axis(data, axis, info=""):
         AssertionError: If the data's shape does not match the given axis.
     """
     if is_pytree_leaf(axis):
-        assert len(axis) == data.ndim, f"{info} axis ({axis}) != {data.shape}"
+        assert len(axis) == data.ndim, f"{info} shape ({data.shape}) does not match provided axis ({pytree_to_string(axis)})"
     elif isinstance(axis, dict):
-        assert len(axis) == len(data), f"{info} axis ({axis}) != len(data) ({len(data)})"
+        assert len(axis) == len(data), f"{info} has {len(data)} elements which does not match axis ({pytree_to_string(axis)})"
         data_items = data.values() if isinstance(data, dict) else data
         for d, (k, a) in zip(data_items, axis.items()):
-            check_pytree_axis(d, a, f"{info} {k}:")
+            check_pytree_axis(d, a, f"{info} '{k}'")
     elif isinstance(axis, (list, tuple)):
-        assert len(axis) == len(data), f"{info} axis ({axis}) != len(data) ({len(data)})"
-        for d, a in zip(data, axis):
-            check_pytree_axis(d, a, info)
-    # we do not cover the case of single values as they are ssumed to be matching
+        assert len(axis) == len(data), f"{info} has {len(data)} elements which does not match axis ({pytree_to_string(axis)})"
+        for i, (d, a) in enumerate(zip(data, axis)):
+            check_pytree_axis(d, a, f"{info}[{i}]")
+    elif isinstance(axis, type):
+        assert isinstance(data, type), f"{info} type ({type(data).__name__}) does not match provided axis ({pytree_to_string(axis)})"
+    # we do not cover the case of single values as they are assumed to be matching
 
 def find_in_pytree(condition, structure):
     """
@@ -368,6 +364,7 @@ def kwargs_to_args(kwargs):
 def runtime_check_axis(func, in_axes, out_axes):
     """
     Wraps a function to check its axes against a specification at runtime.
+    Once jitted, this function becomes a no-op, it however helps with debugging.
 
     Args:
         func: The function to wrap.
@@ -378,9 +375,9 @@ def runtime_check_axis(func, in_axes, out_axes):
         The wrapped function.
     """
     def wrapped_func(*args):
-        check_pytree_axis(args, in_axes, info="INPUT:")
+        check_pytree_axis(args, in_axes, info="Inputs")
         output = func(*args)
-        check_pytree_axis(output, out_axes, info="OUTPUT:")
+        check_pytree_axis(output, out_axes, info="Output")
         return output
 
     return wrapped_func
@@ -482,7 +479,7 @@ def imap(f, in_axes, interval_axis,
         interval_axis (str): Axis name used for identifying the interval.
         interval_starts (str): Input name containing the starts of each interval.
         interval_ends (str): Input name containing the ends (exclusive) of each interval.
-        interval_max_length (str): Input name containing the maximum length of intervals (static if jitted).
+        interval_max_length (str): Input name containing the maximum length of intervals (static if jitted). This is also the name of the corresponding axis.
         output_name (str): Input name containing the output value.
         output_as_input (bool): If True, the output value is also used as an input to `f`.
 
@@ -496,6 +493,7 @@ def imap(f, in_axes, interval_axis,
     interval_length_axis = interval_max_length # same name as the input that contains it
     num_intervals_axis = in_axes[interval_starts][0]
 
+    # Define inner function axes
     # Filter the input and output axes to include only relevant dimensions.
     in_axes_inner = filter_pytree(lambda a: isinstance(a, EllipsisType) or a == interval_axis, in_axes)
     in_axes_inner[interval_max_length] = []
