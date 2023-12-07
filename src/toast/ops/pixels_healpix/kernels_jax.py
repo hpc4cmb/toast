@@ -135,9 +135,6 @@ def pixels_healpix_interval(
     new_pixels_indexed, sub_map, new_hit_submaps = pixels_healpix_inner(quats_indexed, use_flags, flags, flag_mask, hit_submaps, n_pix_submap, hpix, nest,
                                               interval_starts, interval_ends, intervals_max_length,
                                               outputs)
-    
-    # TODO why the performance regression?
-    # TODO runs with flags, single interval covering all samples
 
     # updates results and returns
     pixels = pixels.at[pixel_index,:].set(new_pixels_indexed)
