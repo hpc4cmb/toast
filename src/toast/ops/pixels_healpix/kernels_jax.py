@@ -120,6 +120,8 @@ def pixels_healpix_interval(
     # extract indexes
     quats_indexed = quats[quat_index,:,:]
     pixels_indexed = pixels[pixel_index,:]
+    dummy_sub_map = jnp.zeros_like(pixels_indexed) 
+    dummy_hit_submaps = hit_submaps[dummy_sub_map]
 
     # should we use flags?
     use_flags = (flag_mask != 0)
@@ -129,15 +131,13 @@ def pixels_healpix_interval(
         use_flags = False
 
     # does the computation
-    dummy_sub_map = jnp.zeros_like(pixels_indexed) 
-    dummy_hit_submaps = hit_submaps[dummy_sub_map]
     outputs = (pixels_indexed, dummy_sub_map, dummy_hit_submaps)
     new_pixels_indexed, sub_map, new_hit_submaps = pixels_healpix_inner(quats_indexed, use_flags, flags, flag_mask, hit_submaps, n_pix_submap, hpix, nest,
                                               interval_starts, interval_ends, intervals_max_length,
                                               outputs)
     
-    # TODO why the performance drop?
-    # TODO use_flags:True sub_map:(1, 360000) n_samp:360000 n_intervals:1 intervals_max_length:360000
+    # TODO why the performance regression?
+    # TODO runs with flags, single interval covering all samples
 
     # updates results and returns
     pixels = pixels.at[pixel_index,:].set(new_pixels_indexed)
