@@ -51,14 +51,28 @@ def pixels_healpix_inner(quats, use_flags, flag, flag_mask, hit_submaps, n_pix_s
 
     return pixel, sub_map, hit_submap
 
-# First vmap: loop over samples
-pixels_healpix_inner = jax.vmap(
-    pixels_healpix_inner, in_axes=[0, None, 0, None, None, None, None, None], out_axes=(0, 0, 0)
-)
-# Third vmap: loop over detectors
-pixels_healpix_inner = jax.vmap(
-    pixels_healpix_inner, in_axes=[0, None, None, None, None, None, None, None], out_axes=(0, 0, 0)
-)
+
+# maps over samples and detectors
+pixels_healpix_inner = imap(pixels_healpix_inner, 
+                    in_axes={
+                        'quats': ['n_det','n_samp',...],
+                        'use_flags': bool,
+                        'flags': ['n_samp'],
+                        'flag_mask': int,
+                        'hit_submaps': [...],
+                        'n_pix_submap': int,
+                        'hpix': healpix.HPIX_JAX,
+                        'nest': bool,
+                        'interval_starts': ["n_intervals"],
+                        'interval_ends': ["n_intervals"],
+                        'intervals_max_length': int,
+                        'outputs': (["n_det","n_samp"],["n_det","n_samp"],["n_det","n_samp"]),
+                    },
+                    interval_axis='n_samp', 
+                    interval_starts='interval_starts', 
+                    interval_ends='interval_ends', 
+                    interval_max_length='intervals_max_length', 
+                    output_name='outputs')
 
 def pixels_healpix_interval(
     quat_index,
@@ -105,6 +119,9 @@ def pixels_healpix_interval(
 
     # extract indexes
     quats_indexed = quats[quat_index,:,:]
+    pixels_indexed = pixels[pixel_index,:]
+    dummy_sub_map = jnp.zeros_like(pixels_indexed) 
+    dummy_hit_submaps = hit_submaps[dummy_sub_map]
 
     # should we use flags?
     use_flags = (flag_mask != 0)
@@ -114,7 +131,10 @@ def pixels_healpix_interval(
         use_flags = False
 
     # does the computation
-    new_pixels_indexed, sub_map, new_hit_submaps = pixels_healpix_inner(quats_indexed, use_flags, flags, flag_mask, hit_submaps, n_pix_submap, hpix, nest)
+    outputs = (pixels_indexed, dummy_sub_map, dummy_hit_submaps)
+    new_pixels_indexed, sub_map, new_hit_submaps = pixels_healpix_inner(quats_indexed, use_flags, flags, flag_mask, hit_submaps, n_pix_submap, hpix, nest,
+                                              interval_starts, interval_ends, intervals_max_length,
+                                              outputs)
 
     # updates results and returns
     pixels = pixels.at[pixel_index,:].set(new_pixels_indexed)
