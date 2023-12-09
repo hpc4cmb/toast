@@ -8,6 +8,13 @@ from inspect import Signature, Parameter
 #----------------------------------------------------------------------------------------
 # PYTREE FUNCTIONS
 
+def make_iterable(data):
+    """
+    Produce a datastructure that can be iterated
+    making sure we are not going to iterate on dictionary keys
+    """
+    return data.values() if isinstance(data,dict) else data
+
 def is_pytree_leaf(structure):
     """
     Determines if the given structure is a leaf of a pytree.
@@ -67,13 +74,13 @@ def map2_pytree_leaves(func, pytree1, pytree2, func_single_values=lambda v1, v2:
         return func(pytree1, pytree2)
     elif isinstance(pytree1, dict):
         return {k: map2_pytree_leaves(func, v1, v2, func_single_values) 
-                for ((k, v1), v2) in zip(pytree1.items(), pytree2.values())}
+                for ((k, v1), v2) in zip(pytree1.items(), make_iterable(pytree2))}
     elif isinstance(pytree1, list):
         return [map2_pytree_leaves(func, v1, v2, func_single_values) 
-                for v1, v2 in zip(pytree1, pytree2)]
+                for v1, v2 in zip(pytree1, make_iterable(pytree2))]
     elif isinstance(pytree1, tuple):
         return tuple(map2_pytree_leaves(func, v1, v2, func_single_values) 
-                     for v1, v2 in zip(pytree1, pytree2))
+                     for v1, v2 in zip(pytree1, make_iterable(pytree2)))
     else:
         return func_single_values(pytree1, pytree2)
 
@@ -122,16 +129,16 @@ def check_pytree_axis(data, axis, info=""):
     Raises:
         AssertionError: If the data's shape does not match the given axis.
     """
+    # goes through the axis / data
     if is_pytree_leaf(axis):
         assert len(axis) == data.ndim, f"{info} shape ({data.shape}) does not match provided axis ({pytree_to_string(axis)})"
     elif isinstance(axis, dict):
         assert len(axis) == len(data), f"{info} has {len(data)} elements which does not match axis ({pytree_to_string(axis)})"
-        data_items = data.values() if isinstance(data, dict) else data
-        for d, (k, a) in zip(data_items, axis.items()):
+        for d, (k, a) in zip(make_iterable(data), axis.items()):
             check_pytree_axis(d, a, f"{info} '{k}'")
     elif isinstance(axis, (list, tuple)):
         assert len(axis) == len(data), f"{info} has {len(data)} elements which does not match axis ({pytree_to_string(axis)})"
-        for i, (d, a) in enumerate(zip(data, axis)):
+        for i, (d, a) in enumerate(zip(make_iterable(data), axis)):
             check_pytree_axis(d, a, f"{info}[{i}]")
     elif isinstance(axis, type):
         is_single_number_tracer = isinstance(data, jnp.ndarray) and (data.size == 1)
@@ -364,15 +371,15 @@ def args_to_kwargs(args, keys):
 
 def kwargs_to_args(kwargs):
     """
-    Converts a dictionary of keyword arguments into a list of values.
+    Converts a dictionary of keyword arguments into a tuple of values.
 
     Args:
         kwargs: The dictionary of keyword arguments.
 
     Returns:
-        A list of values from the dictionary.
+        A tuple of values from the dictionary.
     """
-    return list(kwargs.values())
+    return tuple(kwargs.values())
 
 def runtime_check_axis(func, in_axes, out_axes):
     """
@@ -512,6 +519,12 @@ def imap(f, in_axes, interval_axis,
     in_axes_inner[interval_max_length] = []
     out_axes_inner_interval = filter_pytree(lambda a: isinstance(a, EllipsisType) or a == interval_axis, out_axes)
     out_axes_inner = filter_pytree(lambda a: isinstance(a, EllipsisType), out_axes)
+    # version to be used for the within_interval sub-function
+    in_axes_inner_within = deepcopy(in_axes_inner)
+    for key in [interval_starts, interval_ends, interval_max_length]:
+        in_axes_inner_within.pop(key, None)
+    if not output_as_input:
+        in_axes_inner_within.pop(output_name, None)
 
     def inner_function(*args):
         """
@@ -520,19 +533,21 @@ def imap(f, in_axes, interval_axis,
         This function computes the output for each interval index, either by applying `f`
         or by using the existing output, depending on whether the index is within the interval bounds.
         """
+        # gets interval specific inputs
         kwargs = args_to_kwargs(args, in_axes_inner.keys())
         start, end = kwargs[interval_starts], kwargs[interval_ends]
         absolute_index, output_data = kwargs[interval_max_length], kwargs[output_name]
         index = start + absolute_index
+        # pop those inputs as they will not be useful anymore
+        for key in [interval_starts, interval_ends, interval_max_length]:
+            kwargs.pop(key, None)
+        if not output_as_input:
+            kwargs.pop(output_name, None)
 
         def compute_within_interval():
             # Computes the result of function `f` for indices within the interval.
-            input_at_index = get_index_from_pytree(kwargs, in_axes_inner, index, interval_axis)
-            for key in [interval_starts, interval_ends, interval_max_length]:
-                input_at_index.pop(key, None)
-            if not output_as_input:
-                input_at_index.pop(output_name, None)
-            return f(*kwargs_to_args(input_at_index))
+            kwargs_at_index = get_index_from_pytree(kwargs, in_axes_inner_within, index, interval_axis)
+            return f(*kwargs_to_args(kwargs_at_index))
 
         def compute_outside_interval():
             # Retrieves existing output data for indices outside the interval.
@@ -560,11 +575,15 @@ def imap(f, in_axes, interval_axis,
         This function sets up the interval indexing and invokes the batched inner function
         to process the entire data structure.
         """
+        # gets interval specific inputs
         kwargs = args_to_kwargs(args, in_axes_outer.keys())
         max_length, starts, output = kwargs[interval_max_length], kwargs[interval_starts], kwargs[output_name]
-        kwargs[interval_max_length] = jnp.arange(max_length)
 
+        # runs batched computation
+        kwargs[interval_max_length] = jnp.arange(max_length)
         output_interval = batched_function(*kwargs_to_args(kwargs))
+
+        # set result in output
         indices_interval = starts[:, None] + jnp.arange(max_length)
         output = set_index_in_pytree(output, out_axes_outer, indices_interval, interval_axis, output_interval)
         return output
