@@ -158,7 +158,7 @@ install(FILES
 # Install package data
 
 install(DIRECTORY
-    aux
+    _aux
     DESTINATION ${PYTHON_SITE}/toast
 )
 

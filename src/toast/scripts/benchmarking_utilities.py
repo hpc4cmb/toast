@@ -865,7 +865,7 @@ def get_benchmark_stats(jobtype, case):
     if benchmark_stats_data is None:
         # Load the data
         benchmark_stats_data = dict()
-        bench_dir = resource_filename("toast", os.path.join("aux", "benchmarks"))
+        bench_dir = resource_filename("toast", os.path.join("_aux", "benchmarks"))
         bench_file = os.path.join(bench_dir, "stats.json")
         if not os.path.isfile(bench_file):
             msg = f"benchmark stats file {bench_file} does not exist"
