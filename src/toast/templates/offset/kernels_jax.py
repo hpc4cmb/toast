@@ -7,7 +7,7 @@ import jax.numpy as jnp
 
 from ...accelerator import ImplementationType, kernel
 from ...jax.intervals import INTERVALS_JAX
-from ...jax.maps import imap
+from ...jax.maps import imap, xmap
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
@@ -30,7 +30,7 @@ def offset_add_to_signal_inner(step_length, amplitudes, det_data, amplitude_offs
     amplitude_index = amplitude_offset + amplitude_view_offset + (sample_index // step_length)
     return det_data + amplitudes[amplitude_index]
 
-# maps over intervals and detectors
+# maps over intervals
 offset_add_to_signal_inner = imap(offset_add_to_signal_inner, 
                     in_axes={
                         'step_length': int,
@@ -158,54 +158,89 @@ def offset_add_to_signal_jax(
 #----------------------------------------------------------------------------------------
 # offset_project_signal
 
-def offset_project_signal_inner(step_length, det_data, use_flag, flag_data, flag_mask, amplitude_offset, amplitude_view_offset, sample_index):
+def offset_project_signal_sample(det_data, use_flag, flag_data, flag_mask):
     """
+    Compute the contribution for a given sample
+
     Args:
-        step_length (int64):  The minimum number of samples for each offset.
         det_data (double): timestream value
         use_flag (bool): should we use flags
         flag_data (bool),
         flag_mask (int),
-        amplitude_offset (int): starting offset
-        amplitude_view_offset (int): offset for the view
-        sample_index (int): index of the sample within the interval
 
     Returns:
-        (amplitude_index, contribution) (int,double): index in amplitude and value to add (atomically) there
+        contribution (double): value to add to the corresponding amplitude
     """
-    # computes contribution
     if use_flag:
         valid_sample = (flag_data & flag_mask) == 0
         contribution = jnp.where(valid_sample, det_data, 0.0)
     else:
         contribution = det_data
 
-    # computes amplitude index
-    amplitude_index = amplitude_offset + amplitude_view_offset + (sample_index // step_length)
+    return contribution
 
+# maps over samples in a block of size step_length
+offset_project_signal_samples = xmap(offset_project_signal_sample, 
+                    in_axes={
+                        'det_data': ["step_length"],
+                        'use_flag': bool,
+                        'flag_data': ["step_length"],
+                        'flag_mask': int,
+                    },
+                    out_axes=["step_length"])
+
+def offset_project_signal_steplength_block(step_length, det_data, use_flag, flag_data, flag_mask, amplitude_offset, amplitude_view_offset, block_index,
+                                           interval_start, interval_end):
+    """
+    Computes the contribution and index for a block of samples of size step_length
+
+    Args:
+        step_length (int64):  The minimum number of samples for each offset.
+        det_data (array[double]): timestream value
+        use_flag (bool): should we use flags
+        flag_data (array[bool]),
+        flag_mask (int),
+        amplitude_offset (int): starting offset
+        amplitude_view_offset (int): offset for the view
+        block_index (int): index of the sample within the interval
+        interval_start (int): begining of the current interval
+        interval_end (int): end of the current interval
+
+    Returns:
+        (amplitude_index, contribution) (int,double): index in amplitude and value to add (atomically) there
+    """
+    # indices and mask to insure we iterate inside the interval
+    block_indices = interval_start + jnp.arange(start=0, stop=step_length)
+    block_mask = (block_indices <= interval_end)
+
+    # extract block data
+    det_data = det_data[block_indices]
+    flag_data = flag_data[block_indices]
+
+    # computes and sums contribution within the inerval
+    contributions = offset_project_signal_samples(det_data, use_flag, flag_data, flag_mask)
+    contributions_masked = jnp.where(block_mask, contributions, 0.0)
+    contribution = jnp.sum(contributions_masked)
+
+    # computes amplitude index
+    amplitude_index = amplitude_offset + amplitude_view_offset + block_index
     return (amplitude_index, contribution)
 
-# maps over intervals and detectors
-offset_project_signal_inner = imap(offset_project_signal_inner, 
+# maps over nb_intervals and blocks_per_interval (intervals_max_length // steplength)
+offset_project_signal_steplength_blocks = xmap(offset_project_signal_steplength_block, 
                     in_axes={
                         'step_length': int,
-                        'det_data': ["n_samp"],
-                        'use_flag': bool,
-                        'flag_data': ["n_samp"],
+                        'det_data': [...], # n_samp
+                        'use_flag': bool, # n_samp
+                        'flag_data': [...],
                         'flag_mask': int,
                         'amplitude_offset': int,
                         'amplitude_view_offset': ["n_intervals"],
-                        'sample_index': ["intervals_max_length"],
+                        'block_indices': ["blocks_per_interval"],
                         'interval_starts': ["n_intervals"],
                         'interval_ends': ["n_intervals"],
-                        'intervals_max_length': int,
-                        'outputs': (["n_samp"],["n_samp"])
                     },
-                    interval_axis='n_samp', 
-                    interval_starts='interval_starts', 
-                    interval_ends='interval_ends', 
-                    interval_max_length='intervals_max_length', 
-                    output_name='outputs')
+                    out_axes=(["n_intervals","blocks_per_interval"],["n_intervals","blocks_per_interval"]))
 
 def offset_project_signal_intervals(
     data_index,
@@ -256,21 +291,23 @@ def offset_project_signal_intervals(
     flag_data_indexed = flag_data[flag_index,:] if use_flag else jnp.empty_like(det_data_indexed)
     amp_view_off = jnp.roll(n_amp_views, shift=1)
     amp_view_off = amp_view_off.at[0].set(0)
-    sample_indices = jnp.arange(start=0, stop=intervals_max_length)
+    # get number of step_length sized blocks per interval
+    nb_blocks = 1 + (intervals_max_length-1) // step_length
+    block_indices = jnp.arange(start=0, stop=nb_blocks)
 
     # runs computation
-    outputs = (jnp.empty_like(det_data_indexed, dtype=int), jnp.zeros_like(det_data_indexed))
-    (amplitude_indices, contributions) = offset_project_signal_inner(step_length,det_data_indexed,
+    # NOTE: we work on blocks of size step_lengh (which will go to the same amplitude)
+    #       we could simplify the code significantly by ignoring the block structure and using imap (exploiting `.add` being atomic)
+    #       but it reduces performances significantly by creating contention on the atomic
+    (amplitude_indices, contributions) = offset_project_signal_steplength_blocks(step_length,det_data_indexed,
                                                                      use_flag,flag_data_indexed,flag_mask,
-                                                                     amp_offset,amp_view_off,sample_indices,
-                                                                     interval_starts,interval_ends,intervals_max_length,
-                                                                     outputs)
+                                                                     amp_offset,amp_view_off,block_indices,
+                                                                     interval_starts,interval_ends)
 
     # updates det_data and returns
     # NOTE: add is atomic
     amplitudes = amplitudes.at[amplitude_indices].add(contributions)
     return amplitudes
-
 
 # jit compilation
 offset_project_signal_intervals = jax.jit(
