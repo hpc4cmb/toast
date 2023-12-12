@@ -4,6 +4,7 @@ from jax import numpy as jnp
 from copy import deepcopy
 from types import EllipsisType
 from inspect import Signature, Parameter
+import itertools
 
 #----------------------------------------------------------------------------------------
 # PYTREE FUNCTIONS
@@ -257,6 +258,47 @@ def replace_in_pytree(value, new_value, structure):
 
     return map_pytree_leaves(replace_leaf, structure)
 
+def where_pytree(condition_tree, true_tree, false_tree):
+    """
+    Apply a conditional selection to elements in PyTrees (Python trees).
+
+    This function iterates through the elements of PyTrees (structures of nested lists, tuples, or dictionaries)
+    and applies the `jnp.where` function based on a condition tree. If the condition is true, elements from the 
+    true_tree are selected, otherwise elements from the false_tree are chosen.
+
+    NOTE: we suppose that `true_tree` and `false_tree` will have the same shape.
+          `condition_tree` is allowed to be simpler (could be a single bool, etc).
+
+    Args:
+        condition_tree: A PyTree where leaf nodes are boolean conditions.
+        true_tree: A PyTree with the same structure as condition_tree, containing values for when the condition is true.
+        false_tree: A PyTree with the same structure as condition_tree, containing values for when the condition is false.
+
+    Returns:
+        A PyTree with the same structure as the input PyTrees, containing elements from true_tree or false_tree based on 
+        the conditions in condition_tree.
+    """
+    if is_pytree_leaf(condition_tree) and is_pytree_leaf(true_tree) and is_pytree_leaf(false_tree):
+        return jnp.where(condition_tree, true_tree, false_tree)
+    else:
+        # Ensure condition_tree is iterable
+        if not isinstance(condition_tree, (list, dict, tuple)):
+            condition_tree = itertools.repeat(condition_tree)
+
+        # Apply conditional mapping based on the type of true_tree
+        if isinstance(true_tree, dict):
+            condition_tree = condition_tree.values() if isinstance(condition_tree, dict) else condition_tree
+            return {key: where_pytree(cond, true_val, false_val) 
+                    for ((key, true_val), (false_val, cond)) in zip(true_tree.items(), zip(false_tree.values(), condition_tree))}
+        elif isinstance(true_tree, list):
+            return [where_pytree(cond, true_val, false_val) 
+                    for (true_val, (false_val, cond)) in zip(true_tree, zip(false_tree, condition_tree))]
+        elif isinstance(true_tree, tuple):
+            return tuple(where_pytree(cond, true_val, false_val) 
+                         for (true_val, (false_val, cond)) in zip(true_tree, zip(false_tree, condition_tree)))
+        else:
+            return jnp.where(condition_tree, true_tree, false_tree)
+
 #----------------------------------------------------------------------------------------
 # INDEXING
 
@@ -489,7 +531,7 @@ def xmap(f, in_axes, out_axes):
 
 def imap(f, in_axes, interval_axis, 
          interval_starts, interval_ends, interval_max_length,
-         output_name, output_as_input=False):
+         output_name, output_as_input=False, mask_dummy_work=True):
     """
     Extends xmap to handle intervals with padding and reshaping.
 
@@ -502,6 +544,7 @@ def imap(f, in_axes, interval_axis,
         interval_max_length (str): Input name containing the maximum length of intervals (static if jitted). This is also the name of the corresponding axis.
         output_name (str): Input name containing the output value.
         output_as_input (bool): If True, the output value is also used as an input to `f`.
+        mask_dummy_work (bool): If True, will do dummy work out of interval then mask it, otherwise will use a test to skip it.
 
     Returns:
         callable: A transformed function that applies `f` over specified intervals in the input data.
@@ -554,7 +597,12 @@ def imap(f, in_axes, interval_axis,
             return get_index_from_pytree(output_data, out_axes_inner_interval, index, interval_axis)
 
         # NOTE: <= because toast intervals are inclusive
-        output_at_index = lax.cond(index <= end, compute_within_interval, compute_outside_interval)
+        if mask_dummy_work:
+            # compute both sides then use a mask
+            output_at_index = where_pytree(index <= end, compute_within_interval(), compute_outside_interval())
+        else:
+            # compute only the side we need at the cost of a test
+            output_at_index = lax.cond(index <= end, compute_within_interval, compute_outside_interval)
         return output_at_index
     inner_function = runtime_check_axis(inner_function, in_axes_inner, out_axes_inner)
 
