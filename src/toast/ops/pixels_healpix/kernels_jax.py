@@ -6,53 +6,77 @@ import jax
 import jax.numpy as jnp
 
 from ...accelerator import ImplementationType, kernel
-from ...jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
+from ...jax.intervals import INTERVALS_JAX
+from ...jax.maps import imap
 from ...jax.math import healpix, qarray
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
 
-def pixels_healpix_inner(hpix, quats, nest):
+def pixels_healpix_inner(
+    quats, use_flags, flag, flag_mask, hit_submaps, n_pix_submap, hpix, nest
+):
     """
     Compute the healpix pixel indices for the detectors.
 
     Args:
-        hpix (HPIX_JAX): Healpix projection object.
         quats (array, float64): Detector quaternion (size 4).
+        use_flags (bool): should we use flags?
+        flag (uint8):
+        flag_mask (uint8): integer used to select flags (not necesarely a boolean)
+        hit_submaps (array, uint8): The pointing flags (size ???).
+        n_pix_submap (int):
+        hpix (HPIX_JAX): Healpix projection object.
         nest (bool): If True, then use NESTED ordering, else RING.
 
     Returns:
-        pixels (array, int64): The detector pixel indices to store the result.
+        (pixel,submap,hit_submap) (int64,int64): The detector pixel indices to store the result.
     """
-    # initialize dir
-    dir = qarray.rotate_zaxis(quats)
-
     # pixel computation
+    dir = qarray.rotate_zaxis(quats)
     (phi, region, z, rtz) = healpix.vec2zphi(dir)
     if nest:
         pixel = healpix.zphi2nest(hpix, phi, region, z, rtz)
     else:
         pixel = healpix.zphi2ring(hpix, phi, region, z, rtz)
 
-    return pixel
+    # compute sub map
+    sub_map = pixel // n_pix_submap
+
+    # applies the flags
+    if use_flags:
+        is_flagged = (flag & flag_mask) != 0
+        pixel = jnp.where(is_flagged, -1, pixel)
+        hit_submap = jnp.where(is_flagged, hit_submaps[sub_map], 1)
+    else:
+        hit_submap = 1
+
+    return pixel, sub_map, hit_submap
 
 
 # maps over samples and detectors
-# pixels_healpix_inner = jax_xmap(pixels_healpix_inner,
-#                                 in_axes=[[...], # hpix
-#                                          ['detectors','intervals','interval_size',...], # quats
-#                                          [...]], # nest
-#                                 out_axes=['detectors','intervals','interval_size'])
-# TODO xmap is commented out for now due to a [bug with static argnum](https://github.com/google/jax/issues/10741)
-pixels_healpix_inner = jax.vmap(
-    pixels_healpix_inner, in_axes=[None, 0, None], out_axes=0
-)  # loop on interval_size
-pixels_healpix_inner = jax.vmap(
-    pixels_healpix_inner, in_axes=[None, 0, None], out_axes=0
-)  # loop on intervals
-pixels_healpix_inner = jax.vmap(
-    pixels_healpix_inner, in_axes=[None, 0, None], out_axes=0
-)  # loop on detectors
+pixels_healpix_inner = imap(
+    pixels_healpix_inner,
+    in_axes={
+        "quats": ["n_det", "n_samp", ...],
+        "use_flags": bool,
+        "flags": ["n_samp"],
+        "flag_mask": int,
+        "hit_submaps": [...],
+        "n_pix_submap": int,
+        "hpix": healpix.HPIX_JAX,
+        "nest": bool,
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+        "outputs": (["n_det", "n_samp"], ["n_det", "n_samp"], ["n_det", "n_samp"]),
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="outputs",
+)
 
 
 def pixels_healpix_interval(
@@ -95,52 +119,42 @@ def pixels_healpix_interval(
     log = Logger.get()
     log.debug(f"pixels_healpix: jit-compiling.")
 
-    # flag
-    n_samp = pixels.shape[1]
-    use_flags = (flag_mask != 0) and (flags.size == n_samp)
-
-    # used to extract interval slices
-    intervals = JaxIntervals(
-        interval_starts, interval_ends + 1, intervals_max_length
-    )  # end+1 as the interval is inclusive
-
-    # computes the pixels and submap
+    # create hpix object
     hpix = healpix.HPIX_JAX(nside)
-    quats_interval = JaxIntervals.get(
-        quats, (quat_index, intervals, ALL)
-    )  # quats[quat_index,intervals,:]
-    pixels_interval = pixels_healpix_inner(hpix, quats_interval, nest)
-    sub_map = jnp.ravel(
-        pixels_interval // n_pix_submap
-    )  # flattened to index into the 1D hit_submaps
-    previous_hit_submaps_unflattened = jnp.reshape(
-        hit_submaps[sub_map], newshape=pixels_interval.shape
-    )  # unflattened to apply a 2D mask
 
-    # applies the flags
-    if use_flags:
-        # we pad with 1 such that values out of the interval will be flagged
-        flags_interval = JaxIntervals.get(
-            flags, intervals, padding_value=1
-        )  # flags[intervals]
-        is_flagged = (flags_interval & flag_mask) != 0
-        pixels_interval = jnp.where(is_flagged, -1, pixels_interval)
-        #
-        new_hit_submap_unflattened = jnp.where(
-            is_flagged, previous_hit_submaps_unflattened, 1
-        )
-    else:
-        # masks the padded values in sub_map
-        new_hit_submap_unflattened = jnp.where(
-            intervals.mask, previous_hit_submaps_unflattened, 1
-        )
-    new_hit_submap = jnp.ravel(new_hit_submap_unflattened)
+    # extract indexes
+    quats_indexed = quats[quat_index, :, :]
+    pixels_indexed = pixels[pixel_index, :]
+    dummy_sub_map = jnp.zeros_like(pixels_indexed)
+    dummy_hit_submaps = hit_submaps[dummy_sub_map]
+
+    # should we use flags?
+    use_flags = flag_mask != 0
+    n_samp = pixels.shape[1]
+    if flags.size != n_samp:
+        flags = jnp.empty(shape=(n_samp,))
+        use_flags = False
+
+    # does the computation
+    outputs = (pixels_indexed, dummy_sub_map, dummy_hit_submaps)
+    new_pixels_indexed, sub_map, new_hit_submaps = pixels_healpix_inner(
+        quats_indexed,
+        use_flags,
+        flags,
+        flag_mask,
+        hit_submaps,
+        n_pix_submap,
+        hpix,
+        nest,
+        interval_starts,
+        interval_ends,
+        intervals_max_length,
+        outputs,
+    )
 
     # updates results and returns
-    hit_submaps = hit_submaps.at[sub_map].set(new_hit_submap)
-    pixels = JaxIntervals.set(
-        pixels, (pixel_index, intervals), pixels_interval
-    )  # pixels[pixel_index,intervals] = pixels_interval
+    pixels = pixels.at[pixel_index, :].set(new_pixels_indexed)
+    hit_submaps = hit_submaps.at[sub_map].set(new_hit_submaps)
     return pixels, hit_submaps
 
 
@@ -227,4 +241,4 @@ def pixels_healpix_jax(
 
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix", "ops_sim_ground", "ops_sim_satellite", "ops_demodulate");'
+# export TOAST_GPU_JAX=true; export TOAST_GPU_HYBRID_PIPELINES=true; export TOAST_LOGLEVEL=DEBUG; python -c 'import toast.tests; toast.tests.run("ops_pointing_healpix"); toast.tests.run("ops_sim_ground"); toast.tests.run("ops_sim_satellite"); toast.tests.run("ops_demodulate");'

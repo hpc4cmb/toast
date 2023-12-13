@@ -117,15 +117,17 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
             }
         }
 
-        int rank, info=0;
-        double rcond_limit = -1;  // Use machine precision
+        int rank, info = 0;
+        double rcond_limit = -1; // Use machine precision
         toast::AlignedVector <double> singular_values(norder);
 
         int LWORK = toast::LinearAlgebra::gelss_buffersize(ngood, norder, nsignal,
                                                            ngood, ngood, rcond_limit);
         toast::AlignedVector <double> WORK(LWORK);
-        toast::LinearAlgebra::gelss(ngood, norder, nsignal, masked_templates.data(), ngood,
-                                    masked_signals.data(), ngood, singular_values.data(), rcond_limit,
+        toast::LinearAlgebra::gelss(ngood, norder, nsignal,
+                                    masked_templates.data(), ngood,
+                                    masked_signals.data(), ngood,
+                                    singular_values.data(), rcond_limit,
                                     &rank, WORK.data(), LWORK, &info);
 
         for (int iorder = 0; iorder < norder; ++iorder) {
@@ -145,12 +147,12 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
         if (info != 0) {
             auto log = toast::Logger::get();
             std::ostringstream o;
-            o << "DGELLS:  " << ngood << "/" << scanlen << " good samples, order " << norder;
+            o << "DGELLS:  " << ngood << "/" << scanlen << " good samples, order " <<
+            norder;
             o << " failed with info " << info;
             log.error(o.str().c_str(), TOAST_HERE());
             throw std::runtime_error(o.str().c_str());
         }
-
     }
 }
 

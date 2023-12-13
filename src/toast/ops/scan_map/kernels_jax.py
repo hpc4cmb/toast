@@ -6,7 +6,8 @@ import jax
 import jax.numpy as jnp
 
 from ...accelerator import ImplementationType, kernel
-from ...jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
+from ...jax.intervals import INTERVALS_JAX
+from ...jax.maps import imap
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
@@ -16,16 +17,16 @@ def global_to_local(global_pixels, npix_submap, global2local):
     Convert global pixel indices to local submaps and pixels within the submap.
 
     Args:
-        global_pixels (array):  The global pixel indices (size nsamples).
+        global_pixels (int):  The global pixel indice.
         npix_submap (int):  The number of pixels in each submap.
         global2local (array, int64):  The local submap for each global submap.
 
     Returns:
-        (tuple of array):  The (local submap, pixel within submap) for each global pixel (each of size nsamples).
+        (local_submaps, local_pixels) (int,int): (local submap, pixel within submap) for each global pixel.
     """
     quotient, remainder = jnp.divmod(global_pixels, npix_submap)
-    local_pixels = jnp.where(global_pixels < 0, -1, remainder)
-    local_submaps = jnp.where(global_pixels < 0, -1, global2local[quotient])
+    local_pixels = jnp.where(global_pixels < 0, -1, remainder.astype(int))
+    local_submaps = jnp.where(global_pixels < 0, -1, global2local[quotient.astype(int)])
     return (local_submaps, local_pixels)
 
 
@@ -33,9 +34,9 @@ def scan_map_inner(
     mapdata,
     npix_submap,
     global2local,
+    det_data,
     pixels,
     weights,
-    det_data,
     data_scale,
     should_zero,
     should_subtract,
@@ -48,16 +49,16 @@ def scan_map_inner(
         mapdata (array, ?):  The local piece of the map (size ?*npix_submap*nmap).
         npix_submap (int):  The number of pixels in each submap.
         global2local (array, int64):  The local submap for each global submap.
-        pixels (array, int): pixels (size nsample)
-        weights (array, float64):  The pointing matrix weights (size: nsample*nmap).
-        det_data (array, float64):  The timestream on which to accumulate the map values (size nsample).
+        det_data (float64):  The timestream on which to accumulate the map values.
+        pixels (int): pixels
+        weights (array, float64):  The pointing matrix weights (size: nmap).
         data_scale (float): unit rescaling
         should_zero (bool): should we zero det_data
         should_subtract (bool): should we subtract from det_data
         should_scale (bool): should we scale the detector data by the map values
 
     Returns:
-        det_data
+        det_data (float64)
     """
     # Get local submap and pixels
     submap, subpix = global_to_local(pixels, npix_submap, global2local)
@@ -65,8 +66,10 @@ def scan_map_inner(
     mapdata = mapdata[submap, subpix, :]
 
     # computes the update term
-    update = jnp.sum(mapdata * weights, axis=1) * data_scale
+    update = jnp.sum(mapdata * weights) * data_scale
 
+    # removes potentially useless dimension inroduced by imap
+    det_data = jnp.squeeze(det_data)
     # updates det_data
     if should_zero:
         det_data = jnp.zeros_like(det_data)
@@ -83,29 +86,30 @@ def scan_map_inner(
 
 
 # maps over intervals and detectors
-# scan_map_inner = jax_xmap(scan_map_inner,
-#                              in_axes=[[...], # mapdata
-#                                       [...], # npix_submap
-#                                       [...], # global2local
-#                                       ['detectors','intervals',...], # pixels
-#                                       ['detectors','intervals',...], # weights
-#                                       ['detectors','intervals',...], # det_data
-#                                       [...], # data_scale
-#                                       [...], # should_zero
-#                                       [...]], # should_subtract
-#                                       [...]], # should_scale
-#                              out_axes=['detectors','intervals',...])
-# TODO xmap is commented out for now due to a [bug with static argnum](https://github.com/google/jax/issues/10741)
-scan_map_inner = jax.vmap(
+scan_map_inner = imap(
     scan_map_inner,
-    in_axes=[None, None, None, 0, 0, 0, None, None, None, None],
-    out_axes=0,
-)  # loop on intervals
-scan_map_inner = jax.vmap(
-    scan_map_inner,
-    in_axes=[None, None, None, 0, 0, 0, None, None, None, None],
-    out_axes=0,
-)  # loop on detectors
+    in_axes={
+        "mapdata": [..., ..., ...],
+        "npix_submap": int,
+        "global2local": [...],
+        "det_data": ["n_det", "n_samp"],
+        "pixels": ["n_det", "n_samp"],
+        "weights": ["n_det", "n_samp", ...],
+        "data_scale": float,
+        "should_zero": bool,
+        "should_subtract": bool,
+        "should_scale": bool,
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="det_data",
+    output_as_input=True,
+)
 
 
 def scan_map_interval(
@@ -154,46 +158,35 @@ def scan_map_interval(
     log = Logger.get()
     log.debug(f"scan_map: jit-compiling.")
 
-    # extract interval slices
-    intervals = JaxIntervals(
-        interval_starts, interval_ends + 1, intervals_max_length
-    )  # end+1 as the interval is inclusive
-    pixels_interval = JaxIntervals.get(
-        pixels, (pixels_index, intervals)
-    )  # pixels[pixels_index, intervals]
-    det_data_interval = JaxIntervals.get(
-        det_data, (det_data_index, intervals)
-    )  # det_data[det_data_index, intervals]
+    # extract indexes
+    pixels_indexed = pixels[pixels_index, :]
+    det_data_indexed = det_data[det_data_index, :]
     if weight_index is None:
-        weights_interval = jnp.ones_like(pixels_interval)
+        weights_indexed = jnp.ones_like(pixels_indexed)[:, :, jnp.newaxis]
     elif weights.ndim == 2:
-        weights_interval = JaxIntervals.get(
-            weights, (weight_index, intervals, jnp.newaxis)
-        )  # weights[weight_index, intervals, np.newaxis]
+        weights_indexed = weights[weight_index, :, jnp.newaxis]
     else:
-        weights_interval = JaxIntervals.get(
-            weights, (weight_index, intervals, ALL)
-        )  # weights[weight_index, intervals, :]
+        weights_indexed = weights[weight_index, :, :]
 
     # does the computation
-    new_det_data_interval = scan_map_inner(
+    new_det_data_indexed = scan_map_inner(
         mapdata,
         npix_submap,
         global2local,
-        pixels_interval,
-        weights_interval,
-        det_data_interval,
+        det_data_indexed,
+        pixels_indexed,
+        weights_indexed,
         data_scale,
         should_zero,
         should_subtract,
         should_scale,
+        interval_starts,
+        interval_ends,
+        intervals_max_length,
     )
 
     # updates results and returns
-    # det_data[det_data_index, intervals] = new_det_data_interval
-    det_data = JaxIntervals.set(
-        det_data, (det_data_index, intervals), new_det_data_interval
-    )
+    det_data = det_data.at[det_data_index, :].set(new_det_data_indexed)
     return det_data
 
 
@@ -288,4 +281,4 @@ def scan_map_jax(
 
 
 # To test:
-# python -c 'import toast.tests; toast.tests.run("ops_mapmaker_solve", "ops_scan_map")'
+# export TOAST_GPU_JAX=true; export TOAST_GPU_HYBRID_PIPELINES=true; export TOAST_LOGLEVEL=DEBUG; python -c 'import toast.tests; toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_scan_map");'

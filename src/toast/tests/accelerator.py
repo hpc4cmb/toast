@@ -34,8 +34,7 @@ from .mpi import MPITestCase
 
 if use_accel_jax:
     import jax
-
-    from ..jax.mutableArray import MutableJaxArray
+    from ..jax.mutableArray import MutableJaxArray, _zero_out_jitted
 
 
 @trait_docs
@@ -404,21 +403,20 @@ class AcceleratorTest(MPITestCase):
                 self.flatsize = self.fullsize
                 self.flatshape = (self.flatsize,)
                 self.raw = self.storage_class.zeros(self.fullsize)
+                self.data = None
                 self._wrap()
 
             def _wrap(self):
+                self.flat = self.raw.array()[: self.flatsize]
                 if self.accel_exists():
-                    cpu_data = self.raw.host_data
-                    gpu_data = self.raw.data
-                    self.flat = MutableJaxArray(
-                        cpu_data[: self.flatsize],
-                        gpu_data=gpu_data[: self.flatsize],
-                    )
-                    self.flat.host_data[:] = 0
-                    self.flat.data.at[:].set(0)
+                    # creates a device buffer filled with zeroes
+                    # we call _zero_out_jitted with the previous device buffer and a new shape into order to recycle the memory
+                    # accel_reset cannot be used as there is a change in shape
+                    gpu_data = _zero_out_jitted(self.data.data, output_shape=self.shape)
+                    cpu_data = self.flat.reshape(self.shape)
+                    self.data = MutableJaxArray(cpu_data, gpu_data)
                 else:
-                    self.flat = self.raw.array()[: self.flatsize]
-                self.data = self.flat.reshape(self.shape)
+                    self.data = self.flat.reshape(self.shape)
 
             def restrict(self):
                 # Reduce the size of the view
@@ -461,24 +459,23 @@ class AcceleratorTest(MPITestCase):
                 )
 
             def _accel_exists(self):
-                return accel_data_present(self.raw)
+                return accel_data_present(self.data)
 
             def _accel_create(self):
-                self.raw = accel_data_create(self.raw)
-                self.flat = self.raw.reshape(self.flatshape)
-                self.data = self.flat.reshape(self.shape)
+                # NOTE: all JAX operation are on the reshaped array (data) and not the flat buffers (raw / flat)
+                self.data = accel_data_create(self.data)
 
             def _accel_update_device(self):
-                self.raw = accel_data_update_device(self.raw)
+                self.data = accel_data_update_device(self.data)
 
             def _accel_update_host(self):
-                self.raw = accel_data_update_host(self.raw)
+                self.data = accel_data_update_host(self.data)
 
             def _accel_delete(self):
-                self.raw = accel_data_delete(self.raw)
+                self.data = accel_data_delete(self.data)
 
             def _accel_reset(self):
-                accel_data_reset(self.raw)
+                self.data = accel_data_reset(self.data)
 
         obj = JaxWrapper((5, 5, 5), np.float64)
         obj.run_tests()

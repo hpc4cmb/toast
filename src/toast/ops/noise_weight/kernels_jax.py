@@ -6,9 +6,43 @@ import jax
 import jax.numpy as jnp
 
 from ...accelerator import ImplementationType, kernel
-from ...jax.intervals import INTERVALS_JAX, JaxIntervals
+from ...jax.intervals import INTERVALS_JAX
+from ...jax.maps import imap
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
+
+
+def noise_weight_inner(det_data, detector_weights):
+    """
+    multiplies det_data by the weighs in detector_weights
+
+    Args:
+        det_data (float)
+        detector_weights (double): The weight to be used for the detector
+
+    Returns:
+        det_data
+    """
+    return det_data * detector_weights
+
+
+# maps over intervals and detectors
+noise_weight_inner = imap(
+    noise_weight_inner,
+    in_axes={
+        "det_data": ["n_det", "n_samp"],
+        "detector_weights": ["n_det"],
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="det_data",
+    output_as_input=True,
+)
 
 
 def noise_weight_interval(
@@ -37,24 +71,20 @@ def noise_weight_interval(
     log = Logger.get()
     log.debug(f"noise_weight: jit-compiling.")
 
-    # extract interval slice
-    intervals = JaxIntervals(
-        interval_starts, interval_ends + 1, intervals_max_length
-    )  # end+1 as the interval is inclusive
-    det_data_interval = JaxIntervals.get(
-        det_data, (det_data_index, intervals)
-    )  # det_data[det_data_index, intervals]
+    # extract indexes
+    det_data_indexed = det_data[det_data_index, :]
 
     # does the computation
-    new_det_data_interval = (
-        det_data_interval * detector_weights[:, jnp.newaxis, jnp.newaxis]
+    new_det_data_indexed = noise_weight_inner(
+        det_data_indexed,
+        detector_weights,
+        interval_starts,
+        interval_ends,
+        intervals_max_length,
     )
 
     # updates results and returns
-    # det_data[det_data_index, intervals] = new_det_data_interval
-    det_data = JaxIntervals.set(
-        det_data, (det_data_index, intervals), new_det_data_interval
-    )
+    det_data = det_data.at[det_data_index, :].set(new_det_data_indexed)
     return det_data
 
 

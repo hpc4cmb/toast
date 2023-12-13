@@ -4,10 +4,9 @@
 
 import jax
 import jax.numpy as jnp
-from jax.experimental.maps import xmap as jax_xmap
-
 from ...accelerator import ImplementationType, kernel
-from ...jax.intervals import ALL, INTERVALS_JAX, JaxIntervals
+from ...jax.intervals import INTERVALS_JAX
+from ...jax.maps import imap
 from ...jax.math import qarray
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
@@ -33,28 +32,24 @@ def pointing_detector_inner(focalplane, boresight, flag, mask):
 
 
 # maps over intervals and detectors
-# pointing_detector_inner = jax_xmap(
-#    pointing_detector_inner,
-#    in_axes=[
-#        ["detectors", ...],  # focalplane
-#        ["intervals", "interval_size", ...],  # boresight
-#        ["intervals", "interval_size"],  # flags
-#        [...],
-#    ],  # mask
-#    out_axes=["detectors", "intervals", "interval_size", ...],
-# )
-# using vmap as the static arguments triggers the following error:
-# "ShardingContext cannot be used with xmap"
-# TODO revisit once this issue is solved [bug with static argnum](https://github.com/google/jax/issues/10741)
-pointing_detector_inner = jax.vmap(
-    pointing_detector_inner, in_axes=[None, 0, 0, None], out_axes=0
-)  # interval_size
-pointing_detector_inner = jax.vmap(
-    pointing_detector_inner, in_axes=[None, 0, 0, None], out_axes=0
-)  # intervals
-pointing_detector_inner = jax.vmap(
-    pointing_detector_inner, in_axes=[0, None, None, None], out_axes=0
-)  # detectors
+pointing_detector_inner = imap(
+    pointing_detector_inner,
+    in_axes={
+        "focalplane": ["n_det", ...],
+        "boresight": ["n_samp", ...],
+        "quats": ["n_det", "n_samp", ...],
+        "flag": ["n_samp"],
+        "mask": int,
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="quats",
+)
 
 
 def pointing_detector_interval(
@@ -89,24 +84,23 @@ def pointing_detector_interval(
     log = Logger.get()
     log.debug(f"pointing_detector: jit-compiling.")
 
-    # extract interval slices
-    intervals = JaxIntervals(
-        interval_starts, interval_ends + 1, intervals_max_length
-    )  # end+1 as the interval is inclusive
-    boresight_interval = JaxIntervals.get(
-        boresight, (intervals, ALL)
-    )  # boresight[intervals,:]
-    shared_flags_interval = JaxIntervals.get(
-        shared_flags, intervals
-    )  # shared_flags[intervals]
+    # indexes quats
+    quats_indexed = quats[quat_index, :, :]
 
-    # process the interval then updates quats in place
-    new_quats_interval = pointing_detector_inner(
-        focalplane, boresight_interval, shared_flags_interval, shared_flag_mask
+    # process the intervals
+    new_quats_indexed = pointing_detector_inner(
+        focalplane,
+        boresight,
+        quats_indexed,
+        shared_flags,
+        shared_flag_mask,
+        interval_starts,
+        interval_ends,
+        intervals_max_length,
     )
-    quats = JaxIntervals.set(
-        quats, (quat_index, intervals, ALL), new_quats_interval
-    )  # quats[quat_index,intervals,:] = new_quats_interval
+
+    # updates quats at the index
+    quats = quats.at[quat_index, :, :].set(new_quats_indexed)
     return quats
 
 
