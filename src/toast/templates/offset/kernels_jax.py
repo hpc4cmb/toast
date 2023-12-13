@@ -209,8 +209,8 @@ def offset_project_signal_steplength_block(step_length, det_data, use_flag, flag
     Returns:
         (amplitude_index, contribution) (int,double): index in amplitude and value to add (atomically) there
     """
-    # indices and mask to insure we iterate inside the interval
-    block_indices = interval_start + jnp.arange(start=0, stop=step_length)
+    # indices and mask to insure we iterate inside the block / interval
+    block_indices = interval_start + block_index*step_length + jnp.arange(start=0, stop=step_length)
     block_mask = (block_indices <= interval_end)
 
     # extract block data
