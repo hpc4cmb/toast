@@ -86,27 +86,30 @@ def scan_map_inner(
 
 
 # maps over intervals and detectors
-scan_map_inner = imap(scan_map_inner, 
-                    in_axes={
-                        'mapdata': [..., ..., ...],
-                        'npix_submap': int,
-                        'global2local': [...],
-                        'det_data': ["n_det","n_samp"],
-                        'pixels': ["n_det","n_samp"],
-                        'weights': ["n_det","n_samp",...],
-                        'data_scale': float,
-                        'should_zero': bool,
-                        'should_subtract': bool,
-                        'should_scale': bool,
-                        'interval_starts': ["n_intervals"],
-                        'interval_ends': ["n_intervals"],
-                        'intervals_max_length': int
-                    },
-                    interval_axis='n_samp', 
-                    interval_starts='interval_starts', 
-                    interval_ends='interval_ends', 
-                    interval_max_length='intervals_max_length', 
-                    output_name='det_data', output_as_input=True)
+scan_map_inner = imap(
+    scan_map_inner,
+    in_axes={
+        "mapdata": [..., ..., ...],
+        "npix_submap": int,
+        "global2local": [...],
+        "det_data": ["n_det", "n_samp"],
+        "pixels": ["n_det", "n_samp"],
+        "weights": ["n_det", "n_samp", ...],
+        "data_scale": float,
+        "should_zero": bool,
+        "should_subtract": bool,
+        "should_scale": bool,
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="det_data",
+    output_as_input=True,
+)
 
 
 def scan_map_interval(
@@ -156,23 +159,34 @@ def scan_map_interval(
     log.debug(f"scan_map: jit-compiling.")
 
     # extract indexes
-    pixels_indexed = pixels[pixels_index,:]
-    det_data_indexed = det_data[det_data_index,:]
+    pixels_indexed = pixels[pixels_index, :]
+    det_data_indexed = det_data[det_data_index, :]
     if weight_index is None:
-        weights_indexed = jnp.ones_like(pixels_indexed)[:,:,jnp.newaxis]
+        weights_indexed = jnp.ones_like(pixels_indexed)[:, :, jnp.newaxis]
     elif weights.ndim == 2:
-        weights_indexed = weights[weight_index,:,jnp.newaxis]
+        weights_indexed = weights[weight_index, :, jnp.newaxis]
     else:
-        weights_indexed = weights[weight_index,:,:]
+        weights_indexed = weights[weight_index, :, :]
 
     # does the computation
-    new_det_data_indexed = scan_map_inner(mapdata, npix_submap, global2local, 
-                                          det_data_indexed, pixels_indexed, weights_indexed,
-                                          data_scale, should_zero, should_subtract, should_scale,
-                                          interval_starts, interval_ends, intervals_max_length)
+    new_det_data_indexed = scan_map_inner(
+        mapdata,
+        npix_submap,
+        global2local,
+        det_data_indexed,
+        pixels_indexed,
+        weights_indexed,
+        data_scale,
+        should_zero,
+        should_subtract,
+        should_scale,
+        interval_starts,
+        interval_ends,
+        intervals_max_length,
+    )
 
     # updates results and returns
-    det_data = det_data.at[det_data_index,:].set(new_det_data_indexed)
+    det_data = det_data.at[det_data_index, :].set(new_det_data_indexed)
     return det_data
 
 
@@ -268,4 +282,3 @@ def scan_map_jax(
 
 # To test:
 # export TOAST_GPU_JAX=true; export TOAST_GPU_HYBRID_PIPELINES=true; export TOAST_LOGLEVEL=DEBUG; python -c 'import toast.tests; toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_scan_map");'
-

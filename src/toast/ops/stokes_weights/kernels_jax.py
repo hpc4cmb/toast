@@ -13,8 +13,9 @@ from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
 
-#----------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------
 # IQU
+
 
 def stokes_weights_IQU_inner(pin, hwpang, eps, gamma, cal, IAU):
     """
@@ -64,24 +65,27 @@ def stokes_weights_IQU_inner(pin, hwpang, eps, gamma, cal, IAU):
 
 
 # maps over samples, intervals and detectors
-stokes_weights_IQU_inner = imap(stokes_weights_IQU_inner, 
-                    in_axes={
-                        'quats': ["n_det","n_samp",...],
-                        'weights': ["n_det","n_samp",...],
-                        'hwp': ["n_samp"],
-                        'eps': ["n_det"],
-                        'gamma': ["n_det"],
-                        'cal': ["n_det"],
-                        'IAU': int,
-                        'interval_starts': ["n_intervals"],
-                        'interval_ends': ["n_intervals"],
-                        'intervals_max_length': int
-                    },
-                    interval_axis='n_samp', 
-                    interval_starts='interval_starts', 
-                    interval_ends='interval_ends', 
-                    interval_max_length='intervals_max_length', 
-                    output_name='weights')
+stokes_weights_IQU_inner = imap(
+    stokes_weights_IQU_inner,
+    in_axes={
+        "quats": ["n_det", "n_samp", ...],
+        "weights": ["n_det", "n_samp", ...],
+        "hwp": ["n_samp"],
+        "eps": ["n_det"],
+        "gamma": ["n_det"],
+        "cal": ["n_det"],
+        "IAU": int,
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="weights",
+)
+
 
 def stokes_weights_IQU_interval(
     quat_index,
@@ -122,8 +126,8 @@ def stokes_weights_IQU_interval(
     log.debug(f"stokes_weights_IQU: jit-compiling.")
 
     # extract indexes
-    quats_indexed = quats[quat_index,:,:]
-    weights_indexed = weights[weight_index,:,:]
+    quats_indexed = quats[quat_index, :, :]
+    weights_indexed = weights[weight_index, :, :]
 
     # Are we using a half wave plate?
     if hwp.size == 0:
@@ -136,11 +140,21 @@ def stokes_weights_IQU_interval(
     IAU_sign = -1 if IAU else 1
 
     # does the computation
-    new_weights_indexed = stokes_weights_IQU_inner(quats_indexed, weights_indexed, hwp, epsilon, gamma, cal, IAU_sign,
-                                                   interval_starts, interval_ends, intervals_max_length)
+    new_weights_indexed = stokes_weights_IQU_inner(
+        quats_indexed,
+        weights_indexed,
+        hwp,
+        epsilon,
+        gamma,
+        cal,
+        IAU_sign,
+        interval_starts,
+        interval_ends,
+        intervals_max_length,
+    )
 
     # updates results and returns
-    weights = weights.at[weight_index,:,:].set(new_weights_indexed)
+    weights = weights.at[weight_index, :, :].set(new_weights_indexed)
     return weights
 
 
@@ -212,8 +226,10 @@ def stokes_weights_IQU_jax(
         intervals_max_length,
     )
 
-#----------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------
 # I
+
 
 def stokes_weights_I_inner(cal):
     """
@@ -227,20 +243,24 @@ def stokes_weights_I_inner(cal):
     """
     return cal
 
+
 # maps over samples, intervals and detectors
-stokes_weights_I_inner = imap(stokes_weights_I_inner, 
-                    in_axes={
-                        'weights': ["n_det","n_samp"],
-                        'cal': ["n_det"],
-                        'interval_starts': ["n_intervals"],
-                        'interval_ends': ["n_intervals"],
-                        'intervals_max_length': int
-                    },
-                    interval_axis='n_samp', 
-                    interval_starts='interval_starts', 
-                    interval_ends='interval_ends', 
-                    interval_max_length='intervals_max_length', 
-                    output_name='weights')
+stokes_weights_I_inner = imap(
+    stokes_weights_I_inner,
+    in_axes={
+        "weights": ["n_det", "n_samp"],
+        "cal": ["n_det"],
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="weights",
+)
+
 
 def stokes_weights_I_interval(
     weight_index,
@@ -269,11 +289,12 @@ def stokes_weights_I_interval(
     log.debug(f"stokes_weights_I: jit-compiling.")
 
     # extract indexed values
-    weights_indexed = weights[weight_index,:]
+    weights_indexed = weights[weight_index, :]
 
     # does computation
-    new_weights_indexed = stokes_weights_I_inner(weights_indexed, cal,
-                                                 interval_starts, interval_ends, intervals_max_length)
+    new_weights_indexed = stokes_weights_I_inner(
+        weights_indexed, cal, interval_starts, interval_ends, intervals_max_length
+    )
 
     # updates results and returns
     weights = weights.at[weight_index, :].set(new_weights_indexed)

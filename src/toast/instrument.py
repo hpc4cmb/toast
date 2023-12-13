@@ -398,7 +398,11 @@ class Bandpass(object):
     def _get_unit_conversion_coefficients(self, det):
         """Compute and cache the unit conversion coefficients for one detector"""
 
-        if det not in self._kcmb2jysr or det not in self._kcmb2krj or det not in self._kcmb2w:
+        if (
+            det not in self._kcmb2jysr
+            or det not in self._kcmb2krj
+            or det not in self._kcmb2w
+        ):
             # The calculation is a copy from the Hildebrandt and Macias-Perez IDL module for Planck
 
             nu_cmb = k * TCMB / h
@@ -424,7 +428,8 @@ class Bandpass(object):
             # K_CMB->W conversion is from the BoloCalc paper, arXiv:1806.04316
             bandpass = bandpass / np.amax(bandpass)
             self._kcmb2w[det] = integrate_simpson(
-                freqs, k * (x / (np.exp(x) - 1))**2 * np.exp(x) * bandpass,
+                freqs,
+                k * (x / (np.exp(x) - 1)) ** 2 * np.exp(x) * bandpass,
             )
 
         return

@@ -69,7 +69,6 @@ def stokes_weights_IQU_numpy(
             else:
                 ang = 2.0 * (2.0 * (gamma[idet] - hwp) - alpha)
 
-
             weights[widx][samples, 0] = cal[idet]
             weights[widx][samples, 1] = cal[idet] * eta * np.cos(ang)
             weights[widx][samples, 2] = -cal[idet] * eta * np.sin(ang) * U_sign

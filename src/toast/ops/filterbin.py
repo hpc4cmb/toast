@@ -1634,7 +1634,8 @@ class FilterBin(Operator):
                             if self.mc_mode and not force:
                                 if os.path.isfile(fname):
                                     log.info_rank(
-                                        f"Skipping existing file: {fname}", comm=self.comm
+                                        f"Skipping existing file: {fname}",
+                                        comm=self.comm,
                                     )
                                     continue
                             write_healpix_hdf5(
@@ -1651,7 +1652,8 @@ class FilterBin(Operator):
                             if self.mc_mode and not force:
                                 if os.path.isfile(fname):
                                     log.info_rank(
-                                        f"Skipping existing file: {fname}", comm=self.comm
+                                        f"Skipping existing file: {fname}",
+                                        comm=self.comm,
                                     )
                                     continue
                             write_healpix_fits(

@@ -13,14 +13,16 @@ from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
 
-def pixels_healpix_inner(quats, use_flags, flag, flag_mask, hit_submaps, n_pix_submap, hpix, nest):
+def pixels_healpix_inner(
+    quats, use_flags, flag, flag_mask, hit_submaps, n_pix_submap, hpix, nest
+):
     """
     Compute the healpix pixel indices for the detectors.
 
     Args:
         quats (array, float64): Detector quaternion (size 4).
         use_flags (bool): should we use flags?
-        flag (uint8): 
+        flag (uint8):
         flag_mask (uint8): integer used to select flags (not necesarely a boolean)
         hit_submaps (array, uint8): The pointing flags (size ???).
         n_pix_submap (int):
@@ -47,32 +49,35 @@ def pixels_healpix_inner(quats, use_flags, flag, flag_mask, hit_submaps, n_pix_s
         pixel = jnp.where(is_flagged, -1, pixel)
         hit_submap = jnp.where(is_flagged, hit_submaps[sub_map], 1)
     else:
-        hit_submap = 1      
+        hit_submap = 1
 
     return pixel, sub_map, hit_submap
 
 
 # maps over samples and detectors
-pixels_healpix_inner = imap(pixels_healpix_inner, 
-                    in_axes={
-                        'quats': ['n_det','n_samp',...],
-                        'use_flags': bool,
-                        'flags': ['n_samp'],
-                        'flag_mask': int,
-                        'hit_submaps': [...],
-                        'n_pix_submap': int,
-                        'hpix': healpix.HPIX_JAX,
-                        'nest': bool,
-                        'interval_starts': ["n_intervals"],
-                        'interval_ends': ["n_intervals"],
-                        'intervals_max_length': int,
-                        'outputs': (["n_det","n_samp"],["n_det","n_samp"],["n_det","n_samp"]),
-                    },
-                    interval_axis='n_samp', 
-                    interval_starts='interval_starts', 
-                    interval_ends='interval_ends', 
-                    interval_max_length='intervals_max_length', 
-                    output_name='outputs')
+pixels_healpix_inner = imap(
+    pixels_healpix_inner,
+    in_axes={
+        "quats": ["n_det", "n_samp", ...],
+        "use_flags": bool,
+        "flags": ["n_samp"],
+        "flag_mask": int,
+        "hit_submaps": [...],
+        "n_pix_submap": int,
+        "hpix": healpix.HPIX_JAX,
+        "nest": bool,
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+        "outputs": (["n_det", "n_samp"], ["n_det", "n_samp"], ["n_det", "n_samp"]),
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="outputs",
+)
+
 
 def pixels_healpix_interval(
     quat_index,
@@ -118,26 +123,37 @@ def pixels_healpix_interval(
     hpix = healpix.HPIX_JAX(nside)
 
     # extract indexes
-    quats_indexed = quats[quat_index,:,:]
-    pixels_indexed = pixels[pixel_index,:]
-    dummy_sub_map = jnp.zeros_like(pixels_indexed) 
+    quats_indexed = quats[quat_index, :, :]
+    pixels_indexed = pixels[pixel_index, :]
+    dummy_sub_map = jnp.zeros_like(pixels_indexed)
     dummy_hit_submaps = hit_submaps[dummy_sub_map]
 
     # should we use flags?
-    use_flags = (flag_mask != 0)
+    use_flags = flag_mask != 0
     n_samp = pixels.shape[1]
-    if (flags.size != n_samp):
+    if flags.size != n_samp:
         flags = jnp.empty(shape=(n_samp,))
         use_flags = False
 
     # does the computation
     outputs = (pixels_indexed, dummy_sub_map, dummy_hit_submaps)
-    new_pixels_indexed, sub_map, new_hit_submaps = pixels_healpix_inner(quats_indexed, use_flags, flags, flag_mask, hit_submaps, n_pix_submap, hpix, nest,
-                                              interval_starts, interval_ends, intervals_max_length,
-                                              outputs)
+    new_pixels_indexed, sub_map, new_hit_submaps = pixels_healpix_inner(
+        quats_indexed,
+        use_flags,
+        flags,
+        flag_mask,
+        hit_submaps,
+        n_pix_submap,
+        hpix,
+        nest,
+        interval_starts,
+        interval_ends,
+        intervals_max_length,
+        outputs,
+    )
 
     # updates results and returns
-    pixels = pixels.at[pixel_index,:].set(new_pixels_indexed)
+    pixels = pixels.at[pixel_index, :].set(new_pixels_indexed)
     hit_submaps = hit_submaps.at[sub_map].set(new_hit_submaps)
     return pixels, hit_submaps
 

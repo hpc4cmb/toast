@@ -11,11 +11,22 @@ from ...jax.maps import imap
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import AlignedF64, AlignedI64, Logger
 
-#----------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------
 # build_noise_weighted
 
-def build_noise_weighted_inner(global2local, n_pix_submap, pixel, weights, det_data, 
-                               det_flag, det_scale, det_flag_mask, shared_flag, shared_flag_mask):
+
+def build_noise_weighted_inner(
+    global2local,
+    n_pix_submap,
+    pixel,
+    weights,
+    det_data,
+    det_flag,
+    det_scale,
+    det_flag_mask,
+    shared_flag,
+    shared_flag_mask,
+):
     """
     Args:
         global2local (array, int): size n_global_submap
@@ -28,7 +39,7 @@ def build_noise_weighted_inner(global2local, n_pix_submap, pixel, weights, det_d
         det_flag_mask (uint8),
         shared_flag (uint8),
         shared_flag_mask (uint8)
-        
+
     Returns:
         (local_submap, isubpix, update_masked)
     """
@@ -39,7 +50,7 @@ def build_noise_weighted_inner(global2local, n_pix_submap, pixel, weights, det_d
 
     # computes the update to add to zmap
     scaled_data = det_data * det_scale
-    update = jnp.where(valid_samples,  weights * scaled_data,  0.0)
+    update = jnp.where(valid_samples, weights * scaled_data, 0.0)
 
     # computes the indices in zmap
     global_submap = pixel // n_pix_submap
@@ -48,29 +59,33 @@ def build_noise_weighted_inner(global2local, n_pix_submap, pixel, weights, det_d
 
     return (local_submap, isubpix, update)
 
+
 # maps over intervals and detectors
-build_noise_weighted_inner = imap(build_noise_weighted_inner, 
-                                in_axes={
-                                    'global2local': [...],
-                                    'n_pix_submap': int,
-                                    'pixels': ["n_det","n_samp"],
-                                    'weights': ["n_det","n_samp",...],
-                                    'det_data': ["n_det","n_samp"],
-                                    'det_flags': ["n_det","n_samp"],
-                                    'det_scale': ["n_det"],
-                                    'det_flag_mask': int,
-                                    'shared_flags': ["n_samp"],
-                                    'shared_flag_mask': int,
-                                    'interval_starts': ["n_intervals"],
-                                    'interval_ends': ["n_intervals"],
-                                    'intervals_max_length': int,
-                                    'outputs': (["n_det","n_samp"],["n_det","n_samp"],["n_det","n_samp",...])
-                                },
-                                interval_axis='n_samp', 
-                                interval_starts='interval_starts', 
-                                interval_ends='interval_ends', 
-                                interval_max_length='intervals_max_length', 
-                                output_name='outputs')
+build_noise_weighted_inner = imap(
+    build_noise_weighted_inner,
+    in_axes={
+        "global2local": [...],
+        "n_pix_submap": int,
+        "pixels": ["n_det", "n_samp"],
+        "weights": ["n_det", "n_samp", ...],
+        "det_data": ["n_det", "n_samp"],
+        "det_flags": ["n_det", "n_samp"],
+        "det_scale": ["n_det"],
+        "det_flag_mask": int,
+        "shared_flags": ["n_samp"],
+        "shared_flag_mask": int,
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+        "outputs": (["n_det", "n_samp"], ["n_det", "n_samp"], ["n_det", "n_samp", ...]),
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="outputs",
+)
+
 
 def build_noise_weighted_interval(
     global2local,
@@ -125,26 +140,42 @@ def build_noise_weighted_interval(
         weights = weights[:, :, jnp.newaxis]
 
     # extract inputs
-    pixels_indexed = pixels[pixel_index,:]
-    weights_indexed = weights[weight_index,:,:]
-    det_data_indexed = det_data[data_index,:]
+    pixels_indexed = pixels[pixel_index, :]
+    weights_indexed = weights[weight_index, :, :]
+    det_data_indexed = det_data[data_index, :]
     n_pix_submap = zmap.shape[1]
 
     # setup flags
     n_samp = pixels.shape[1]
-    if (det_flags.shape[1] != n_samp):
+    if det_flags.shape[1] != n_samp:
         det_flags_indexed = jnp.zeros_like(det_data_indexed)
     else:
-        det_flags_indexed = det_flags[flag_index,:]
-    if (shared_flags.size != n_samp):
+        det_flags_indexed = det_flags[flag_index, :]
+    if shared_flags.size != n_samp:
         shared_flags = jnp.zeros(shape=(n_samp,))
 
     # Does the computation
-    outputs = (jnp.empty_like(pixels_indexed),jnp.empty_like(pixels_indexed),jnp.zeros_like(weights_indexed))
-    (local_submap,isubpix,update) = build_noise_weighted_inner(global2local,n_pix_submap,pixels_indexed,weights_indexed,det_data_indexed,
-                                                               det_flags_indexed,det_scale,det_flag_mask,shared_flags,shared_flag_mask,
-                                                               interval_starts,interval_ends,intervals_max_length,
-                                                               outputs)
+    outputs = (
+        jnp.empty_like(pixels_indexed),
+        jnp.empty_like(pixels_indexed),
+        jnp.zeros_like(weights_indexed),
+    )
+    (local_submap, isubpix, update) = build_noise_weighted_inner(
+        global2local,
+        n_pix_submap,
+        pixels_indexed,
+        weights_indexed,
+        det_data_indexed,
+        det_flags_indexed,
+        det_scale,
+        det_flag_mask,
+        shared_flags,
+        shared_flag_mask,
+        interval_starts,
+        interval_ends,
+        intervals_max_length,
+        outputs,
+    )
 
     # updates zmap and returns
     # NOTE: add is atomic
@@ -239,8 +270,10 @@ def build_noise_weighted_jax(
         intervals_max_length,
     )
 
-#----------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------
 # cov_accum_diag_hits
+
 
 def cov_accum_diag_hits_inner(nsubpix, submap, subpix, hits):
     """
@@ -296,8 +329,10 @@ def cov_accum_diag_hits_jax(nsub, nsubpix, nnz, submap, subpix, hits, use_accel)
     # run kernel
     hits[:] = cov_accum_diag_hits_inner(nsubpix, submap_input, subpix_input, hits_input)
 
-#----------------------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------------------
 # cov_accum_diag_invnpp
+
 
 def cov_accum_diag_invnpp_inner(nsubpix, nnz, submap, subpix, weights, scale, invnpp):
     """

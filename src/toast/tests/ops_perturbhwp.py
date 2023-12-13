@@ -28,7 +28,11 @@ class PerturbHWPTest(MPITestCase):
         data = create_ground_data(self.comm)
 
         # Copy original HWP to a different field for later comparison
-        ops.Copy(shared=[(defaults.hwp_angle, "hwp_orig"),]).apply(data)
+        ops.Copy(
+            shared=[
+                (defaults.hwp_angle, "hwp_orig"),
+            ]
+        ).apply(data)
 
         perturb = ops.PerturbHWP(
             drift_sigma=0.1 / u.h,
@@ -39,12 +43,8 @@ class PerturbHWPTest(MPITestCase):
 
         for ob in data.obs:
             times = ob.shared[defaults.times].data
-            perturbed = np.unwrap(
-                ob.shared[defaults.hwp_angle].data
-            )
-            orig = np.unwrap(
-                ob.shared["hwp_orig"].data
-            )
+            perturbed = np.unwrap(ob.shared[defaults.hwp_angle].data)
+            orig = np.unwrap(ob.shared["hwp_orig"].data)
             rms = np.std(perturbed - orig)
 
             if data.comm.group_rank == 0:
@@ -77,10 +77,7 @@ class PerturbHWPTest(MPITestCase):
                 ax.set_xlabel("Frequency [Hz]")
                 ax.set_ylabel("PSD [Rad / Hz^1/2]")
 
-                outfile = os.path.join(
-                    self.outdir,
-                    f"HWP_comparison_{ob.name}.png"
-                )
+                outfile = os.path.join(self.outdir, f"HWP_comparison_{ob.name}.png")
                 fig.savefig(outfile)
 
             self.assertTrue(
@@ -99,9 +96,7 @@ class PerturbHWPTest(MPITestCase):
             # set shared objects with a non-None value.
             new_val = None
             if ob.comm_col_rank == 0:
-                new_val = np.round(
-                    np.linspace(0, 10, ob.n_local_samples)
-                ) * np.pi / 8
+                new_val = np.round(np.linspace(0, 10, ob.n_local_samples)) * np.pi / 8
             ob.shared[defaults.hwp_angle].set(new_val, offset=(0,), fromrank=0)
 
         if data.comm.comm_world is not None:

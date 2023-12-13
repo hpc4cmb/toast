@@ -30,23 +30,27 @@ def pointing_detector_inner(focalplane, boresight, flag, mask):
     )
     return quats
 
+
 # maps over intervals and detectors
-pointing_detector_inner = imap(pointing_detector_inner, 
-                               in_axes={
-                                   'focalplane': ["n_det", ...],
-                                   'boresight': ["n_samp", ...],
-                                   'quats': ["n_det", "n_samp", ...],
-                                   'flag': ["n_samp"],
-                                   'mask': int,
-                                   'interval_starts': ["n_intervals"],
-                                   'interval_ends': ["n_intervals"],
-                                   'intervals_max_length': int
-                               },
-                               interval_axis='n_samp', 
-                               interval_starts='interval_starts', 
-                               interval_ends='interval_ends', 
-                               interval_max_length='intervals_max_length', 
-                               output_name='quats')
+pointing_detector_inner = imap(
+    pointing_detector_inner,
+    in_axes={
+        "focalplane": ["n_det", ...],
+        "boresight": ["n_samp", ...],
+        "quats": ["n_det", "n_samp", ...],
+        "flag": ["n_samp"],
+        "mask": int,
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="quats",
+)
+
 
 def pointing_detector_interval(
     focalplane,
@@ -81,14 +85,22 @@ def pointing_detector_interval(
     log.debug(f"pointing_detector: jit-compiling.")
 
     # indexes quats
-    quats_indexed = quats[quat_index,:,:]
+    quats_indexed = quats[quat_index, :, :]
 
     # process the intervals
-    new_quats_indexed = pointing_detector_inner(focalplane, boresight, quats_indexed, shared_flags, shared_flag_mask,
-                                              interval_starts, interval_ends, intervals_max_length)
+    new_quats_indexed = pointing_detector_inner(
+        focalplane,
+        boresight,
+        quats_indexed,
+        shared_flags,
+        shared_flag_mask,
+        interval_starts,
+        interval_ends,
+        intervals_max_length,
+    )
 
     # updates quats at the index
-    quats = quats.at[quat_index,:,:].set(new_quats_indexed)
+    quats = quats.at[quat_index, :, :].set(new_quats_indexed)
     return quats
 
 

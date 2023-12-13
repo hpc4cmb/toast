@@ -801,9 +801,7 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
             raise ValueError("HDF5 does not support fits_IDL")
 
         if "partial" in kwargs and kwargs["partial"]:
-            raise ValueError(
-                "HDF5 does not support partial; map is always chunked."
-            )
+            raise ValueError("HDF5 does not support partial; map is always chunked.")
 
         if "column_names" in kwargs and kwargs["column_names"] is not None:
             raise ValueError("HDF5 does not support column_names")

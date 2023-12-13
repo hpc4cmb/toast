@@ -11,6 +11,7 @@ from ...jax.maps import imap
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
+
 def noise_weight_inner(det_data, detector_weights):
     """
     multiplies det_data by the weighs in detector_weights
@@ -26,19 +27,22 @@ def noise_weight_inner(det_data, detector_weights):
 
 
 # maps over intervals and detectors
-noise_weight_inner = imap(noise_weight_inner, 
-                    in_axes={
-                        'det_data': ["n_det","n_samp"],
-                        'detector_weights': ["n_det"],
-                        'interval_starts': ["n_intervals"],
-                        'interval_ends': ["n_intervals"],
-                        'intervals_max_length': int
-                    },
-                    interval_axis='n_samp', 
-                    interval_starts='interval_starts', 
-                    interval_ends='interval_ends', 
-                    interval_max_length='intervals_max_length', 
-                    output_name='det_data', output_as_input=True)
+noise_weight_inner = imap(
+    noise_weight_inner,
+    in_axes={
+        "det_data": ["n_det", "n_samp"],
+        "detector_weights": ["n_det"],
+        "interval_starts": ["n_intervals"],
+        "interval_ends": ["n_intervals"],
+        "intervals_max_length": int,
+    },
+    interval_axis="n_samp",
+    interval_starts="interval_starts",
+    interval_ends="interval_ends",
+    interval_max_length="intervals_max_length",
+    output_name="det_data",
+    output_as_input=True,
+)
 
 
 def noise_weight_interval(
@@ -68,14 +72,19 @@ def noise_weight_interval(
     log.debug(f"noise_weight: jit-compiling.")
 
     # extract indexes
-    det_data_indexed = det_data[det_data_index,:]
+    det_data_indexed = det_data[det_data_index, :]
 
     # does the computation
-    new_det_data_indexed = noise_weight_inner(det_data_indexed, detector_weights,
-                                              interval_starts, interval_ends, intervals_max_length)
+    new_det_data_indexed = noise_weight_inner(
+        det_data_indexed,
+        detector_weights,
+        interval_starts,
+        interval_ends,
+        intervals_max_length,
+    )
 
     # updates results and returns
-    det_data = det_data.at[det_data_index,:].set(new_det_data_indexed)
+    det_data = det_data.at[det_data_index, :].set(new_det_data_indexed)
     return det_data
 
 
