@@ -231,8 +231,8 @@ offset_project_signal_steplength_blocks = xmap(offset_project_signal_steplength_
                     in_axes={
                         'step_length': int,
                         'det_data': [...], # n_samp
-                        'use_flag': bool, # n_samp
-                        'flag_data': [...],
+                        'use_flag': bool,
+                        'flag_data': [...], # n_samp
                         'flag_mask': int,
                         'amplitude_offset': int,
                         'amplitude_view_offset': ["n_intervals"],

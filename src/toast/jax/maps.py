@@ -282,7 +282,7 @@ def where_pytree(condition_tree, true_tree, false_tree):
         return jnp.where(condition_tree, true_tree, false_tree)
     else:
         # Ensure condition_tree is iterable
-        if not isinstance(condition_tree, (list, dict, tuple)):
+        if (not isinstance(condition_tree, (list, dict, tuple))) and isinstance(true_tree, (list, dict, tuple)):
             condition_tree = itertools.repeat(condition_tree)
 
         # Apply conditional mapping based on the type of true_tree
