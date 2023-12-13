@@ -544,7 +544,7 @@ def imap(f, in_axes, interval_axis,
         interval_max_length (str): Input name containing the maximum length of intervals (static if jitted). This is also the name of the corresponding axis.
         output_name (str): Input name containing the output value.
         output_as_input (bool): If True, the output value is also used as an input to `f`.
-        mask_dummy_work (bool): If True, will do dummy work out of interval then mask it, otherwise will use a test to skip it.
+        mask_dummy_work (bool): If True (default value), will do dummy work out of interval then mask it, otherwise will use a test to skip it.
 
     Returns:
         callable: A transformed function that applies `f` over specified intervals in the input data.
