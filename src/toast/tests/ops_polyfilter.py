@@ -79,7 +79,8 @@ class PolyFilterTest(MPITestCase):
 
         for ob in data.obs:
             times = np.array(ob.shared[defaults.times])
-            for det in ob.local_detectors:
+
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = (
                     np.array(ob.shared[defaults.shared_flags])
                     & defaults.shared_mask_invalid
@@ -109,7 +110,7 @@ class PolyFilterTest(MPITestCase):
         polyfilter.apply(data)
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = (
                     np.array(ob.shared[defaults.shared_flags])
                     & defaults.shared_mask_invalid
@@ -171,7 +172,7 @@ class PolyFilterTest(MPITestCase):
 
         for ob in data.obs:
             times = np.array(ob.shared[defaults.times])
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = (
                     np.array(ob.shared[defaults.shared_flags])
                     & defaults.shared_mask_invalid
@@ -201,7 +202,7 @@ class PolyFilterTest(MPITestCase):
         polyfilter.apply(data)
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = (
                     np.array(ob.shared[defaults.shared_flags])
                     & defaults.shared_mask_invalid
@@ -297,7 +298,7 @@ class PolyFilterTest(MPITestCase):
         # Add 2D polynomial modes.
         coeff = np.arange(norder**2)
         for obs in data.obs:
-            for det in obs.local_detectors:
+            for det in obs.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 det_quat = obs.telescope.focalplane[det]["quat"]
                 x, y, z = qa.rotate(det_quat, ZAXIS)
                 theta, phi = np.arcsin([x, y])
@@ -332,7 +333,9 @@ class PolyFilterTest(MPITestCase):
             fig = plt.figure(figsize=[18, 12])
             ax = fig.add_subplot(1, 3, 1)
             ob = data.obs[0]
-            for idet, det in enumerate(ob.local_detectors):
+            for idet, det in enumerate(
+                ob.select_local_detectors(flagmask=defaults.det_mask_invalid)
+            ):
                 good = np.logical_and(
                     ob.detdata[defaults.det_flags][det, :] == 0,
                     ob.shared[defaults.shared_flags].data == 0,
@@ -366,7 +369,9 @@ class PolyFilterTest(MPITestCase):
 
         if data.comm.world_rank == 0:
             ax = fig.add_subplot(1, 3, 2)
-            for idet, det in enumerate(ob.local_detectors):
+            for idet, det in enumerate(
+                ob.select_local_detectors(flagmask=defaults.det_mask_invalid)
+            ):
                 good = np.logical_and(
                     ob.detdata["pyflags"][det, :] == 0,
                     ob.shared[defaults.shared_flags].data == 0,
@@ -387,7 +392,9 @@ class PolyFilterTest(MPITestCase):
 
         if data.comm.world_rank == 0:
             ax = fig.add_subplot(1, 3, 3)
-            for idet, det in enumerate(ob.local_detectors):
+            for idet, det in enumerate(
+                ob.select_local_detectors(flagmask=defaults.det_mask_invalid)
+            ):
                 good = np.logical_and(
                     ob.detdata[defaults.det_flags][det, :] == 0,
                     ob.shared[defaults.shared_flags].data == 0,
@@ -402,7 +409,7 @@ class PolyFilterTest(MPITestCase):
 
         # Check for consistency
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 check = np.allclose(
                     ob.detdata[defaults.det_data][det], ob.detdata["pyfilter"][det]
                 )
@@ -474,7 +481,7 @@ class PolyFilterTest(MPITestCase):
         for ob in data.obs:
             rms[ob.name] = dict()
             times = ob.shared[defaults.times]
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = np.array(ob.shared[defaults.shared_flags])
                 flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
@@ -495,7 +502,7 @@ class PolyFilterTest(MPITestCase):
         common_filter.apply(data)
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = np.array(ob.shared[defaults.shared_flags])
                 flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0

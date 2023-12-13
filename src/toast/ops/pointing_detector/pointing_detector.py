@@ -37,6 +37,11 @@ class PointingDetectorSimple(Operator):
         defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
     )
 
+    det_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for optional detector flagging",
+    )
+
     boresight = Unicode(
         defaults.boresight_radec, help="Observation shared key for boresight"
     )
@@ -119,7 +124,7 @@ class PointingDetectorSimple(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

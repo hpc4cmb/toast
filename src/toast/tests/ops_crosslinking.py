@@ -50,7 +50,8 @@ class CrossLinkingTest(MPITestCase):
         # Check that the total number of samples makes sense
         nsample = 0
         for obs in data.obs:
-            nsample += obs.n_local_samples * len(obs.local_detectors)
+            dets = obs.select_local_detectors(flagmask=crosslinking.det_flag_mask)
+            nsample += obs.n_local_samples * len(dets)
         if self.comm is not None:
             nsample = self.comm.reduce(nsample)
 

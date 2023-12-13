@@ -474,7 +474,9 @@ offset_apply_diag_precond_inner = jax.jit(
 
 
 @kernel(impl=ImplementationType.JAX, name="offset_apply_diag_precond")
-def offset_apply_diag_precond_jax(offset_var, amplitudes_in, amplitude_flags, amplitudes_out, use_accel):
+def offset_apply_diag_precond_jax(
+    offset_var, amplitudes_in, amplitude_flags, amplitudes_out, use_accel
+):
     """
     Simple multiplication.
 

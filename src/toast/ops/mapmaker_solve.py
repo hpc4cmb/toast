@@ -160,6 +160,7 @@ class SolverRHS(Operator):
             map_key=self.binning.binned,
             det_data=det_temp,
             det_data_units=self.det_data_units,
+            det_flag_mask=self.binning.det_flag_mask,
             subtract=True,
         )
 
@@ -167,6 +168,7 @@ class SolverRHS(Operator):
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
             det_data=det_temp,
+            det_flag_mask=self.binning.det_flag_mask,
             view=pixels.view,
         )
 
@@ -174,7 +176,11 @@ class SolverRHS(Operator):
         self.template_matrix.transpose = True
         self.template_matrix.det_data = det_temp
         self.template_matrix.det_data_units = self.det_data_units
+        self.template_matrix.det_flag_mask = self.binning.det_flag_mask
         self.template_matrix.view = pixels.view
+
+        # Initialize template matrix for all detectors
+        self.template_matrix.initialize(data)
 
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.
@@ -211,8 +217,7 @@ class SolverRHS(Operator):
 
         log.debug_rank("MapMaker   RHS begin run projection pipeline", comm=comm)
 
-        # NOTE: we set `use_accel=False` as templates cannot be initialized on device
-        proj_pipe.apply(data, detectors=detectors, use_accel=False)
+        proj_pipe.apply(data, detectors=detectors)
 
         log.debug_rank(
             "MapMaker   RHS projection pipeline finished in", comm=comm, timer=timer
@@ -374,7 +379,11 @@ class SolverLHS(Operator):
         self.template_matrix.transpose = False
         self.template_matrix.det_data = self.det_temp
         self.template_matrix.det_data_units = self.det_data_units
+        self.template_matrix.det_flag_mask = self.binning.det_flag_mask
         self.template_matrix.view = pixels.view
+
+        # Initialize template matrix for all detectors
+        self.template_matrix.initialize(data)
 
         self.binning.det_data = self.det_temp
         self.binning.det_data_units = self.det_data_units
@@ -432,6 +441,7 @@ class SolverLHS(Operator):
             map_key=self.binning.binned,
             det_data=self.det_temp,
             det_data_units=self.det_data_units,
+            det_flag_mask=self.binning.det_flag_mask,
             subtract=True,
         )
 
@@ -439,6 +449,7 @@ class SolverLHS(Operator):
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
             det_data=self.det_temp,
+            det_flag_mask=self.binning.det_flag_mask,
             view=pixels.view,
         )
 

@@ -65,9 +65,11 @@ class GainTemplate(Template):
         # but sorted in order of occurrence.
         all_dets = OrderedDict()
 
+        # Build up detector list
         for iob, ob in enumerate(new_data.obs):
-            # Build up detector list
             for d in ob.local_detectors:
+                if ob.local_detector_flags[d] & self.det_flag_mask:
+                    continue
                 if d not in all_dets:
                     all_dets[d] = None
 
@@ -134,6 +136,8 @@ class GainTemplate(Template):
 
                 self._precond[iob][ivw] = dict()
                 for det in ob.local_detectors:
+                    if det not in self._all_dets:
+                        continue
                     detweight = 1.0
                     if noise is not None:
                         detweight = noise.detector_weight(det).to_value(invvar_units)
@@ -162,10 +166,15 @@ class GainTemplate(Template):
         return z
 
     def _add_to_signal(self, detector, amplitudes, **kwargs):
+        if detector not in self._all_dets:
+            # This must have been cut by per-detector flags during initialization
+            return
         norder = self.order + 1
         offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
+                continue
+            if detector not in ob.detdata[self.det_data].detectors:
                 continue
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 legendre_poly = self._templates[iob][ivw]
@@ -176,10 +185,15 @@ class GainTemplate(Template):
                 vw[detector] += gain_fluctuation
 
     def _project_signal(self, detector, amplitudes, **kwargs):
+        if detector not in self._all_dets:
+            # This must have been cut by per-detector flags during initialization
+            return
         norder = self.order + 1
         offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
+                continue
+            if detector not in ob.detdata[self.det_data].detectors:
                 continue
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 legendre_poly = self._templates[iob][ivw]

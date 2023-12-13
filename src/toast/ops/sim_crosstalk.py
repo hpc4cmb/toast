@@ -125,7 +125,8 @@ def invert_xtalk_mat(matdic):
 
 @trait_docs
 class CrossTalk(Operator):
-    """
+    """Simulate readout crosstalk between channels.
+
     1.  The cross talk matrix can just be a dictionary of
     dictionaries of values (i.e. a sparse matrix) on every process.
     It does not need to be a dense matrix loaded from an HDF5 file.
@@ -138,6 +139,7 @@ class CrossTalk(Operator):
     accumulates to its local detectors, and passes it along.
     This continues until every process has accumulated the data
     from the other processes in the column.
+
     """
 
     # Class traits

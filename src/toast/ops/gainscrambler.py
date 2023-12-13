@@ -77,6 +77,8 @@ class GainScrambler(Operator):
             counter1 = 0
             counter2 = 0
 
+            dets_present = set(obs.detdata[self.det_data].detectors)
+
             for det in dets:
                 # Test the detector pattern
                 if pat is not None and pat.match(det) is None:
@@ -93,8 +95,8 @@ class GainScrambler(Operator):
                 )
 
                 gain = self.center + rngdata[0] * self.sigma
-
-                obs.detdata[self.det_data][det] *= gain
+                if det in dets_present:
+                    obs.detdata[self.det_data][det] *= gain
 
         return
 

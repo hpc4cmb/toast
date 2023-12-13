@@ -7,6 +7,7 @@ import traitlets
 
 from ...accelerator import ImplementationType
 from ...noise_sim import AnalyticNoise
+from ...observation import default_values as defaults
 from ...timing import Timer, function_timer
 from ...traits import Int, Unicode, UseEnum, trait_docs
 from ...utils import Environment, Logger
@@ -40,6 +41,11 @@ class NoiseWeight(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
+    det_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for optional detector flagging",
+    )
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -51,16 +57,16 @@ class NoiseWeight(Operator):
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         for ob in data.obs:
-            # Get the detectors we are using for this observation.  Since
-            # we are modifying the timestream units, we consider all detectors.
-            dets = ob.select_local_detectors(detectors, flagmask=0)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
-
             data_input_units = ob.detdata[self.det_data].units
             data_invcov_units = 1.0 / data_input_units**2
             data_output_units = 1.0 / data_input_units
+
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            if len(dets) == 0:
+                # Nothing to do for this observation, but
+                # update the units of the output
+                ob.detdata[self.det_data].update_units(data_output_units)
+                continue
 
             # Check that the noise model exists
             if self.noise_model not in ob:

@@ -273,7 +273,6 @@ void expand_matrix(py::array_t <double> compressed_matrix,
     }
 }
 
-
 void build_template_covariance(std::vector <int64_t> & starts,
                                std::vector <int64_t> & stops,
                                std::vector <py::array_t <double,
@@ -312,7 +311,6 @@ void build_template_covariance(std::vector <int64_t> & starts,
     }
 }
 
-
 // void build_template_covariance(
 //     py::buffer starts,
 //     py::buffer stops,
@@ -340,12 +338,12 @@ void build_template_covariance(std::vector <int64_t> & starts,
 //         stops, "stops", 1, temp_shape, {n_template}
 //     );
 
-//     // Template covariance    
+//     // Template covariance
 //     double * raw_template_cov = extract_buffer <double> (
-//         template_covariance, 
-//         "template_covariance", 
-//         2, 
-//         temp_shape, 
+//         template_covariance,
+//         "template_covariance",
+//         2,
+//         temp_shape,
 //         {n_template, n_template}
 //     );
 
@@ -377,7 +375,10 @@ void build_template_covariance(std::vector <int64_t> & starts,
 //                 val = 1;
 //             }
 //             for (int64_t isample = istart; isample < istop; ++isample) {
-//                 //std::cerr << "DBG: (" << row << "," << col << "," << isample << ") trow[" << isample << "-" << row_start << "]=" << raw_row[isample - row_start] << " tcol[" << isample << "-" << col_start << "]=" << raw_col[isample - col_start] << " g=" << raw_good[isample] << std::endl;
+//                 //std::cerr << "DBG: (" << row << "," << col << "," << isample << ")
+// trow[" << isample << "-" << row_start << "]=" << raw_row[isample - row_start] << "
+// tcol[" << isample << "-" << col_start << "]=" << raw_col[isample - col_start] << "
+// g=" << raw_good[isample] << std::endl;
 //                 val += raw_row[isample - row_start]
 //                        * raw_col[isample - col_start]
 //                        * raw_good[isample];

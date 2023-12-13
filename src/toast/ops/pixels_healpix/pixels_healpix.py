@@ -162,7 +162,9 @@ class PixelsHealpix(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(
+                detectors, flagmask=self.detector_pointing.det_flag_mask
+            )
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -222,7 +224,9 @@ class PixelsHealpix(Operator):
                         # this calculation.  This could eventually be a kernel.
                         ob.detdata[self.pixels].accel_update_host()
                         restore_dev = True
-                    for det in ob.select_local_detectors(detectors):
+                    for det in ob.select_local_detectors(
+                        detectors, flagmask=self.detector_pointing.det_flag_mask
+                    ):
                         for vslice in view_slices:
                             good = ob.detdata[self.pixels][det, vslice] >= 0
                             self._local_submaps[

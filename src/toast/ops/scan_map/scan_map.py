@@ -38,6 +38,11 @@ class ScanMap(Operator):
         defaults.det_data_units, help="Output units if creating detector data"
     )
 
+    det_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for optional detector flagging",
+    )
+
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
     )
@@ -90,7 +95,7 @@ class ScanMap(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -209,8 +214,13 @@ class ScanMask(Operator):
     )
 
     det_flags_value = Int(
-        defaults.det_mask_processing, 
-        help="The detector flag value to set where the mask result is non-zero"
+        defaults.det_mask_processing,
+        help="The detector flag value to set where the mask result is non-zero",
+    )
+
+    det_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for optional detector flagging",
     )
 
     view = Unicode(
@@ -257,7 +267,7 @@ class ScanMask(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors, self.det_flag_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -324,6 +334,11 @@ class ScanScale(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
+    det_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for optional detector flagging",
+    )
+
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
     )
@@ -373,7 +388,7 @@ class ScanScale(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

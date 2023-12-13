@@ -255,7 +255,9 @@ class SimAtmTest(MPITestCase):
 
         if rank == 0:
             for obs in data.obs:
-                for det in obs.local_detectors:
+                for det in obs.select_local_detectors(
+                    flagmask=defaults.det_mask_invalid
+                ):
                     sig0 = obs.detdata["full_signal"][det]
                     sig1 = obs.detdata["interpolated_signal"][det]
                     assert np.std(sig1 - sig0) / np.std(sig0) < 1e-2
@@ -481,7 +483,7 @@ class SimAtmTest(MPITestCase):
         # a non-zero signal
 
         for obs in data.obs:
-            for det in obs.local_detectors:
+            for det in obs.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 sig = obs.detdata[defaults.det_data][det]
                 assert np.std(sig) != 0
 
@@ -547,7 +549,7 @@ class SimAtmTest(MPITestCase):
 
         # Check that the atmospheric fluctuations are stronger at higher frequency
         for obs in data.obs:
-            for det in obs.local_detectors:
+            for det in obs.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 new_rms = np.std(obs.detdata[defaults.det_data][det])
                 assert new_rms > 1.1 * old_rms[obs.name][det]
 

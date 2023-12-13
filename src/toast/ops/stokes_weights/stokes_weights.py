@@ -89,12 +89,6 @@ class StokesWeights(Operator):
         defaults.weights, help="Observation detdata key for output weights"
     )
 
-    quats = Unicode(
-        None,
-        allow_none=True,
-        help="Observation detdata key for output quaternions",
-    )
-
     single_precision = Bool(False, help="If True, use 32bit float in output")
 
     cal = Unicode(
@@ -157,13 +151,7 @@ class StokesWeights(Operator):
                 raise RuntimeError("If using HWP, you must specify the fp_gamma key")
 
         # Expand detector pointing
-        if self.quats is not None:
-            quats_name = self.quats
-        else:
-            if self.detector_pointing.quats is not None:
-                quats_name = self.detector_pointing.quats
-            else:
-                quats_name = "quats"
+        quats_name = self.detector_pointing.quats
 
         view = self.view
         if view is None:
@@ -171,12 +159,13 @@ class StokesWeights(Operator):
             view = self.detector_pointing.view
 
         # Expand detector pointing
-        self.detector_pointing.quats = quats_name
         self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(
+                detectors, flagmask=self.detector_pointing.det_flag_mask
+            )
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

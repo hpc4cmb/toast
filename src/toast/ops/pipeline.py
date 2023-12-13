@@ -170,7 +170,11 @@ class Pipeline(Operator):
 
         # notify user of device->host data movements introduced by CPU operators
         if (self._unstaged_data is not None) and (not self._unstaged_data.is_empty()):
-            cpu_ops = {str(op) for op in self.operators if not op.supports_accel()}
+            cpu_ops = {
+                op.__class__.__qualname__
+                for op in self.operators
+                if not op.supports_accel()
+            }
             log.debug(
                 f"{pstr} {self}, had to move {self._unstaged_data} back to host as {cpu_ops} do not support accel."
             )
@@ -357,4 +361,4 @@ class Pipeline(Operator):
         """
         Converts the pipeline into a human-readable string.
         """
-        return f"Pipeline{[str(op) for op in self.operators]}"
+        return f"Pipeline{[op.__class__.__qualname__ for op in self.operators]}"

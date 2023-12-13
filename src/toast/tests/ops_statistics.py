@@ -60,7 +60,7 @@ class StatisticsTest(MPITestCase):
                 skew = f["skewness"][:].copy()
                 kurt = f["kurtosis"][:].copy()
             # Test the statistics
-            for det in obs.local_detectors:
+            for det in obs.select_local_detectors(flagmask=statistics.det_flag_mask):
                 idet = detectors.index(det)
                 sig = obs.detdata[defaults.det_data][det]
                 # Test variance

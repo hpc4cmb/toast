@@ -124,6 +124,8 @@ class Fourier2D(Template):
 
             # Build up detector list
             for d in ob.local_detectors:
+                if ob.local_detector_flags[d] & self.det_flag_mask:
+                    continue
                 if d not in all_dets:
                     all_dets[d] = None
 
@@ -265,6 +267,8 @@ class Fourier2D(Template):
                 norms_view = self._norms[norm_slice].reshape((-1, self._nmode))
 
                 for det in ob.local_detectors:
+                    if det not in self._all_dets:
+                        continue
                     detweight = 1.0
                     if noise is not None:
                         detweight = noise.detector_weight(det).to_value(invvar_units)
@@ -327,6 +331,9 @@ class Fourier2D(Template):
         return z
 
     def _add_to_signal(self, detector, amplitudes, **kwargs):
+        if detector not in self._all_dets:
+            # This must have been cut by per-detector flags during initialization
+            return
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
                 continue
@@ -347,6 +354,9 @@ class Fourier2D(Template):
                 )
 
     def _project_signal(self, detector, amplitudes, **kwargs):
+        if detector not in self._all_dets:
+            # This must have been cut by per-detector flags during initialization
+            return
         for iob, ob in enumerate(self.data.obs):
             if detector not in ob.local_detectors:
                 continue

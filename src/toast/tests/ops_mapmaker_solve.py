@@ -187,8 +187,8 @@ class MapmakerSolveTest(MPITestCase):
 
         tmatrix.amplitudes = "amplitudes"
         tmatrix.det_data = defaults.det_data
-        tmatrix.data = data
         tmatrix.transpose = False
+        tmatrix.initialize(data)
         tmatrix.apply(data)
 
         # Pointing operator

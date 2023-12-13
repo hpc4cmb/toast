@@ -60,7 +60,9 @@ class ScanMapTest(MPITestCase):
 
             # Manual check of the projection of map values to timestream
             for ob in data.obs:
-                for det in ob.local_detectors:
+                for det in ob.select_local_detectors(
+                    flagmask=defaults.det_mask_invalid
+                ):
                     wt = ob.detdata[weights.weights][det]
                     local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
                         ob.detdata[pixels.pixels][det]
@@ -179,7 +181,7 @@ class ScanMapTest(MPITestCase):
 
         mask_data = data["fake_mask"]
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
                     ob.detdata[pixels.pixels][det]
                 )

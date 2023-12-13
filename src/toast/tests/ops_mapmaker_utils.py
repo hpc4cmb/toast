@@ -65,7 +65,7 @@ class MapmakerUtilsTest(MPITestCase):
         # Manual check
         check_hits = PixelData(data["pixel_dist"], np.int64, n_value=1)
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
                     ob.detdata["pixels"][det]
                 )
@@ -159,8 +159,7 @@ class MapmakerUtilsTest(MPITestCase):
         for ob in data.obs:
             noise = ob["noise_model"]
             noise_corr = ob["noise_model_corr"]
-
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 detweight = noise.detector_weight(det).to_value(invnpp_units)
                 detweight_corr = noise_corr.detector_weight(det).to_value(invnpp_units)
 
@@ -322,7 +321,7 @@ class MapmakerUtilsTest(MPITestCase):
         for ob in data.obs:
             noise = ob["noise_model"]
             noise_corr = ob["noise_model_corr"]
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 wt = ob.detdata[defaults.weights][det]
                 local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
                     ob.detdata[defaults.pixels][det]

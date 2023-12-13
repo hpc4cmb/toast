@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import json
+import os
 from collections import OrderedDict
 
 import h5py
@@ -70,6 +71,12 @@ class Offset(Template):
     )
 
     precond_width = Int(20, help="Preconditioner width in terms of offsets / baselines")
+
+    debug_plots = Unicode(
+        None,
+        allow_none=True,
+        help="If not None, make debugging plots in this directory",
+    )
 
     @traitlets.validate("precond_width")
     def _check_precond_width(self, proposal):
@@ -167,13 +174,16 @@ class Offset(Template):
                 if self.use_noise_prior:
                     obstime = ob.shared[self.times][-1] - ob.shared[self.times][0]
                     tbase = self.step_time.to_value(u.second)
-                    fbase = 1.0 / tbase
                     powmin = np.floor(np.log10(1 / obstime)) - 1
-                    powmax = min(np.ceil(np.log10(1 / tbase)) + 2, self._obs_rate[iob])
+                    powmax = min(
+                        np.ceil(np.log10(1 / tbase)) + 2, np.log10(self._obs_rate[iob])
+                    )
                     self._freq[iob] = np.logspace(powmin, powmax, 1000)
 
             # Build up detector list
             for d in ob.local_detectors:
+                if ob.local_detector_flags[d] & self.det_flag_mask:
+                    continue
                 if d not in all_dets:
                     all_dets[d] = None
 
@@ -264,7 +274,9 @@ class Offset(Template):
                                 amplen = step_length
                                 if amp == n_amp_view - 1:
                                     amplen = view_samples - voff
-                                self._offsetvar[offset + amp] = 1.0 / (detnoise * amplen)
+                                self._offsetvar[offset + amp] = 1.0 / (
+                                    detnoise * amplen
+                                )
                                 voff += step_length
                         else:
                             flags = views.detdata[self.det_flags][ivw]
@@ -274,9 +286,10 @@ class Offset(Template):
                                 if amp == n_amp_view - 1:
                                     amplen = view_samples - voff
                                 n_good = amplen - np.count_nonzero(
-                                    flags[det][voff : voff + amplen] & self.det_flag_mask
+                                    flags[det][voff : voff + amplen]
+                                    & self.det_flag_mask
                                 )
-                                if ((n_good / amplen) <= self.good_fraction):
+                                if (n_good / amplen) <= self.good_fraction:
                                     # This detector is cut or too many samples flagged
                                     self._offsetvar[offset + amp] = 0.0
                                     self._amp_flags[offset + amp] = True
@@ -317,6 +330,51 @@ class Offset(Template):
                         det,
                     )
 
+                    if self.debug_plots is not None:
+                        set_matplotlib_backend()
+                        import matplotlib.pyplot as plt
+
+                        fname = os.path.join(
+                            self.debug_plots, f"{self.name}_{det}_{ob.name}_psd.pdf"
+                        )
+                        psdfreq = ob[self.noise_model].freq(det).to_value(u.Hz)
+                        psd = (
+                            ob[self.noise_model]
+                            .psd(det)
+                            .to_value(self.det_data_units**2 * u.second)
+                        )
+                        corrpsd = self._remove_white_noise(psdfreq, psd)
+
+                        fig = plt.figure(figsize=[12, 12])
+                        ax = fig.add_subplot(2, 1, 1)
+                        ax.loglog(
+                            psdfreq,
+                            psd,
+                            color="black",
+                            label="Original PSD",
+                        )
+                        ax.loglog(
+                            psdfreq,
+                            corrpsd,
+                            color="red",
+                            label="Correlated PSD",
+                        )
+                        ax.set_xlabel("Frequency [Hz]")
+                        ax.set_ylabel("PSD [K$^2$ / Hz]")
+                        ax.legend(loc="best")
+
+                        ax = fig.add_subplot(2, 1, 2)
+                        ax.loglog(
+                            self._freq[iob],
+                            offset_psd,
+                            label=f"Offset PSD",
+                        )
+                        ax.set_xlabel("Frequency [Hz]")
+                        ax.set_ylabel("PSD [K$^2$ / Hz]")
+                        ax.legend(loc="best")
+                        fig.savefig(fname)
+                        plt.close(fig)
+
                     # "Noise weight" (time-domain inverse variance)
                     detnoise = (
                         ob[self.noise_model]
@@ -334,6 +392,18 @@ class Offset(Template):
 
                     self._filters[iob][det] = list()
                     self._precond[iob][det] = list()
+
+                    if self.debug_plots is not None:
+                        ffilter = os.path.join(
+                            self.debug_plots, f"{self.name}_{det}_{ob.name}_filters.pdf"
+                        )
+                        fprec = os.path.join(
+                            self.debug_plots, f"{self.name}_{det}_{ob.name}_prec.pdf"
+                        )
+                        figfilter = plt.figure(figsize=[12, 8])
+                        axfilter = figfilter.add_subplot(1, 1, 1)
+                        figprec = plt.figure(figsize=[12, 8])
+                        axprec = figprec.add_subplot(1, 1, 1)
 
                     # Loop over views
                     views = ob.view[self.view]
@@ -370,6 +440,13 @@ class Offset(Template):
 
                         self._filters[iob][det].append(noisefilter)
 
+                        if self.debug_plots is not None:
+                            axfilter.plot(
+                                np.arange(len(noisefilter)),
+                                noisefilter,
+                                label=f"Noise filter {ivw}",
+                            )
+
                         # Build the preconditioner
                         lower = None
                         preconditioner = None
@@ -388,6 +465,12 @@ class Offset(Template):
                             icenter = preconditioner.size // 2
                             if detnoise != 0:
                                 preconditioner[icenter] += 1.0 / detnoise
+                            if self.debug_plots is not None:
+                                axprec.plot(
+                                    np.arange(len(preconditioner)),
+                                    preconditioner,
+                                    label=f"Toeplitz preconditioner {ivw}",
+                                )
                         else:
                             # We are using a banded matrix for the preconditioner.
                             # This contains a Toeplitz component from the inverse
@@ -421,17 +504,35 @@ class Offset(Template):
                             )
                         self._precond[iob][det].append((preconditioner, lower))
                         offset += n_amp_view
+
+                    if self.debug_plots is not None:
+                        axfilter.set_xlabel("Sample Lag")
+                        axfilter.set_ylabel("Amplitude")
+                        axfilter.legend(loc="best")
+                        figfilter.savefig(ffilter)
+                        axprec.set_xlabel("Sample Lag")
+                        axprec.set_ylabel("Amplitude")
+                        axprec.legend(loc="best")
+                        figprec.savefig(fprec)
+                        plt.close(figfilter)
+                        plt.close(figprec)
+
         log.verbose(f"Offset variance = {self._offsetvar}")
         return
 
     # Helper functions for noise / preconditioner calculations
 
     def _interpolate_psd(self, x, lfreq, lpsd):
-        result = np.zeros(x.size)
-        good = np.abs(x) > 1e-10
-        logx = np.log(np.abs(x[good]))
+        # Threshold for zero frequency
+        thresh = 1.0e-6
+        lowf = x < thresh
+        good = np.logical_not(lowf)
+
+        logx = np.empty_like(x)
+        logx[lowf] = np.log(thresh)
+        logx[good] = np.log(x[good])
         logresult = np.interp(logx, lfreq, lpsd)
-        result[good] = np.exp(logresult)
+        result = np.exp(logresult)
         return result
 
     def _truncate(self, noisefilter, lim=1e-4):
@@ -444,6 +545,42 @@ class Offset(Template):
         noisefilter = noisefilter[icenter - icut : icenter + icut + 1]
         return noisefilter
 
+    def _remove_white_noise(self, freq, psd):
+        """Remove the white noise component of the PSD."""
+        corrpsd = psd.copy()
+        n_corrpsd = len(corrpsd)
+        plat_off = int(0.8 * n_corrpsd)
+        if n_corrpsd - plat_off < 10:
+            if n_corrpsd < 10:
+                # Crazy spectrum...
+                plat_off = 0
+            else:
+                plat_off = n_corrpsd - 10
+
+        cfreq = np.log(freq[plat_off:])
+        cdata = np.log(corrpsd[plat_off:])
+
+        def lin_func(x, a, b, c):
+            # Line
+            return a * (x - b) + c
+
+        params, params_cov = scipy.optimize.curve_fit(
+            lin_func, cfreq, cdata, p0=[0.0, cfreq[-1], cdata[-1]]
+        )
+
+        cdata = lin_func(cfreq, params[0], params[1], params[2])
+        cdata = np.exp(cdata)
+        plat = cdata[-1]
+
+        # Given the range between the white noise plateau and the maximum
+        # values of the PSD, we set a minimum value for any spectral bins
+        # that are small or negative.
+        corrmax = np.amax(corrpsd)
+        corrthresh = 1.0e-10 * corrmax - plat
+        corrpsd -= plat
+        corrpsd[corrpsd < corrthresh] = corrthresh
+        return corrpsd
+
     def _get_offset_psd(self, noise, freq, step_time, det):
         """Compute the PSD of the baseline offsets."""
         psdfreq = noise.freq(det).to_value(u.Hz)
@@ -451,37 +588,47 @@ class Offset(Template):
         rate = noise.rate(det).to_value(u.Hz)
 
         # Remove the white noise component from the PSD
-        psd = psd.copy()
-        psd -= np.amin(psd[psdfreq > 1.0])
-        psd[psd < 1e-30] = 1e-30
+        psd = self._remove_white_noise(psdfreq, psd)
 
-        # The calculation of `offset_psd` is from Keihänen, E. et al:
-        # "Making CMB temperature and polarization maps with Madam",
-        # A&A 510:A57, 2010
+        # Log PSD for interpolation
         logfreq = np.log(psdfreq)
         logpsd = np.log(psd)
 
-        def g(x):
-            bad = np.abs(x) < 1e-10
-            good = np.logical_not(bad)
-            arg = np.pi * x[good]
-            result = bad.astype(np.float64)
-            result[good] = (np.sin(arg) / arg) ** 2
-            return result
+        # The calculation of `offset_psd` is based on Keihänen, E. et al:
+        # "Making CMB temperature and polarization maps with Madam",
+        # A&A 510:A57, 2010, with a small algebra correction.
 
+        m_max = 5
         tbase = step_time
         fbase = 1.0 / tbase
 
-        offset_psd = np.zeros_like(freq)
-        offset_psd[:] += self._interpolate_psd(freq, logfreq, logpsd) * g(freq * tbase)
+        def g(f, m):
+            # The frequencies are constructed without the zero frequency,
+            # so we do not need to handle it here.
+            # result = np.sin(np.pi * f * tbase) ** 2 / (np.pi * (f * tbase + m)) ** 2
+            x = np.pi * (f * tbase + m)
+            bad = np.abs(x) < 1.0e-30
+            good = np.logical_not(bad)
+            result = np.empty_like(x)
+            result[bad] = 1.0
+            result[good] = np.sin(x[good]) ** 2 / x[good] ** 2
+            return result
 
-        for m in range(1, 2):
+        offset_psd = np.zeros_like(freq)
+
+        # The m = 0 term
+        offset_psd = self._interpolate_psd(freq, logfreq, logpsd) * g(freq, 0)
+
+        # The remaining terms
+        for m in range(1, m_max):
+            # Positive m
             offset_psd[:] += self._interpolate_psd(
                 freq + m * fbase, logfreq, logpsd
-            ) * g(freq * tbase + m)
+            ) * g(freq, m)
+            # Negative m
             offset_psd[:] += self._interpolate_psd(
                 freq - m * fbase, logfreq, logpsd
-            ) * g(freq * tbase - m)
+            ) * g(freq, -m)
 
         offset_psd *= fbase
         return offset_psd
@@ -500,6 +647,10 @@ class Offset(Template):
     @function_timer
     def _add_to_signal(self, detector, amplitudes, use_accel=None, **kwargs):
         log = Logger.get()
+
+        if detector not in self._all_dets:
+            # This must have been cut by per-detector flags during initialization
+            return
 
         # Kernel selection
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
@@ -584,6 +735,10 @@ class Offset(Template):
     def _project_signal(self, detector, amplitudes, use_accel=None, **kwargs):
         log = Logger.get()
 
+        if detector not in self._all_dets:
+            # This must have been cut by per-detector flags during initialization
+            return
+
         # Kernel selection
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
@@ -656,12 +811,14 @@ class Offset(Template):
             raise NotImplementedError(
                 "offset template add_prior on accelerator not implemented"
             )
+        if self.debug_plots is not None:
+            set_matplotlib_backend()
+            import matplotlib.pyplot as plt
+
         for det in self._all_dets:
             offset = self._det_start[det]
             for iob, ob in enumerate(self.data.obs):
                 if det not in ob.local_detectors:
-                    continue
-                if det not in ob.detdata[self.det_data].detectors:
                     continue
                 for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                     n_amp_view = self._obs_views[iob][ivw]
@@ -672,12 +829,51 @@ class Offset(Template):
                     if det in self._filters[iob]:
                         # There is some contribution from this detector
                         amps_out[:] += scipy.signal.convolve(
-                            amps_in, self._filters[iob][det][ivw], mode="same", method="direct"
+                            amps_in,
+                            self._filters[iob][det][ivw],
+                            mode="same",
+                            method="direct",
                         )
+
+                        if self.debug_plots is not None:
+                            # Find the first unused file name in the sequence
+                            iter = -1
+                            while iter < 0 or os.path.isfile(fname):
+                                iter += 1
+                                fname = os.path.join(
+                                    self.debug_plots,
+                                    f"{self.name}_{det}_{ob.name}_prior_{ivw}_{iter}.pdf",
+                                )
+                            fig = plt.figure(figsize=[12, 8])
+                            ax = fig.add_subplot(1, 1, 1)
+                            ax.plot(
+                                np.arange(len(amps_in)),
+                                amps_in,
+                                color="black",
+                                label="Input Amplitudes",
+                            )
+                            ax.plot(
+                                np.arange(len(amps_in)),
+                                amps_out,
+                                color="red",
+                                label="Output Amplitudes",
+                            )
+
                         amps_out[amp_flags_in != 0] = 0.0
-                        print(f"DBG filter: {self._filters[iob][det][ivw]}")
-                        print(f"DBG amps_in: {amps_in}")
-                        print(f"DBG amps_out: {amps_out}", flush=True)
+
+                        if self.debug_plots is not None:
+                            ax.plot(
+                                np.arange(len(amps_in)),
+                                amps_out,
+                                color="green",
+                                label="Output Amplitudes (flagged)",
+                            )
+                            ax.set_xlabel("Amplitude Index")
+                            ax.set_ylabel("Value")
+                            ax.legend(loc="best")
+                            fig.savefig(fname)
+                            plt.close(fig)
+
                     else:
                         amps_out[:] = 0.0
                     offset += n_amp_view
@@ -721,7 +917,9 @@ class Offset(Template):
                                 # scipy.signal.convolve will use either `convolve` or
                                 # `fftconvolve` depending on the size of the inputs
                                 amps_out = scipy.signal.convolve(
-                                    amps_in, self._precond[iob][det][ivw][0], mode="same"
+                                    amps_in,
+                                    self._precond[iob][det][ivw][0],
+                                    mode="same",
                                 )
                             else:
                                 # Use pre-computed Cholesky decomposition.  Note that this

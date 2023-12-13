@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import re
 import shutil
 import tempfile
 from datetime import datetime
@@ -24,6 +25,7 @@ from ..mpi import Comm
 from ..observation import DetectorData, Observation
 from ..observation import default_values as defaults
 from ..pixels import PixelData
+from ..pixels_io_healpix import write_healpix_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..schedule_sim_satellite import create_satellite_schedule
@@ -224,6 +226,7 @@ def create_satellite_data(
     pixel_per_process=1,
     hwp_rpm=9.0,
     single_group=False,
+    flagged_pixels=True,
 ):
     """Create a data object with a simple satellite sim.
 
@@ -244,6 +247,10 @@ def create_satellite_data(
     """
     toastcomm = create_comm(mpicomm, single_group=single_group)
     data = Data(toastcomm)
+
+    if flagged_pixels:
+        # We are going to flag half the pixels
+        pixel_per_process *= 2
 
     tele = create_space_telescope(
         toastcomm.group_size,
@@ -280,6 +287,17 @@ def create_satellite_data(
         detset_key="pixel",
     )
     sim_sat.apply(data)
+
+    if flagged_pixels:
+        det_pat = re.compile(r"D(.*)[AB]-.*")
+        for ob in data.obs:
+            det_flags = dict()
+            for det in ob.local_detectors:
+                det_mat = det_pat.match(det)
+                idet = int(det_mat.group(1))
+                if idet % 2 != 0:
+                    det_flags[det] = defaults.det_mask_invalid
+            ob.update_local_detector_flags(det_flags)
 
     return data
 
@@ -496,7 +514,7 @@ def create_healpix_ring_satellite(
     return data
 
 
-def create_fake_sky(data, dist_key, map_key):
+def create_fake_sky(data, dist_key, map_key, hpix_out=None):
     np.random.seed(987654321)
     dist = data[dist_key]
     pix_data = PixelData(dist, np.float64, n_value=3, units=defaults.det_data_units)
@@ -512,6 +530,15 @@ def create_fake_sky(data, dist_key, map_key):
             pix_data.data[off, :, 2] = U_data
             off += 1
     data[map_key] = pix_data
+    if hpix_out is not None:
+        write_healpix_fits(
+            pix_data,
+            hpix_out,
+            nest=True,
+            comm_bytes=10000000,
+            report_memory=False,
+            single_precision=False,
+        )
 
 
 def create_fake_mask(data, dist_key, mask_key):
@@ -713,6 +740,7 @@ def create_ground_data(
     split=False,
     turnarounds_invalid=False,
     single_group=False,
+    flagged_pixels=True,
 ):
     """Create a data object with a simple ground sim.
 
@@ -731,6 +759,10 @@ def create_ground_data(
     """
     toastcomm = create_comm(mpicomm, single_group=single_group)
     data = Data(toastcomm)
+
+    if flagged_pixels:
+        # We are going to flag half the pixels
+        pixel_per_process *= 2
 
     tele = create_ground_telescope(
         toastcomm.group_size,
@@ -807,6 +839,17 @@ def create_ground_data(
     else:
         sim_ground.turnaround_mask = 2
     sim_ground.apply(data)
+
+    if flagged_pixels:
+        det_pat = re.compile(r"D(.*)[AB]-.*")
+        for ob in data.obs:
+            det_flags = dict()
+            for det in ob.local_detectors:
+                det_mat = det_pat.match(det)
+                idet = int(det_mat.group(1))
+                if idet % 2 != 0:
+                    det_flags[det] = defaults.det_mask_invalid
+            ob.update_local_detector_flags(det_flags)
 
     return data
 

@@ -243,7 +243,6 @@ class SimAtmosphere(Operator):
             # Check that this operator has the traits we expect
             for trt in [
                 "view",
-                "quats",
                 "weights",
                 "mode",
             ]:

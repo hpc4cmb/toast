@@ -137,7 +137,7 @@ class AnalyticNoise(Noise):
     def _detector_weight(self, det):
         if self._NET[det] == 0:
             nunit = self._NET[det].unit
-            return 0.0 * (1.0 / (nunit ** 2) / u.Hz)
+            return 0.0 * (1.0 / (nunit**2) / u.Hz)
         else:
             wt = 1.0 / (self._NET[det] ** 2) / self._rate[det]
             return wt.decompose()

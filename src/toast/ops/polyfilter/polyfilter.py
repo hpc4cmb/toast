@@ -546,27 +546,29 @@ class PolyFilter(Operator):
                 shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
             signals = []
-            idets = []
+            filter_dets = []
             last_flags = None
             in_place = True
-            for idet, det in enumerate(dets):
+            for det in dets:
                 # Test the detector pattern
                 if pat.match(det) is None:
                     continue
 
-                ref = obs.detdata[self.det_data][idet]
-                signal = ref.astype(np.float64, copy=False)
-                if not signal is ref:
+                ref = obs.detdata[self.det_data][det]
+                if isinstance(ref[0], np.float64):
+                    signal = ref
+                else:
                     in_place = False
+                    signal = np.array(ref, dtype=np.float64)
                 if self.det_flags is not None:
-                    det_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
+                    det_flags = obs.detdata[self.det_flags][det] & self.det_flag_mask
                     flags = shared_flags | det_flags
                 else:
                     flags = shared_flags
 
                 if last_flags is None or np.all(last_flags == flags):
+                    filter_dets.append(det)
                     signals.append(signal)
-                    idets.append(idet)
                 else:
                     filter_polynomial(
                         self.order,
@@ -578,10 +580,10 @@ class PolyFilter(Operator):
                         use_accel=use_accel,
                     )
                     if not in_place:
-                        for i, x in zip(idets, signals):
-                            obs.detdata[self.det_data][i] = x
+                        for fdet, x in zip(filter_dets, signals):
+                            obs.detdata[self.det_data][fdet] = x
                     signals = [signal]
-                    idets = [idet]
+                    filter_dets = [det]
                 last_flags = flags.copy()
 
             if len(signals) > 0:
@@ -595,8 +597,8 @@ class PolyFilter(Operator):
                     use_accel=use_accel,
                 )
                 if not in_place:
-                    for i, x in zip(idets, signals):
-                        obs.detdata[self.det_data][i] = x
+                    for fdet, x in zip(filter_dets, signals):
+                        obs.detdata[self.det_data][fdet] = x
 
             # Optionally flag unfiltered data
             if self.shared_flags is not None and self.poly_flag_mask is not None:
@@ -807,7 +809,7 @@ class CommonModeFilter(Operator):
             # Loop over all values of the focalplane key
             for value in values:
                 local_dets = []
-                for idet, det in enumerate(temp_ob.local_detectors):
+                for det in temp_ob.local_detectors:
                     if temp_ob.local_detector_flags[det] & self.det_flag_mask:
                         continue
                     if pat.match(det) is None:
@@ -817,8 +819,12 @@ class CommonModeFilter(Operator):
                         and focalplane[det][self.focalplane_key] != value
                     ):
                         continue
-                    local_dets.append(idet)
-                local_dets = np.array(local_dets)
+                    local_dets.append(det)
+
+                # The indices into the detector data, which may be different than
+                # the index into the full set of local detectors.
+                data_indices = temp_ob.detdata[self.det_data].indices(local_dets)
+                flag_indices = temp_ob.detdata[self.det_flags].indices(local_dets)
 
                 # Average all detectors that match the key
                 template = np.zeros(nsample)
@@ -834,7 +840,8 @@ class CommonModeFilter(Operator):
                     det_flags = np.zeros([ndet, nsample], dtype=np.uint8)
 
                 sum_detectors(
-                    local_dets,
+                    data_indices,
+                    flag_indices,
                     shared_flags,
                     self.shared_flag_mask,
                     temp_ob.detdata[self.det_data].data,
@@ -850,7 +857,7 @@ class CommonModeFilter(Operator):
                     comm.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
 
                 subtract_mean(
-                    local_dets,
+                    data_indices,
                     temp_ob.detdata[self.det_data].data,
                     template,
                     hits,

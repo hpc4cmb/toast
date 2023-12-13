@@ -521,7 +521,8 @@ class Madam(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
-            all_dets.update(dets)
+            for d in dets:
+                all_dets.add(d)
 
             # Check that the timestamps exist.
             if self.times not in ob.shared:
@@ -588,7 +589,7 @@ class Madam(Operator):
         nsamp = nsamp_valid
 
         interval_starts = np.array(interval_starts, dtype=np.int64)
-        all_dets = sorted(all_dets)
+        all_dets = list(sorted(all_dets))
         ndet = len(all_dets)
 
         nnz_full = len(self.stokes_weights.mode)
@@ -715,7 +716,8 @@ class Madam(Operator):
                         nse_scale = float(ob[self.noise_scale])
 
                 for det in all_dets:
-                    if det not in ob.local_detectors:
+                    local_dets = ob.select_local_detectors(flagmask=self.det_flag_mask)
+                    if det not in local_dets:
                         continue
                     psd = nse.psd(det).to_value(u.K**2 * u.second) * nse_scale**2
                     detw = nse.detector_weight(det).to_value(1.0 / u.K**2)
@@ -755,7 +757,7 @@ class Madam(Operator):
                 None,
                 None,
                 None,
-                None,
+                self.det_flag_mask,
                 do_purge=False,
             )
         else:
@@ -777,7 +779,7 @@ class Madam(Operator):
                     None,
                     None,
                     None,
-                    None,
+                    self.det_flag_mask,
                 )
             else:
                 # Allocate and copy all at once.
@@ -798,7 +800,7 @@ class Madam(Operator):
                     None,
                     None,
                     None,
-                    None,
+                    self.det_flag_mask,
                     do_purge=False,
                 )
 
@@ -855,7 +857,7 @@ class Madam(Operator):
                 None,
                 None,
                 None,
-                None,
+                self.det_flag_mask,
                 operator=self.stokes_weights,
             )
 
@@ -989,6 +991,7 @@ class Madam(Operator):
                     self._madam_signal_raw,
                     interval_starts,
                     1,
+                    self.det_flag_mask,
                 )
                 del self._madam_signal
                 del self._madam_signal_raw
@@ -1004,6 +1007,7 @@ class Madam(Operator):
                     self._madam_signal,
                     interval_starts,
                     1,
+                    self.det_flag_mask,
                 )
 
             log_time_memory(

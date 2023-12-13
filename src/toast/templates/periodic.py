@@ -154,8 +154,11 @@ class Periodic(Template):
             total_bins += obins
             self._obs_nbins.append(obins)
             self._obs_incr.append(oincr)
+
             # Build up detector list
             for d in ob.local_detectors:
+                if ob.local_detector_flags[d] & self.det_flag_mask:
+                    continue
                 if d not in all_dets:
                     all_dets[d] = None
 
@@ -228,6 +231,10 @@ class Periodic(Template):
                 det_indx = ob.detdata[self.det_data].indices([det])[0]
                 amp_hits = self._amp_hits[amp_offset : amp_offset + nbins]
                 amp_flags = self._amp_flags[amp_offset : amp_offset + nbins]
+                if self.det_flags is not None:
+                    flag_indx = ob.detdata[self.det_flags].indices([det])[0]
+                else:
+                    flag_indx = None
                 for vw in ob.intervals[self.view].data:
                     vw_slc = slice(vw.first, vw.last + 1, 1)
                     if self.is_detdata_key:
@@ -239,6 +246,7 @@ class Periodic(Template):
                         iob,
                         ob,
                         vw,
+                        flag_indx=flag_indx,
                         det_flags=True,
                     )
                     np.add.at(
@@ -259,7 +267,9 @@ class Periodic(Template):
         z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
-    def _view_flags_and_index(self, det_indx, ob_indx, ob, view, det_flags=False):
+    def _view_flags_and_index(
+        self, det_indx, ob_indx, ob, view, flag_indx=None, det_flags=False
+    ):
         """Get the flags and amplitude indices for one detector and view."""
         vw_slc = slice(view.first, view.last + 1, 1)
         vw_len = view.last - view.first + 1
@@ -281,7 +291,7 @@ class Periodic(Template):
                 bad = np.zeros(vw_len, dtype=bool)
         if det_flags and self.det_flags is not None:
             # We have some det flags
-            bad |= ob.detdata[self.det_flags][det_indx, vw_slc] & self.det_flag_mask
+            bad |= ob.detdata[self.det_flags][flag_indx, vw_slc] & self.det_flag_mask
         good = np.logical_not(bad)
 
         # Find the amplitude index for every good sample
@@ -295,6 +305,10 @@ class Periodic(Template):
         return good, amp_indx
 
     def _add_to_signal(self, detector, amplitudes, **kwargs):
+        if detector not in self._all_dets:
+            # This must have been cut by per-detector flags during initialization
+            return
+
         amp_offset = self._det_offset[detector]
         for iob, ob in enumerate(self.data.obs):
             if self.is_detdata_key:
@@ -305,6 +319,8 @@ class Periodic(Template):
                     continue
 
             if detector not in ob.local_detectors:
+                continue
+            if detector not in ob.detdata[self.det_data].detectors:
                 continue
             nbins = self._obs_nbins[iob]
             det_indx = ob.detdata[self.det_data].indices([detector])[0]
@@ -323,6 +339,10 @@ class Periodic(Template):
             amp_offset += nbins
 
     def _project_signal(self, detector, amplitudes, **kwargs):
+        if detector not in self._all_dets:
+            # This must have been cut by per-detector flags during initialization
+            return
+
         amp_offset = self._det_offset[detector]
         for iob, ob in enumerate(self.data.obs):
             if self.is_detdata_key:
@@ -334,9 +354,16 @@ class Periodic(Template):
 
             if detector not in ob.local_detectors:
                 continue
+            if detector not in ob.detdata[self.det_data].detectors:
+                continue
+
             nbins = self._obs_nbins[iob]
             det_indx = ob.detdata[self.det_data].indices([detector])[0]
             amps = amplitudes.local[amp_offset : amp_offset + nbins]
+            if self.det_flags is not None:
+                flag_indx = ob.detdata[self.det_flags].indices([detector])[0]
+            else:
+                flag_indx = None
             for vw in ob.intervals[self.view].data:
                 vw_slc = slice(vw.first, vw.last + 1, 1)
                 good, amp_indx = self._view_flags_and_index(
@@ -344,6 +371,7 @@ class Periodic(Template):
                     iob,
                     ob,
                     vw,
+                    flag_indx=flag_indx,
                     det_flags=True,
                 )
                 # Accumulate to amplitudes

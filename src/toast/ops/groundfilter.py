@@ -232,7 +232,6 @@ class GroundFilter(Operator):
     def fit_templates(
         self,
         obs,
-        det,
         templates,
         ref,
         good,
@@ -350,27 +349,24 @@ class GroundFilter(Operator):
             last_cov = None
             last_rcond = None
             ndet = len(obs.local_detectors)
-            for idet, det in enumerate(
-                obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+
+            for det in obs.select_local_detectors(
+                detectors, flagmask=self.det_flag_mask
             ):
                 if data.comm.group_rank == 0:
-                    msg = (
-                        f"{log_prefix} OpGroundFilter: "
-                        f"Processing detector # {idet + 1} / {ndet}"
-                    )
+                    msg = f"{log_prefix} OpGroundFilter: " f"Processing detector {det}"
                     log.verbose(msg)
 
-                ref = obs.detdata[self.det_data][idet]
+                ref = obs.detdata[self.det_data][det]
                 if self.det_flags is not None:
-                    def_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
-                    good = np.logical_and(common_flags == 0, def_flags == 0)
+                    test_flags = obs.detdata[self.det_flags][det] & self.det_flag_mask
+                    good = np.logical_and(common_flags == 0, test_flags == 0)
                 else:
                     good = common_flags == 0
 
                 t1 = time()
                 coeff, last_invcov, last_cov, last_rcond = self.fit_templates(
                     obs,
-                    det,
                     templates,
                     ref,
                     good,
@@ -388,6 +384,11 @@ class GroundFilter(Operator):
                     log.verbose(msg)
 
                 if coeff is None:
+                    # All samples flagged or template fit failed.
+                    curflag = obs.local_detector_flags[det]
+                    obs.update_local_detector_flags(
+                        {det: curflag | self.ground_flag_mask}
+                    )
                     continue
 
                 t1 = time()

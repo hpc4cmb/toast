@@ -102,14 +102,14 @@ def set_default_values(values=None):
 
     # composite masks for convenience
     defaults["shared_mask_nonscience"] = (
-        defaults["shared_mask_invalid"] | 
-        defaults["shared_mask_unstable_scanrate"] | 
-        defaults["shared_mask_irregular"]
+        defaults["shared_mask_invalid"]
+        | defaults["shared_mask_unstable_scanrate"]
+        | defaults["shared_mask_irregular"]
     )
     defaults["det_mask_nonscience"] = (
-        defaults["det_mask_invalid"] | 
-        defaults["det_mask_processing"] | 
-        defaults["det_mask_sso"]
+        defaults["det_mask_invalid"]
+        | defaults["det_mask_processing"]
+        | defaults["det_mask_sso"]
     )
 
     if values is not None:
@@ -443,6 +443,7 @@ class Observation(MutableMapping):
             for det in self.local_detectors:
                 if (det in sel_set) and (det in good):
                     dets.append(det)
+        # print(f"SELECT mask {int(flagmask)} {selection}: {dets}", flush=True)
         return dets
 
     # Detector set distribution

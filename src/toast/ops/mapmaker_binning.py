@@ -213,6 +213,11 @@ class BinMap(Operator):
             data[self.binned].reset()
             data[self.binned].update_units(1.0 / self.det_data_units)
 
+        # Use the same detector mask in the pointing
+        self.pixel_pointing.detector_pointing.det_flag_mask = self.det_flag_mask
+        if hasattr(self.stokes_weights, "detector_pointing"):
+            self.stokes_weights.detector_pointing.det_flag_mask = self.det_flag_mask
+
         # Noise weighted map.  We output this to the final binned map location,
         # since we will multiply by the covariance in-place.
 

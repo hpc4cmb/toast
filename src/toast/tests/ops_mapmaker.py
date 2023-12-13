@@ -7,6 +7,7 @@ import sys
 
 import healpy as hp
 import numpy as np
+import scipy
 from astropy import units as u
 
 from .. import ops as ops
@@ -270,6 +271,9 @@ class MapmakerTest(MPITestCase):
             output_dir=testdir,
             save_cleaned=True,
             overwrite_cleaned=False,
+            copy_groups=2,
+            purge_det_data=True,
+            restore_det_data=True,
         )
 
         # Make the map
@@ -309,7 +313,7 @@ class MapmakerTest(MPITestCase):
         pars["precond_width_max"] = 1
         pars["use_cgprecond"] = "F"
         pars["use_fprecond"] = "F"
-        pars["info"] = 2
+        pars["info"] = 3
         pars["path_output"] = testdir
 
         madam = ops.Madam(
@@ -337,7 +341,7 @@ class MapmakerTest(MPITestCase):
         # Compare local destriped TOD on every process
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 input_signal = ob.detdata["input_signal"][det]
                 madam_signal = ob.detdata["madam_cleaned"][det]
                 toast_signal = ob.detdata["toastmap_cleaned"][det]
@@ -504,7 +508,12 @@ class MapmakerTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
+        create_fake_sky(
+            data,
+            "pixel_dist",
+            "fake_map",
+            hpix_out=os.path.join(testdir, "input_map.fits"),
+        )
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
@@ -554,6 +563,7 @@ class MapmakerTest(MPITestCase):
             step_time=step_seconds * u.second,
             use_noise_prior=True,
             precond_width=1,
+            debug_plots=testdir,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
@@ -616,7 +626,8 @@ class MapmakerTest(MPITestCase):
         pars["precond_width_min"] = 1
         pars["precond_width_max"] = 1
         pars["use_cgprecond"] = "F"
-        pars["use_fprecond"] = "T"
+        pars["use_fprecond"] = "F"
+        pars["info"] = 3
         pars["path_output"] = testdir
 
         madam = ops.Madam(
@@ -664,14 +675,33 @@ class MapmakerTest(MPITestCase):
 
             # Compare maps
 
+            input_map = hp.read_map(
+                os.path.join(testdir, "input_map.fits"), field=None, nest=True
+            )
             toast_map = hp.read_map(toast_map_path, field=None, nest=True)
             madam_map = hp.read_map(madam_map_path, field=None, nest=True)
+
             # Set madam unhit pixels to zero
             for stokes, ststr in zip(range(3), ["I", "Q", "U"]):
                 mask = hp.mask_bad(madam_map[stokes])
                 madam_map[stokes][mask] = 0.0
+                input_map[stokes][mask] = 0.0
                 diff_map = toast_map[stokes] - madam_map[stokes]
+                madam_diff_truth = madam_map[stokes] - input_map[stokes]
+                toast_diff_truth = toast_map[stokes] - input_map[stokes]
+
                 print("diff map {} has rms {}".format(ststr, np.std(diff_map)))
+                print(
+                    "toast-truth map {} has rms {}".format(
+                        ststr, np.std(toast_diff_truth)
+                    )
+                )
+                print(
+                    "madam-truth map {} has rms {}".format(
+                        ststr, np.std(madam_diff_truth)
+                    )
+                )
+
                 outfile = os.path.join(testdir, "madam_map_{}.png".format(ststr))
                 hp.mollview(madam_map[stokes], xsize=1600, nest=True)
                 plt.savefig(outfile)
@@ -682,6 +712,14 @@ class MapmakerTest(MPITestCase):
                 plt.close()
                 outfile = os.path.join(testdir, "diff_map_{}.png".format(ststr))
                 hp.mollview(diff_map, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+                outfile = os.path.join(testdir, "madam_diff_truth_{}.png".format(ststr))
+                hp.mollview(madam_diff_truth, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+                outfile = os.path.join(testdir, "toast_diff_truth_{}.png".format(ststr))
+                hp.mollview(toast_diff_truth, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
 
@@ -730,7 +768,12 @@ class MapmakerTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
+        create_fake_sky(
+            data,
+            "pixel_dist",
+            "fake_map",
+            hpix_out=os.path.join(testdir, "input_map.fits"),
+        )
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
@@ -782,6 +825,7 @@ class MapmakerTest(MPITestCase):
             step_time=step_seconds * u.second,
             use_noise_prior=True,
             precond_width=10,
+            debug_plots=testdir,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
@@ -843,7 +887,7 @@ class MapmakerTest(MPITestCase):
         pars["kfilter"] = "T"
         pars["precond_width_min"] = 10
         pars["precond_width_max"] = 10
-        pars["use_cgprecond"] = "T"
+        pars["use_cgprecond"] = "F"
         pars["use_fprecond"] = "F"
         pars["info"] = 3
         pars["path_output"] = testdir
@@ -893,13 +937,19 @@ class MapmakerTest(MPITestCase):
 
             # Compare maps
 
+            input_map = hp.read_map(
+                os.path.join(testdir, "input_map.fits"), field=None, nest=True
+            )
             toast_map = hp.read_map(toast_map_path, field=None, nest=True)
             madam_map = hp.read_map(madam_map_path, field=None, nest=True)
             # Set madam unhit pixels to zero
             for stokes, ststr in zip(range(3), ["I", "Q", "U"]):
                 mask = hp.mask_bad(madam_map[stokes])
                 madam_map[stokes][mask] = 0.0
+                input_map[stokes][mask] = 0.0
                 diff_map = toast_map[stokes] - madam_map[stokes]
+                madam_diff_truth = madam_map[stokes] - input_map[stokes]
+                toast_diff_truth = toast_map[stokes] - input_map[stokes]
                 # print("diff map {} has rms {}".format(ststr, np.std(diff_map)))
                 outfile = os.path.join(testdir, "madam_map_{}.png".format(ststr))
                 hp.mollview(madam_map[stokes], xsize=1600, nest=True)
@@ -911,6 +961,14 @@ class MapmakerTest(MPITestCase):
                 plt.close()
                 outfile = os.path.join(testdir, "diff_map_{}.png".format(ststr))
                 hp.mollview(diff_map, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+                outfile = os.path.join(testdir, "madam_diff_truth_{}.png".format(ststr))
+                hp.mollview(madam_diff_truth, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+                outfile = os.path.join(testdir, "toast_diff_truth_{}.png".format(ststr))
+                hp.mollview(toast_diff_truth, xsize=1600, nest=True)
                 plt.savefig(outfile)
                 plt.close()
 

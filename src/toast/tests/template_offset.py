@@ -60,7 +60,7 @@ class TemplateOffsetTest(MPITestCase):
 
         # Verify
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 np.testing.assert_equal(ob.detdata[defaults.det_data][det], 1.0)
 
         # Accumulate amplitudes
@@ -84,7 +84,7 @@ class TemplateOffsetTest(MPITestCase):
             slices.append(slice((n_step - 1) * step_samples, ob.n_local_samples, 1))
             sizes.append(ob.n_local_samples - (n_step - 1) * step_samples)
 
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 for slc, sz in zip(slices, sizes):
                     np.testing.assert_equal(
                         np.sum(ob.detdata[defaults.det_data][det, slc]), 1.0 * sz
@@ -168,7 +168,7 @@ class TemplateOffsetTest(MPITestCase):
             slices.append(slice((n_step - 1) * step_samples, ob.n_local_samples, 1))
             sizes.append(ob.n_local_samples - (n_step - 1) * step_samples)
 
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 for slc, sz in zip(slices, sizes):
                     np.testing.assert_equal(
                         np.sum(ob.detdata[defaults.det_data][det, slc]), 1.0 * sz
@@ -263,7 +263,9 @@ class TemplateOffsetTest(MPITestCase):
         # input amplitudes (with starting value 1.0) without clearing those,
         # so we add 1.0 to the expected values.
         offset = 0
-        all_dets = list(data.obs[0].local_detectors)
+        all_dets = list(
+            data.obs[0].select_local_detectors(flagmask=defaults.det_data_mask)
+        )
         expected = list()
         for det in all_dets:
             for iob, ob in enumerate(data.obs):

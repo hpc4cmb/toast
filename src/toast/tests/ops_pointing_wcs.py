@@ -395,7 +395,7 @@ class PointingWCSTest(MPITestCase):
             stheta = (90.0 - ob.shared["source"].data[:, 1]) * np.pi / 180.0
             spos = qa.from_iso_angles(stheta, sphi, np.zeros_like(stheta))
             sdir = qa.rotate(spos, zaxis)
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 fwhm = 2 * ob.telescope.focalplane[det]["fwhm"].to_value(u.arcmin)
                 coeff = 1.0 / (fwhm * np.sqrt(2 * np.pi))
                 pre = -0.5 * (1.0 / fwhm) ** 2

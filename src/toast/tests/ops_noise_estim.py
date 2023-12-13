@@ -508,7 +508,7 @@ class NoiseEstimTest(MPITestCase):
                 input_model = ob["noise_model"]
                 estim_model = ob["noise_estimate"]
                 fit_model = ob[noise_fitter.out_model]
-                for det in ob.local_detectors:
+                for det in ob.select_local_detectors(flagmask=estim.det_flag_mask):
                     fname = os.path.join(
                         self.outdir, f"estimate_model_{ob.name}_{det}.pdf"
                     )
@@ -533,7 +533,7 @@ class NoiseEstimTest(MPITestCase):
             input_model = ob["noise_model"]
             estim_model = ob["noise_estimate"]
             fit_model = ob[noise_fitter.out_model]
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=estim.det_flag_mask):
                 np.testing.assert_almost_equal(
                     np.mean(input_model.psd(det)[-5:]).value,
                     np.mean(fit_model.psd(det)[-5:]).value,

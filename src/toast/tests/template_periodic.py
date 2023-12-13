@@ -37,7 +37,7 @@ class TemplatePeriodicTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
         self.nside = 64
         np.random.seed(123456)
-        if not (
+        if (
             ("CONDA_BUILD" in os.environ)
             or ("CIBUILDWHEEL" in os.environ)
             or ("CI" in os.environ)
@@ -560,14 +560,15 @@ class TemplatePeriodicTest(MPITestCase):
 
         # Compare the cleaned timestreams to the original
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 dof = np.sqrt(ob.n_local_samples)
                 in_rms = np.std(ob.detdata["input"][det])
                 thresh = hwpss_scale * (in_rms / dof)
                 out_rms = np.std(ob.detdata[defaults.det_data][det])
-                print(f"Using threshold {thresh}, input rms = {in_rms}")
                 if out_rms > thresh:
-                    print(f"{ob.name}:{det} output rms = {out_rms} exceeds threshold")
+                    msg = f"{ob.name}:{det} output rms = {out_rms} exceeds threshold"
+                    msg += f" ({thresh}) for input rms = {in_rms}"
+                    print(msg)
                     raise RuntimeError("Failed satellite hwpss template regression")
 
         close_data(data)

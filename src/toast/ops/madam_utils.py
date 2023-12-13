@@ -79,8 +79,9 @@ def stage_local(
             )
     for ob in data.obs:
         views = ob.view[view]
+        local_dets = set(ob.select_local_detectors(flagmask=det_mask))
         for idet, det in enumerate(dets):
-            if det not in ob.local_detectors:
+            if det not in local_dets:
                 continue
             if operator is not None:
                 # Synthesize data for staging
@@ -185,6 +186,7 @@ def restore_local(
     madam_buffer,
     interval_starts,
     nnz,
+    det_mask,
 ):
     """Helper function to create a detdata buffer from madam data."""
     n_det = len(dets)
@@ -195,6 +197,7 @@ def restore_local(
             ob.detdata.create(detdata_name, dtype=detdata_dtype)
         else:
             ob.detdata.create(detdata_name, dtype=detdata_dtype, sample_shape=(nnz,))
+        local_dets = ob.select_local_detectors(flagmask=det_mask)
         # Loop over views
         views = ob.view[view]
         for ivw, vw in enumerate(views):
@@ -205,23 +208,21 @@ def restore_local(
             else:
                 view_samples = vw.stop - vw.start
             offset = interval_starts[interval]
-            ldet = 0
-            for det in dets:
-                if det not in ob.local_detectors:
+            for idet, det in enumerate(dets):
+                if det not in local_dets:
                     continue
-                idet = ob.local_detectors.index(det)
+                idet = local_dets.index(det)
                 slc = slice(
                     (idet * nsamp + offset) * nnz,
                     (idet * nsamp + offset + view_samples) * nnz,
                     1,
                 )
                 if nnz > 1:
-                    views.detdata[detdata_name][ivw][ldet] = madam_buffer[slc].reshape(
+                    views.detdata[detdata_name][ivw][det] = madam_buffer[slc].reshape(
                         (-1, nnz)
                     )
                 else:
-                    views.detdata[detdata_name][ivw][ldet] = madam_buffer[slc]
-                ldet += 1
+                    views.detdata[detdata_name][ivw][det] = madam_buffer[slc]
             interval += 1
     return
 
@@ -239,6 +240,7 @@ def restore_in_turns(
     madam_buffer_raw,
     interval_starts,
     nnz,
+    det_mask,
 ):
     """When restoring data, take turns copying it."""
     for copying in range(n_copy_groups):
@@ -254,6 +256,7 @@ def restore_in_turns(
                 madam_buffer,
                 interval_starts,
                 nnz,
+                det_mask,
             )
             madam_buffer_raw.clear()
         nodecomm.barrier()

@@ -106,14 +106,29 @@ class Statistics(Operator):
                 fname_out = f"{self.name}_{obs.name}.h5"
             if self.output_dir is not None:
                 fname_out = os.path.join(self.output_dir, fname_out)
-            all_dets = list(obs.all_detectors)
-            ndet = len(all_dets)
 
+            # Get the list of all detectors that are not cut
+            obs_dets = obs.select_local_detectors(
+                detectors, flagmask=self.det_flag_mask
+            )
+            if obs.comm.group_size == 1:
+                all_dets = obs_dets
+            else:
+                proc_dets = obs.comm.comm_group.gather(obs_dets, root=0)
+                all_dets = None
+                if obs.comm.group_rank == 0:
+                    all_set = set()
+                    for pdets in proc_dets:
+                        for d in pdets:
+                            all_set.add(d)
+                    all_dets = list(sorted(all_set))
+                all_dets = obs.comm.comm_group.bcast(all_dets, root=0)
+
+            ndet = len(all_dets)
             hits = np.zeros([ndet], dtype=int)
             means = np.zeros([ndet], dtype=float)
             stats = np.zeros([nstat, ndet], dtype=float)
 
-            obs_dets = obs.select_local_detectors(detectors)
             views = obs.view[self.view]
 
             # Measure the mean separately to simplify the math

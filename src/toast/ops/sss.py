@@ -97,7 +97,9 @@ class SimScanSynchronousSignal(Operator):
         comm = data.comm.comm_group
 
         for obs in data.obs:
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(
+                detectors, flagmask=defaults.det_mask_invalid
+            )
             log_prefix = f"{group} : {obs.name} : "
 
             exists = obs.detdata.ensure(

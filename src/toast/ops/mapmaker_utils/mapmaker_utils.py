@@ -542,7 +542,7 @@ class BuildNoiseWeighted(Operator):
     If any samples have compromised telescope pointing, those pixel indices should
     have already been set to a negative value by the operator that generated the
     pointing matrix.  Individual detector flags can optionally be applied to
-    timesamples when accumulating data.  The detector mask defaults to cutting 
+    timesamples when accumulating data.  The detector mask defaults to cutting
     "non-science" samples.
 
     """
@@ -1082,6 +1082,11 @@ class CovarianceAndHits(Operator):
             if getattr(self, trait) is None:
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
+
+        # Set pointing flags
+        self.pixel_pointing.detector_pointing.det_flag_mask = self.det_flag_mask
+        if hasattr(self.stokes_weights, "detector_pointing"):
+            self.stokes_weights.detector_pointing.det_flag_mask = self.det_flag_mask
 
         # Construct the pointing distribution if it does not already exist
 
