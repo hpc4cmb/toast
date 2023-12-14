@@ -188,6 +188,7 @@ class BuildHitMap(Operator):
                     )
         return
 
+    @function_timer
     def _finalize(self, data, **kwargs):
         if self.hits in data:
             if self.sync_type == "alltoallv":
@@ -473,6 +474,7 @@ class BuildInverseCovariance(Operator):
                     )
         return
 
+    @function_timer
     def _finalize(self, data, **kwargs):
         if self.inverse_covariance in data:
             if self.sync_type == "alltoallv":
@@ -823,6 +825,7 @@ class BuildNoiseWeighted(Operator):
 
         return
 
+    @function_timer
     def _finalize(self, data, use_accel=None, **kwargs):
         if self.zmap in data:
             log = Logger.get()

@@ -8,7 +8,7 @@ from astropy import units as u
 
 from ..covariance import covariance_apply
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import Timer, function_timer
 from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .delete import Delete
@@ -158,14 +158,15 @@ class BinMap(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        timer = Timer()
+        timer.start()
 
-        for trait in "pixel_pointing", "stokes_weights":
+        for trait in "pixel_pointing", "stokes_weights", "det_data":
             if getattr(self, trait) is None:
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
-        if data.comm.world_rank == 0:
-            log.verbose("  BinMap building pipeline")
+        log.verbose_rank("  BinMap building pipeline", comm=data.comm.comm_world)
 
         if self.covariance not in data:
             msg = f"Data does not contain noise covariance '{self.covariance}'"
@@ -180,10 +181,6 @@ class BinMap(Operator):
             msg += f" equal det_data units ({self.det_data_units}) squared."
             log.error(msg)
             raise RuntimeError(msg)
-
-        # Check that the detector data is set
-        if self.det_data is None:
-            raise RuntimeError("You must set the det_data trait before calling exec()")
 
         # Sanity check that the covariance pixel distribution agrees
         if cov.distribution != data[self.pixel_dist]:

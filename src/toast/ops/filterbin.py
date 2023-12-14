@@ -1579,8 +1579,12 @@ class FilterBin(Operator):
                 save_pointing=self.binning.full_pointing,
             )
             cov.apply(data, detectors=detectors)
+            log.info_rank(
+                f"Binned covariance and hits in", comm=self.comm, timer=timer
+            )
 
         self.binning.apply(data, detectors=detectors)
+        log.info_rank(f"Binned signal in", comm=self.comm, timer=timer)
 
         mc_root = self.name
         if self.mc_mode:
