@@ -242,10 +242,7 @@ class TemplateMatrix(Operator):
             input_units = 1.0 / self.det_data_units
             for ob in data.obs:
                 if self.det_data not in ob.detdata:
-                    print(
-                        f"detector data {self.det_data} not in obs {ob.name}",
-                        flush=True,
-                    )
+                    continue
                 if ob.detdata[self.det_data].units != input_units:
                     msg = f"obs {ob.name} detdata {self.det_data}"
                     msg += f" does not have units of {input_units}"

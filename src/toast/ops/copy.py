@@ -103,13 +103,17 @@ class Copy(Operator):
                     detectors,
                     flagmask=0,
                 )
+                print(f"DEBUG copy {ob.name}:{dets}", flush=True)
                 if len(dets) == 0:
                     # Nothing to do for this observation
+                    print(f"DEBUG copy {ob.name} has no dets", flush=True)
                     continue
                 for in_key, out_key in self.detdata:
                     if in_key not in ob.detdata:
+                        print(f"DEBUG copy {ob.name} does not have key {in_key}", flush=True)
                         continue
                     if out_key in ob.detdata:
+                        print(f"DEBUG copy {ob.name} has key {out_key}", flush=True)
                         # The key exists- verify that dimensions / dtype match
                         in_dtype = ob.detdata[in_key].dtype
                         out_dtype = ob.detdata[out_key].dtype
@@ -132,6 +136,7 @@ class Copy(Operator):
                         # Copy units
                         ob.detdata[out_key].update_units(ob.detdata[in_key].units)
                     else:
+                        print(f"DEBUG copy {ob.name} creating {out_key}", flush=True)
                         sample_shape = None
                         shp = ob.detdata[in_key].detector_shape
                         if len(shp) > 1:

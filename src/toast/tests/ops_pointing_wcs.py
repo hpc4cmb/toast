@@ -180,8 +180,8 @@ class PointingWCSTest(MPITestCase):
             pixels = ops.PixelsWCS(
                 detector_pointing=detpointing_radec,
                 projection=proj,
-                # resolution=(0.5 * u.degree, 0.5 * u.degree),
-                # auto_bounds=True,
+                resolution=(0.5 * u.degree, 0.5 * u.degree),
+                auto_bounds=True,
                 use_astropy=True,
             )
 

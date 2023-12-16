@@ -212,6 +212,7 @@ class TemplateOffsetTest(MPITestCase):
             transpose=True,
             templates=[tmpl],
         )
+        tmatrix.initialize(data)
 
         # Create some zero amplitudes
         for ob in data.obs:
@@ -234,6 +235,8 @@ class TemplateOffsetTest(MPITestCase):
             templates=[tmpl],
             transpose=False,
         )
+        forward_tmatrix.initialize(data)
+
         backward_tmatrix = forward_tmatrix.duplicate()
         backward_tmatrix.det_data_units = defaults.det_data_units
         backward_tmatrix.transpose = True
@@ -264,7 +267,7 @@ class TemplateOffsetTest(MPITestCase):
         # so we add 1.0 to the expected values.
         offset = 0
         all_dets = list(
-            data.obs[0].select_local_detectors(flagmask=defaults.det_data_mask)
+            data.obs[0].select_local_detectors(flagmask=defaults.det_mask_invalid)
         )
         expected = list()
         for det in all_dets:

@@ -57,6 +57,8 @@ class NoiseWeight(Operator):
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         for ob in data.obs:
+            if self.det_data not in ob.detdata:
+                continue
             data_input_units = ob.detdata[self.det_data].units
             data_invcov_units = 1.0 / data_input_units**2
             data_output_units = 1.0 / data_input_units
