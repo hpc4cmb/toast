@@ -26,6 +26,7 @@ an interactive python session.
 """
 
 import argparse
+import datetime
 import os
 import sys
 import traceback
@@ -91,13 +92,21 @@ def load_instrument_and_schedule(args, comm):
     # Load a generic focalplane file.  NOTE:  again, this is just using the
     # built-in Focalplane class.  In a workflow for a specific experiment we would
     # have a custom class.
+    log = toast.utils.Logger.get()
+    timer = toast.timing.Timer()
+    timer.start()
+
     focalplane = toast.instrument.Focalplane()
     with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
         focalplane.load_hdf5(f.handle, comm=comm)
+    log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
+    log.info_rank(f"Focalplane: {str(focalplane)}", comm=comm)
 
     # Load the schedule file
     schedule = toast.schedule.SatelliteSchedule()
     schedule.read(args.schedule, comm=comm)
+    log.info_rank("Loaded schedule in", comm=comm, timer=timer)
+    log.info_rank(f"Schedule: {str(schedule)}", comm=comm)
 
     # Create a telescope for the simulation.  Again, for a specific experiment we
     # would use custom classes for the site.
@@ -272,6 +281,16 @@ def main():
 
     # Get optional MPI parameters
     comm, procs, rank = toast.get_world()
+
+    if "OMP_NUM_THREADS" in os.environ:
+        nthread = os.environ["OMP_NUM_THREADS"]
+    else:
+        nthread = "unknown number of"
+    log.info_rank(
+        f"Executing workflow with {procs} MPI tasks, each with "
+        f"{nthread} OpenMP threads at {datetime.datetime.now()}",
+        comm,
+    )
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
