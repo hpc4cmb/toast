@@ -115,7 +115,6 @@ class ScanMap(Operator):
                     raise RuntimeError(msg)
 
             # If our output detector data does not yet exist, create it
-            print(f"DEBUG:  scan map {ob.name} create {self.det_data} with {dets}", flush=True)
             _ = ob.detdata.ensure(
                 self.det_data,
                 detectors=dets,

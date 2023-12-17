@@ -9,7 +9,7 @@ from ...accelerator import ImplementationType
 from ...noise_sim import AnalyticNoise
 from ...observation import default_values as defaults
 from ...timing import Timer, function_timer
-from ...traits import Int, Unicode, UseEnum, trait_docs
+from ...traits import Int, Unicode, Unit, UseEnum, trait_docs
 from ...utils import Environment, Logger
 from ..operator import Operator
 from .kernels import noise_weight
@@ -46,6 +46,10 @@ class NoiseWeight(Operator):
         help="Bit mask value for optional detector flagging",
     )
 
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
+    )
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -59,7 +63,7 @@ class NoiseWeight(Operator):
         for ob in data.obs:
             if self.det_data not in ob.detdata:
                 continue
-            data_input_units = ob.detdata[self.det_data].units
+            data_input_units = self.det_data_units
             data_invcov_units = 1.0 / data_input_units**2
             data_output_units = 1.0 / data_input_units
 
@@ -86,6 +90,13 @@ class NoiseWeight(Operator):
                 ],
                 dtype=np.float64,
             )
+
+            if ob.detdata[self.det_data].units != data_input_units:
+                msg = f"obs {ob.name} detdata {self.det_data}"
+                msg += f" does not have units of {data_input_units}"
+                msg += f" before noise weighting"
+                log.error(msg)
+                raise RuntimeError(msg)
 
             # Multiply detectors by their respective noise weight
             intervals = ob.intervals[self.view].data
