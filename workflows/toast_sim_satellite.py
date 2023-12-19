@@ -101,12 +101,16 @@ def load_instrument_and_schedule(args, comm):
         focalplane.load_hdf5(f.handle, comm=comm)
     log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
     log.info_rank(f"Focalplane: {str(focalplane)}", comm=comm)
+    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"After loading focalplane:  {mem}", comm)
 
     # Load the schedule file
     schedule = toast.schedule.SatelliteSchedule()
     schedule.read(args.schedule, comm=comm)
     log.info_rank("Loaded schedule in", comm=comm, timer=timer)
     log.info_rank(f"Schedule: {str(schedule)}", comm=comm)
+    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"After loading focalplane:  {mem}", comm)
 
     # Create a telescope for the simulation.  Again, for a specific experiment we
     # would use custom classes for the site.
@@ -220,11 +224,17 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
+    mem = toast.utils.memreport(msg="(whole node)", comm=world_comm, silent=True)
+    log.info_rank(f"After simulating data:  {mem}", world_comm)
+
     # Optionally write out the data
     if ops.save_hdf5.volume is None:
         ops.save_hdf5.volume = os.path.join(args.out_dir, "data")
     ops.save_hdf5.apply(data)
     log.info_rank("Saved HDF5 data in", comm=world_comm, timer=timer)
+
+    mem = toast.utils.memreport(msg="(whole node)", comm=world_comm, silent=True)
+    log.info_rank(f"After saving data:  {mem}", world_comm)
 
     return data
 
