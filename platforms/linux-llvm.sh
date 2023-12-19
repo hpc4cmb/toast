@@ -2,15 +2,15 @@
 
 # This assumes you have created a virtualenv and installed toast
 # dependencies (e.g. with wheels/install_deps_linux.sh) into that virtual
-# env.  This assumes installation of llvm-17 from LLVM apt sources.
+# env.  This assumes installation of llvm-18 from LLVM apt sources.
 
 venv_path=$(dirname $(dirname $(which python3)))
 
 export LD_LIBRARY_PATH="${venv_path}/lib"
 
 cmake \
-    -DCMAKE_C_COMPILER="clang-17" \
-    -DCMAKE_CXX_COMPILER="clang++-17" \
+    -DCMAKE_C_COMPILER="clang-18" \
+    -DCMAKE_CXX_COMPILER="clang++-18" \
     -DCMAKE_C_FLAGS="-O3 -g -fPIC -pthread -I${venv_path}/include" \
     -DCMAKE_CXX_FLAGS="-O3 -g -fPIC -pthread -std=c++11 -stdlib=libc++ -I${venv_path}/include" \
     -DUSE_OPENMP_TARGET=TRUE \

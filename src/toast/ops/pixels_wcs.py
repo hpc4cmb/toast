@@ -444,9 +444,7 @@ class PixelsWCS(Operator):
                         # this calculation.  This could eventually be a kernel.
                         ob.detdata[self.pixels].accel_update_host()
                         restore_dev = True
-                    for det in ob.select_local_detectors(
-                        detectors, flagmask=self.detector_pointing.det_flag_mask
-                    ):
+                    for det in dets:
                         for vslice in view_slices:
                             good = ob.detdata[self.pixels][det, vslice] >= 0
                             self._local_submaps[
@@ -479,9 +477,7 @@ class PixelsWCS(Operator):
                 center_lonlat = ob.shared[self.center_offset].data
 
             # Process all detectors
-            for det in ob.select_local_detectors(
-                detectors, flagmask=self.detector_pointing.det_flag_mask
-            ):
+            for det in dets:
                 for vslice in view_slices:
                     # Timestream of detector quaternions
                     quats = ob.detdata[quats_name][det][vslice]
@@ -546,7 +542,6 @@ class PixelsWCS(Operator):
         return
 
     def _requires(self):
-        req = self.detector_pointing.requires()
         req = self.detector_pointing.requires()
         if "detdata" not in req:
             req["detdata"] = list()

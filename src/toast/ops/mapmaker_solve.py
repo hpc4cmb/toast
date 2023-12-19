@@ -236,6 +236,8 @@ class SolverRHS(Operator):
         return
 
     def _finalize(self, data, **kwargs):
+        for tname in data[self.template_matrix.amplitudes].keys():
+            print(f"DEBUG RHS {tname} = {data[self.template_matrix.amplitudes][tname]}", flush=True)
         return
 
     def _requires(self):

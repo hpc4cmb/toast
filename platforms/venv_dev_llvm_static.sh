@@ -7,7 +7,7 @@ set -e
 
 opts="$@"
 
-suf="-17"
+suf="-18"
 if [ "x$(which clang++${suf})" = "x" ]; then
     echo "The clang++${suf} compiler is not in your PATH, trying clang++"
     if [ "x$(which clang++)" = "x" ]; then
@@ -46,10 +46,10 @@ export CFLAGS="-O3 -g -fPIC -pthread"
 export FCFLAGS="-O3 -g -fPIC -pthread"
 export CXXFLAGS="-O3 -g -fPIC -pthread -std=c++11 -stdlib=libc++ -I${INCDIR}"
 
-export LD_LIBRARY_PATH="/usr/lib/llvm-17/lib:${LIBDIR}"
-export LIBRARY_PATH="/usr/lib/llvm-17/lib:${LIBDIR}"
+export LD_LIBRARY_PATH="/usr/lib/llvm-18/lib:${LIBDIR}"
+export LIBRARY_PATH="/usr/lib/llvm-18/lib:${LIBDIR}"
 
-# # export CMAKE_MODULE_LINKER_FLAGS="-L/usr/lib/llvm-17/lib -stdlib=libc++ "
+# # export CMAKE_MODULE_LINKER_FLAGS="-L/usr/lib/llvm-18/lib -stdlib=libc++ "
 # export LINK_OPTIONS="-stdlib=libc++"
 
 cmake \
