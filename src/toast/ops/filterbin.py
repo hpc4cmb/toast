@@ -107,8 +107,6 @@ class SparseTemplates:
         provided mask"""
         masked = SparseTemplates()
         for start, stop, template in zip(self.starts, self.stops, self.templates):
-            # test = template * good[start:stop]
-            # if np.count_nonzero(test) > 0:
             if np.any(good[start:stop]):
                 masked.starts.append(start)
                 masked.stops.append(stop)
@@ -1088,18 +1086,6 @@ class FilterBin(Operator):
         final map.
         """
         log = Logger.get()
-        # ntemplate = templates.ntemplate
-        # invcov = np.zeros([ntemplate, ntemplate])
-        # array_starts = np.array(templates.starts, dtype=np.int64)
-        # array_stops = np.array(templates.stops, dtype=np.int64)
-        # fgood = good.astype(np.float64)
-        # build_template_covariance(
-        #     array_starts,
-        #     array_stops,
-        #     templates.templates,
-        #     fgood,
-        #     invcov,
-        # )
         ntemplate = templates.ntemplate
         invcov = np.zeros([ntemplate, ntemplate])
         build_template_covariance(

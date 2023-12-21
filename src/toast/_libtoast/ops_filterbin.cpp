@@ -311,6 +311,23 @@ void build_template_covariance(std::vector <int64_t> & starts,
     }
 }
 
+// Alternative implementation which uses the buffer extraction helper functions
+// and is closer to the techniques we have been using for omp target offload
+// kernels.  Left here as a future starting point.
+//
+// The python calling code then also needs updated, for example:
+//
+// array_starts = np.array(templates.starts, dtype=np.int64)
+// array_stops = np.array(templates.stops, dtype=np.int64)
+// fgood = good.astype(np.float64)
+// build_template_covariance(
+//     array_starts,
+//     array_stops,
+//     templates.templates,
+//     fgood,
+//     invcov,
+// ) 
+//
 // void build_template_covariance(
 //     py::buffer starts,
 //     py::buffer stops,

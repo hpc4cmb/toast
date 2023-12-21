@@ -196,32 +196,25 @@ class Demodulate(Operator):
             local_dets = obs.select_local_detectors(
                 detectors, flagmask=self.det_flag_mask
             )
-            # print(f"DEMOD Proc {obs.comm.group_rank}: local {local_dets}")
             if obs.comm.comm_group is None:
                 all_dets = local_dets
-                # print(f"DEMOD Proc {obs.comm.group_rank}: comm_group is None")
             else:
                 proc_dets = obs.comm.comm_group.gather(local_dets, root=0)
                 all_dets = None
                 if obs.comm.comm_group.rank == 0:
-                    # print(f"DEMOD gathered {proc_dets}")
                     all_dets = set()
                     for pdets in proc_dets:
                         for d in pdets:
                             all_dets.add(d)
                     all_dets = list(sorted(all_dets))
                 all_dets = obs.comm.comm_group.bcast(all_dets, root=0)
-                # print(f"DEMOD Proc {obs.comm.group_rank}: all {all_dets}")
 
             offset = obs.local_index_offset
             nsample = obs.n_local_samples
 
             fsample = obs.telescope.focalplane.sample_rate
             fmax, hwp_rate = self._get_fmax(obs)
-            # print(
-            #     f"DEMOD:  fsample={fsample}, fmax={fmax}, hwprate={hwp_rate}",
-            #     flush=True,
-            # )
+
             wkernel = self._get_wkernel(fmax, fsample)
             lowpass = Lowpass(wkernel, fmax, fsample, offset, self.nskip, self.window)
 
@@ -267,7 +260,6 @@ class Demodulate(Operator):
 
             self._demodulate_shared_data(obs, demod_obs)
 
-            # (f"DEMOD Proc {obs.comm.group_rank} local_dets: {demod_obs.local_detectors}", flush=True)
             exists_data = demod_obs.detdata.ensure(
                 self.det_data,
                 detectors=demod_dets,

@@ -286,7 +286,6 @@ class HWPFilter(Operator):
             last_invcov = None
             last_cov = None
             last_rcond = None
-            ndet = len(obs.local_detectors)
             for det in obs.select_local_detectors(
                 detectors, flagmask=self.det_flag_mask
             ):
