@@ -42,6 +42,11 @@ class ScanWCSMap(Operator):
         defaults.det_data_units, help="Output units if creating detector data"
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     subtract = Bool(
         False, help="If True, subtract the map timestream instead of accumulating"
     )
@@ -72,6 +77,13 @@ class ScanWCSMap(Operator):
         help="If True, do not clear detector pointing matrices if we "
         "generate the pixel distribution",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("pixel_pointing")
     def _check_pixel_pointing(self, proposal):
@@ -155,7 +167,7 @@ class ScanWCSMap(Operator):
         # FIXME:  This seems like a common pattern, maybe move to a "Create" operator?
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -231,6 +243,11 @@ class ScanWCSMask(Operator):
         help="The detector flag value to set where the mask result is non-zero",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     mask_bits = Int(
         255, help="The number to bitwise-and with each mask value to form the result"
     )
@@ -253,6 +270,13 @@ class ScanWCSMask(Operator):
         help="If True, do not clear detector pointing matrices if we "
         "generate the pixel distribution",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("pixel_pointing")
     def _check_pixel_pointing(self, proposal):
@@ -308,7 +332,7 @@ class ScanWCSMask(Operator):
         # FIXME:  This seems like a common pattern, maybe move to a "Create" operator?
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

@@ -125,6 +125,11 @@ class Madam(Operator):
         defaults.det_data, help="Observation detdata key for the timestream data"
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -133,7 +138,7 @@ class Madam(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -205,6 +210,13 @@ class Madam(Operator):
     mem_report = Bool(
         False, help="Print system memory use while staging / unstaging data."
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -520,9 +532,19 @@ class Madam(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
-            for d in dets:
-                all_dets.add(d)
+            local_dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
+            if ob.comm.comm_group is not None:
+                pdets = ob.comm.comm_group.gather(local_dets, root=0)
+                obs_dets = None
+                if ob.comm.group_rank == 0:
+                    obs_dets = set()
+                    for plocal in pdets:
+                        for d in plocal:
+                            obs_dets.add(d)
+                obs_dets = ob.comm_group.bcast(obs_dets, root=0) 
+            else:
+                obs_dets = set(local_dets)
+            all_dets.update(obs_dets)
 
             # Check that the timestamps exist.
             if self.times not in ob.shared:
@@ -715,8 +737,8 @@ class Madam(Operator):
                     if self.noise_scale in ob:
                         nse_scale = float(ob[self.noise_scale])
 
+                local_dets = set(ob.select_local_detectors(flagmask=self.det_mask))
                 for det in all_dets:
-                    local_dets = ob.select_local_detectors(flagmask=self.det_flag_mask)
                     if det not in local_dets:
                         continue
                     psd = nse.psd(det).to_value(u.K**2 * u.second) * nse_scale**2
@@ -754,6 +776,7 @@ class Madam(Operator):
                 interval_starts,
                 1,
                 1,
+                self.det_mask,
                 None,
                 None,
                 None,
@@ -776,6 +799,7 @@ class Madam(Operator):
                     interval_starts,
                     1,
                     1,
+                    self.det_mask,
                     None,
                     None,
                     None,
@@ -797,6 +821,7 @@ class Madam(Operator):
                     interval_starts,
                     1,
                     1,
+                    self.det_mask,
                     None,
                     None,
                     None,
@@ -835,6 +860,7 @@ class Madam(Operator):
                 interval_starts,
                 1,
                 1,
+                self.det_mask,
                 self.shared_flags,
                 self.shared_flag_mask,
                 self.det_flags,
@@ -854,6 +880,7 @@ class Madam(Operator):
                 interval_starts,
                 nnz,
                 nnz_stride,
+                self.det_mask,
                 None,
                 None,
                 None,
@@ -991,7 +1018,7 @@ class Madam(Operator):
                     self._madam_signal_raw,
                     interval_starts,
                     1,
-                    self.det_flag_mask,
+                    self.det_mask,
                 )
                 del self._madam_signal
                 del self._madam_signal_raw
@@ -1007,7 +1034,7 @@ class Madam(Operator):
                     self._madam_signal,
                     interval_starts,
                     1,
-                    self.det_flag_mask,
+                    self.det_mask,
                 )
 
             log_time_memory(

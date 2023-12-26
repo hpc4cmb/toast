@@ -64,6 +64,11 @@ class HWPFilter(Operator):
         help="Observation detdata key",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     shared_flags = Unicode(
         defaults.shared_flags,
         allow_none=True,
@@ -83,7 +88,7 @@ class HWPFilter(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_invalid,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     hwp_flag_mask = Int(
@@ -110,6 +115,13 @@ class HWPFilter(Operator):
     detrend = Bool(
         False, help="Subtract the fitted trend along with the ground template"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
@@ -287,7 +299,7 @@ class HWPFilter(Operator):
             last_cov = None
             last_rcond = None
             for det in obs.select_local_detectors(
-                detectors, flagmask=self.det_flag_mask
+                detectors, flagmask=self.det_mask
             ):
                 if data.comm.group_rank == 0:
                     msg = f"{log_prefix} OpHWPFilter: " f"Processing detector {det}"

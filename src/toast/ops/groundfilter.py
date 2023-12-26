@@ -69,6 +69,11 @@ class GroundFilter(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     shared_flags = Unicode(
         defaults.shared_flags,
         allow_none=True,
@@ -88,7 +93,7 @@ class GroundFilter(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_invalid,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     ground_flag_mask = Int(
@@ -135,6 +140,13 @@ class GroundFilter(Operator):
         defaults.shared_mask_scan_rightleft,
         help="Bit mask value for right-to-left scans",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
@@ -214,7 +226,6 @@ class GroundFilter(Operator):
             # Create separate templates for alternating scans
             common_flags = obs.shared[self.shared_flags].data
             legendre_filter = []
-            # The flag masks are hard-coded in sim_ground.py
             mask1 = (common_flags & self.rightleft_mask) == 0
             mask2 = (common_flags & self.leftright_mask) == 0
             for template in legendre_templates:
@@ -350,7 +361,7 @@ class GroundFilter(Operator):
             last_rcond = None
 
             for det in obs.select_local_detectors(
-                detectors, flagmask=self.det_flag_mask
+                detectors, flagmask=self.det_mask
             ):
                 if data.comm.group_rank == 0:
                     msg = f"{log_prefix} OpGroundFilter: " f"Processing detector {det}"

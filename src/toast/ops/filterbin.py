@@ -453,6 +453,11 @@ class FilterBin(Operator):
         defaults.det_data, help="Observation detdata key for the timestream data"
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -466,7 +471,7 @@ class FilterBin(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -624,6 +629,27 @@ class FilterBin(Operator):
 
     report_memory = Bool(False, help="Report memory throughout the execution")
 
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
+
     @traitlets.validate("binning")
     def _check_binning(self, proposal):
         bin = proposal["value"]
@@ -747,7 +773,7 @@ class FilterBin(Operator):
 
         t1 = time()
         for iobs, obs in enumerate(data.obs):
-            dets = obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if self.grank == 0:
                 log.debug(
                     f"{self.group:4} : FilterBin: Processing observation "
@@ -1584,6 +1610,7 @@ class FilterBin(Operator):
                 inverse_covariance=invcov_name,
                 hits=hits_name,
                 rcond=rcond_name,
+                det_mask=self.binning.det_mask,
                 det_flags=self.binning.det_flags,
                 det_flag_mask=self.binning.det_flag_mask,
                 det_data_units=self._det_data_units,

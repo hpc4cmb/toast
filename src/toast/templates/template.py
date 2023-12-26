@@ -52,6 +52,11 @@ class Template(TraitConfig):
         defaults.det_data_units, help="Desired units of detector data"
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -61,6 +66,20 @@ class Template(TraitConfig):
     det_flag_mask = Int(
         defaults.det_mask_invalid, help="Bit mask value for solver flags"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+
+    @traitlets.validate("det_flag_mask")
+    def _check_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Flag mask should be a positive integer")
+        return check
 
     @traitlets.validate("data")
     def _check_data(self, proposal):

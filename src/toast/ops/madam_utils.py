@@ -57,10 +57,11 @@ def stage_local(
     interval_starts,
     nnz,
     nnz_stride,
+    det_mask,
     shared_flags,
     shared_mask,
     det_flags,
-    det_mask,
+    det_flag_mask,
     do_purge=False,
     operator=None,
 ):
@@ -120,7 +121,7 @@ def stage_local(
                         detflags = flags
                     else:
                         detflags = np.copy(flags)
-                        detflags |= views.detdata[det_flags][ivw][det] & det_mask
+                        detflags |= views.detdata[det_flags][ivw][det] & det_flag_mask
                     madam_buffer[slc][detflags != 0] = -1
         if do_purge:
             del ob.detdata[detdata_name]
@@ -140,10 +141,11 @@ def stage_in_turns(
     interval_starts,
     nnz,
     nnz_stride,
+    det_mask,
     shared_flags,
     shared_mask,
     det_flags,
-    det_mask,
+    det_flag_mask,
     operator=None,
 ):
     """When purging data, take turns staging it."""
@@ -165,10 +167,11 @@ def stage_in_turns(
                 interval_starts,
                 nnz,
                 nnz_stride,
+                det_mask,
                 shared_flags,
                 shared_mask,
                 det_flags,
-                det_mask,
+                det_flag_mask,
                 do_purge=True,
                 operator=operator,
             )

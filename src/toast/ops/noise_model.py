@@ -130,9 +130,9 @@ class FitNoiseModel(Operator):
         None, allow_none=True, help="Create a new noise model with this name"
     )
 
-    det_flag_mask = Int(
+    det_mask = Int(
         defaults.det_mask_invalid,
-        help="Bit mask value for excluding bad detectors",
+        help="Bit mask value for per-detector flagging",
     )
 
     bad_fit_mask = Int(
@@ -170,6 +170,13 @@ class FitNoiseModel(Operator):
         allow_none=True,
         help="The gtol value passed to the least_squares solver",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -212,7 +219,7 @@ class FitNoiseModel(Operator):
                 nse_fmin[det] = 0.0 * u.Hz
                 nse_fknee[det] = 0.0 * u.Hz
                 nse_alpha[det] = 0.0
-                if cur_flag & self.det_flag_mask != 0:
+                if cur_flag & self.det_mask != 0:
                     continue
                 props = self._fit_log_psd(freqs, in_psd, guess=params)
                 if props["fit_result"].success:
@@ -613,9 +620,9 @@ class FlagNoiseFit(Operator):
         help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(
-        defaults.det_mask_nonscience,
-        help="Bit mask for considering detectors",
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
     )
 
     outlier_flag_mask = Int(
@@ -638,7 +645,7 @@ class FlagNoiseFit(Operator):
             raise RuntimeError("You must set det_flags before calling exec()")
 
         for obs in data.obs:
-            dets = obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

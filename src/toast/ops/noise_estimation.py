@@ -63,6 +63,11 @@ class NoiseEstim(Operator):
         "Only relevant if `mapfile` is set",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_data = Unicode(
         defaults.det_data,
         help="Observation detdata key apply filtering to",
@@ -76,7 +81,7 @@ class NoiseEstim(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_invalid,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     mask_flags = Unicode(
@@ -170,6 +175,7 @@ class NoiseEstim(Operator):
             for trt in [
                 "view",
                 "boresight",
+                "det_mask",
                 "shared_flags",
                 "shared_flag_mask",
                 "quats",
@@ -181,11 +187,25 @@ class NoiseEstim(Operator):
                     raise traitlets.TraitError(msg)
         return detpointing
 
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
         if check < 0:
-            raise traitlets.TraitError("Flag mask should be a positive integer")
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
         return check
 
     def __init__(self, **kwargs):
@@ -285,6 +305,7 @@ class NoiseEstim(Operator):
             Copy(detdata=[(self.det_data, "temp_signal")]).apply(data)
             CommonModeFilter(
                 det_data="temp_signal",
+                det_mask=self.det_mask,
                 det_flags=self.det_flags,
                 det_flag_mask=self.det_flag_mask,
                 focalplane_key=self.focalplane_key,
@@ -305,6 +326,7 @@ class NoiseEstim(Operator):
             scan_map = ScanHealpixMap(
                 file=self.mapfile,
                 det_data=self.det_data,
+                det_mask=self.det_mask,
                 subtract=True,
                 pixel_dist=self.pixel_dist,
                 pixel_pointing=self.pixel_pointing,
@@ -315,6 +337,7 @@ class NoiseEstim(Operator):
         if self.maskfile is not None:
             scan_mask = ScanHealpixMask(
                 file=self.maskfile,
+                det_mask=self.det_mask,
                 det_flags=self.mask_flags,
                 def_flags_value=self.mask_flag_mask,
                 pixel_dist=self.pixel_dist,
@@ -325,13 +348,28 @@ class NoiseEstim(Operator):
         for orig_obs in data.obs:
             obs = self._redistribute(orig_obs)
 
+            # Get the set of all detector we are considering for this obs
+            local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
+            if obs.comm.comm_group is not None:
+                pdets = obs.comm.comm_group.gather(local_dets, root=0)
+                all_dets = None
+                if obs.comm.group_rank == 0:
+                    all_dets = set()
+                    for plocal in pdets:
+                        for d in plocal:
+                            all_dets.add(d)
+                all_dets = obs.comm_group.bcast(all_dets, root=0)
+                all_dets = list(sorted(all_dets))
+            else:
+                all_dets = local_dets
+
             if self.focalplane_key is not None:
                 # Pick just one detector to represent each key value
                 fp = obs.telescope.focalplane
                 det_names = []
                 key2det = {}
                 det2key = {}
-                for det in obs.all_detectors:
+                for det in all_dets:
                     key = fp[det][self.focalplane_key]
                     if key not in key2det:
                         det_names.append(det)
@@ -347,7 +385,7 @@ class NoiseEstim(Operator):
                         pairs.append([det1, det2])
             else:
                 det2key = None
-                det_names = obs.all_detectors
+                det_names = all_dets
                 ndet = len(det_names)
                 if len(self.pairs) > 0:
                     pairs = self.pairs

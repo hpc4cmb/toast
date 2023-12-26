@@ -53,6 +53,11 @@ class BuildHitMap(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -61,7 +66,7 @@ class BuildHitMap(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -80,6 +85,13 @@ class BuildHitMap(Operator):
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
@@ -146,7 +158,7 @@ class BuildHitMap(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(
-                selection=detectors, flagmask=self.det_flag_mask
+                selection=detectors, flagmask=self.det_mask
             )
             if len(dets) == 0:
                 # Nothing to do for this observation
@@ -270,6 +282,11 @@ class BuildInverseCovariance(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -278,7 +295,7 @@ class BuildInverseCovariance(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
@@ -305,6 +322,13 @@ class BuildInverseCovariance(Operator):
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
@@ -381,7 +405,7 @@ class BuildInverseCovariance(Operator):
             for ob in data.obs:
                 # Get the detectors we are using for this observation
                 dets = ob.select_local_detectors(
-                    selection=detectors, flagmask=self.det_flag_mask
+                    selection=detectors, flagmask=self.det_mask
                 )
                 if len(dets) == 0:
                     # Nothing to do for this observation
@@ -407,7 +431,7 @@ class BuildInverseCovariance(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(
-                selection=detectors, flagmask=self.det_flag_mask
+                selection=detectors, flagmask=self.det_mask
             )
             if len(dets) == 0:
                 # Nothing to do for this observation
@@ -569,6 +593,11 @@ class BuildNoiseWeighted(Operator):
         help="Observation detdata key for the timestream data",
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -577,7 +606,7 @@ class BuildNoiseWeighted(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
@@ -604,6 +633,13 @@ class BuildNoiseWeighted(Operator):
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
@@ -682,7 +718,7 @@ class BuildNoiseWeighted(Operator):
             for ob in data.obs:
                 # Get the detectors we are using for this observation
                 dets = ob.select_local_detectors(
-                    selection=detectors, flagmask=self.det_flag_mask
+                    selection=detectors, flagmask=self.det_mask
                 )
                 if len(dets) == 0:
                     # Nothing to do for this observation
@@ -753,7 +789,7 @@ class BuildNoiseWeighted(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(
-                selection=detectors, flagmask=self.det_flag_mask
+                selection=detectors, flagmask=self.det_mask
             )
             if len(dets) == 0:
                 # Nothing to do for this observation
@@ -968,6 +1004,11 @@ class CovarianceAndHits(Operator):
         help="The Data key where the reciprocal condition number should be stored",
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -976,7 +1017,7 @@ class CovarianceAndHits(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
@@ -1019,6 +1060,13 @@ class CovarianceAndHits(Operator):
     save_pointing = Bool(
         False, help="If True, do not clear detector pointing matrices after use"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
@@ -1084,8 +1132,10 @@ class CovarianceAndHits(Operator):
                 raise RuntimeError(msg)
 
         # Set pointing flags
+        self.pixel_pointing.detector_pointing.det_mask = self.det_mask
         self.pixel_pointing.detector_pointing.det_flag_mask = self.det_flag_mask
         if hasattr(self.stokes_weights, "detector_pointing"):
+            self.stokes_weights.detector_pointing.det_mask = self.det_mask
             self.stokes_weights.detector_pointing.det_flag_mask = self.det_flag_mask
 
         # Construct the pointing distribution if it does not already exist
@@ -1127,6 +1177,7 @@ class CovarianceAndHits(Operator):
             hits=self.hits,
             view=self.pixel_pointing.view,
             pixels=self.pixel_pointing.pixels,
+            det_mask=self.det_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,
@@ -1145,6 +1196,7 @@ class CovarianceAndHits(Operator):
             weights=self.stokes_weights.weights,
             noise_model=self.noise_model,
             det_data_units=self.det_data_units,
+            det_mask=self.det_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,

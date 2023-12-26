@@ -29,6 +29,11 @@ class Statistics(Operator):
 
     det_data = Unicode(defaults.det_data, help="Observation detdata key to analyze")
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -37,7 +42,7 @@ class Statistics(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -60,6 +65,13 @@ class Statistics(Operator):
         allow_none=True,
         help="If specified, write output data products to this directory",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -109,7 +121,7 @@ class Statistics(Operator):
 
             # Get the list of all detectors that are not cut
             obs_dets = obs.select_local_detectors(
-                detectors, flagmask=self.det_flag_mask
+                detectors, flagmask=self.det_mask
             )
             if obs.comm.group_size == 1:
                 all_dets = obs_dets

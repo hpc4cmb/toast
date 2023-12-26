@@ -54,6 +54,11 @@ class TemplateMatrix(Operator):
         defaults.det_data_units, help="Output units if creating detector data"
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -64,6 +69,20 @@ class TemplateMatrix(Operator):
         defaults.det_mask_nonscience,
         help="Bit mask value for optional detector flagging",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+
+    @traitlets.validate("det_flag_mask")
+    def _check_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Flag mask should be a positive integer")
+        return check
 
     @traitlets.validate("templates")
     def _check_templates(self, proposal):
@@ -101,6 +120,7 @@ class TemplateMatrix(Operator):
             view=self.view,
             det_data=self.det_data,
             det_data_units=self.det_data_units,
+            det_mask=self.det_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
         )
@@ -187,6 +207,7 @@ class TemplateMatrix(Operator):
                 if tmpl.view is None:
                     tmpl.view = self.view
                 tmpl.det_data_units = self.det_data_units
+                tmpl.det_mask = self.det_mask
                 tmpl.det_flags = self.det_flags
                 tmpl.det_flag_mask = self.det_flag_mask
                 # This next line will trigger calculation of the number
@@ -291,7 +312,7 @@ class TemplateMatrix(Operator):
                 # Get the detectors we are using for this observation
                 dets = ob.select_local_detectors(
                     selection=detectors,
-                    flagmask=0,
+                    flagmask=self.det_mask,
                 )
                 if len(dets) == 0:
                     # Nothing to do for this observation
@@ -510,6 +531,7 @@ class SolveAmplitudes(Operator):
                 "binned",
                 "covariance",
                 "det_flags",
+                "det_mask",
                 "det_flag_mask",
                 "shared_flags",
                 "shared_flag_mask",
@@ -568,6 +590,7 @@ class SolveAmplitudes(Operator):
         # flags are combined to the first bit (== 1) of the solver flags.
 
         save_det_flags = self.binning.det_flags
+        save_det_mask = self.binning.det_mask
         save_det_flag_mask = self.binning.det_flag_mask
         save_shared_flags = self.binning.shared_flags
         save_shared_flag_mask = self.binning.shared_flag_mask
@@ -575,7 +598,8 @@ class SolveAmplitudes(Operator):
         save_covariance = self.binning.covariance
 
         save_tmpl_flags = self.template_matrix.det_flags
-        save_tmpl_mask = self.template_matrix.det_flag_mask
+        save_tmpl_mask = self.template_matrix.det_mask
+        save_tmpl_det_mask = self.template_matrix.det_flag_mask
 
         # The pointing matrix used for the solve.  The per-detector flags
         # are normally reset when the binner is run, but here we set them
@@ -583,8 +607,10 @@ class SolveAmplitudes(Operator):
         # setting up the solver flags below.
         solve_pixels = self.binning.pixel_pointing
         solve_weights = self.binning.stokes_weights
+        solve_pixels.detector_pointing.det_mask = save_det_mask
         solve_pixels.detector_pointing.det_flag_mask = save_det_flag_mask
         if hasattr(solve_weights, "detector_pointing"):
+            solve_weights.detector_pointing.det_mask = save_det_mask
             solve_weights.detector_pointing.det_flag_mask = save_det_flag_mask
 
         # Output data products, prefixed with the name of the operator and optionally
@@ -618,7 +644,7 @@ class SolveAmplitudes(Operator):
             # Verify that our flags exist
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors, flagmask=save_det_flag_mask)
+                dets = ob.select_local_detectors(detectors, flagmask=save_det_mask)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -645,7 +671,7 @@ class SolveAmplitudes(Operator):
 
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors, flagmask=save_det_flag_mask)
+                dets = ob.select_local_detectors(detectors, flagmask=save_det_mask)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -697,6 +723,7 @@ class SolveAmplitudes(Operator):
 
             scanner = ScanMask(
                 det_flags=self.solver_flags,
+                det_mask=save_det_mask,
                 det_flag_mask=save_det_flag_mask,
                 pixels=solve_pixels.pixels,
                 view=solve_view,
@@ -752,6 +779,7 @@ class SolveAmplitudes(Operator):
                 hits=self.solver_hits_name,
                 rcond=self.solver_rcond_name,
                 det_data_units=det_data_units,
+                det_mask=save_det_mask,
                 det_flags=self.solver_flags,
                 det_flag_mask=255,
                 pixel_pointing=solve_pixels,
@@ -797,7 +825,7 @@ class SolveAmplitudes(Operator):
             local_cut = 0
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors, flagmask=save_det_flag_mask)
+                dets = ob.select_local_detectors(detectors, flagmask=save_det_mask)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -837,6 +865,7 @@ class SolveAmplitudes(Operator):
         # the flag mask to the templates
         self.template_matrix.det_data_units = det_data_units
         self.template_matrix.det_flags = self.solver_flags
+        self.template_matrix.det_mask = save_det_mask
         self.template_matrix.det_flag_mask = 255
 
         # Set our binning operator to use only our new solver flags
@@ -968,6 +997,7 @@ class SolveAmplitudes(Operator):
         # for the final map making or for other external operations.
 
         self.binning.det_flags = save_det_flags
+        self.binning.det_mask = save_det_mask
         self.binning.det_flag_mask = save_det_flag_mask
         self.binning.shared_flags = save_shared_flags
         self.binning.shared_flag_mask = save_shared_flag_mask
@@ -975,7 +1005,8 @@ class SolveAmplitudes(Operator):
         self.binning.covariance = save_covariance
 
         self.template_matrix.det_flags = save_tmpl_flags
-        self.template_matrix.det_flag_mask = save_tmpl_mask
+        self.template_matrix.det_flag_mask = save_tmpl_det_mask
+        self.template_matrix.det_mask = save_tmpl_mask
         # FIXME: this reset does not seem needed
         # if not self.mc_mode:
         #    self.template_matrix.reset_templates()

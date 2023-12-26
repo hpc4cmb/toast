@@ -38,9 +38,14 @@ class ScanMap(Operator):
         defaults.det_data_units, help="Output units if creating detector data"
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flag_mask = Int(
         defaults.det_mask_invalid,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     view = Unicode(
@@ -66,6 +71,20 @@ class ScanMap(Operator):
     )
 
     zero = Bool(False, help="If True, zero the data before accumulating / subtracting")
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -95,7 +114,7 @@ class ScanMap(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -207,6 +226,11 @@ class ScanMask(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -220,7 +244,7 @@ class ScanMask(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_invalid,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     view = Unicode(
@@ -238,6 +262,20 @@ class ScanMask(Operator):
     mask_bits = Int(
         255, help="The number to bitwise-and with each mask value to form the result"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -267,7 +305,7 @@ class ScanMask(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors, self.det_flag_mask)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -330,13 +368,18 @@ class ScanScale(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_data = Unicode(
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
     det_flag_mask = Int(
         defaults.det_mask_invalid,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     view = Unicode(
@@ -354,6 +397,20 @@ class ScanScale(Operator):
         allow_none=True,
         help="The Data key where the weight map is located",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -388,7 +445,7 @@ class ScanScale(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

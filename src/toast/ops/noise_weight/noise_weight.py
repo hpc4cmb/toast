@@ -41,14 +41,33 @@ class NoiseWeight(Operator):
         None, allow_none=True, help="Observation detdata key for the timestream data"
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flag_mask = Int(
         defaults.det_mask_invalid,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     det_data_units = Unit(
         defaults.det_data_units, help="Output units if creating detector data"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+
+    @traitlets.validate("det_flag_mask")
+    def _check_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Flag mask should be a positive integer")
+        return check
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -67,7 +86,7 @@ class NoiseWeight(Operator):
             data_invcov_units = 1.0 / data_input_units**2
             data_output_units = 1.0 / data_input_units
 
-            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation, but
                 # update the units of the output

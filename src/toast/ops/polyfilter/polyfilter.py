@@ -58,6 +58,11 @@ class PolyFilter2D(Operator):
 
     order = Int(1, allow_none=False, help="Polynomial order")
 
+    det_mask = Int(
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -65,8 +70,8 @@ class PolyFilter2D(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid,
-        help="Bit mask value for optional detector flagging",
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for detector sample flagging",
     )
 
     poly_flag_mask = Int(
@@ -92,6 +97,13 @@ class PolyFilter2D(Operator):
     focalplane_key = Unicode(
         None, allow_none=True, help="Which focalplane key to match"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -159,7 +171,7 @@ class PolyFilter2D(Operator):
             # selection, in order to avoid bad detectors in the fit.
             detectors = []
             for det in temp_ob.select_local_detectors(
-                selection=None, flagmask=self.det_flag_mask
+                selection=None, flagmask=self.det_mask
             ):
                 if pat.match(det) is None:
                     continue
@@ -451,6 +463,11 @@ class PolyFilter(Operator):
 
     order = Int(1, allow_none=False, help="Polynomial order")
 
+    det_mask = Int(
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -458,8 +475,8 @@ class PolyFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid,
-        help="Bit mask value for optional detector flagging",
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for detector sample flagging",
     )
 
     poly_flag_mask = Int(
@@ -474,13 +491,20 @@ class PolyFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid,
+        defaults.shared_mask_invalid | defaults.shared_mask_turnaround,
         help="Bit mask value for optional shared flagging",
     )
 
     view = Unicode(
         "throw", allow_none=True, help="Use this view of the data in all observations"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -514,7 +538,7 @@ class PolyFilter(Operator):
 
         for obs in data.obs:
             # Get the detectors we are using for this observation
-            dets = obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -657,6 +681,11 @@ class CommonModeFilter(Operator):
         "match the pattern are filtered.",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -664,8 +693,8 @@ class CommonModeFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid,
-        help="Bit mask value for optional detector flagging",
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -688,6 +717,13 @@ class CommonModeFilter(Operator):
         help="If True, redistribute data before and after filtering for "
         "optimal data locality.",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -810,7 +846,7 @@ class CommonModeFilter(Operator):
             for value in values:
                 local_dets = []
                 for det in temp_ob.local_detectors:
-                    if temp_ob.local_detector_flags[det] & self.det_flag_mask:
+                    if temp_ob.local_detector_flags[det] & self.det_mask:
                         continue
                     if pat.match(det) is None:
                         continue

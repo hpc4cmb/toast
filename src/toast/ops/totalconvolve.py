@@ -62,6 +62,11 @@ class SimTotalconvolve(Operator):
         help="Operator that translates boresight pointing into detector frame",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -69,7 +74,7 @@ class SimTotalconvolve(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid, help="Bit mask value for detector sample flagging"
     )
 
     shared_flags = Unicode(
@@ -223,6 +228,13 @@ class SimTotalconvolve(Operator):
         "replaced with the detector name.",
     )
 
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
         check = proposal["value"]
@@ -325,7 +337,7 @@ class SimTotalconvolve(Operator):
         for obs in data.obs:
             # Get the detectors we are using for this observation
             obs_dets = obs.select_local_detectors(
-                detectors, flagmask=self.det_flag_mask
+                detectors, flagmask=self.det_mask
             )
             for det in obs_dets:
                 my_dets.add(det)

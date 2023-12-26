@@ -43,6 +43,11 @@ class CadenceMap(Operator):
 
     times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -51,7 +56,7 @@ class CadenceMap(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -71,6 +76,27 @@ class CadenceMap(Operator):
     )
 
     save_pointing = Bool(False, help="If True, do not clear pixel numbers after use")
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
 
     @traitlets.validate("pixel_pointing")
     def _check_pixel_pointing(self, proposal):
@@ -156,7 +182,7 @@ class CadenceMap(Operator):
             for obs in data.obs:
                 obs_data = data.select(obs_uid=obs.uid)
                 dets = obs.select_local_detectors(
-                    detectors, flagmask=self.det_flag_mask
+                    detectors, flagmask=self.det_mask
                 )
                 times = obs.shared[self.times].data
                 days = to_MJD(times).astype(int)

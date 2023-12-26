@@ -75,6 +75,7 @@ class PixelsHealpix(Operator):
                 "boresight",
                 "shared_flags",
                 "shared_flag_mask",
+                "det_mask",
                 "quats",
                 "coord_in",
                 "coord_out",
@@ -163,7 +164,7 @@ class PixelsHealpix(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(
-                detectors, flagmask=self.detector_pointing.det_flag_mask
+                detectors, flagmask=self.detector_pointing.det_mask
             )
             if len(dets) == 0:
                 # Nothing to do for this observation
@@ -225,7 +226,7 @@ class PixelsHealpix(Operator):
                         ob.detdata[self.pixels].accel_update_host()
                         restore_dev = True
                     for det in ob.select_local_detectors(
-                        detectors, flagmask=self.detector_pointing.det_flag_mask
+                        detectors, flagmask=self.detector_pointing.det_mask
                     ):
                         for vslice in view_slices:
                             good = ob.detdata[self.pixels][det, vslice] >= 0

@@ -160,6 +160,7 @@ class SolverRHS(Operator):
             map_key=self.binning.binned,
             det_data=det_temp,
             det_data_units=self.det_data_units,
+            det_mask=self.binning.det_mask,
             det_flag_mask=self.binning.det_flag_mask,
             subtract=True,
         )
@@ -168,6 +169,7 @@ class SolverRHS(Operator):
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
             det_data=det_temp,
+            det_mask=self.binning.det_mask,
             det_flag_mask=self.binning.det_flag_mask,
             view=pixels.view,
         )
@@ -176,6 +178,7 @@ class SolverRHS(Operator):
         self.template_matrix.transpose = True
         self.template_matrix.det_data = det_temp
         self.template_matrix.det_data_units = self.det_data_units
+        self.template_matrix.det_mask = self.binning.det_mask
         self.template_matrix.det_flag_mask = self.binning.det_flag_mask
         self.template_matrix.view = pixels.view
 
@@ -381,6 +384,7 @@ class SolverLHS(Operator):
         self.template_matrix.transpose = False
         self.template_matrix.det_data = self.det_temp
         self.template_matrix.det_data_units = self.det_data_units
+        self.template_matrix.det_mask = self.binning.det_mask
         self.template_matrix.det_flag_mask = self.binning.det_flag_mask
         self.template_matrix.view = pixels.view
 
@@ -443,6 +447,7 @@ class SolverLHS(Operator):
             map_key=self.binning.binned,
             det_data=self.det_temp,
             det_data_units=self.det_data_units,
+            det_mask=self.binning.det_mask,
             det_flag_mask=self.binning.det_flag_mask,
             subtract=True,
         )
@@ -451,6 +456,7 @@ class SolverLHS(Operator):
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
             det_data=self.det_temp,
+            det_mask=self.binning.det_mask,
             det_flag_mask=self.binning.det_flag_mask,
             view=pixels.view,
         )

@@ -36,6 +36,7 @@ class SubHarmonic(Template):
     #    view             : The timestream view we are using
     #    det_data         : The detector data key with the timestreams
     #    det_data_units   : The units of the detector data
+    #    det_mask         : Bitmask for per-detector flagging
     #    det_flags        : Optional detector solver flags
     #    det_flag_mask    : Bit mask for detector solver flags
     #
@@ -61,7 +62,7 @@ class SubHarmonic(Template):
         # Build up detector list
         for iob, ob in enumerate(new_data.obs):
             for d in ob.local_detectors:
-                if ob.local_detector_flags[d] & self.det_flag_mask:
+                if ob.local_detector_flags[d] & self.det_mask:
                     continue
                 if d not in all_dets:
                     all_dets[d] = None

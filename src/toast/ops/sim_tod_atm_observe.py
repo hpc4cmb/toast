@@ -80,6 +80,11 @@ class ObserveAtmosphere(Operator):
         defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -87,7 +92,7 @@ class ObserveAtmosphere(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid, help="Bit mask value for detector sample flagging"
     )
 
     sim = Unicode("atm_sim", help="Data key with the dictionary of sims per session")
@@ -121,6 +126,13 @@ class ObserveAtmosphere(Operator):
 
     debug_tod = Bool(False, help="If True, dump TOD to pickle files")
 
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
@@ -157,7 +169,7 @@ class ObserveAtmosphere(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

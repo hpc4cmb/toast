@@ -86,6 +86,11 @@ class Demodulate(Operator):
         help="Observation detdata key apply filtering to",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -93,7 +98,7 @@ class Demodulate(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid, help="Bit mask value for detector sample flagging"
     )
 
     demod_flag_mask = Int(
@@ -133,6 +138,27 @@ class Demodulate(Operator):
     do_2f = Bool(False, help="also cache the 2f-demodulated signal")
 
     # Intervals?
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
 
     @traitlets.validate("stokes_weights")
     def _check_stokes_weights(self, proposal):
@@ -194,7 +220,7 @@ class Demodulate(Operator):
         for obs in demodulate_obs:
             # Get the detectors which are not cut with per-detector flags
             local_dets = obs.select_local_detectors(
-                detectors, flagmask=self.det_flag_mask
+                detectors, flagmask=self.det_mask
             )
             if obs.comm.comm_group is None:
                 all_dets = local_dets
