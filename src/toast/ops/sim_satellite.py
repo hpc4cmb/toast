@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -188,6 +188,9 @@ class SimSatellite(Operator):
     may have some gaps in between for cooler cycles or other events.  The precession
     axis (anti-sun direction) is continuously slewed.
 
+    To be consistent with the ground simulation facilities, the satellite pointing
+    is expressed in the ICRS (equatorial) system.  Detector pointing expansion can
+    rotate the output pointing to any other reference frame.
     """
 
     # Class traits
@@ -229,7 +232,8 @@ class SimSatellite(Operator):
     detset_key = Unicode(
         None,
         allow_none=True,
-        help="If specified, use this column of the focalplane detector_data to group detectors",
+        help="If specified, use this column of the focalplane "
+        "detector_data to group detectors",
     )
 
     times = Unicode(defaults.times, help="Observation shared key for timestamps")
@@ -395,7 +399,8 @@ class SimSatellite(Operator):
                 n_detset = len(detsets)
             if det_ranks > n_detset:
                 if comm.group_rank == 0:
-                    msg = f"Group {comm.group} has {comm.group_size} processes but {n_detset} detector sets."
+                    msg = f"Group {comm.group} has {comm.group_size} "
+                    msg += f"processes but {n_detset} detector sets."
                     log.error(msg)
                     raise RuntimeError(msg)
 
