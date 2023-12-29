@@ -115,19 +115,19 @@ class PointingDetectorSimple(Operator):
                 raise RuntimeError(msg)
             if self.coord_in == "C":
                 if self.coord_out == "E":
-                    coord_rot = qa.equ2ecl
+                    coord_rot = qa.equ2ecl()
                 elif self.coord_out == "G":
-                    coord_rot = qa.equ2gal
+                    coord_rot = qa.equ2gal()
             elif self.coord_in == "E":
                 if self.coord_out == "G":
-                    coord_rot = qa.ecl2gal
+                    coord_rot = qa.ecl2gal()
                 elif self.coord_out == "C":
-                    coord_rot = qa.inv(qa.equ2ecl)
+                    coord_rot = qa.inv(qa.equ2ecl())
             elif self.coord_in == "G":
                 if self.coord_out == "C":
-                    coord_rot = qa.inv(qa.equ2gal)
+                    coord_rot = qa.inv(qa.equ2gal())
                 if self.coord_out == "E":
-                    coord_rot = qa.inv(qa.ecl2gal)
+                    coord_rot = qa.inv(qa.ecl2gal())
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -171,11 +171,14 @@ class PointingDetectorSimple(Operator):
                 comm=data.comm.comm_group,
             )
 
-            # FIXME: handle coordinate transforms here too...
+            if coord_rot is None:
+                boresight = ob.shared[self.boresight].data
+            else:
+                boresight = qa.mult(coord_rot, ob.shared[self.boresight].data)
 
             pointing_detector(
                 fp_quats,
-                ob.shared[self.boresight].data,
+                boresight,
                 quat_indx,
                 ob.detdata[self.quats].data,
                 ob.intervals[self.view].data,
