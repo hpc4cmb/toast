@@ -267,6 +267,7 @@ class SpaceSite(Site):
         vel_z = np.zeros(n_sparse, np.float64)
         for i, t in enumerate(sparse_times):
             atime = astime.Time(t, format="unix")
+            # Get the satellite position and velocity in the equatorial frame (ICRS)
             p, v = coord.get_body_barycentric_posvel("earth", atime)
             # FIXME:  apply translation from earth center to L2.
             pm = p.xyz.to_value(u.kilometer)
