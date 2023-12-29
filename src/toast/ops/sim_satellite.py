@@ -189,8 +189,8 @@ class SimSatellite(Operator):
     axis (anti-sun direction) is continuously slewed.
 
     To be consistent with the ground simulation facilities, the satellite pointing
-    is expressed in the ICRS (equatorial) system.  Detector pointing expansion can
-    rotate the output pointing to any other reference frame.
+    is expressed in the ICRS (equatorial) system by default.  Detector pointing
+    expansion can rotate the output pointing to any other reference frame.
     """
 
     # Class traits
@@ -252,6 +252,10 @@ class SimSatellite(Operator):
         defaults.boresight_radec, help="Observation shared key for boresight"
     )
 
+    coord = Unicode(
+        "C", help="Coordinate system to use for pointing. One of ('C', 'E', 'G')"
+    )
+
     position = Unicode(defaults.position, help="Observation shared key for position")
 
     velocity = Unicode(defaults.velocity, help="Observation shared key for velocity")
@@ -271,6 +275,14 @@ class SimSatellite(Operator):
         allow_none=True,
         help="Observation detdata key for flags to initialize",
     )
+
+    @traitlets.validate("coord")
+    def _check_coord(self, proposal):
+        check = proposal["value"]
+        if check is not None:
+            if check not in ["E", "C", "G"]:
+                raise traitlets.TraitError("coordinate system must be 'E', 'C', or 'G'")
+        return check
 
     @traitlets.validate("telescope")
     def _check_telescope(self, proposal):
@@ -340,9 +352,23 @@ class SimSatellite(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def _get_coord_rot(self):
+        """ Get an optional coordinate rotation quaternion to return satellite
+        pointing and velocity in the user-specified frame
+        """
+        if self.coord == "C":
+            coord_rot = None
+        elif self.coord == "E":
+            coord_rot = qa.equ2ecl()
+        elif self.coord_in == "G":
+            coord_rot = qa.equ2gal()
+        return coord_rot
+
+
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         zaxis = np.array([0, 0, 1], dtype=np.float64)
+        coord_rot = self._get_coord_rot()
         log = Logger.get()
         if self.telescope is None:
             raise RuntimeError(
@@ -512,6 +538,10 @@ class SimSatellite(Operator):
 
                 # Get the motion of the site for these times.
                 position, velocity = site.position_velocity(stamps)
+                if coord_rot is not None:
+                    # `site` always returns ICRS (celestial) position
+                    position = qa.rotate(coord_rot, position)
+                    velocity = qa.rotate(coord_rot, velocity)
 
                 # Get the quaternions for the precession axis.  For now, assume that
                 # it simply points away from the solar system barycenter
