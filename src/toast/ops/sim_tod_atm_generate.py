@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -340,6 +340,13 @@ class GenerateAtmosphere(Operator):
         istart = 0
         counter1start = counter1
 
+        # Figure out the optimal size of the concentric
+        # observation cones
+        ncone = 3
+        scale = 10
+        azmin, azmax, elmin, elmax = scan_range
+        rmax_tot = self.zmax.to_value(u.m) / np.cos(elmin.to_value(u.radian))
+
         while tmin < tmax_tot:
             if comm is not None:
                 comm.Barrier()
@@ -355,19 +362,22 @@ class GenerateAtmosphere(Operator):
                     f"out of {tmax_tot - tmin_tot:10.1f} s"
                 )
 
-            rmin = 0
-            rmax = 100
-            scale = 10
-            counter2start = counter2
+            rmin = 10
+            while rmax_tot / scale**(ncone - 1) < rmin:
+                ncone -= 1
+            rmax = rmax_tot / scale**(ncone - 1)
+            xstep_current = u.Quantity(self.xstep) / np.sqrt(scale)**(ncone - 1)
+            ystep_current = u.Quantity(self.ystep) / np.sqrt(scale)**(ncone - 1)
+            zstep_current = u.Quantity(self.zstep) / np.sqrt(scale)**(ncone - 1)
             counter1 = counter1start
-            xstep_current = u.Quantity(self.xstep)
-            ystep_current = u.Quantity(self.ystep)
-            zstep_current = u.Quantity(self.zstep)
+            # xstep_current = u.Quantity(self.xstep)
+            # ystep_current = u.Quantity(self.ystep)
+            # zstep_current = u.Quantity(self.zstep)
 
             sim_list = list()
 
-            while rmax < 100000:
-                sim, counter2 = self._simulate_atmosphere(
+            for icone in range(ncone):
+                sim = self._simulate_atmosphere(
                     weather,
                     scan_range,
                     tmin,
@@ -378,7 +388,7 @@ class GenerateAtmosphere(Operator):
                     key1,
                     key2,
                     counter1,
-                    counter2start,
+                    counter2,
                     cachedir,
                     log_prefix,
                     tmin_tot,
@@ -392,19 +402,8 @@ class GenerateAtmosphere(Operator):
                 if not self.cache_only:
                     sim_list.append(sim)
 
-                if self.debug_plots or self.debug_snapshots:
-                    self._plot_snapshots(
-                        sim,
-                        log_prefix,
-                        sname,
-                        scan_range,
-                        tmin,
-                        tmax,
-                        comm,
-                        rmin,
-                        rmax,
-                    )
-
+                # Scale the size of the observation cone to
+                # move to the next field
                 rmin = rmax
                 rmax *= scale
                 xstep_current *= np.sqrt(scale)
@@ -412,8 +411,25 @@ class GenerateAtmosphere(Operator):
                 zstep_current *= np.sqrt(scale)
                 counter1 += 1
 
+            if self.debug_plots or self.debug_snapshots:
+                self._plot_snapshots(
+                    sim_list,
+                    log_prefix,
+                    sname,
+                    scan_range,
+                    tmin,
+                    tmax,
+                    comm,
+                    f"{key1}_{key2}_{counter1}_{counter2}",
+                )
+
             if not self.cache_only:
                 output.append(sim_list)
+
+            # Advance the sample counter in case wind_time broke the
+            # observation in parts
+
+            counter2 += 100000000
             tmin = tmax
 
         if not self.cache_only:
@@ -656,7 +672,7 @@ class GenerateAtmosphere(Operator):
             fname = None
             if cachedir is not None:
                 fname = os.path.join(
-                    cachedir, "{}_{}_{}_{}.h5".format(key1, key2, counter1, counter2)
+                    cachedir, f"{key1}_{key2}_{counter1}_{counter2}.h5"
                 )
                 if os.path.isfile(fname):
                     if self.overwrite_cache:
@@ -665,7 +681,8 @@ class GenerateAtmosphere(Operator):
                         have_cache = True
             if have_cache:
                 log.debug(
-                    f"{prefix}Loading the atmosphere for t = {tmin - tmin_tot} from {fname}"
+                    f"{prefix}Loading the atmosphere for t = {tmin - tmin_tot} "
+                    f"from {fname}"
                 )
             else:
                 log.debug(
@@ -676,25 +693,28 @@ class GenerateAtmosphere(Operator):
 
         err = sim.simulate(use_cache=use_cache)
         if err != 0:
-            raise RuntimeError(prefix + "Simulation failed.")
+            msg = f"{prefix}Simulation failed."
+            raise RuntimeError(msg)
 
-        # Advance the sample counter in case wind_time broke the
-        # observation in parts
-
-        counter2 += 100000000
-
-        op = None
         if have_cache:
-            op = "Loaded"
+            msg = f"{prefix}SimAtmosphere: Loaded atmosphere"
         else:
-            op = "Simulated"
-        msg = f"{prefix}SimAtmosphere: {op} atmosphere"
+            msg = f"{prefix}SimAtmosphere: Simulated atmosphere"
         log.debug_rank(msg, comm=comm, timer=tmr)
-        return sim, counter2
+
+        return sim
 
     @function_timer
     def _plot_snapshots(
-        self, sim, prefix, obsname, scan_range, tmin, tmax, comm, rmin, rmax
+            self,
+            sim_list,
+            prefix,
+            obsname,
+            scan_range,
+            tmin,
+            tmax,
+            comm,
+            realization,
     ):
         """Create snapshots of the atmosphere"""
         log = Logger.get()
@@ -710,10 +730,11 @@ class GenerateAtmosphere(Operator):
         azmax = azmax.to_value(u.radian)
         elmin = elmin.to_value(u.radian)
         elmax = elmax.to_value(u.radian)
+        elmean = 0.5 * (elmin + elmax)
 
         # elstep = np.radians(0.01)
         elstep = (elmax - elmin) / 320
-        azstep = elstep * np.cos(0.5 * (elmin + elmax))
+        azstep = elstep * np.cos(elmean)
         azgrid = np.linspace(azmin, azmax, int((azmax - azmin) / azstep) + 1)
         elgrid = np.linspace(elmin, elmax, int((elmax - elmin) / elstep) + 1)
         AZ, EL = np.meshgrid(azgrid, elgrid)
@@ -729,8 +750,8 @@ class GenerateAtmosphere(Operator):
             rank = comm.rank
             ntask = comm.size
 
-        r = 0
         t = 0
+        r = 0
         my_snapshots = []
         vmin = 1e30
         vmax = -1e30
@@ -738,32 +759,35 @@ class GenerateAtmosphere(Operator):
         for i, t in enumerate(np.arange(tmin, tmax, tstep)):
             if i % ntask != rank:
                 continue
-            err = sim.observe(atmtimes + t, az, el, atmdata, r)
-            if err != 0:
-                raise RuntimeError(prefix + "Observation failed")
+            atmdata_temp = np.zeros_like(atmdata)
+            atmdata[:] = 0
+            for sim in sim_list:
+                err = sim.observe(atmtimes + t, az, el, atmdata_temp, r)
+                if err != 0:
+                    msg = f"{prefix}Observation failed"
+                    raise RuntimeError(msg)
+                atmdata += atmdata_temp
+            rms = np.std(atmdata)
+            if rms == 0:
+                continue
             atmdata *= self.gain
             vmin = min(vmin, np.amin(atmdata))
             vmax = max(vmax, np.amax(atmdata))
             atmdata2d = atmdata.reshape(AZ.shape)
             my_snapshots.append((t, r, atmdata2d.copy()))
 
+        outdir = "snapshots"
+        os.makedirs(outdir, exist_ok=True)
+
         if self.debug_snapshots:
-            outdir = "snapshots"
-            if rank == 0:
-                try:
-                    os.makedirs(outdir)
-                except FileExistsError:
-                    pass
             fn = os.path.join(
                 outdir,
-                "atm_{}_{}_t_{}_{}_r_{}_{}.pck".format(
-                    obsname, rank, int(tmin), int(tmax), int(rmin), int(rmax)
-                ),
+                f"atm_{obsname}_{rank}_"
+                f"t_{int(tmin)}_{int(tmax)}.pck"
             )
             with open(fn, "wb") as fout:
                 pickle.dump([azgrid, elgrid, my_snapshots], fout)
-
-        log.debug("Snapshots saved in {}".format(fn))
+            log.debug(f"Snapshots saved in {fn}")
 
         if self.debug_plots:
             if comm is not None:
@@ -771,6 +795,14 @@ class GenerateAtmosphere(Operator):
                 vmax = comm.allreduce(vmax, op=MPI.MAX)
 
             for t, r, atmdata2d in my_snapshots:
+                # DEBUG begin
+                rms = np.std(atmdata2d)
+                print(
+                    f"DEBUG : rank = {rank}, t = {t}, r = {r}, "
+                    f"RMS = {rms}, real {realization}",
+                    flush=True
+                )
+                # DEBUG end
                 plt.figure(figsize=[12, 4])
                 plt.imshow(
                     atmdata2d,
@@ -779,7 +811,7 @@ class GenerateAtmosphere(Operator):
                     extent=np.degrees(
                         [
                             0,
-                            (azmax - azmin) * np.cos(0.5 * (elmin + elmax)),
+                            (azmax - azmin) * np.cos(elmean),
                             elmin,
                             elmax,
                         ]
@@ -790,13 +822,15 @@ class GenerateAtmosphere(Operator):
                 )
                 plt.colorbar()
                 ax = plt.gca()
-                ax.set_title("t = {:15.1f} s, r = {:15.1f} m".format(t, r))
+                ax.set_title(f"t = {t:15.1f} s, r = {r:15.1f} m")
                 ax.set_xlabel("az [deg]")
                 ax.set_ylabel("el [deg]")
                 ax.set_yticks(np.degrees([elmin, elmax]))
-                plt.savefig(
-                    "atm_{}_t_{:04}_r_{:04}.png".format(obsname, int(t), int(r))
+                fn = os.path.join(
+                    outdir,
+                    f"atm_{obsname}_t_{int(t):04}_r_{int(r):04}.png",
                 )
+                plt.savefig(fn)
                 plt.close()
 
         del my_snapshots
