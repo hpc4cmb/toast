@@ -137,6 +137,9 @@ class Offset(Template):
         # Frequency bins for the noise prior for each obs.
         self._freq = dict()
 
+        # Good detectors to use for each observation
+        self._obs_dets = dict()
+
         for iob, ob in enumerate(new_data.obs):
             # Compute sample rate from timestamps
             (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(ob.shared[self.times])
@@ -182,16 +185,18 @@ class Offset(Template):
                     self._freq[iob] = np.logspace(powmin, powmax, 1000)
 
             # Build up detector list
-            for d in ob.local_detectors:
-                if ob.local_detector_flags[d] & self.det_mask:
+            self._obs_dets[iob] = set()
+            for d in ob.select_local_detectors(flagmask=self.det_mask):
+                if d not in ob.detdata[self.det_data].detectors:
                     continue
+                self._obs_dets[iob].add(d)
                 if d not in all_dets:
                     all_dets[d] = None
 
         self._all_dets = list(all_dets.keys())
 
         # Go through the data one local detector at a time and compute the offsets into
-        # the amplitudes.
+        # the amplitudes.  Also save the detectors in use for 
 
         self._det_start = dict()
 
@@ -199,7 +204,7 @@ class Offset(Template):
         for det in self._all_dets:
             self._det_start[det] = offset
             for iob, ob in enumerate(new_data.obs):
-                if det not in ob.local_detectors:
+                if det not in self._obs_dets[iob]:
                     continue
                 offset += np.sum(self._obs_views[iob])
 
@@ -230,9 +235,7 @@ class Offset(Template):
         offset = 0
         for det in self._all_dets:
             for iob, ob in enumerate(new_data.obs):
-                if det not in ob.local_detectors:
-                    continue
-                if det not in ob.detdata[self.det_data].detectors:
+                if det not in self._obs_dets[iob]:
                     continue
 
                 # "Noise weight" (time-domain inverse variance)
@@ -316,9 +319,7 @@ class Offset(Template):
             offset = 0
             for det in self._all_dets:
                 for iob, ob in enumerate(new_data.obs):
-                    if det not in ob.local_detectors:
-                        continue
-                    if det not in ob.detdata[self.det_data].detectors:
+                    if det not in self._obs_dets[iob]:
                         continue
                     if iob not in self._filters:
                         self._filters[iob] = dict()
@@ -658,9 +659,7 @@ class Offset(Template):
 
         amp_offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
-            if detector not in ob.local_detectors:
-                continue
-            if detector not in ob.detdata[self.det_data].detectors:
+            if detector not in self._obs_dets[iob]:
                 continue
             det_indx = ob.detdata[self.det_data].indices([detector])
             # The step length for this observation
@@ -745,9 +744,7 @@ class Offset(Template):
 
         amp_offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
-            if detector not in ob.local_detectors:
-                continue
-            if detector not in ob.detdata[self.det_data].detectors:
+            if detector not in self._obs_dets[iob]:
                 continue
             det_indx = ob.detdata[self.det_data].indices([detector])
             if self.det_flags is not None:
@@ -819,7 +816,7 @@ class Offset(Template):
         for det in self._all_dets:
             offset = self._det_start[det]
             for iob, ob in enumerate(self.data.obs):
-                if det not in ob.local_detectors:
+                if det not in self._obs_dets[iob]:
                     continue
                 for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                     n_amp_view = self._obs_views[iob][ivw]
@@ -891,9 +888,7 @@ class Offset(Template):
             for det in self._all_dets:
                 offset = self._det_start[det]
                 for iob, ob in enumerate(self.data.obs):
-                    if det not in ob.local_detectors:
-                        continue
-                    if det not in ob.detdata[self.det_data].detectors:
+                    if det not in self._obs_dets[iob]:
                         continue
                     # Loop over views
                     views = ob.view[self.view]
@@ -992,7 +987,7 @@ class Offset(Template):
         for det in self._all_dets:
             amp_offset = self._det_start[det]
             for iob, ob in enumerate(self.data.obs):
-                if det not in ob.local_detectors:
+                if det not in self._obs_dets[iob]:
                     continue
                 if ob.comm_row_size != 1:
                     raise NotImplementedError(

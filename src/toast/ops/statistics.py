@@ -103,11 +103,8 @@ class Statistics(Operator):
         nstat = 3  # Variance, Skewness, Kurtosis
 
         if self.output_dir is not None:
-            if data.comm.world_rank == 0:
-                if not os.path.isdir(self.output_dir):
-                    os.makedirs(self.output_dir)
-            if data.comm.comm_world is not None:
-                data.comm.comm_world.barrier()
+            if not os.path.isdir(self.output_dir):
+                os.makedirs(self.output_dir, exist_ok=True)
 
         for obs in data.obs:
             # NOTE:  We could use the session name / uid in the filename

@@ -122,6 +122,22 @@ class Pipeline(Operator):
             msg = f"{self} data, group {data.comm.group} has no observations."
             log.verbose_rank(msg, comm=data.comm.comm_group)
 
+        # Ensure that all operators with a detector mask are using the same
+        # mask.
+        det_mask = None
+        for op in self.operators:
+            if hasattr(op, "det_mask"):
+                if det_mask is None:
+                    det_mask = op.det_mask
+                else:
+                    if op.det_mask != det_mask:
+                        msg = "All operators in a Pipeline which use a det_mask"
+                        msg += " must have the same mask value"
+                        log.error(msg)
+                        raise RuntimeError(msg)
+        if det_mask is None:
+            det_mask = 0
+
         if len(self.detector_sets) == 1 and self.detector_sets[0] == "ALL":
             # Run the operators with all detectors at once
             for op in self.operators:
@@ -133,7 +149,9 @@ class Pipeline(Operator):
                 )
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
             # Get superset of detectors across all observations
-            all_local_dets = data.all_local_detectors(selection=detectors)
+            all_local_dets = data.all_local_detectors(
+                selection=detectors, flagmask=det_mask
+            )
             # Run operators one detector at a time
             for det in all_local_dets:
                 msg = f"{pstr} {self} SINGLE detector {det}"

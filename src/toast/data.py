@@ -77,11 +77,16 @@ class Data(MutableMapping):
             self._internal.clear()
         return
 
-    def all_local_detectors(self, selection=None):
+    def all_local_detectors(self, selection=None, flagmask=0):
         """Get the superset of local detectors in all observations.
 
         This builds up the result from calling `select_local_detectors()` on
         all observations.
+
+        Args:
+            selection (list):  Only consider this list of detectors
+            flagmask (int):  Apply this det_mask to the detector selection in
+                each observation.
 
         Returns:
             (list):  The list of all local detectors across all observations.
@@ -89,7 +94,7 @@ class Data(MutableMapping):
         """
         all_dets = OrderedDict()
         for ob in self.obs:
-            dets = ob.select_local_detectors(selection=selection)
+            dets = ob.select_local_detectors(selection=selection, flagmask=flagmask)
             for d in dets:
                 if d not in all_dets:
                     all_dets[d] = None

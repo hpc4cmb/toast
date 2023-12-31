@@ -67,7 +67,7 @@ class TemplateMatrix(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     @traitlets.validate("det_mask")
@@ -255,7 +255,7 @@ class TemplateMatrix(Operator):
 
         # We loop over detectors.  Internally, each template loops over observations
         # and ignores observations where the detector does not exist.
-        all_dets = data.all_local_detectors(selection=detectors)
+        all_dets = data.all_local_detectors(selection=detectors, flagmask=self.det_mask)
 
         if self.transpose:
             # Check that the incoming detector data in all observations has the correct
@@ -861,12 +861,14 @@ class SolveAmplitudes(Operator):
             comm=comm,
         )
 
-        # First application of the template matrix will propagate flags and
-        # the flag mask to the templates
+        # Initialize the template matrix
+        self.template_matrix.det_data = self.det_data
         self.template_matrix.det_data_units = det_data_units
         self.template_matrix.det_flags = self.solver_flags
         self.template_matrix.det_mask = save_det_mask
         self.template_matrix.det_flag_mask = 255
+        self.template_matrix.view = self.binning.pixel_pointing.view
+        self.template_matrix.initialize(data)
 
         # Set our binning operator to use only our new solver flags
         self.binning.shared_flag_mask = 0

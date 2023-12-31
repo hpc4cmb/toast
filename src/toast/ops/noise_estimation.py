@@ -193,14 +193,14 @@ class NoiseEstim(Operator):
         if check < 0:
             raise traitlets.TraitError("Det mask should be a positive integer")
         return check
-    
+
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
         if check < 0:
             raise traitlets.TraitError("Det flag mask should be a positive integer")
         return check
-    
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_mask(self, proposal):
         check = proposal["value"]
@@ -352,16 +352,15 @@ class NoiseEstim(Operator):
             local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if obs.comm.comm_group is not None:
                 pdets = obs.comm.comm_group.gather(local_dets, root=0)
-                all_dets = None
+                good_dets = None
                 if obs.comm.group_rank == 0:
-                    all_dets = set()
+                    good_dets = set()
                     for plocal in pdets:
                         for d in plocal:
-                            all_dets.add(d)
-                all_dets = obs.comm_group.bcast(all_dets, root=0)
-                all_dets = list(sorted(all_dets))
+                            good_dets.add(d)
+                good_dets = obs.comm.comm_group.bcast(good_dets, root=0)
             else:
-                all_dets = local_dets
+                good_dets = set(local_dets)
 
             if self.focalplane_key is not None:
                 # Pick just one detector to represent each key value
@@ -369,7 +368,7 @@ class NoiseEstim(Operator):
                 det_names = []
                 key2det = {}
                 det2key = {}
-                for det in all_dets:
+                for det in obs.all_detectors:
                     key = fp[det][self.focalplane_key]
                     if key not in key2det:
                         det_names.append(det)
@@ -385,7 +384,7 @@ class NoiseEstim(Operator):
                         pairs.append([det1, det2])
             else:
                 det2key = None
-                det_names = all_dets
+                det_names = obs.all_detectors
                 ndet = len(det_names)
                 if len(self.pairs) > 0:
                     pairs = self.pairs
@@ -452,43 +451,58 @@ class NoiseEstim(Operator):
                 if det1 not in det_names or det2 not in det_names:
                     # User-specified pair is invalid
                     continue
-                signal1 = obs.detdata[self.det_data][det1]
+                if det1 not in good_dets or (
+                    det2 is not None and det2 not in good_dets
+                ):
+                    # One of our detectors is cut.  Store a zero PSD.
+                    nse_freqs = np.array(
+                        [
+                            0.0,
+                            1.0e-5,
+                            fsample / 4,
+                            fsample / 2,
+                        ],
+                        dtype=np.float64,
+                    )
+                    nse_psd = np.zeros_like(nse_freqs)
+                else:
+                    signal1 = obs.detdata[self.det_data][det1]
 
-                flags[:] = shared_flags
-                if self.det_flags is not None:
-                    flags[:] |= (
-                        obs.detdata[self.det_flags][det1] & self.det_flag_mask
-                    ) != 0
-
-                signal2 = None
-                if det1 != det2:
-                    signal2 = obs.detdata[self.det_data][det2]
+                    flags[:] = shared_flags
                     if self.det_flags is not None:
                         flags[:] |= (
-                            obs.detdata[self.det_flags][det2] & self.det_flag_mask
+                            obs.detdata[self.det_flags][det1] & self.det_flag_mask
                         ) != 0
 
-                if det2key is None:
-                    det1_name = det1
-                    det2_name = det2
-                else:
-                    det1_name = det2key[det1]
-                    det2_name = det2key[det2]
+                    signal2 = None
+                    if det1 != det2:
+                        signal2 = obs.detdata[self.det_data][det2]
+                        if self.det_flags is not None:
+                            flags[:] |= (
+                                obs.detdata[self.det_flags][det2] & self.det_flag_mask
+                            ) != 0
 
-                nse_freqs, nse_psd = self.process_noise_estimate(
-                    obs,
-                    signal1,
-                    signal2,
-                    flags,
-                    gapflags,
-                    gapflags_nsum,
-                    times,
-                    fsample,
-                    fileroot,
-                    det1_name,
-                    det2_name,
-                    intervals,
-                )
+                    if det2key is None:
+                        det1_name = det1
+                        det2_name = det2
+                    else:
+                        det1_name = det2key[det1]
+                        det2_name = det2key[det2]
+
+                    nse_freqs, nse_psd = self.process_noise_estimate(
+                        obs,
+                        signal1,
+                        signal2,
+                        flags,
+                        gapflags,
+                        gapflags_nsum,
+                        times,
+                        fsample,
+                        fileroot,
+                        det1_name,
+                        det2_name,
+                        intervals,
+                    )
                 if obs.comm.group_rank == 0:
                     det_units = obs.detdata[self.det_data].units
                     if det_units == u.dimensionless_unscaled:

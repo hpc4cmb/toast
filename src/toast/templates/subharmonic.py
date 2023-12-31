@@ -59,11 +59,16 @@ class SubHarmonic(Template):
         # but sorted in order of occurrence.
         all_dets = OrderedDict()
 
+        # Good detectors to use for each observation
+        self._obs_dets = dict()
+
         # Build up detector list
         for iob, ob in enumerate(new_data.obs):
-            for d in ob.local_detectors:
-                if ob.local_detector_flags[d] & self.det_mask:
+            self._obs_dets[iob] = set()
+            for d in ob.select_local_detectors(flagmask=self.det_mask):
+                if d not in ob.detdata[self.det_data].detectors:
                     continue
+                self._obs_dets[iob].add(d)
                 if d not in all_dets:
                     all_dets[d] = None
 
@@ -82,7 +87,7 @@ class SubHarmonic(Template):
         for det in self._all_dets:
             self._det_start[det] = offset
             for iob, ob in enumerate(new_data.obs):
-                if det not in ob.local_detectors:
+                if det not in self._obs_dets[iob]:
                     continue
                 # We have one set of amplitudes for each detector in each view
                 offset += len(ob.view[self.view]) * (self.order + 1)
@@ -143,7 +148,7 @@ class SubHarmonic(Template):
 
                 self._precond[iob][ivw] = dict()
                 for det in ob.local_detectors:
-                    if det not in self._all_dets:
+                    if det not in self._obs_dets[iob]:
                         continue
                     detweight = 1.0
                     if noise is not None:
@@ -181,7 +186,7 @@ class SubHarmonic(Template):
         norder = self.order + 1
         offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
-            if detector not in ob.local_detectors:
+            if detector not in self._obs_dets[iob]:
                 continue
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 amp_view = amplitudes.local[offset : offset + norder]
@@ -196,9 +201,7 @@ class SubHarmonic(Template):
         norder = self.order + 1
         offset = self._det_start[detector]
         for iob, ob in enumerate(self.data.obs):
-            if detector not in ob.local_detectors:
-                continue
-            if detector not in ob.detdata[self.det_data].detectors:
+            if detector not in self._obs_dets[iob]:
                 continue
             for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
                 amp_view = amplitudes.local[offset : offset + norder]
@@ -215,7 +218,7 @@ class SubHarmonic(Template):
         for det in self._all_dets:
             offset = self._det_start[det]
             for iob, ob in enumerate(self.data.obs):
-                if det not in ob.local_detectors:
+                if det not in self._obs_dets[iob]:
                     continue
                 views = ob.view[self.view]
                 for ivw, vw in enumerate(views):

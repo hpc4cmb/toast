@@ -115,6 +115,9 @@ class Fourier2D(Template):
         # but sorted in order of occurrence.
         all_dets = OrderedDict()
 
+        # Good detectors to use for each observation
+        self._obs_dets = dict()
+
         local_offset = 0
         global_offset = 0
 
@@ -124,9 +127,11 @@ class Fourier2D(Template):
             self._obs_view_global_offset[iob] = list()
 
             # Build up detector list
-            for d in ob.local_detectors:
-                if ob.local_detector_flags[d] & self.det_mask:
+            self._obs_dets[iob] = set()
+            for d in ob.select_local_detectors(flagmask=self.det_mask):
+                if d not in ob.detdata[self.det_data].detectors:
                     continue
+                self._obs_dets[iob].add(d)
                 if d not in all_dets:
                     all_dets[d] = None
 
@@ -268,7 +273,7 @@ class Fourier2D(Template):
                 norms_view = self._norms[norm_slice].reshape((-1, self._nmode))
 
                 for det in ob.local_detectors:
-                    if det not in self._all_dets:
+                    if det not in self._obs_dets[iob]:
                         continue
                     detweight = 1.0
                     if noise is not None:
@@ -336,9 +341,7 @@ class Fourier2D(Template):
             # This must have been cut by per-detector flags during initialization
             return
         for iob, ob in enumerate(self.data.obs):
-            if detector not in ob.local_detectors:
-                continue
-            if detector not in ob.detdata[self.det_data].detectors:
+            if detector not in self._obs_dets[iob]:
                 continue
             views = ob.view[self.view]
             for ivw, vw in enumerate(views):
@@ -359,9 +362,7 @@ class Fourier2D(Template):
             # This must have been cut by per-detector flags during initialization
             return
         for iob, ob in enumerate(self.data.obs):
-            if detector not in ob.local_detectors:
-                continue
-            if detector not in ob.detdata[self.det_data].detectors:
+            if detector not in self._obs_dets[iob]:
                 continue
             views = ob.view[self.view]
             for ivw, vw in enumerate(views):

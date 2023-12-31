@@ -178,12 +178,6 @@ class SolverRHS(Operator):
         self.template_matrix.transpose = True
         self.template_matrix.det_data = det_temp
         self.template_matrix.det_data_units = self.det_data_units
-        self.template_matrix.det_mask = self.binning.det_mask
-        self.template_matrix.det_flag_mask = self.binning.det_flag_mask
-        self.template_matrix.view = pixels.view
-
-        # Initialize template matrix for all detectors
-        self.template_matrix.initialize(data)
 
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.
@@ -239,8 +233,11 @@ class SolverRHS(Operator):
         return
 
     def _finalize(self, data, **kwargs):
-        for tname in data[self.template_matrix.amplitudes].keys():
-            print(f"DEBUG RHS {tname} = {data[self.template_matrix.amplitudes][tname]}", flush=True)
+        # for tname in data[self.template_matrix.amplitudes].keys():
+        #     print(
+        #         f"DEBUG RHS {tname} = {data[self.template_matrix.amplitudes][tname]}",
+        #         flush=True,
+        #     )
         return
 
     def _requires(self):
@@ -384,12 +381,6 @@ class SolverLHS(Operator):
         self.template_matrix.transpose = False
         self.template_matrix.det_data = self.det_temp
         self.template_matrix.det_data_units = self.det_data_units
-        self.template_matrix.det_mask = self.binning.det_mask
-        self.template_matrix.det_flag_mask = self.binning.det_flag_mask
-        self.template_matrix.view = pixels.view
-
-        # Initialize template matrix for all detectors
-        self.template_matrix.initialize(data)
 
         self.binning.det_data = self.det_temp
         self.binning.det_data_units = self.det_data_units

@@ -533,18 +533,19 @@ class Madam(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             local_dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-            if ob.comm.comm_group is not None:
-                pdets = ob.comm.comm_group.gather(local_dets, root=0)
-                obs_dets = None
-                if ob.comm.group_rank == 0:
-                    obs_dets = set()
-                    for plocal in pdets:
-                        for d in plocal:
-                            obs_dets.add(d)
-                obs_dets = ob.comm_group.bcast(obs_dets, root=0) 
-            else:
-                obs_dets = set(local_dets)
-            all_dets.update(obs_dets)
+            # if ob.comm.comm_group is not None:
+            #     pdets = ob.comm.comm_group.gather(local_dets, root=0)
+            #     obs_dets = None
+            #     if ob.comm.group_rank == 0:
+            #         obs_dets = set()
+            #         for plocal in pdets:
+            #             for d in plocal:
+            #                 obs_dets.add(d)
+            #     obs_dets = ob.comm.comm_group.bcast(obs_dets, root=0) 
+            # else:
+            #     obs_dets = set(local_dets)
+            # all_dets.update(obs_dets)
+            all_dets.update(set(local_dets))
 
             # Check that the timestamps exist.
             if self.times not in ob.shared:

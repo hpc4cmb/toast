@@ -72,7 +72,9 @@ class TemplatePeriodicTest(MPITestCase):
         for ob in data.obs:
             n_samp = ob.n_local_samples
             if full:
-                plot_dets = ob.local_detectors
+                plot_dets = ob.select_local_detectors(
+                    flagmask=defaults.det_mask_invalid
+                )
             else:
                 plot_dets = [ob.local_detectors[0]]
             for det in plot_dets:
@@ -535,7 +537,7 @@ class TemplatePeriodicTest(MPITestCase):
                     out=f"{oroot}_{ob.name}",
                 )
             self.plot_compare(
-                testdir, data, mapper.name, comps=["sky", "noise", "hwpss"]
+                testdir, data, mapper.name, comps=["sky", "noise", "hwpss"], full=False
             )
             hit_file = os.path.join(testdir, f"{mapper.name}_hits.fits")
             map_file = os.path.join(testdir, f"{mapper.name}_map.fits")
@@ -560,7 +562,7 @@ class TemplatePeriodicTest(MPITestCase):
 
         # Compare the cleaned timestreams to the original
         for ob in data.obs:
-            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_nonscience):
                 dof = np.sqrt(ob.n_local_samples)
                 in_rms = np.std(ob.detdata["input"][det])
                 thresh = hwpss_scale * (in_rms / dof)
