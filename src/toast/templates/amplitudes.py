@@ -526,6 +526,7 @@ class Amplitudes(AcceleratorObject):
         if (self._local_ranges is None) and (self._local_indices is None):
             # Every process has a unique set of amplitudes.  Reduce the local
             # dot products.
+
             local_result = np.dot(
                 np.where(self.local_flags == 0, self.local, 0),
                 np.where(other.local_flags == 0, other.local, 0),

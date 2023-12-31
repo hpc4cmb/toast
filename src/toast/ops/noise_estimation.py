@@ -13,9 +13,9 @@ from astropy import units as u
 
 from ..noise import Noise
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Instance, Int, List, Quantity, Tuple, Unicode, trait_docs
-from ..utils import Logger, Timer
+from ..utils import Logger
 from .arithmetic import Combine
 from .copy import Copy
 from .delete import Delete

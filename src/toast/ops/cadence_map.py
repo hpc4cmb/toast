@@ -16,9 +16,9 @@ from ..coordinates import to_MJD
 from ..data import Data
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer, GlobalTimers
 from ..traits import Bool, Instance, Int, Unicode, trait_docs
-from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
+from ..utils import Environment, Logger, dtype_to_aligned
 from .operator import Operator
 from .pointing import BuildPixelDistribution
 

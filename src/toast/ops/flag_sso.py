@@ -15,9 +15,9 @@ from ..coordinates import to_DJD
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Float, Instance, Int, List, Quantity, Unicode, trait_docs
-from ..utils import Environment, Logger, Timer
+from ..utils import Environment, Logger
 from .operator import Operator
 from .pipeline import Pipeline
 

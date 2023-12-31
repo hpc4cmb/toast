@@ -16,7 +16,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Float, Int, Unicode, trait_docs
-from ..utils import Environment, Logger, Timer, name_UID
+from ..utils import Environment, Logger, name_UID
 from .operator import Operator
 
 

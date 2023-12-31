@@ -504,6 +504,12 @@ class Offset(Template):
                                 lower=lower,
                                 check_finite=True,
                             )
+                            if self.debug_plots is not None:
+                                axprec.plot(
+                                    np.arange(len(preconditioner)),
+                                    preconditioner,
+                                    label=f"Banded preconditioner {ivw}",
+                                )
                         self._precond[iob][det].append((preconditioner, lower))
                         offset += n_amp_view
 
@@ -932,6 +938,7 @@ class Offset(Template):
                             # This detector is cut
                             amps_out = np.zeros_like(amps_in)
                         amplitudes_out.local[amp_slice] = amps_out
+                        offset += n_amp_view
         else:
             # Since we do not have a noise filter term in our LHS, our diagonal
             # preconditioner is just the application of offset variance.

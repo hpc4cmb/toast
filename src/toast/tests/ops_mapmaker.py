@@ -16,6 +16,8 @@ from ..accelerator import accel_enabled
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
+from ..timing import GlobalTimers, gather_timers
+from ..timing import dump as dump_timers
 from ..vis import set_matplotlib_backend
 from ._helpers import close_data, create_fake_sky, create_outdir, create_satellite_data
 from .mpi import MPITestCase
@@ -250,6 +252,10 @@ class MapmakerTest(MPITestCase):
 
         ops.Copy(detdata=[(defaults.det_data, "input_signal")]).apply(data)
 
+        gt = GlobalTimers.get()
+        gt.stop_all()
+        gt.clear_all()
+
         # Map maker
         mapper = ops.MapMaker(
             name="toastmap",
@@ -278,6 +284,11 @@ class MapmakerTest(MPITestCase):
 
         # Make the map
         mapper.apply(data)
+
+        alltimers = gather_timers(comm=data.comm.comm_world)
+        if data.comm.world_rank == 0:
+            out = os.path.join(testdir, "timing")
+            dump_timers(alltimers, out)
 
         toast_hit_path = os.path.join(testdir, f"{mapper.name}_hits.fits")
         toast_map_path = os.path.join(testdir, f"{mapper.name}_map.fits")
@@ -563,10 +574,14 @@ class MapmakerTest(MPITestCase):
             step_time=step_seconds * u.second,
             use_noise_prior=True,
             precond_width=1,
-            debug_plots=testdir,
+            # debug_plots=testdir,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        gt = GlobalTimers.get()
+        gt.stop_all()
+        gt.clear_all()
 
         # Map maker
         mapper = ops.MapMaker(
@@ -586,6 +601,11 @@ class MapmakerTest(MPITestCase):
 
         # Make the map
         mapper.apply(data)
+
+        alltimers = gather_timers(comm=data.comm.comm_world)
+        if data.comm.world_rank == 0:
+            out = os.path.join(testdir, "timing")
+            dump_timers(alltimers, out)
 
         # Outputs
         toast_hits = "toastmap_hits"
@@ -807,6 +827,7 @@ class MapmakerTest(MPITestCase):
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
+            full_pointing=True,
         )
 
         # Set up template matrix with just an offset template.
@@ -825,10 +846,14 @@ class MapmakerTest(MPITestCase):
             step_time=step_seconds * u.second,
             use_noise_prior=True,
             precond_width=10,
-            debug_plots=testdir,
+            # debug_plots=testdir,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        gt = GlobalTimers.get()
+        gt.stop_all()
+        gt.clear_all()
 
         # Map maker
         mapper = ops.MapMaker(
@@ -848,6 +873,11 @@ class MapmakerTest(MPITestCase):
 
         # Make the map
         mapper.apply(data)
+
+        alltimers = gather_timers(comm=data.comm.comm_world)
+        if data.comm.world_rank == 0:
+            out = os.path.join(testdir, "timing")
+            dump_timers(alltimers, out)
 
         # Outputs
         toast_hits = "toastmap_hits"

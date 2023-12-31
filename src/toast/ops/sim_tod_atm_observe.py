@@ -15,9 +15,9 @@ from ..atm import available_utils
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..observation_dist import global_interval_times
-from ..timing import GlobalTimers, function_timer
+from ..timing import GlobalTimers, function_timer, Timer
 from ..traits import Bool, Float, Int, Quantity, Unicode, Unit, trait_docs
-from ..utils import Environment, Logger, Timer, unit_conversion
+from ..utils import Environment, Logger, unit_conversion
 from .operator import Operator
 
 if available_utils:

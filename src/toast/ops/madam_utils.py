@@ -6,8 +6,7 @@ import os
 
 import numpy as np
 
-from ..timing import function_timer
-from ..utils import GlobalTimers, Logger, Timer, dtype_to_aligned, memreport
+from ..utils import Logger, dtype_to_aligned, memreport
 from .memory_counter import MemoryCounter
 
 

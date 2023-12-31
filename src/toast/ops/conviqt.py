@@ -14,13 +14,11 @@ from astropy import units as u
 from .. import qarray as qa
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Dict, Instance, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import (
     Environment,
-    GlobalTimers,
     Logger,
-    Timer,
     dtype_to_aligned,
     unit_conversion,
 )
