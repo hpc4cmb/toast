@@ -705,7 +705,7 @@ class StokesWeightsDemod(Operator):
     )
 
     weights = Unicode(
-        f"{defaults.weights}_demod", help="Observation detdata key for output weights"
+        defaults.weights, help="Observation detdata key for output weights"
     )
 
     single_precision = Bool(False, help="If True, use 32bit float in output")

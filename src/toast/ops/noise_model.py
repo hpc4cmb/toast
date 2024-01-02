@@ -745,8 +745,8 @@ class FlagNoiseFit(Operator):
                         msg += f"{local_fknee[idet]} that is > {self.sigma_fknee} "
                         msg += f"x {fknee_std} from {fknee_mean}"
                         log.debug(msg)
-                        obs.detdata[self.det_flags][det, :] |= self.det_flag_mask
-                        new_flags[det] = cur_flag | self.det_flag_mask
+                        obs.detdata[self.det_flags][det, :] |= self.outlier_flag_mask
+                        new_flags[det] = cur_flag | self.outlier_flag_mask
             obs.update_local_detector_flags(new_flags)
 
     def _finalize(self, data, **kwargs):
