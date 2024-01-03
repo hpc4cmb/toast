@@ -909,7 +909,7 @@ class SolveAmplitudes(Operator):
         )
 
         lhs_calc = SolverLHS(
-            name="{}_lhs".format(self.name),
+            name=f"{self.name}_lhs",
             det_data_units=det_data_units,
             binning=self.binning,
             template_matrix=self.template_matrix,
@@ -959,12 +959,12 @@ class SolveAmplitudes(Operator):
         for prod_key in write_del:
             if self.write_solver_products:
                 if is_pix_wcs:
-                    fname = os.path.join(self.output_dir, "{}.fits".format(prod_key))
+                    fname = os.path.join(self.output_dir, f"{prod_key}.fits")
                     write_wcs_fits(data[prod_key], fname)
                 else:
                     if self.write_hdf5:
                         # Non-standard HDF5 output
-                        fname = os.path.join(self.output_dir, "{}.h5".format(prod_key))
+                        fname = os.path.join(self.output_dir, f"{prod_key}.h5")
                         write_healpix_hdf5(
                             data[prod_key],
                             fname,
@@ -975,7 +975,7 @@ class SolveAmplitudes(Operator):
                     else:
                         # Standard FITS output
                         fname = os.path.join(
-                            self.output_dir, "{}.fits".format(prod_key)
+                            self.output_dir, f"{prod_key}.fits"
                         )
                         write_healpix_fits(
                             data[prod_key],
@@ -1022,7 +1022,7 @@ class SolveAmplitudes(Operator):
         return
 
     def _requires(self):
-        # This operator requires everything that its sub-operators needs.
+        # This operator requires everything that its sub-operators need.
         req = self.binning.requires()
         if self.template_matrix is not None:
             req.update(self.template_matrix.requires())
