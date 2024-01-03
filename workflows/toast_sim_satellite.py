@@ -288,6 +288,8 @@ def main():
     log = toast.utils.Logger.get()
     gt = toast.timing.GlobalTimers.get()
     gt.start("toast_satellite_sim (total)")
+    timer0 = toast.timing.Timer()
+    timer0.start()
 
     # Get optional MPI parameters
     comm, procs, rank = toast.get_world()
@@ -363,6 +365,8 @@ def main():
     if toast_comm.world_rank == 0:
         out = os.path.join(args.out_dir, "timing")
         toast.timing.dump(alltimers, out)
+
+    log.info_rank("Workflow completed in", comm=comm, timer=timer0)
 
 
 if __name__ == "__main__":

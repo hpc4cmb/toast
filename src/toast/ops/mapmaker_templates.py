@@ -1156,7 +1156,7 @@ class ApplyAmplitudes(Operator):
         return
 
     def _requires(self):
-        # This operator requires everything that its sub-operators needs.
+        # This operator requires everything that its sub-operators need.
         req = dict()
         req["global"] = [self.amplitudes]
         req["detdata"] = list()

@@ -360,7 +360,7 @@ class SimSatellite(Operator):
             coord_rot = None
         elif self.coord == "E":
             coord_rot = qa.equ2ecl()
-        elif self.coord_in == "G":
+        elif self.coord == "G":
             coord_rot = qa.equ2gal()
         return coord_rot
 

@@ -261,6 +261,9 @@ class MapMaker(Operator):
             timer=timer,
         )
 
+        memreport.prefix = "After solving amplitudes"
+        memreport.apply(data, use_accel=use_accel)
+
         # Data names of outputs
 
         self.hits_name = "{}_hits".format(self.name)
@@ -307,6 +310,9 @@ class MapMaker(Operator):
                 comm=comm,
                 timer=timer,
             )
+
+            memreport.prefix = "After pixel distribution"
+            memreport.apply(data, use_accel=use_accel)
 
         if map_binning.covariance not in data:
             # Construct the noise covariance, hits, and condition number
@@ -363,6 +369,9 @@ class MapMaker(Operator):
                 timer=timer,
             )
 
+            memreport.prefix = "After binning final map"
+            memreport.apply(data, use_accel=use_accel)
+
         if (
             self.template_matrix is None
             or self.template_matrix.n_enabled_templates == 0
@@ -397,6 +406,9 @@ class MapMaker(Operator):
                 timer=timer,
             )
 
+            memreport.prefix = "After subtracting templates"
+            memreport.apply(data, use_accel=use_accel)
+
         if out_cleaned is None:
             map_binning.det_data = self.det_data
         else:
@@ -430,6 +442,9 @@ class MapMaker(Operator):
                     self.clean_name,
                 ]
             ).apply(data, use_accel=use_accel)
+
+            memreport.prefix = "After purging cleaned TOD"
+            memreport.apply(data, use_accel=use_accel)
 
         # FIXME:  This I/O technique assumes "known" types of pixel representations.
         # Instead, we should associate read / write functions to a particular pixel
@@ -506,6 +521,7 @@ class MapMaker(Operator):
                             report_memory=self.report_memory,
                         )
                 log.info_rank(f"Wrote {fname} in", comm=comm, timer=wtimer)
+
             if not self.keep_final_products and not self.mc_mode:
                 if prod_key in data:
                     data[prod_key].clear()
