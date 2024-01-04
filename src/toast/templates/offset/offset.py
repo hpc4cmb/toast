@@ -195,8 +195,8 @@ class Offset(Template):
 
         self._all_dets = list(all_dets.keys())
 
-        # Go through the data one local detector at a time and compute the offsets into
-        # the amplitudes.  Also save the detectors in use for 
+        # Go through the data one local detector at a time and compute the offsets
+        # into the amplitudes.
 
         self._det_start = dict()
 
