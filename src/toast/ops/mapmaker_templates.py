@@ -16,7 +16,8 @@ from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
 from ..pixels_io_wcs import write_wcs_fits
 from ..templates import AmplitudesMap, Template
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, List, Unicode, Unit, trait_docs
+from ..traits import (Bool, Float, Instance, Int, List, Unicode, Unit,
+                      trait_docs)
 from ..utils import Logger
 from .arithmetic import Combine
 from .copy import Copy
@@ -470,7 +471,8 @@ class SolveAmplitudes(Operator):
     mask = Unicode(
         None,
         allow_none=True,
-        help="Data key for pixel mask to use in solving.  First bit of pixel values is tested",
+        help="Data key for pixel mask to use in solving.  "
+        "First bit of pixel values is tested",
     )
 
     binning = Instance(
@@ -577,9 +579,7 @@ class SolveAmplitudes(Operator):
                     )
                 else:
                     # Standard FITS output
-                    fname = os.path.join(
-                        self.output_dir, f"{prod_key}.fits"
-                    )
+                    fname = os.path.join(self.output_dir, f"{prod_key}.fits")
                     write_healpix_fits(
                         self._data[prod_key],
                         fname,

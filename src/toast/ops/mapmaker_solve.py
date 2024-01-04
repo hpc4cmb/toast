@@ -701,7 +701,7 @@ def solve(
         log.info_rank(
             f"MapMaker iteration {iter:4d}, relative residual = {relative:0.6e} in",
             comm=comm,
-            timer=timer
+            timer=timer,
         )
 
         # Check for convergence
