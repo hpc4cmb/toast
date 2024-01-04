@@ -390,11 +390,11 @@ class SolverLHS(Operator):
         self.binning.apply(data, detectors=detectors)
         self.binning.pre_process = None
 
-        nz = data[self.binning.binned].data != 0
-        print(
-            f"{comm.rank} LHS binned:  {self.binning.binned} = {data[self.binning.binned].data[nz]}",
-            flush=True,
-        )
+        # nz = data[self.binning.binned].data != 0
+        # print(
+        #     f"{comm.rank} LHS binned:  {self.binning.binned} = {data[self.binning.binned].data[nz]}",
+        #     flush=True,
+        # )
 
         log.debug_rank(
             "MapMaker   LHS projection and binning finished in", comm=comm, timer=timer
@@ -408,21 +408,21 @@ class SolverLHS(Operator):
         if self.out in data:
             data[self.out].reset()
 
-        nz = data[self.template_matrix.amplitudes]["baselines"].local != 0
-        print(
-            f"{comm.rank} LHS prior input:  {self.template_matrix.amplitudes} = {data[self.template_matrix.amplitudes]['baselines'].local[nz]}",
-            flush=True,
-        )
+        # nz = data[self.template_matrix.amplitudes]["baselines"].local != 0
+        # print(
+        #     f"{comm.rank} LHS prior input:  {self.template_matrix.amplitudes} = {data[self.template_matrix.amplitudes]['baselines'].local[nz]}",
+        #     flush=True,
+        # )
 
         self.template_matrix.add_prior(
             data[self.template_matrix.amplitudes], data[self.out]
         )
 
-        nz = data[self.out]["baselines"].local != 0
-        print(
-            f"{comm.rank} LHS prior output:  {self.out} = {data[self.out]['baselines'].local[nz]}",
-            flush=True,
-        )
+        # nz = data[self.out]["baselines"].local != 0
+        # print(
+        #     f"{comm.rank} LHS prior output:  {self.out} = {data[self.out]['baselines'].local[nz]}",
+        #     flush=True,
+        # )
 
         log.debug_rank(
             "MapMaker   LHS add noise prior finished in", comm=comm, timer=timer
@@ -690,13 +690,13 @@ def solve(
 
         # q = A * d
         lhs_op.apply(data, detectors=detectors)
-        print(f"{comm.rank} LHS {iter}:  proposal = {proposal}", flush=True)
-        print(f"{comm.rank} LHS {iter}:  lhs_out = {lhs_out}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  proposal = {proposal}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  lhs_out = {lhs_out}", flush=True)
 
         # alpha = delta_new / (d^T * q)
         alpha = delta / proposal.dot(lhs_out)
-        print(f"{comm.rank} LHS {iter}:  delta = {delta}", flush=True)
-        print(f"{comm.rank} LHS {iter}:  alpha = {alpha}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  delta = {delta}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  alpha = {alpha}", flush=True)
 
         # Update the result
         # x += alpha * d
@@ -705,7 +705,7 @@ def solve(
             v.local[:] = proposal[k].local
         temp *= alpha
         result += temp
-        print(f"{comm.rank} LHS {iter}:  new result = {result}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  new result = {result}", flush=True)
 
         # Update the residual
         # r -= alpha * q
@@ -714,11 +714,11 @@ def solve(
             v.local[:] = lhs_out[k].local
         temp *= alpha
         residual -= temp
-        print(f"{comm.rank} LHS {iter}:  new residual = {residual}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  new residual = {residual}", flush=True)
 
         # Epsilon
         sqsum = residual.dot(residual)
-        print(f"{comm.rank} LHS {iter}:  sqsum = {sqsum}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  sqsum = {sqsum}", flush=True)
 
         if comm is not None:
             comm.barrier()
