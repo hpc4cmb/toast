@@ -240,17 +240,13 @@ class MapMaker(Operator):
             if is_pix_wcs:
                 fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
                 if self.mc_mode and not force and os.path.isfile(fname):
-                    log.info_rank(
-                        f"Skipping existing file: {fname}", comm=self._comm
-                    )
+                    log.info_rank(f"Skipping existing file: {fname}", comm=self._comm)
                 else:
                     write_wcs_fits(self._data[prod_key], fname)
             else:
                 if self.write_hdf5:
                     # Non-standard HDF5 output
-                    fname = os.path.join(
-                        self.output_dir, f"{rootname}_{product}.h5"
-                    )
+                    fname = os.path.join(self.output_dir, f"{rootname}_{product}.h5")
                     if self.mc_mode and not force and os.path.isfile(fname):
                         log.info_rank(
                             f"Skipping existing file: {fname}", comm=self._comm
@@ -265,9 +261,7 @@ class MapMaker(Operator):
                         )
                 else:
                     # Standard FITS output
-                    fname = os.path.join(
-                        self.output_dir, f"{rootname}_{product}.fits"
-                    )
+                    fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
                     if self.mc_mode and not force and os.path.isfile(fname):
                         log.info_rank(
                             f"Skipping existing file: {fname}", comm=self._comm
@@ -293,7 +287,7 @@ class MapMaker(Operator):
 
     @function_timer
     def _setup(self, data, detectors, use_accel):
-        """ Set up convenience members used in the _exec() method """
+        """Set up convenience members used in the _exec() method"""
 
         self._log = Logger.get()
         self._timer = Timer()
@@ -337,7 +331,7 @@ class MapMaker(Operator):
 
     @function_timer
     def _fit_templates(self):
-        """ Solve for template amplitudes """
+        """Solve for template amplitudes"""
 
         amplitudes_solve = SolveAmplitudes(
             name=self.name,
@@ -377,7 +371,7 @@ class MapMaker(Operator):
 
     @function_timer
     def _prepare_binning(self):
-        """ Set up the final map binning"""
+        """Set up the final map binning"""
 
         # Map binning operator
         if self.map_binning is not None and self.map_binning.enabled:
@@ -421,7 +415,7 @@ class MapMaker(Operator):
 
     @function_timer
     def _build_pixel_covariance(self, map_binning):
-        """ Accumulate hits and pixel covariance """
+        """Accumulate hits and pixel covariance"""
 
         if map_binning.covariance in self._data and self.mc_mode:
             # Covariance is already cached
@@ -479,7 +473,7 @@ class MapMaker(Operator):
 
     @function_timer
     def _bin_and_write_raw_signal(self, map_binning):
-        """ Optionally bin and save an undestriped map """
+        """Optionally bin and save an undestriped map"""
 
         if not self.write_binmap:
             return
@@ -554,7 +548,7 @@ class MapMaker(Operator):
 
     @function_timer
     def _bin_cleaned_signal(self, map_binning, out_cleaned):
-        """ Bin and save a map of the destriped signal """
+        """Bin and save a map of the destriped signal"""
 
         self._log.info_rank(
             f"{self._log_prefix} begin final map binning",
@@ -587,7 +581,7 @@ class MapMaker(Operator):
 
     @function_timer
     def _purge_cleaned_tod(self):
-        """ If the cleaned TOD is not being returned, purge it """
+        """If the cleaned TOD is not being returned, purge it"""
 
         if self.save_cleaned:
             return
@@ -602,7 +596,7 @@ class MapMaker(Operator):
 
     @function_timer
     def _write_maps(self):
-        """ Write and delete the outputs """
+        """Write and delete the outputs"""
 
         self._write_del(
             self.noiseweighted_map_name,
@@ -623,7 +617,7 @@ class MapMaker(Operator):
 
     @function_timer
     def _closeout(self):
-        """ Explicitly delete members used by the _exec() method """
+        """Explicitly delete members used by the _exec() method"""
 
         del self._log
         del self._timer
