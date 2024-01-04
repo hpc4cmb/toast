@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -222,10 +222,16 @@ class MapMaker(Operator):
         # Instead, we should associate read / write functions to a particular pixel
         # class.
 
-        is_pix_wcs = hasattr(self.map_binning.pixel_pointing, "wcs")
-        is_hpix_nest = None
-        if not is_pix_wcs:
-            is_hpix_nest = self.map_binning.pixel_pointing.nest
+        if self.map_binning is not None and self.map_binning.enabled:
+            map_binning = self.map_binning
+        else:
+            map_binning = self.binning
+
+        if hasattr(map_binning.pixel_pointing, "wcs"):
+            is_pix_wcs = True
+        else:
+            is_pix_wcs = False
+            is_hpix_nest = map_binning.pixel_pointing.nest
 
         wtimer = Timer()
         wtimer.start()
