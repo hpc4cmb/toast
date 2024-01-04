@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -548,7 +548,57 @@ class SolveAmplitudes(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _exec(self, data, detectors=None, **kwargs):
+    def _write_del(self, prod_key):
+        """Write and delete map object"""
+
+        # FIXME:  This I/O technique assumes "known" types of pixel representations.
+        # Instead, we should associate read / write functions to a particular pixel
+        # class.
+
+        is_pix_wcs = hasattr(self.binning.pixel_pointing, "wcs")
+        is_hpix_nest = None
+        if not is_pix_wcs:
+            is_hpix_nest = self.binning.pixel_pointing.nest
+
+        if self.write_solver_products:
+            if is_pix_wcs:
+                fname = os.path.join(self.output_dir, f"{prod_key}.fits")
+                write_wcs_fits(self._data[prod_key], fname)
+            else:
+                if self.write_hdf5:
+                    # Non-standard HDF5 output
+                    fname = os.path.join(self.output_dir, f"{prod_key}.h5")
+                    write_healpix_hdf5(
+                        self._data[prod_key],
+                        fname,
+                        nest=is_hpix_nest,
+                        single_precision=True,
+                        force_serial=self.write_hdf5_serial,
+                    )
+                else:
+                    # Standard FITS output
+                    fname = os.path.join(
+                        self.output_dir, f"{prod_key}.fits"
+                    )
+                    write_healpix_fits(
+                        self._data[prod_key],
+                        fname,
+                        nest=is_hpix_nest,
+                        report_memory=self.report_memory,
+                    )
+
+        if not self.mc_mode and not self.keep_solver_products:
+            if prod_key in self._data:
+                self._data[prod_key].clear()
+                del self._data[prod_key]
+
+                self._memreport.prefix = f"After writing/deleting {prod_key}"
+                self._memreport.apply(self._data, use_accel=self._use_accel)
+
+        return
+
+    @function_timer
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
         timer = Timer()
         log_prefix = "SolveAmplitudes"
@@ -560,12 +610,14 @@ class SolveAmplitudes(Operator):
         ):
             return
 
-        memreport = MemoryCounter()
+        self._data = data
+        self._use_accel = use_accel
+        self._memreport = MemoryCounter()
         if not self.report_memory:
-            memreport.enabled = False
+            self._memreport.enabled = False
 
-        memreport.prefix = "Start of amplitude solve"
-        memreport.apply(data)
+        self._memreport.prefix = "Start of amplitude solve"
+        self._memreport.apply(data)
 
         # The global communicator we are using (or None)
         comm = data.comm.comm_world
@@ -577,8 +629,8 @@ class SolveAmplitudes(Operator):
             if self.binning.pixel_dist in data:
                 del data[self.binning.pixel_dist]
 
-            memreport.prefix = "After resetting pixel distribution"
-            memreport.apply(data)
+            self._memreport.prefix = "After resetting pixel distribution"
+            self._memreport.apply(data)
 
         # Get the units used across the distributed data for our desired
         # input detector data
@@ -618,20 +670,20 @@ class SolveAmplitudes(Operator):
 
         mc_root = None
         if self.mc_mode and self.mc_index is not None:
-            mc_root = "{}_{:05d}".format(self.name, self.mc_index)
+            mc_root = "{self.name}_{self.mc_index:05d}"
         else:
             mc_root = self.name
 
-        self.solver_flags = "{}_solve_flags".format(self.name)
-        self.solver_hits_name = "{}_solve_hits".format(self.name)
-        self.solver_cov_name = "{}_solve_cov".format(self.name)
-        self.solver_rcond_name = "{}_solve_rcond".format(self.name)
-        self.solver_rcond_mask_name = "{}_solve_rcond_mask".format(self.name)
-        self.solver_rhs = "{}_solve_rhs".format(mc_root)
-        self.solver_bin = "{}_solve_bin".format(mc_root)
+        self.solver_flags = f"{self.name}_solve_flags"
+        self.solver_hits_name = f"{self.name}_solve_hits"
+        self.solver_cov_name = f"{self.name}_solve_cov"
+        self.solver_rcond_name = f"{self.name}_solve_rcond"
+        self.solver_rcond_mask_name = f"{self.name}_solve_rcond_mask"
+        self.solver_rhs = f"{mc_root}_solve_rhs"
+        self.solver_bin = f"{mc_root}_solve_bin"
 
         if self.amplitudes is None:
-            self.amplitudes = "{}_solve_amplitudes".format(mc_root)
+            self.amplitudes = f"{mc_root}_solve_amplitudes"
 
         timer.start()
 
@@ -649,17 +701,14 @@ class SolveAmplitudes(Operator):
                     # Nothing to do for this observation
                     continue
                 if self.solver_flags not in ob.detdata:
-                    msg = "In MC mode, solver flags missing for observation {}".format(
-                        ob.name
-                    )
+                    msg = f"In MC mode, solver flags missing for observation {ob.name}"
                     log.error(msg)
                     raise RuntimeError(msg)
                 det_check = set(ob.detdata[self.solver_flags].detectors)
                 for d in dets:
                     if d not in det_check:
-                        msg = "In MC mode, solver flags missing for observation {}, det {}".format(
-                            ob.name, d
-                        )
+                        msg = "In MC mode, solver flags missing for "
+                        msg + f"observation {ob.name}, det {d}"
                         log.error(msg)
                         raise RuntimeError(msg)
             log.info_rank(f"{log_prefix} MC mode, reusing flags for solver", comm=comm)
@@ -746,8 +795,8 @@ class SolveAmplitudes(Operator):
                 timer=timer,
             )
 
-            memreport.prefix = "After building flags"
-            memreport.apply(data)
+            self._memreport.prefix = "After building flags"
+            self._memreport.apply(data)
 
         # Now construct the noise covariance, hits, and condition number mask for
         # the solver.
@@ -755,7 +804,8 @@ class SolveAmplitudes(Operator):
         if self.mc_mode:
             # Verify that our covariance and other products exist.
             if self.binning.pixel_dist not in data:
-                msg = f"MC mode, pixel distribution '{self.binning.pixel_dist}' does not exist"
+                msg = f"MC mode, pixel distribution "
+                msg += f"'{self.binning.pixel_dist}' does not exist"
                 log.error(msg)
                 raise RuntimeError(msg)
             if self.solver_cov_name not in data:
@@ -792,8 +842,11 @@ class SolveAmplitudes(Operator):
 
             solver_cov.apply(data, detectors=detectors)
 
-            memreport.prefix = "After constructing covariance and hits"
-            memreport.apply(data)
+            self._memreport.prefix = "After constructing covariance and hits"
+            self._memreport.apply(data)
+
+            # Hits are only ever needed for optional output
+            self._write_del(self.solver_hits_name)
 
             data[self.solver_rcond_mask_name] = PixelData(
                 data[self.binning.pixel_dist], dtype=np.uint8, n_value=1
@@ -805,9 +858,10 @@ class SolveAmplitudes(Operator):
             data[self.solver_rcond_mask_name].data[
                 data[self.solver_rcond_name].data < self.solve_rcond_threshold
             ] = 1
+            self._write_del(self.solver_rcond_name)
 
-            memreport.prefix = "After constructing rcond mask"
-            memreport.apply(data)
+            self._memreport.prefix = "After constructing rcond mask"
+            self._memreport.apply(data)
 
             # Re-use our mask scanning pipeline, setting third bit (== 4)
             scanner.det_flags_value = 4
@@ -833,33 +887,21 @@ class SolveAmplitudes(Operator):
                     for d in dets:
                         local_total += len(vw[d])
                         local_cut += np.count_nonzero(vw[d])
-            total = None
-            cut = None
-            msg = None
+
             if comm is None:
                 total = local_total
                 cut = local_cut
-                msg = "Solver flags cut {} / {} = {:0.2f}% of samples".format(
-                    cut, total, 100.0 * (cut / total)
-                )
             else:
-                total = comm.reduce(local_total, op=MPI.SUM, root=0)
-                cut = comm.reduce(local_cut, op=MPI.SUM, root=0)
-                if comm.rank == 0:
-                    msg = "Solver flags cut {} / {} = {:0.2f}% of samples".format(
-                        cut, total, 100.0 * (cut / total)
-                    )
-            log.info_rank(
-                f"{log_prefix} {msg}",
-                comm=comm,
-            )
+                total = comm.allreduce(local_total, op=MPI.SUM)
+                cut = comm.allreduce(local_cut, op=MPI.SUM)
+
+            frac = 100.0 * (cut / total)
+            msg = f"Solver flags cut {cut } / {total} = {frac:0.2f}% of samples"
+            log.info_rank(f"{log_prefix} {msg}", comm=comm)
 
         # Compute the RHS.  Overwrite inputs, either the original or the copy.
 
-        log.info_rank(
-            f"{log_prefix} begin RHS calculation",
-            comm=comm,
-        )
+        log.info_rank(f"{log_prefix} begin RHS calculation", comm=comm)
 
         # Initialize the template matrix
         self.template_matrix.det_data = self.det_data
@@ -898,8 +940,8 @@ class SolveAmplitudes(Operator):
             timer=timer,
         )
 
-        memreport.prefix = "After constructing RHS"
-        memreport.apply(data)
+        self._memreport.prefix = "After constructing RHS"
+        self._memreport.apply(data)
 
         # Set up the LHS operator.
 
@@ -937,56 +979,12 @@ class SolveAmplitudes(Operator):
             timer=timer,
         )
 
-        memreport.prefix = "After solving for amplitudes"
-        memreport.apply(data)
+        self._memreport.prefix = "After solving for amplitudes"
+        self._memreport.apply(data)
 
-        # FIXME:  This I/O technique assumes "known" types of pixel representations.
-        # Instead, we should associate read / write functions to a particular pixel
-        # class.
-
-        is_pix_wcs = hasattr(self.binning.pixel_pointing, "wcs")
-        is_hpix_nest = None
-        if not is_pix_wcs:
-            is_hpix_nest = self.binning.pixel_pointing.nest
-
-        write_del = [
-            self.solver_hits_name,
-            self.solver_cov_name,
-            self.solver_rcond_name,
-            self.solver_rcond_mask_name,
-            self.solver_bin,
-        ]
-        for prod_key in write_del:
-            if self.write_solver_products:
-                if is_pix_wcs:
-                    fname = os.path.join(self.output_dir, f"{prod_key}.fits")
-                    write_wcs_fits(data[prod_key], fname)
-                else:
-                    if self.write_hdf5:
-                        # Non-standard HDF5 output
-                        fname = os.path.join(self.output_dir, f"{prod_key}.h5")
-                        write_healpix_hdf5(
-                            data[prod_key],
-                            fname,
-                            nest=is_hpix_nest,
-                            single_precision=True,
-                            force_serial=self.write_hdf5_serial,
-                        )
-                    else:
-                        # Standard FITS output
-                        fname = os.path.join(
-                            self.output_dir, f"{prod_key}.fits"
-                        )
-                        write_healpix_fits(
-                            data[prod_key],
-                            fname,
-                            nest=is_hpix_nest,
-                            report_memory=self.report_memory,
-                        )
-            if not self.mc_mode and not self.keep_solver_products:
-                if prod_key in data:
-                    data[prod_key].clear()
-                    del data[prod_key]
+        self._write_del(self.solver_cov_name)
+        self._write_del(self.solver_rcond_mask_name)
+        self._write_del(self.solver_bin)
 
         if not self.mc_mode and not self.keep_solver_products:
             if self.solver_rhs in data:
@@ -1013,8 +1011,13 @@ class SolveAmplitudes(Operator):
         # if not self.mc_mode:
         #    self.template_matrix.reset_templates()
 
-        memreport.prefix = "End of amplitude solve"
-        memreport.apply(data)
+        self._memreport.prefix = "End of amplitude solve"
+        self._memreport.apply(data)
+
+        # Delete members used by the _exec() method
+        del self._memreport
+        del self._data
+        del self._use_accel
 
         return
 
