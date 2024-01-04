@@ -292,34 +292,53 @@ class MapMaker(Operator):
         return
 
     @function_timer
-    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
-        log = Logger.get()
-        timer = Timer()
-        log_prefix = "MapMaker"
+    def _setup(self, data, detectors, use_accel):
+        """ Set up convenience members used in the _exec() method """
 
-        mc_root = self.name
+        self._log = Logger.get()
+        self._timer = Timer()
+        self._log_prefix = "MapMaker"
+
+        self._mc_root = self.name
         if self.mc_mode:
             if self.mc_root is not None:
-                mc_root += f"_{self.mc_root}"
+                self._mc_root += f"_{self.mc_root}"
             if self.mc_index is not None:
-                mc_root += f"_{self.mc_index:05d}"
+                self._mc_root += f"_{self.mc_index:05d}"
 
         self._data = data
+        self._detectors = detectors
         self._use_accel = use_accel
         self._memreport = MemoryCounter()
         if not self.report_memory:
             self._memreport.enabled = False
 
-        self._memreport.prefix = "Start of mapmaking"
-        self._memreport.apply(data, use_accel=self._use_accel)
-
         # The global communicator we are using (or None)
+
         self._comm = data.comm.comm_world
         self._rank = data.comm.world_rank
 
-        timer.start()
+        # Data names of outputs
 
-        # Solve for template amplitudes
+        self.hits_name = f"{self.name}_hits"
+        self.cov_name = f"{self.name}_cov"
+        self.invcov_name = f"{self.name}_invcov"
+        self.rcond_name = f"{self.name}_rcond"
+        self.det_flag_name = f"{self.name}_flags"
+
+        self.clean_name = f"{self.name}_cleaned"
+        self.binmap_name = f"{self.name}_binmap"
+        self.map_name = f"{self.name}_map"
+        self.noiseweighted_map_name = f"{self.name}_noiseweighted_map"
+
+        self._timer.start()
+
+        return
+
+    @function_timer
+    def _fit_templates(self):
+        """ Solve for template amplitudes """
+
         amplitudes_solve = SolveAmplitudes(
             name=self.name,
             det_data=self.det_data,
@@ -340,49 +359,46 @@ class MapMaker(Operator):
             reset_pix_dist=self.reset_pix_dist,
             report_memory=self.report_memory,
         )
-        amplitudes_solve.apply(data, detectors=detectors, use_accel=self._use_accel)
+        amplitudes_solve.apply(
+            self._data, detectors=self._detectors, use_accel=self._use_accel
+        )
+        template_amplitudes = amplitudes_solve.amplitudes
 
-        log.info_rank(
-            f"{log_prefix}  finished template amplitude solve in",
+        self._log.info_rank(
+            f"{self._log_prefix}  finished template amplitude solve in",
             comm=self._comm,
-            timer=timer,
+            timer=self._timer,
         )
 
         self._memreport.prefix = "After solving amplitudes"
-        self._memreport.apply(data, use_accel=self._use_accel)
+        self._memreport.apply(self._data, use_accel=self._use_accel)
 
-        # Data names of outputs
+        return template_amplitudes
 
-        self.hits_name = f"{self.name}_hits"
-        self.cov_name = f"{self.name}_cov"
-        self.invcov_name = f"{self.name}_invcov"
-        self.rcond_name = f"{self.name}_rcond"
-        self.det_flag_name = f"{self.name}_flags"
+    @function_timer
+    def _prepare_binning(self):
+        """ Set up the final map binning"""
 
-        self.clean_name = f"{self.name}_cleaned"
-        self.binmap_name = f"{self.name}_binmap"
-        self.map_name = f"{self.name}_map"
-        self.noiseweighted_map_name = f"{self.name}_noiseweighted_map"
-
-        # Check map binning
-
-        map_binning = self.map_binning
-        if self.map_binning is None or not self.map_binning.enabled:
+        # Map binning operator
+        if self.map_binning is not None and self.map_binning.enabled:
+            map_binning = self.map_binning
+        else:
             # Use the same binning used in the solver.
             map_binning = self.binning
         map_binning.pre_process = None
         map_binning.covariance = self.cov_name
 
+        # Pixel distribution
         if self.reset_pix_dist:
-            if map_binning.pixel_dist in data:
-                del data[map_binning.pixel_dist]
-            if map_binning.covariance in data:
+            if map_binning.pixel_dist in self._data:
+                del self._data[map_binning.pixel_dist]
+            if map_binning.covariance in self._data:
                 # Cannot trust earlier covariance
-                del data[map_binning.covariance]
+                del self._data[map_binning.covariance]
 
-        if map_binning.pixel_dist not in data:
-            log.info_rank(
-                f"{log_prefix} Caching pixel distribution",
+        if map_binning.pixel_dist not in self._data:
+            self._log.info_rank(
+                f"{self._log_prefix} Caching pixel distribution",
                 comm=self._comm,
             )
             pix_dist = BuildPixelDistribution(
@@ -391,79 +407,107 @@ class MapMaker(Operator):
                 shared_flags=map_binning.shared_flags,
                 shared_flag_mask=map_binning.shared_flag_mask,
             )
-            pix_dist.apply(data)
-            log.info_rank(
-                f"{log_prefix}  finished build of pixel distribution in",
+            pix_dist.apply(self._data)
+            self._log.info_rank(
+                f"{self._log_prefix}  finished build of pixel distribution in",
                 comm=self._comm,
-                timer=timer,
+                timer=self._timer,
             )
 
             self._memreport.prefix = "After pixel distribution"
-            self._memreport.apply(data, use_accel=self._use_accel)
+            self._memreport.apply(self._data, use_accel=self._use_accel)
 
-        if map_binning.covariance not in data:
-            # Construct the noise covariance, hits, and condition number
-            # mask for the final binned map.
+        return map_binning
 
-            log.info_rank(
-                f"{log_prefix} begin build of final binning covariance",
-                comm=self._comm,
-            )
+    @function_timer
+    def _build_pixel_covariance(self, map_binning):
+        """ Accumulate hits and pixel covariance """
 
-            final_cov = CovarianceAndHits(
-                pixel_dist=map_binning.pixel_dist,
-                covariance=map_binning.covariance,
-                inverse_covariance=self.invcov_name,
-                hits=self.hits_name,
-                rcond=self.rcond_name,
-                det_mask=map_binning.det_mask,
-                det_flags=map_binning.det_flags,
-                det_flag_mask=map_binning.det_flag_mask,
-                det_data_units=map_binning.det_data_units,
-                shared_flags=map_binning.shared_flags,
-                shared_flag_mask=map_binning.shared_flag_mask,
-                pixel_pointing=map_binning.pixel_pointing,
-                stokes_weights=map_binning.stokes_weights,
-                noise_model=map_binning.noise_model,
-                rcond_threshold=self.map_rcond_threshold,
-                sync_type=map_binning.sync_type,
-                save_pointing=map_binning.full_pointing,
-            )
+        if map_binning.covariance in self._data and self.mc_mode:
+            # Covariance is already cached
+            return
 
-            final_cov.apply(data, detectors=detectors, use_accel=self._use_accel)
+        # Construct the noise covariance, hits, and condition number
+        # mask for the final binned map.
 
-            log.info_rank(
-                f"{log_prefix}  finished build of final covariance in",
-                comm=self._comm,
-                timer=timer,
-            )
+        self._log.info_rank(
+            f"{self._log_prefix} begin build of final binning covariance",
+            comm=self._comm,
+        )
 
-            self._memreport.prefix = "After constructing final covariance and hits"
-            self._memreport.apply(data, use_accel=self._use_accel)
+        final_cov = CovarianceAndHits(
+            pixel_dist=map_binning.pixel_dist,
+            covariance=map_binning.covariance,
+            inverse_covariance=self.invcov_name,
+            hits=self.hits_name,
+            rcond=self.rcond_name,
+            det_mask=map_binning.det_mask,
+            det_flags=map_binning.det_flags,
+            det_flag_mask=map_binning.det_flag_mask,
+            det_data_units=map_binning.det_data_units,
+            shared_flags=map_binning.shared_flags,
+            shared_flag_mask=map_binning.shared_flag_mask,
+            pixel_pointing=map_binning.pixel_pointing,
+            stokes_weights=map_binning.stokes_weights,
+            noise_model=map_binning.noise_model,
+            rcond_threshold=self.map_rcond_threshold,
+            sync_type=map_binning.sync_type,
+            save_pointing=map_binning.full_pointing,
+        )
 
-            self._write_del(self.hits_name, self.write_hits, False, self.name)
-            self._write_del(self.rcond_name, self.write_rcond, False, self.name)
-            self._write_del(self.invcov_name, self.write_invcov, False, self.name)
+        final_cov.apply(
+            self._data, detectors=self._detectors, use_accel=self._use_accel
+        )
 
-        if self.write_binmap:
-            map_binning.det_data = self.det_data
-            map_binning.binned = self.binmap_name
-            map_binning.noiseweighted = None
-            log.info_rank(
-                f"{log_prefix} begin map binning",
-                comm=self._comm,
-            )
-            map_binning.apply(data, detectors=detectors, use_accel=self._use_accel)
-            log.info_rank(
-                f"{log_prefix}  finished binning in",
-                comm=self._comm,
-                timer=timer,
-            )
-            self._write_del(self.binmap_name, self.write_binmap, True, mc_root)
+        self._log.info_rank(
+            f"{self._log_prefix}  finished build of final covariance in",
+            comm=self._comm,
+            timer=self._timer,
+        )
 
-            self._memreport.prefix = "After binning final map"
-            self._memreport.apply(data, use_accel=self._use_accel)
+        self._memreport.prefix = "After constructing final covariance and hits"
+        self._memreport.apply(self._data, use_accel=self._use_accel)
 
+        # These data products are not needed later so they can be
+        # written out and purged
+
+        self._write_del(self.hits_name, self.write_hits, False, self.name)
+        self._write_del(self.rcond_name, self.write_rcond, False, self.name)
+        self._write_del(self.invcov_name, self.write_invcov, False, self.name)
+
+        return
+
+    @function_timer
+    def _bin_and_write_raw_signal(self, map_binning):
+        """ Optionally bin and save an undestriped map """
+
+        if not self.write_binmap:
+            return
+
+        map_binning.det_data = self.det_data
+        map_binning.binned = self.binmap_name
+        map_binning.noiseweighted = None
+        self._log.info_rank(
+            f"{self._log_prefix} begin map binning",
+            comm=self._comm,
+        )
+        map_binning.apply(
+            self._data, detectors=self._detectors, use_accel=self._use_accel
+        )
+        self._log.info_rank(
+            f"{self._log_prefix}  finished binning in",
+            comm=self._comm,
+            timer=self._timer,
+        )
+        self._write_del(self.binmap_name, self.write_binmap, True, self._mc_root)
+
+        self._memreport.prefix = "After binning final map"
+        self._memreport.apply(self._data, use_accel=self._use_accel)
+
+        return
+
+    @function_timer
+    def _clean_signal(self, template_amplitudes):
         if (
             self.template_matrix is None
             or self.template_matrix.n_enabled_templates == 0
@@ -473,8 +517,8 @@ class MapMaker(Operator):
         else:
             # Apply (subtract) solved amplitudes.
 
-            log.info_rank(
-                f"{log_prefix} begin apply template amplitudes",
+            self._log.info_rank(
+                f"{self._log_prefix} begin apply template amplitudes",
                 comm=self._comm,
             )
 
@@ -486,23 +530,36 @@ class MapMaker(Operator):
             amplitudes_apply = ApplyAmplitudes(
                 op="subtract",
                 det_data=self.det_data,
-                amplitudes=amplitudes_solve.amplitudes,
+                amplitudes=template_amplitudes,
                 template_matrix=self.template_matrix,
                 output=out_cleaned,
             )
-            amplitudes_apply.apply(data, detectors=detectors, use_accel=self._use_accel)
+            amplitudes_apply.apply(
+                self._data, detectors=self._detectors, use_accel=self._use_accel
+            )
 
             if not self.keep_solver_products:
-                del data[amplitudes_solve.amplitudes]
+                del self._data[template_amplitudes]
 
-            log.info_rank(
-                f"{log_prefix}  finished apply template amplitudes in",
+            self._log.info_rank(
+                f"{self._log_prefix}  finished apply template amplitudes in",
                 comm=self._comm,
-                timer=timer,
+                timer=self._timer,
             )
 
             self._memreport.prefix = "After subtracting templates"
-            self._memreport.apply(data, use_accel=self._use_accel)
+            self._memreport.apply(self._data, use_accel=self._use_accel)
+
+        return out_cleaned
+
+    @function_timer
+    def _bin_cleaned_signal(self, map_binning, out_cleaned):
+        """ Bin and save a map of the destriped signal """
+
+        self._log.info_rank(
+            f"{self._log_prefix} begin final map binning",
+            comm=self._comm,
+        )
 
         if out_cleaned is None:
             map_binning.det_data = self.det_data
@@ -512,56 +569,102 @@ class MapMaker(Operator):
             map_binning.noiseweighted = self.noiseweighted_map_name
         map_binning.binned = self.map_name
 
-        log.info_rank(
-            f"{log_prefix} begin final map binning",
-            comm=self._comm,
+        # Do the final binning
+        map_binning.apply(
+            self._data, detectors=self._detectors, use_accel=self._use_accel
         )
 
-        # Do the final binning
-        map_binning.apply(data, detectors=detectors, use_accel=self._use_accel)
-
-        log.info_rank(
-            f"{log_prefix}  finished final binning in",
+        self._log.info_rank(
+            f"{self._log_prefix}  finished final binning in",
             comm=self._comm,
-            timer=timer,
+            timer=self._timer,
         )
 
         self._memreport.prefix = "After binning final map"
-        self._memreport.apply(data, use_accel=self._use_accel)
+        self._memreport.apply(self._data, use_accel=self._use_accel)
 
-        # Write and delete the outputs
+        return
 
-        if not self.save_cleaned:
-            Delete(
-                detdata=[
-                    self.clean_name,
-                ]
-            ).apply(data, use_accel=self._use_accel)
+    @function_timer
+    def _purge_cleaned_tod(self):
+        """ If the cleaned TOD is not being returned, purge it """
 
-            self._memreport.prefix = "After purging cleaned TOD"
-            self._memreport.apply(data, use_accel=self._use_accel)
+        if self.save_cleaned:
+            return
+
+        del_tod = Delete(detdata=[self.clean_name])
+        del_tod.apply(self._data, use_accel=self._use_accel)
+
+        self._memreport.prefix = "After purging cleaned TOD"
+        self._memreport.apply(self._data, use_accel=self._use_accel)
+
+        return
+
+    @function_timer
+    def _write_maps(self):
+        """ Write and delete the outputs """
 
         self._write_del(
-            self.noiseweighted_map_name, self.write_noiseweighted_map, True, mc_root
+            self.noiseweighted_map_name,
+            self.write_noiseweighted_map,
+            True,
+            self._mc_root,
         )
-        self._write_del(self.map_name, self.write_map, True, mc_root)
+        self._write_del(self.map_name, self.write_map, True, self._mc_root)
         self._write_del(self.cov_name, self.write_cov, False, self.name)
 
-        log.info_rank(
-            f"{log_prefix}  finished output write in",
+        self._log.info_rank(
+            f"{self._log_prefix}  finished output write in",
             comm=self._comm,
-            timer=timer,
+            timer=self._timer,
         )
 
-        self._memreport.prefix = "End of mapmaking"
-        self._memreport.apply(data, use_accel=self._use_accel)
+        return
 
-        # Explicitly delete members used by the _exec() method
+    @function_timer
+    def _closeout(self):
+        """ Explicitly delete members used by the _exec() method """
+
+        del self._log
+        del self._timer
+        del self._log_prefix
+        del self._mc_root
+        del self._data
+        del self._detectors
+        del self._use_accel
         del self._memreport
         del self._comm
         del self._rank
-        del self._data
-        del self._use_accel
+
+        return
+
+    @function_timer
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
+        self._setup(data, detectors, use_accel)
+
+        self._memreport.prefix = "Start of mapmaking"
+        self._memreport.apply(self._data, use_accel=self._use_accel)
+
+        template_amplitudes = self._fit_templates()
+
+        map_binning = self._prepare_binning()
+
+        self._build_pixel_covariance(map_binning)
+
+        self._bin_and_write_raw_signal(map_binning)
+
+        out_cleaned = self._clean_signal(template_amplitudes)
+
+        self._bin_cleaned_signal(map_binning, out_cleaned)
+
+        self._purge_cleaned_tod()  # Potentially frees memory for writing maps
+
+        self._write_maps()
+
+        self._memreport.prefix = "End of mapmaking"
+        self._memreport.apply(self._data, use_accel=self._use_accel)
+
+        self._closeout()
 
         return
 
