@@ -48,6 +48,11 @@ class CrossLinking(Operator):
         help="The Data key where the PixelDist object should be stored",
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -59,7 +64,8 @@ class CrossLinking(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_nonscience,
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -69,7 +75,7 @@ class CrossLinking(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional telescope flagging",
     )
 
@@ -90,6 +96,27 @@ class CrossLinking(Operator):
     weights = "crosslinking_weights"
     crosslinking_map = "crosslinking_map"
     noise_model = "uniform_noise_weights"
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
 
     @traitlets.validate("pixel_pointing")
     def _check_pixel_pointing(self, proposal):
@@ -211,7 +238,7 @@ class CrossLinking(Operator):
 
         for obs in data.obs:
             obs_data = data.select(obs_uid=obs.uid)
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
             for det in dets:
                 # Pointing weights
                 self._get_weights(obs_data, det)

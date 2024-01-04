@@ -233,28 +233,33 @@ class Noise(object):
                     first = max(0, first - 1)
                     last = min(freq.size - 1, last + 1)
                 noisevar_mid = np.median(psd[first:last])
-                # Noise in the end of the PSD
-                first = np.searchsorted(freq, rate * 0.45, side="left")
-                last = np.searchsorted(freq, rate * 0.50, side="right")
-                if first == last:
-                    first = max(0, first - 1)
-                    last = min(freq.size - 1, last + 1)
-                noisevar_end = np.median(psd[first:last])
-                if noisevar_end / noisevar_mid < 0.5:
-                    # There is a transfer function roll-off.  Measure the
-                    # white noise plateau value
-                    first = np.searchsorted(freq, rate * 0.2, side="left")
-                    last = np.searchsorted(freq, rate * 0.4, side="right")
+                if noisevar_mid == 0:
+                    # This detector is flagged in the noise model.
+                    # Set its weight to zero.
+                    invvar = 0.0 * (1.0 / u.K**2)
                 else:
-                    # No significant roll-off.  Use the last PSD bins for
-                    # the noise variance
+                    # Noise in the end of the PSD
                     first = np.searchsorted(freq, rate * 0.45, side="left")
                     last = np.searchsorted(freq, rate * 0.50, side="right")
-                if first == last:
-                    first = max(0, first - 1)
-                    last = min(freq.size - 1, last + 1)
-                noisevar = np.median(psd[first:last])
-                invvar = (1.0 / noisevar / rate).decompose()
+                    if first == last:
+                        first = max(0, first - 1)
+                        last = min(freq.size - 1, last + 1)
+                    noisevar_end = np.median(psd[first:last])
+                    if noisevar_end / noisevar_mid < 0.5:
+                        # There is a transfer function roll-off.  Measure the
+                        # white noise plateau value
+                        first = np.searchsorted(freq, rate * 0.2, side="left")
+                        last = np.searchsorted(freq, rate * 0.4, side="right")
+                    else:
+                        # No significant roll-off.  Use the last PSD bins for
+                        # the noise variance
+                        first = np.searchsorted(freq, rate * 0.45, side="left")
+                        last = np.searchsorted(freq, rate * 0.50, side="right")
+                    if first == last:
+                        first = max(0, first - 1)
+                        last = min(freq.size - 1, last + 1)
+                    noisevar = np.median(psd[first:last])
+                    invvar = (1.0 / noisevar / rate).decompose()
                 for det in self._dets_for_keys[k]:
                     self._detweights[det] += mix[det][k] * invvar
         return self._detweights[det]

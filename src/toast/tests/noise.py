@@ -15,6 +15,7 @@ from ..instrument_sim import fake_hexagon_focalplane
 from ..io import H5File
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
+from ..observation import default_values as defaults
 from ._helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 from .ops_noise_estim import plot_noise_estim_compare
@@ -117,7 +118,7 @@ class InstrumentTest(MPITestCase):
         for ob in data.obs:
             in_model = ob[noise_model.noise_model]
             out_model = ob[noise_fitter.out_model]
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 in_psd = in_model.psd(det)
                 fit_psd = out_model.psd(det)
 

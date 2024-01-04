@@ -13,9 +13,9 @@ from astropy import units as u
 
 from ..noise import Noise
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Instance, Int, List, Quantity, Tuple, Unicode, trait_docs
-from ..utils import Logger, Timer
+from ..utils import Logger
 from .arithmetic import Combine
 from .copy import Copy
 from .delete import Delete
@@ -63,6 +63,11 @@ class NoiseEstim(Operator):
         "Only relevant if `mapfile` is set",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_data = Unicode(
         defaults.det_data,
         help="Observation detdata key apply filtering to",
@@ -75,7 +80,8 @@ class NoiseEstim(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid,
+        help="Bit mask value for detector sample flagging",
     )
 
     mask_flags = Unicode(
@@ -85,7 +91,7 @@ class NoiseEstim(Operator):
     )
 
     mask_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask for raising processing mask flags"
+        defaults.det_mask_processing, help="Bit mask for raising processing mask flags"
     )
 
     shared_flags = Unicode(
@@ -95,7 +101,8 @@ class NoiseEstim(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_nonscience,
+        help="Bit mask value for optional shared flagging",
     )
 
     out_model = Unicode(
@@ -168,6 +175,7 @@ class NoiseEstim(Operator):
             for trt in [
                 "view",
                 "boresight",
+                "det_mask",
                 "shared_flags",
                 "shared_flag_mask",
                 "quats",
@@ -179,11 +187,25 @@ class NoiseEstim(Operator):
                     raise traitlets.TraitError(msg)
         return detpointing
 
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
         if check < 0:
-            raise traitlets.TraitError("Flag mask should be a positive integer")
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
         return check
 
     def __init__(self, **kwargs):
@@ -283,6 +305,7 @@ class NoiseEstim(Operator):
             Copy(detdata=[(self.det_data, "temp_signal")]).apply(data)
             CommonModeFilter(
                 det_data="temp_signal",
+                det_mask=self.det_mask,
                 det_flags=self.det_flags,
                 det_flag_mask=self.det_flag_mask,
                 focalplane_key=self.focalplane_key,
@@ -303,6 +326,7 @@ class NoiseEstim(Operator):
             scan_map = ScanHealpixMap(
                 file=self.mapfile,
                 det_data=self.det_data,
+                det_mask=self.det_mask,
                 subtract=True,
                 pixel_dist=self.pixel_dist,
                 pixel_pointing=self.pixel_pointing,
@@ -313,8 +337,9 @@ class NoiseEstim(Operator):
         if self.maskfile is not None:
             scan_mask = ScanHealpixMask(
                 file=self.maskfile,
+                det_mask=self.det_mask,
                 det_flags=self.mask_flags,
-                def_flags_value=self.mask_bit,
+                def_flags_value=self.mask_flag_mask,
                 pixel_dist=self.pixel_dist,
                 pixel_pointing=self.pixel_pointing,
             )
@@ -322,6 +347,20 @@ class NoiseEstim(Operator):
 
         for orig_obs in data.obs:
             obs = self._redistribute(orig_obs)
+
+            # Get the set of all detector we are considering for this obs
+            local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
+            if obs.comm.comm_group is not None:
+                pdets = obs.comm.comm_group.gather(local_dets, root=0)
+                good_dets = None
+                if obs.comm.group_rank == 0:
+                    good_dets = set()
+                    for plocal in pdets:
+                        for d in plocal:
+                            good_dets.add(d)
+                good_dets = obs.comm.comm_group.bcast(good_dets, root=0)
+            else:
+                good_dets = set(local_dets)
 
             if self.focalplane_key is not None:
                 # Pick just one detector to represent each key value
@@ -412,43 +451,58 @@ class NoiseEstim(Operator):
                 if det1 not in det_names or det2 not in det_names:
                     # User-specified pair is invalid
                     continue
-                signal1 = obs.detdata[self.det_data][det1]
+                if det1 not in good_dets or (
+                    det2 is not None and det2 not in good_dets
+                ):
+                    # One of our detectors is cut.  Store a zero PSD.
+                    nse_freqs = np.array(
+                        [
+                            0.0,
+                            1.0e-5,
+                            fsample / 4,
+                            fsample / 2,
+                        ],
+                        dtype=np.float64,
+                    )
+                    nse_psd = np.zeros_like(nse_freqs)
+                else:
+                    signal1 = obs.detdata[self.det_data][det1]
 
-                flags[:] = shared_flags
-                if self.det_flags is not None:
-                    flags[:] |= (
-                        obs.detdata[self.det_flags][det1] & self.det_flag_mask
-                    ) != 0
-
-                signal2 = None
-                if det1 != det2:
-                    signal2 = obs.detdata[self.det_data][det2]
+                    flags[:] = shared_flags
                     if self.det_flags is not None:
                         flags[:] |= (
-                            obs.detdata[self.det_flags][det2] & self.det_flag_mask
+                            obs.detdata[self.det_flags][det1] & self.det_flag_mask
                         ) != 0
 
-                if det2key is None:
-                    det1_name = det1
-                    det2_name = det2
-                else:
-                    det1_name = det2key[det1]
-                    det2_name = det2key[det2]
+                    signal2 = None
+                    if det1 != det2:
+                        signal2 = obs.detdata[self.det_data][det2]
+                        if self.det_flags is not None:
+                            flags[:] |= (
+                                obs.detdata[self.det_flags][det2] & self.det_flag_mask
+                            ) != 0
 
-                nse_freqs, nse_psd = self.process_noise_estimate(
-                    obs,
-                    signal1,
-                    signal2,
-                    flags,
-                    gapflags,
-                    gapflags_nsum,
-                    times,
-                    fsample,
-                    fileroot,
-                    det1_name,
-                    det2_name,
-                    intervals,
-                )
+                    if det2key is None:
+                        det1_name = det1
+                        det2_name = det2
+                    else:
+                        det1_name = det2key[det1]
+                        det2_name = det2key[det2]
+
+                    nse_freqs, nse_psd = self.process_noise_estimate(
+                        obs,
+                        signal1,
+                        signal2,
+                        flags,
+                        gapflags,
+                        gapflags_nsum,
+                        times,
+                        fsample,
+                        fileroot,
+                        det1_name,
+                        det2_name,
+                        intervals,
+                    )
                 if obs.comm.group_rank == 0:
                     det_units = obs.detdata[self.det_data].units
                     if det_units == u.dimensionless_unscaled:

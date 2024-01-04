@@ -67,7 +67,7 @@ class GroundFilterTest(MPITestCase):
         groundfilter.apply(data)
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
                 flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
@@ -103,11 +103,11 @@ class GroundFilterTest(MPITestCase):
         rms = dict()
         for ob in data.obs:
             shared_flags = ob.shared[defaults.shared_flags].data
-            rightgoing = (shared_flags & defaults.scan_leftright) != 0
-            leftgoing = (shared_flags & defaults.scan_rightleft) != 0
+            rightgoing = (shared_flags & defaults.shared_mask_scan_leftright) != 0
+            leftgoing = (shared_flags & defaults.shared_mask_scan_rightleft) != 0
             az = ob.shared[defaults.azimuth].data * 100
             rms[ob.name] = dict()
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
                 flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
@@ -125,7 +125,7 @@ class GroundFilterTest(MPITestCase):
             split_template=True,
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_invalid,
             shared_flags=defaults.shared_flags,
             shared_flag_mask=self.shared_flag_mask,
             view=None,
@@ -133,7 +133,7 @@ class GroundFilterTest(MPITestCase):
         groundfilter.apply(data)
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
                 flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0

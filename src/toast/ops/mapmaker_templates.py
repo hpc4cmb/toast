@@ -54,6 +54,11 @@ class TemplateMatrix(Operator):
         defaults.det_data_units, help="Output units if creating detector data"
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -61,8 +66,23 @@ class TemplateMatrix(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_nonscience,
+        help="Bit mask value for detector sample flagging",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+
+    @traitlets.validate("det_flag_mask")
+    def _check_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Flag mask should be a positive integer")
+        return check
 
     @traitlets.validate("templates")
     def _check_templates(self, proposal):
@@ -100,6 +120,7 @@ class TemplateMatrix(Operator):
             view=self.view,
             det_data=self.det_data,
             det_data_units=self.det_data_units,
+            det_mask=self.det_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
         )
@@ -173,6 +194,28 @@ class TemplateMatrix(Operator):
         self._initialized = False
 
     @function_timer
+    def initialize(self, data, use_accel=False):
+        if not self._initialized:
+            if use_accel:
+                # fail when a user tries to run the initialization pipeline on GPU
+                raise RuntimeError(
+                    "You cannot currently initialize templates on device (please disable accel for this operator/pipeline)."
+                )
+            for tmpl in self.templates:
+                if not tmpl.enabled:
+                    continue
+                if tmpl.view is None:
+                    tmpl.view = self.view
+                tmpl.det_data_units = self.det_data_units
+                tmpl.det_mask = self.det_mask
+                tmpl.det_flags = self.det_flags
+                tmpl.det_flag_mask = self.det_flag_mask
+                # This next line will trigger calculation of the number
+                # of amplitudes within each template.
+                tmpl.data = data
+            self._initialized = True
+
+    @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
 
@@ -201,38 +244,26 @@ class TemplateMatrix(Operator):
             msg += "but does not support accelerators"
             raise RuntimeError(msg)
 
-        # On the first call, we initialize all templates using the Data instance and
-        # the fixed options for view, flagging, etc.
+        # Ensure we have initialized templates with the full set of detectors.
         if not self._initialized:
-            if use_accel:
-                # fail when a user tries to run the initialization pipeline on GPU
-                raise RuntimeError(
-                    "You cannot currently initialize templates on device (please disable accel for this operator/pipeline)."
-                )
-            for tmpl in self.templates:
-                if tmpl.view is None:
-                    tmpl.view = self.view
-                tmpl.det_data_units = self.det_data_units
-                tmpl.det_flags = self.det_flags
-                tmpl.det_flag_mask = self.det_flag_mask
-                # This next line will trigger calculation of the number
-                # of amplitudes within each template.
-                tmpl.data = data
-            self._initialized = True
+            raise RuntimeError("You must call initialize() before calling exec()")
 
         # Set the data we are using for this execution
         for tmpl in self.templates:
-            tmpl.det_data = self.det_data
+            if tmpl.enabled:
+                tmpl.det_data = self.det_data
 
         # We loop over detectors.  Internally, each template loops over observations
         # and ignores observations where the detector does not exist.
-        all_dets = data.all_local_detectors(selection=detectors)
+        all_dets = data.all_local_detectors(selection=detectors, flagmask=self.det_mask)
 
         if self.transpose:
             # Check that the incoming detector data in all observations has the correct
             # units.
             input_units = 1.0 / self.det_data_units
             for ob in data.obs:
+                if self.det_data not in ob.detdata:
+                    continue
                 if ob.detdata[self.det_data].units != input_units:
                     msg = f"obs {ob.name} detdata {self.det_data}"
                     msg += f" does not have units of {input_units}"
@@ -279,7 +310,10 @@ class TemplateMatrix(Operator):
             # Ensure that our output detector data exists in each observation
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(selection=detectors)
+                dets = ob.select_local_detectors(
+                    selection=detectors,
+                    flagmask=self.det_mask,
+                )
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -303,15 +337,16 @@ class TemplateMatrix(Operator):
 
             for d in all_dets:
                 for tmpl in self.templates:
-                    log.verbose(
-                        f"TemplateMatrix {d} add to signal {tmpl.name} (use_accel={use_accel})"
-                    )
-                    tmpl.add_to_signal(
-                        d,
-                        data[self.amplitudes][tmpl.name],
-                        use_accel=use_accel,
-                        **kwargs,
-                    )
+                    if tmpl.enabled:
+                        log.verbose(
+                            f"TemplateMatrix {d} add to signal {tmpl.name} (use_accel={use_accel})"
+                        )
+                        tmpl.add_to_signal(
+                            d,
+                            data[self.amplitudes][tmpl.name],
+                            use_accel=use_accel,
+                            **kwargs,
+                        )
         return
 
     def _finalize(self, data, use_accel=None, **kwargs):
@@ -496,6 +531,7 @@ class SolveAmplitudes(Operator):
                 "binned",
                 "covariance",
                 "det_flags",
+                "det_mask",
                 "det_flag_mask",
                 "shared_flags",
                 "shared_flag_mask",
@@ -554,6 +590,7 @@ class SolveAmplitudes(Operator):
         # flags are combined to the first bit (== 1) of the solver flags.
 
         save_det_flags = self.binning.det_flags
+        save_det_mask = self.binning.det_mask
         save_det_flag_mask = self.binning.det_flag_mask
         save_shared_flags = self.binning.shared_flags
         save_shared_flag_mask = self.binning.shared_flag_mask
@@ -561,7 +598,20 @@ class SolveAmplitudes(Operator):
         save_covariance = self.binning.covariance
 
         save_tmpl_flags = self.template_matrix.det_flags
-        save_tmpl_mask = self.template_matrix.det_flag_mask
+        save_tmpl_mask = self.template_matrix.det_mask
+        save_tmpl_det_mask = self.template_matrix.det_flag_mask
+
+        # The pointing matrix used for the solve.  The per-detector flags
+        # are normally reset when the binner is run, but here we set them
+        # explicitly since we will use these pointing matrix operators for
+        # setting up the solver flags below.
+        solve_pixels = self.binning.pixel_pointing
+        solve_weights = self.binning.stokes_weights
+        solve_pixels.detector_pointing.det_mask = save_det_mask
+        solve_pixels.detector_pointing.det_flag_mask = save_det_flag_mask
+        if hasattr(solve_weights, "detector_pointing"):
+            solve_weights.detector_pointing.det_mask = save_det_mask
+            solve_weights.detector_pointing.det_flag_mask = save_det_flag_mask
 
         # Output data products, prefixed with the name of the operator and optionally
         # the MC index.
@@ -594,7 +644,7 @@ class SolveAmplitudes(Operator):
             # Verify that our flags exist
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
+                dets = ob.select_local_detectors(detectors, flagmask=save_det_mask)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -621,13 +671,13 @@ class SolveAmplitudes(Operator):
 
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
+                dets = ob.select_local_detectors(detectors, flagmask=save_det_mask)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
                 # Create the new solver flags
                 exists = ob.detdata.ensure(
-                    self.solver_flags, dtype=np.uint8, detectors=detectors
+                    self.solver_flags, dtype=np.uint8, detectors=dets
                 )
                 # The data views
                 views = ob.view[solve_view]
@@ -671,21 +721,19 @@ class SolveAmplitudes(Operator):
             # pointing, we want to do that later when building the covariance and
             # the pixel distribution.
 
-            # Use the same pointing operator as the binning
-            scan_pointing = self.binning.pixel_pointing
-
             scanner = ScanMask(
                 det_flags=self.solver_flags,
-                pixels=scan_pointing.pixels,
+                det_mask=save_det_mask,
+                det_flag_mask=save_det_flag_mask,
+                pixels=solve_pixels.pixels,
                 view=solve_view,
-                # mask_bits=1,
             )
 
             scanner.det_flags_value = 2
             scanner.mask_key = self.mask
 
             scan_pipe = Pipeline(
-                detector_sets=["SINGLE"], operators=[scan_pointing, scanner]
+                detector_sets=["SINGLE"], operators=[solve_pixels, scanner]
             )
 
             if self.mask is not None:
@@ -731,10 +779,11 @@ class SolveAmplitudes(Operator):
                 hits=self.solver_hits_name,
                 rcond=self.solver_rcond_name,
                 det_data_units=det_data_units,
+                det_mask=save_det_mask,
                 det_flags=self.solver_flags,
                 det_flag_mask=255,
-                pixel_pointing=self.binning.pixel_pointing,
-                stokes_weights=self.binning.stokes_weights,
+                pixel_pointing=solve_pixels,
+                stokes_weights=solve_weights,
                 noise_model=self.binning.noise_model,
                 rcond_threshold=self.solve_rcond_threshold,
                 sync_type=self.binning.sync_type,
@@ -776,7 +825,7 @@ class SolveAmplitudes(Operator):
             local_cut = 0
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(detectors)
+                dets = ob.select_local_detectors(detectors, flagmask=save_det_mask)
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -812,11 +861,14 @@ class SolveAmplitudes(Operator):
             comm=comm,
         )
 
-        # First application of the template matrix will propagate flags and
-        # the flag mask to the templates
+        # Initialize the template matrix
+        self.template_matrix.det_data = self.det_data
         self.template_matrix.det_data_units = det_data_units
         self.template_matrix.det_flags = self.solver_flags
+        self.template_matrix.det_mask = save_det_mask
         self.template_matrix.det_flag_mask = 255
+        self.template_matrix.view = self.binning.pixel_pointing.view
+        self.template_matrix.initialize(data)
 
         # Set our binning operator to use only our new solver flags
         self.binning.shared_flag_mask = 0
@@ -947,6 +999,7 @@ class SolveAmplitudes(Operator):
         # for the final map making or for other external operations.
 
         self.binning.det_flags = save_det_flags
+        self.binning.det_mask = save_det_mask
         self.binning.det_flag_mask = save_det_flag_mask
         self.binning.shared_flags = save_shared_flags
         self.binning.shared_flag_mask = save_shared_flag_mask
@@ -954,7 +1007,8 @@ class SolveAmplitudes(Operator):
         self.binning.covariance = save_covariance
 
         self.template_matrix.det_flags = save_tmpl_flags
-        self.template_matrix.det_flag_mask = save_tmpl_mask
+        self.template_matrix.det_flag_mask = save_tmpl_det_mask
+        self.template_matrix.det_mask = save_tmpl_mask
         # FIXME: this reset does not seem needed
         # if not self.mc_mode:
         #    self.template_matrix.reset_templates()

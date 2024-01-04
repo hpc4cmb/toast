@@ -85,7 +85,7 @@ class ScanWCSTest(MPITestCase):
         # Check that the sets of timestreams match.
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 np.testing.assert_almost_equal(
                     ob.detdata["test"][det], ob.detdata[defaults.det_data][det]
                 )
@@ -131,7 +131,7 @@ class ScanWCSTest(MPITestCase):
         # Scan map into timestreams
         scanner = ops.ScanMask(
             det_flags=defaults.det_flags,
-            det_flags_mask=defaults.det_mask_invalid,
+            det_flags_value=defaults.det_mask_invalid,
             pixels=pixels.pixels,
             mask_key="fake_mask",
         )
@@ -149,7 +149,7 @@ class ScanWCSTest(MPITestCase):
         # Check that the sets of timestreams match.
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 np.testing.assert_equal(
                     ob.detdata["test_flags"][det], ob.detdata[defaults.det_flags][det]
                 )

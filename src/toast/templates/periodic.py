@@ -44,6 +44,7 @@ class Periodic(Template):
     #    view             : The timestream view we are using
     #    det_data         : The detector data key with the timestreams
     #    det_data_units   : The units of the detector data
+    #    det_mask         : Bitmask for per-detector flagging
     #    det_flags        : Optional detector solver flags
     #    det_flag_mask    : Bit mask for detector solver flags
     #
@@ -96,13 +97,17 @@ class Periodic(Template):
         # but sorted in order of occurrence.
         all_dets = OrderedDict()
 
+        # Good detectors to use for each observation
+        self._obs_dets = dict()
+
         # Find the binning for each observation and the total detectors on this
         # process.
         self._obs_min = list()
         self._obs_max = list()
         self._obs_incr = list()
         self._obs_nbins = list()
-        for ob in new_data.obs:
+        total_bins = 0
+        for iob, ob in enumerate(new_data.obs):
             if self.is_detdata_key:
                 if self.key not in ob.detdata:
                     continue
@@ -147,14 +152,28 @@ class Periodic(Template):
             else:
                 oincr = float(self.increment)
                 obins = int((omax - omin) / oincr)
+            if obins == 0 and ob.comm.group_rank == 0:
+                msg = f"Template {self.name}, obs {ob.name} has zero amplitude bins"
+                log.warning(msg)
+            total_bins += obins
             self._obs_nbins.append(obins)
             self._obs_incr.append(oincr)
+
             # Build up detector list
-            for d in ob.local_detectors:
+            self._obs_dets[iob] = set()
+            for d in ob.select_local_detectors(flagmask=self.det_mask):
+                if d not in ob.detdata[self.det_data].detectors:
+                    continue
+                self._obs_dets[iob].add(d)
                 if d not in all_dets:
                     all_dets[d] = None
 
         self._all_dets = list(all_dets.keys())
+
+        if total_bins == 0:
+            msg = f"Template {self.name} process group {new_data.comm.group}"
+            msg += f" has zero amplitude bins- change the binning size."
+            raise RuntimeError(msg)
 
         # During application of the template, we will be looping over detectors
         # in the outer loop.  So we pack the amplitudes by detector and then by
@@ -166,6 +185,8 @@ class Periodic(Template):
         for det in self._all_dets:
             self._det_offset[det] = offset
             for iob, ob in enumerate(new_data.obs):
+                if det not in self._obs_dets[iob]:
+                    continue
                 if self.is_detdata_key:
                     if self.key not in ob.detdata:
                         continue
@@ -205,19 +226,22 @@ class Periodic(Template):
         for det in self._all_dets:
             amp_offset = self._det_offset[det]
             for iob, ob in enumerate(self.data.obs):
+                if det not in self._obs_dets[iob]:
+                    continue
                 if self.is_detdata_key:
                     if self.key not in ob.detdata:
                         continue
                 else:
                     if self.key not in ob.shared:
                         continue
-
-                if det not in ob.local_detectors:
-                    continue
                 nbins = self._obs_nbins[iob]
                 det_indx = ob.detdata[self.det_data].indices([det])[0]
                 amp_hits = self._amp_hits[amp_offset : amp_offset + nbins]
                 amp_flags = self._amp_flags[amp_offset : amp_offset + nbins]
+                if self.det_flags is not None:
+                    flag_indx = ob.detdata[self.det_flags].indices([det])[0]
+                else:
+                    flag_indx = None
                 for vw in ob.intervals[self.view].data:
                     vw_slc = slice(vw.first, vw.last + 1, 1)
                     if self.is_detdata_key:
@@ -229,6 +253,7 @@ class Periodic(Template):
                         iob,
                         ob,
                         vw,
+                        flag_indx=flag_indx,
                         det_flags=True,
                     )
                     np.add.at(
@@ -249,7 +274,9 @@ class Periodic(Template):
         z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
-    def _view_flags_and_index(self, det_indx, ob_indx, ob, view, det_flags=False):
+    def _view_flags_and_index(
+        self, det_indx, ob_indx, ob, view, flag_indx=None, det_flags=False
+    ):
         """Get the flags and amplitude indices for one detector and view."""
         vw_slc = slice(view.first, view.last + 1, 1)
         vw_len = view.last - view.first + 1
@@ -271,7 +298,7 @@ class Periodic(Template):
                 bad = np.zeros(vw_len, dtype=bool)
         if det_flags and self.det_flags is not None:
             # We have some det flags
-            bad |= ob.detdata[self.det_flags][det_indx, vw_slc] & self.det_flag_mask
+            bad |= ob.detdata[self.det_flags][flag_indx, vw_slc] & self.det_flag_mask
         good = np.logical_not(bad)
 
         # Find the amplitude index for every good sample
@@ -285,17 +312,20 @@ class Periodic(Template):
         return good, amp_indx
 
     def _add_to_signal(self, detector, amplitudes, **kwargs):
+        if detector not in self._all_dets:
+            # This must have been cut by per-detector flags during initialization
+            return
+
         amp_offset = self._det_offset[detector]
         for iob, ob in enumerate(self.data.obs):
+            if detector not in self._obs_dets[iob]:
+                continue
             if self.is_detdata_key:
                 if self.key not in ob.detdata:
                     continue
             else:
                 if self.key not in ob.shared:
                     continue
-
-            if detector not in ob.local_detectors:
-                continue
             nbins = self._obs_nbins[iob]
             det_indx = ob.detdata[self.det_data].indices([detector])[0]
             amps = amplitudes.local[amp_offset : amp_offset + nbins]
@@ -313,20 +343,27 @@ class Periodic(Template):
             amp_offset += nbins
 
     def _project_signal(self, detector, amplitudes, **kwargs):
+        if detector not in self._all_dets:
+            # This must have been cut by per-detector flags during initialization
+            return
+
         amp_offset = self._det_offset[detector]
         for iob, ob in enumerate(self.data.obs):
+            if detector not in self._obs_dets[iob]:
+                continue
             if self.is_detdata_key:
                 if self.key not in ob.detdata:
                     continue
             else:
                 if self.key not in ob.shared:
                     continue
-
-            if detector not in ob.local_detectors:
-                continue
             nbins = self._obs_nbins[iob]
             det_indx = ob.detdata[self.det_data].indices([detector])[0]
             amps = amplitudes.local[amp_offset : amp_offset + nbins]
+            if self.det_flags is not None:
+                flag_indx = ob.detdata[self.det_flags].indices([detector])[0]
+            else:
+                flag_indx = None
             for vw in ob.intervals[self.view].data:
                 vw_slc = slice(vw.first, vw.last + 1, 1)
                 good, amp_indx = self._view_flags_and_index(
@@ -334,6 +371,7 @@ class Periodic(Template):
                     iob,
                     ob,
                     vw,
+                    flag_indx=flag_indx,
                     det_flags=True,
                 )
                 # Accumulate to amplitudes
@@ -354,15 +392,14 @@ class Periodic(Template):
         for det in self._all_dets:
             amp_offset = self._det_offset[det]
             for iob, ob in enumerate(self.data.obs):
+                if det not in self._obs_dets[iob]:
+                    continue
                 if self.is_detdata_key:
                     if self.key not in ob.detdata:
                         continue
                 else:
                     if self.key not in ob.shared:
                         continue
-
-                if det not in ob.local_detectors:
-                    continue
                 nbins = self._obs_nbins[iob]
                 amps_in = amplitudes_in.local[amp_offset : amp_offset + nbins]
                 amps_out = amplitudes_out.local[amp_offset : amp_offset + nbins]
@@ -399,15 +436,14 @@ class Periodic(Template):
         for det in self._all_dets:
             amp_offset = self._det_offset[det]
             for iob, ob in enumerate(self.data.obs):
+                if det not in self._obs_dets[iob]:
+                    continue
                 if self.is_detdata_key:
                     if self.key not in ob.detdata:
                         continue
                 else:
                     if self.key not in ob.shared:
                         continue
-
-                if det not in ob.local_detectors:
-                    continue
                 if ob.name not in obs_det_amps:
                     obs_det_amps[ob.name] = dict()
                 nbins = self._obs_nbins[iob]

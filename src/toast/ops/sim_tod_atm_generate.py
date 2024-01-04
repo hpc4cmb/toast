@@ -17,9 +17,9 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..observation_dist import global_interval_times
 from ..pointing_utils import scan_range_lonlat
-from ..timing import GlobalTimers, function_timer
+from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
-from ..utils import Environment, Logger, Timer
+from ..utils import Environment, Logger
 from .operator import Operator
 
 if available_atm:

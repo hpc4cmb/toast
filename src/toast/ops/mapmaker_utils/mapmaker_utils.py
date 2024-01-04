@@ -33,7 +33,7 @@ class BuildHitMap(Operator):
 
     Although individual detector flags do not impact the pointing per se, they can be
     used with this operator in order to produce a hit map that is consistent with other
-    pixel space products.
+    pixel space products.  The detector mask defaults to cutting "non-science" samples.
 
     """
 
@@ -53,6 +53,11 @@ class BuildHitMap(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -60,7 +65,8 @@ class BuildHitMap(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_nonscience,
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -70,7 +76,8 @@ class BuildHitMap(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+        defaults.shared_mask_nonscience,
+        help="Bit mask value for optional flagging",
     )
 
     pixels = Unicode(defaults.pixels, help="Observation detdata key for pixel indices")
@@ -78,6 +85,13 @@ class BuildHitMap(Operator):
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
@@ -143,7 +157,9 @@ class BuildHitMap(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(selection=detectors)
+            dets = ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            )
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -244,7 +260,8 @@ class BuildInverseCovariance(Operator):
     If any samples have compromised telescope pointing, those pixel indices should
     have already been set to a negative value by the operator that generated the
     pointing matrix.  Individual detector flags can optionally be applied to
-    timesamples when accumulating data.
+    timesamples when accumulating data.  The detector mask defaults to cutting
+    "non-science" samples.
 
     """
 
@@ -266,6 +283,11 @@ class BuildInverseCovariance(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -273,7 +295,8 @@ class BuildInverseCovariance(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_nonscience,
+        help="Bit mask value for detector sample flagging",
     )
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
@@ -285,7 +308,8 @@ class BuildInverseCovariance(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+        defaults.shared_mask_nonscience,
+        help="Bit mask value for optional flagging",
     )
 
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
@@ -299,6 +323,13 @@ class BuildInverseCovariance(Operator):
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
@@ -374,7 +405,9 @@ class BuildInverseCovariance(Operator):
             weight_nnz = 0
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(selection=detectors)
+                dets = ob.select_local_detectors(
+                    selection=detectors, flagmask=self.det_mask
+                )
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -398,7 +431,9 @@ class BuildInverseCovariance(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(selection=detectors)
+            dets = ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            )
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -533,7 +568,8 @@ class BuildNoiseWeighted(Operator):
     If any samples have compromised telescope pointing, those pixel indices should
     have already been set to a negative value by the operator that generated the
     pointing matrix.  Individual detector flags can optionally be applied to
-    timesamples when accumulating data.
+    timesamples when accumulating data.  The detector mask defaults to cutting
+    "non-science" samples.
 
     """
 
@@ -559,6 +595,11 @@ class BuildNoiseWeighted(Operator):
         help="Observation detdata key for the timestream data",
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -566,7 +607,8 @@ class BuildNoiseWeighted(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_nonscience,
+        help="Bit mask value for detector sample flagging",
     )
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
@@ -578,7 +620,8 @@ class BuildNoiseWeighted(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+        defaults.shared_mask_nonscience,
+        help="Bit mask value for optional flagging",
     )
 
     pixels = Unicode("pixels", help="Observation detdata key for pixel indices")
@@ -592,6 +635,13 @@ class BuildNoiseWeighted(Operator):
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
@@ -669,7 +719,9 @@ class BuildNoiseWeighted(Operator):
             weight_nnz = 0
             for ob in data.obs:
                 # Get the detectors we are using for this observation
-                dets = ob.select_local_detectors(selection=detectors)
+                dets = ob.select_local_detectors(
+                    selection=detectors, flagmask=self.det_mask
+                )
                 if len(dets) == 0:
                     # Nothing to do for this observation
                     continue
@@ -738,7 +790,9 @@ class BuildNoiseWeighted(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(selection=detectors)
+            dets = ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            )
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -913,7 +967,8 @@ class CovarianceAndHits(Operator):
     This operator runs the pointing operator and builds the PixelDist instance
     describing how submaps are distributed among processes.  It builds the hit map
     and the inverse covariance and then inverts this with a threshold on the condition
-    number in each pixel.
+    number in each pixel.  The detector flag mask defaults to cutting "non-science"
+    samples.
 
     NOTE:  The pixel pointing operator must have the "pixels", "create_dist"
     traits, which will be set by this operator during execution.
@@ -952,6 +1007,11 @@ class CovarianceAndHits(Operator):
         help="The Data key where the reciprocal condition number should be stored",
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -959,7 +1019,8 @@ class CovarianceAndHits(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_nonscience,
+        help="Bit mask value for detector sample flagging",
     )
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
@@ -971,7 +1032,8 @@ class CovarianceAndHits(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
+        defaults.shared_mask_nonscience,
+        help="Bit mask value for optional flagging",
     )
 
     pixel_pointing = Instance(
@@ -1001,6 +1063,13 @@ class CovarianceAndHits(Operator):
     save_pointing = Bool(
         False, help="If True, do not clear detector pointing matrices after use"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
@@ -1065,14 +1134,19 @@ class CovarianceAndHits(Operator):
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
+        # Set pointing flags
+        self.pixel_pointing.detector_pointing.det_mask = self.det_mask
+        self.pixel_pointing.detector_pointing.det_flag_mask = self.det_flag_mask
+        if hasattr(self.stokes_weights, "detector_pointing"):
+            self.stokes_weights.detector_pointing.det_mask = self.det_mask
+            self.stokes_weights.detector_pointing.det_flag_mask = self.det_flag_mask
+
         # Construct the pointing distribution if it does not already exist
 
         if self.pixel_dist not in data:
             pix_dist = BuildPixelDistribution(
                 pixel_dist=self.pixel_dist,
                 pixel_pointing=self.pixel_pointing,
-                shared_flags=self.shared_flags,
-                shared_flag_mask=self.shared_flag_mask,
                 save_pointing=self.save_pointing,
             )
             pix_dist.apply(data)
@@ -1106,6 +1180,7 @@ class CovarianceAndHits(Operator):
             hits=self.hits,
             view=self.pixel_pointing.view,
             pixels=self.pixel_pointing.pixels,
+            det_mask=self.det_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,
@@ -1124,6 +1199,7 @@ class CovarianceAndHits(Operator):
             weights=self.stokes_weights.weights,
             noise_model=self.noise_model,
             det_data_units=self.det_data_units,
+            det_mask=self.det_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,

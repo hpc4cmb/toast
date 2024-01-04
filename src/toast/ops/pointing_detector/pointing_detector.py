@@ -37,6 +37,11 @@ class PointingDetectorSimple(Operator):
         defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     boresight = Unicode(
         defaults.boresight_radec, help="Observation shared key for boresight"
     )
@@ -58,6 +63,13 @@ class PointingDetectorSimple(Operator):
         allow_none=True,
         help="The output coordinate system ('C', 'E', 'G')",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("coord_in")
     def _check_coord_in(self, proposal):
@@ -119,7 +131,7 @@ class PointingDetectorSimple(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

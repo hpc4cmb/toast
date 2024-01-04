@@ -136,7 +136,7 @@ class MadamTest(MPITestCase):
         rms = dict()
         for ob in data.obs:
             rms[ob.name] = dict()
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = np.array(ob.shared[defaults.shared_flags])
                 flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
@@ -203,13 +203,6 @@ class MadamTest(MPITestCase):
             stokes_weights=weights,
             det_out="destriped",
             noise_model="noise_model",
-            copy_groups=2,
-            purge_det_data=False,
-            restore_det_data=False,
-            shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
-            det_flags=defaults.det_flags,
-            det_flag_mask=1,
         )
         madam.apply(data)
 
@@ -242,7 +235,7 @@ class MadamTest(MPITestCase):
         #     plt.close()
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = np.array(ob.shared[defaults.shared_flags])
                 flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0

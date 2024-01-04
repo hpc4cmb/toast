@@ -160,6 +160,8 @@ class SolverRHS(Operator):
             map_key=self.binning.binned,
             det_data=det_temp,
             det_data_units=self.det_data_units,
+            det_mask=self.binning.det_mask,
+            det_flag_mask=self.binning.det_flag_mask,
             subtract=True,
         )
 
@@ -167,6 +169,8 @@ class SolverRHS(Operator):
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
             det_data=det_temp,
+            det_mask=self.binning.det_mask,
+            det_flag_mask=self.binning.det_flag_mask,
             view=pixels.view,
         )
 
@@ -174,7 +178,6 @@ class SolverRHS(Operator):
         self.template_matrix.transpose = True
         self.template_matrix.det_data = det_temp
         self.template_matrix.det_data_units = self.det_data_units
-        self.template_matrix.view = pixels.view
 
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.
@@ -211,8 +214,7 @@ class SolverRHS(Operator):
 
         log.debug_rank("MapMaker   RHS begin run projection pipeline", comm=comm)
 
-        # NOTE: we set `use_accel=False` as templates cannot be initialized on device
-        proj_pipe.apply(data, detectors=detectors, use_accel=False)
+        proj_pipe.apply(data, detectors=detectors)
 
         log.debug_rank(
             "MapMaker   RHS projection pipeline finished in", comm=comm, timer=timer
@@ -231,6 +233,11 @@ class SolverRHS(Operator):
         return
 
     def _finalize(self, data, **kwargs):
+        # for tname in data[self.template_matrix.amplitudes].keys():
+        #     print(
+        #         f"DEBUG RHS {tname} = {data[self.template_matrix.amplitudes][tname]}",
+        #         flush=True,
+        #     )
         return
 
     def _requires(self):
@@ -374,7 +381,6 @@ class SolverLHS(Operator):
         self.template_matrix.transpose = False
         self.template_matrix.det_data = self.det_temp
         self.template_matrix.det_data_units = self.det_data_units
-        self.template_matrix.view = pixels.view
 
         self.binning.det_data = self.det_temp
         self.binning.det_data_units = self.det_data_units
@@ -386,7 +392,7 @@ class SolverLHS(Operator):
 
         # nz = data[self.binning.binned].data != 0
         # print(
-        #     f"LHS binned:  {self.binning.binned} = {data[self.binning.binned].data[nz]}",
+        #     f"{comm.rank} LHS binned:  {self.binning.binned} = {data[self.binning.binned].data[nz]}",
         #     flush=True,
         # )
 
@@ -402,9 +408,21 @@ class SolverLHS(Operator):
         if self.out in data:
             data[self.out].reset()
 
+        # nz = data[self.template_matrix.amplitudes]["baselines"].local != 0
+        # print(
+        #     f"{comm.rank} LHS prior input:  {self.template_matrix.amplitudes} = {data[self.template_matrix.amplitudes]['baselines'].local[nz]}",
+        #     flush=True,
+        # )
+
         self.template_matrix.add_prior(
             data[self.template_matrix.amplitudes], data[self.out]
         )
+
+        # nz = data[self.out]["baselines"].local != 0
+        # print(
+        #     f"{comm.rank} LHS prior output:  {self.out} = {data[self.out]['baselines'].local[nz]}",
+        #     flush=True,
+        # )
 
         log.debug_rank(
             "MapMaker   LHS add noise prior finished in", comm=comm, timer=timer
@@ -417,13 +435,6 @@ class SolverLHS(Operator):
             "MapMaker   LHS begin scan map and accumulate amplitudes", comm=comm
         )
 
-        # Clear temp detector data
-        for ob in data.obs:
-            ob.detdata[self.det_temp][:] = 0
-            ob.detdata[self.det_temp].update_units(self.det_data_units)
-            if ob.detdata[self.det_temp].accel_exists():
-                ob.detdata[self.det_temp].accel_reset()
-
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
             pixels=pixels.pixels,
@@ -432,6 +443,8 @@ class SolverLHS(Operator):
             map_key=self.binning.binned,
             det_data=self.det_temp,
             det_data_units=self.det_data_units,
+            det_mask=self.binning.det_mask,
+            det_flag_mask=self.binning.det_flag_mask,
             subtract=True,
         )
 
@@ -439,6 +452,8 @@ class SolverLHS(Operator):
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
             det_data=self.det_temp,
+            det_mask=self.binning.det_mask,
+            det_flag_mask=self.binning.det_flag_mask,
             view=pixels.view,
         )
 
@@ -675,13 +690,13 @@ def solve(
 
         # q = A * d
         lhs_op.apply(data, detectors=detectors)
-        # print(f"LHS {iter}:  proposal = {proposal}", flush=True)
-        # print(f"LHS {iter}:  lhs_out = {lhs_out}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  proposal = {proposal}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  lhs_out = {lhs_out}", flush=True)
 
         # alpha = delta_new / (d^T * q)
         alpha = delta / proposal.dot(lhs_out)
-        # print(f"LHS {iter}:  delta = {delta}", flush=True)
-        # print(f"LHS {iter}:  alpha = {alpha}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  delta = {delta}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  alpha = {alpha}", flush=True)
 
         # Update the result
         # x += alpha * d
@@ -690,7 +705,7 @@ def solve(
             v.local[:] = proposal[k].local
         temp *= alpha
         result += temp
-        # print(f"LHS {iter}:  new result = {result}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  new result = {result}", flush=True)
 
         # Update the residual
         # r -= alpha * q
@@ -699,11 +714,11 @@ def solve(
             v.local[:] = lhs_out[k].local
         temp *= alpha
         residual -= temp
-        # print(f"LHS {iter}:  new residual = {residual}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  new residual = {residual}", flush=True)
 
         # Epsilon
         sqsum = residual.dot(residual)
-        # print(f"LHS {iter}:  sqsum = {sqsum}", flush=True)
+        # print(f"{comm.rank} LHS {iter}:  sqsum = {sqsum}", flush=True)
 
         if comm is not None:
             comm.barrier()

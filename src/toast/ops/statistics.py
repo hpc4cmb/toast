@@ -17,7 +17,7 @@ from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Int, Unicode, trait_docs
-from ..utils import Environment, GlobalTimers, Logger, Timer, dtype_to_aligned
+from ..utils import Environment, Logger, dtype_to_aligned
 from .operator import Operator
 
 
@@ -29,6 +29,11 @@ class Statistics(Operator):
 
     det_data = Unicode(defaults.det_data, help="Observation detdata key to analyze")
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -36,7 +41,8 @@ class Statistics(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_nonscience,
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -46,7 +52,8 @@ class Statistics(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_nonscience,
+        help="Bit mask value for optional shared flagging",
     )
 
     view = Unicode(
@@ -58,6 +65,13 @@ class Statistics(Operator):
         allow_none=True,
         help="If specified, write output data products to this directory",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -88,6 +102,10 @@ class Statistics(Operator):
         log = Logger.get()
         nstat = 3  # Variance, Skewness, Kurtosis
 
+        if self.output_dir is not None:
+            if not os.path.isdir(self.output_dir):
+                os.makedirs(self.output_dir, exist_ok=True)
+
         for obs in data.obs:
             # NOTE:  We could use the session name / uid in the filename
             # too for easy sorting.
@@ -97,14 +115,29 @@ class Statistics(Operator):
                 fname_out = f"{self.name}_{obs.name}.h5"
             if self.output_dir is not None:
                 fname_out = os.path.join(self.output_dir, fname_out)
-            all_dets = list(obs.all_detectors)
-            ndet = len(all_dets)
 
+            # Get the list of all detectors that are not cut
+            obs_dets = obs.select_local_detectors(
+                detectors, flagmask=self.det_mask
+            )
+            if obs.comm.group_size == 1:
+                all_dets = obs_dets
+            else:
+                proc_dets = obs.comm.comm_group.gather(obs_dets, root=0)
+                all_dets = None
+                if obs.comm.group_rank == 0:
+                    all_set = set()
+                    for pdets in proc_dets:
+                        for d in pdets:
+                            all_set.add(d)
+                    all_dets = list(sorted(all_set))
+                all_dets = obs.comm.comm_group.bcast(all_dets, root=0)
+
+            ndet = len(all_dets)
             hits = np.zeros([ndet], dtype=int)
             means = np.zeros([ndet], dtype=float)
             stats = np.zeros([nstat, ndet], dtype=float)
 
-            obs_dets = obs.select_local_detectors(detectors)
             views = obs.view[self.view]
 
             # Measure the mean separately to simplify the math

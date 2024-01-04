@@ -311,15 +311,15 @@ class NoiseEstimTest(MPITestCase):
             for case, (input_freq, input_psd) in enumerate(zip(test_freq, test_psd)):
                 fit = fitter._fit_log_psd(input_freq, input_psd)
                 result = fit["fit_result"]
-                print(f"result solution = {result.x}")
-                print(f"result cost = {result.cost}")
-                print(f"result fun = {result.fun}")
-                print(f"result nfev = {result.nfev}")
-                print(f"result njev = {result.njev}")
-                print(f"result status = {result.status}")
-                print(f"result message = {result.message}")
-                print(f"result status = {result.status}")
-                print(f"result active_mask = {result.active_mask}")
+                # print(f"result solution = {result.x}")
+                # print(f"result cost = {result.cost}")
+                # print(f"result fun = {result.fun}")
+                # print(f"result nfev = {result.nfev}")
+                # print(f"result njev = {result.njev}")
+                # print(f"result status = {result.status}")
+                # print(f"result message = {result.message}")
+                # print(f"result status = {result.status}")
+                # print(f"result active_mask = {result.active_mask}")
                 fit_data = fitter._evaluate_model(
                     input_freq,
                     fit["fmin"],
@@ -508,7 +508,7 @@ class NoiseEstimTest(MPITestCase):
                 input_model = ob["noise_model"]
                 estim_model = ob["noise_estimate"]
                 fit_model = ob[noise_fitter.out_model]
-                for det in ob.local_detectors:
+                for det in ob.select_local_detectors(flagmask=estim.det_flag_mask):
                     fname = os.path.join(
                         self.outdir, f"estimate_model_{ob.name}_{det}.pdf"
                     )
@@ -533,7 +533,7 @@ class NoiseEstimTest(MPITestCase):
             input_model = ob["noise_model"]
             estim_model = ob["noise_estimate"]
             fit_model = ob[noise_fitter.out_model]
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=estim.det_flag_mask):
                 np.testing.assert_almost_equal(
                     np.mean(input_model.psd(det)[-5:]).value,
                     np.mean(fit_model.psd(det)[-5:]).value,

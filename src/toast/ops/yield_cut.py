@@ -16,7 +16,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Float, Int, Unicode, trait_docs
-from ..utils import Environment, Logger, Timer, name_UID
+from ..utils import Environment, Logger, name_UID
 from .operator import Operator
 
 
@@ -28,11 +28,19 @@ class YieldCut(Operator):
     responsivity to be useful for science.  This can be a temporary problem.  This
     operator simulates a random loss in detector yield.
 
+    The `det_mask` trait is used to select incoming "good" detectors.  This selection
+    of good detectors then has the yield cut applied.
+
     """
 
     # Class traits
 
     API = Int(0, help="Internal interface version for this operator")
+
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for input per-detector flagging",
+    )
 
     det_flags = Unicode(
         defaults.det_flags,
@@ -41,7 +49,7 @@ class YieldCut(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid, help="Bit mask value for flagging cut detectors"
     )
 
     keep_frac = Float(0.9, help="Fraction of detectors to keep")
@@ -60,6 +68,13 @@ class YieldCut(Operator):
 
     realization = Int(0, help="The realization index")
 
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
@@ -75,7 +90,7 @@ class YieldCut(Operator):
 
         for obs in data.obs:
             focalplane = obs.telescope.focalplane
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
 
             # For reproducibility, generate the random cut across all detectors
             # in the observation.  This means that a given process might have more
@@ -83,6 +98,7 @@ class YieldCut(Operator):
             # value should be close for a large enough number of detectors.
 
             exists = obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
+            new_flags = dict()
             for det in dets:
                 key1 = obs.telescope.uid
                 if self.fixed:
@@ -104,6 +120,8 @@ class YieldCut(Operator):
                 )[0]
                 if x > self.keep_frac:
                     obs.detdata[self.det_flags][det] |= self.det_flag_mask
+                    new_flags[det] = self.det_flag_mask
+            obs.update_local_detector_flags(new_flags)
         return
 
     def _finalize(self, data, **kwargs):

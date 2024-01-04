@@ -70,8 +70,8 @@ class Combine(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
-            if len(dets) == 0:
+            local_dets = ob.select_local_detectors(detectors)
+            if len(local_dets) == 0:
                 # Nothing to do for this observation
                 continue
             if self.first not in ob.detdata:
@@ -89,6 +89,16 @@ class Combine(Operator):
 
             first_units = ob.detdata[self.first].units
             second_units = ob.detdata[self.second].units
+
+            # Operate on the intersection of detectors
+            dets = list(
+                sorted(
+                    set.intersection(
+                        set(ob.detdata[self.first].detectors),
+                        set(ob.detdata[self.second].detectors),
+                    )
+                )
+            )
 
             if self.result == self.first:
                 result_units = first_units

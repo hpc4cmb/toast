@@ -8,9 +8,9 @@ import ephem
 import numpy as np
 from astropy import units as u
 
+from ..coordinates import to_DJD
 from ..intervals import IntervalList
 from ..timing import Timer, function_timer
-from ..coordinates import to_DJD
 
 
 @function_timer

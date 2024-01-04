@@ -20,9 +20,9 @@ from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..noise import Noise
 from ..observation import Observation
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Instance, Int, Quantity, Unicode, trait_docs
-from ..utils import GlobalTimers, Logger, Timer, dtype_to_aligned, name_UID
+from ..utils import Logger, dtype_to_aligned, name_UID
 from .operator import Operator
 
 
@@ -86,6 +86,11 @@ class Demodulate(Operator):
         help="Observation detdata key apply filtering to",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -93,7 +98,7 @@ class Demodulate(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid, help="Bit mask value for detector sample flagging"
     )
 
     demod_flag_mask = Int(
@@ -133,6 +138,27 @@ class Demodulate(Operator):
     do_2f = Bool(False, help="also cache the 2f-demodulated signal")
 
     # Intervals?
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
 
     @traitlets.validate("stokes_weights")
     def _check_stokes_weights(self, proposal):
@@ -192,21 +218,37 @@ class Demodulate(Operator):
         timer = Timer()
         timer.start()
         for obs in demodulate_obs:
-            dets = obs.select_local_detectors(detectors)
+            # Get the detectors which are not cut with per-detector flags
+            local_dets = obs.select_local_detectors(
+                detectors, flagmask=self.det_mask
+            )
+            if obs.comm.comm_group is None:
+                all_dets = local_dets
+            else:
+                proc_dets = obs.comm.comm_group.gather(local_dets, root=0)
+                all_dets = None
+                if obs.comm.comm_group.rank == 0:
+                    all_dets = set()
+                    for pdets in proc_dets:
+                        for d in pdets:
+                            all_dets.add(d)
+                    all_dets = list(sorted(all_dets))
+                all_dets = obs.comm.comm_group.bcast(all_dets, root=0)
 
             offset = obs.local_index_offset
             nsample = obs.n_local_samples
 
             fsample = obs.telescope.focalplane.sample_rate
             fmax, hwp_rate = self._get_fmax(obs)
+
             wkernel = self._get_wkernel(fmax, fsample)
             lowpass = Lowpass(wkernel, fmax, fsample, offset, self.nskip, self.window)
 
             # Create a new observation to hold the demodulated and downsampled data
 
-            demod_telescope = self._demodulate_telescope(obs)
+            demod_telescope = self._demodulate_telescope(obs, all_dets)
             demod_times = self._demodulate_times(obs)
-            demod_detsets = self._demodulate_detsets(obs)
+            demod_detsets = self._demodulate_detsets(obs, all_dets)
             demod_sample_sets = self._demodulate_sample_sets(obs)
             demod_process_rows = obs.dist.process_rows
 
@@ -230,7 +272,7 @@ class Demodulate(Operator):
             # Allocate storage
 
             demod_dets = []
-            for det in dets:
+            for det in local_dets:
                 for prefix in self.prefixes:
                     demod_dets.append(f"{prefix}_{det}")
             n_local = demod_obs.n_local_samples
@@ -254,10 +296,12 @@ class Demodulate(Operator):
                 self.det_flags, detectors=demod_dets, dtype=np.uint8
             )
 
-            self._demodulate_flags(obs, demod_obs, dets, wkernel, offset)
-            self._demodulate_signal(data, obs, demod_obs, dets, lowpass)
-            self._demodulate_pointing(data, obs, demod_obs, dets, lowpass, offset)
-            self._demodulate_noise(obs, demod_obs, dets, fsample, hwp_rate, lowpass)
+            self._demodulate_flags(obs, demod_obs, local_dets, wkernel, offset)
+            self._demodulate_signal(data, obs, demod_obs, local_dets, lowpass)
+            self._demodulate_pointing(data, obs, demod_obs, local_dets, lowpass, offset)
+            self._demodulate_noise(
+                obs, demod_obs, local_dets, fsample, hwp_rate, lowpass
+            )
 
             self._demodulate_intervals(obs, demod_obs)
 
@@ -282,7 +326,9 @@ class Demodulate(Operator):
     def _get_fmax(self, obs):
         times = obs.shared[self.times].data
         hwp_angle = np.unwrap(obs.shared[self.hwp_angle].data)
-        hwp_rate = np.mean(np.diff(hwp_angle) / np.diff(times)) / (2 * np.pi) * u.Hz
+        hwp_rate = np.absolute(
+            np.mean(np.diff(hwp_angle) / np.diff(times)) / (2 * np.pi) * u.Hz
+        )
         if self.fmax is not None:
             fmax = self.fmax
         else:
@@ -300,22 +346,30 @@ class Demodulate(Operator):
         return wkernel
 
     @function_timer
-    def _demodulate_telescope(self, obs):
+    def _demodulate_telescope(self, obs, all_dets):
         focalplane = obs.telescope.focalplane
         det_data = focalplane.detector_data
         field_names = det_data.colnames
         # Initialize fields to empty lists
-        fields = dict([(name, []) for name in field_names])
-        for idet, det in enumerate(det_data["name"]):
+        fields = {name: list() for name in field_names}
+        all_set = set(all_dets)
+        for row, det in enumerate(det_data["name"]):
+            if det not in all_set:
+                continue
             for field_name in field_names:
                 # Each detector translates into 3 or 5 new entries
                 for prefix in self.prefixes:
                     if field_name == "name":
                         fields[field_name].append(f"{prefix}_{det}")
                     else:
-                        fields[field_name].append(det_data[field_name][idet])
-        fields = [fields[field_name] for field_name in field_names]
-        demod_det_data = QTable(fields, names=field_names)
+                        fields[field_name].append(det_data[field_name][row])
+        demod_det_data = QTable(
+            [fields[field_name] for field_name in field_names], names=field_names
+        )
+        my_all = list()
+        for name in demod_det_data["name"]:
+            my_all.append(name)
+
         demod_focalplane = Focalplane(
             detector_data=demod_det_data,
             field_of_view=focalplane.field_of_view,
@@ -359,23 +413,40 @@ class Demodulate(Operator):
         return
 
     @function_timer
-    def _demodulate_detsets(self, obs):
-        """Lump all derived detectors into detector sets"""
-        detsets = obs.all_detector_sets
-        demod_detsets = []
-        if detsets is None:
-            for det in obs.all_detectors:
-                demod_detset = []
+    def _demodulate_detsets(self, obs, all_dets):
+        """In order to force local detectors to remain on their original
+        process, we create a detector set for each row of the process
+        grid.
+        """
+        log = Logger.get()
+        if obs.comm_col_size == 1:
+            # One process row
+            detsets = [all_dets]
+        else:
+            local_proc_dets = obs.comm_col.gather(obs.local_detectors, root=0)
+            detsets = None
+            if obs.comm_col_rank == 0:
+                all_set = set(all_dets)
+                detsets = list()
+                for iprow, pdets in enumerate(local_proc_dets):
+                    plocal = list()
+                    for d in pdets:
+                        if d in all_set:
+                            plocal.append(d)
+                    if len(plocal) == 0:
+                        msg = f"obs {obs.name}, process row {iprow} has no"
+                        msg += " unflagged detectors.  This may cause an error."
+                        log.warning(msg)
+                    detsets.append(plocal)
+            detsets = obs.comm_col.bcast(detsets, root=0)
+
+        demod_detsets = list()
+        for dset in detsets:
+            demod_detset = list()
+            for det in dset:
                 for prefix in self.prefixes:
                     demod_detset.append(f"{prefix}_{det}")
-                demod_detsets.append(demod_detset)
-        else:
-            for detset in detsets:
-                demod_detset = []
-                for det in detset:
-                    for prefix in self.prefixes:
-                        demod_detset.append(f"{prefix}_{det}")
-                demod_detsets.append(demod_detset)
+            demod_detsets.append(demod_detset)
         return demod_detsets
 
     @function_timer

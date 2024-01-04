@@ -32,6 +32,7 @@ def offset_add_to_signal(
     amp_offset,
     n_amp_views,
     amplitudes,
+    amplitude_flags,
     data_index,
     det_data,
     intervals,
@@ -46,6 +47,7 @@ def offset_add_to_signal(
         amp_offset (int64):  The first amplitude for this detector.
         n_amp_views (array, int):  The number of amplitudes for each interval.
         amplitudes (array, double): The amplitude data.
+        amplitude_flags (array, uint8): The amplitude flags.
         data_index (int):  The detector to process.
         det_data (array, double):  The array of data for all detectors.
         intervals (array, Interval):  The intervals to process.
@@ -60,6 +62,7 @@ def offset_add_to_signal(
         amp_offset,
         n_amp_views,
         amplitudes,
+        amplitude_flags,
         data_index,
         det_data,
         intervals,
@@ -78,6 +81,7 @@ def offset_project_signal(
     amp_offset,
     n_amp_views,
     amplitudes,
+    amplitude_flags,
     intervals,
     use_accel=False,
 ):
@@ -97,6 +101,7 @@ def offset_project_signal(
         amp_offset (int64):  The first amplitude for this detector.
         n_amp_views (array, int):  The number of amplitudes for each interval.
         amplitudes (array, double): The amplitude data.
+        amplitude_flags (array, uint8): The amplitude flags.
         intervals (array, Interval):  The intervals to process.
         use_accel (bool):  Whether to use the accelerator for this call (if supported).
 
@@ -114,6 +119,7 @@ def offset_project_signal(
         amp_offset,
         n_amp_views,
         amplitudes,
+        amplitude_flags,
         intervals,
         use_accel,
     )
@@ -123,6 +129,7 @@ def offset_project_signal(
 def offset_apply_diag_precond(
     offset_var,
     amplitudes_in,
+    amplitude_flags,
     amplitudes_out,
     use_accel=False,
 ):
@@ -130,6 +137,7 @@ def offset_apply_diag_precond(
     Args:
         offset_var (array, double):  The variance weight to apply to each amplitude.
         amplitudes_in (array, double):  Input amplitude data
+        amplitude_flags (array, uint8): The amplitude flags.
         amplitudes_out (array, double):  Output amplitude data
         use_accel (bool):  Whether to use the accelerator for this call (if supported).
 
@@ -140,6 +148,7 @@ def offset_apply_diag_precond(
     return libtoast_offset_apply_diag_precond(
         offset_var,
         amplitudes_in,
+        amplitude_flags,
         amplitudes_out,
         use_accel,
     )

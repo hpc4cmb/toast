@@ -198,7 +198,10 @@ class IoCompressionTest(MPITestCase):
 
     def create_data(self, pixel_per_process=1, single_group=False):
         data = create_ground_data(
-            self.comm, pixel_per_process=pixel_per_process, single_group=single_group
+            self.comm,
+            pixel_per_process=pixel_per_process,
+            single_group=single_group,
+            flagged_pixels=False,
         )
 
         # Simple detector pointing

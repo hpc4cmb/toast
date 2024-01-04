@@ -13,9 +13,9 @@ from .._libtoast import add_templates, bin_invcov, bin_proj, legendre
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Int, Unicode, trait_docs
-from ..utils import Environment, Logger, Timer
+from ..utils import Environment, Logger
 from .operator import Operator
 
 # Wrappers for more precise timing
@@ -69,6 +69,11 @@ class GroundFilter(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     shared_flags = Unicode(
         defaults.shared_flags,
         allow_none=True,
@@ -76,7 +81,8 @@ class GroundFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_invalid,
+        help="Bit mask value for optional shared flagging",
     )
 
     det_flags = Unicode(
@@ -86,8 +92,8 @@ class GroundFilter(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid | defaults.det_mask_processing,
-        help="Bit mask value for optional detector flagging",
+        defaults.det_mask_invalid,
+        help="Bit mask value for detector sample flagging",
     )
 
     ground_flag_mask = Int(
@@ -126,12 +132,21 @@ class GroundFilter(Operator):
     )
 
     leftright_mask = Int(
-        defaults.scan_leftright, help="Bit mask value for left-to-right scans"
+        defaults.shared_mask_scan_leftright,
+        help="Bit mask value for left-to-right scans",
     )
 
     rightleft_mask = Int(
-        defaults.scan_rightleft, help="Bit mask value for right-to-left scans"
+        defaults.shared_mask_scan_rightleft,
+        help="Bit mask value for right-to-left scans",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
@@ -211,7 +226,6 @@ class GroundFilter(Operator):
             # Create separate templates for alternating scans
             common_flags = obs.shared[self.shared_flags].data
             legendre_filter = []
-            # The flag masks are hard-coded in sim_ground.py
             mask1 = (common_flags & self.rightleft_mask) == 0
             mask2 = (common_flags & self.leftright_mask) == 0
             for template in legendre_templates:
@@ -229,7 +243,6 @@ class GroundFilter(Operator):
     def fit_templates(
         self,
         obs,
-        det,
         templates,
         ref,
         good,
@@ -346,26 +359,24 @@ class GroundFilter(Operator):
             last_invcov = None
             last_cov = None
             last_rcond = None
-            ndet = len(obs.local_detectors)
-            for idet, det in enumerate(obs.local_detectors):
+
+            for det in obs.select_local_detectors(
+                detectors, flagmask=self.det_mask
+            ):
                 if data.comm.group_rank == 0:
-                    msg = (
-                        f"{log_prefix} OpGroundFilter: "
-                        f"Processing detector # {idet + 1} / {ndet}"
-                    )
+                    msg = f"{log_prefix} OpGroundFilter: " f"Processing detector {det}"
                     log.verbose(msg)
 
-                ref = obs.detdata[self.det_data][idet]
+                ref = obs.detdata[self.det_data][det]
                 if self.det_flags is not None:
-                    def_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
-                    good = np.logical_and(common_flags == 0, def_flags == 0)
+                    test_flags = obs.detdata[self.det_flags][det] & self.det_flag_mask
+                    good = np.logical_and(common_flags == 0, test_flags == 0)
                 else:
                     good = common_flags == 0
 
                 t1 = time()
                 coeff, last_invcov, last_cov, last_rcond = self.fit_templates(
                     obs,
-                    det,
                     templates,
                     ref,
                     good,
@@ -383,6 +394,11 @@ class GroundFilter(Operator):
                     log.verbose(msg)
 
                 if coeff is None:
+                    # All samples flagged or template fit failed.
+                    curflag = obs.local_detector_flags[det]
+                    obs.update_local_detector_flags(
+                        {det: curflag | self.ground_flag_mask}
+                    )
                     continue
 
                 t1 = time()

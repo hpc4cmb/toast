@@ -121,7 +121,13 @@ class SparseTemplates:
                 norm = np.sum(template**2) ** 0.5
             else:
                 norm = np.sum((template * good[start:stop]) ** 2) ** 0.5
-            template /= norm
+            # If the template and the "good" array have disjoint elements which are
+            # non-zero, then the norm might end up being zero.  In that case, just
+            # zero the template.
+            if norm == 0:
+                template[:] = 0
+            else:
+                template /= norm
         return
 
 
@@ -447,6 +453,11 @@ class FilterBin(Operator):
         defaults.det_data, help="Observation detdata key for the timestream data"
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -459,8 +470,8 @@ class FilterBin(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid | defaults.det_mask_processing,
-        help="Bit mask value for optional detector flagging",
+        defaults.det_mask_nonscience,
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -470,7 +481,7 @@ class FilterBin(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional telescope flagging",
     )
 
@@ -524,11 +535,13 @@ class FilterBin(Operator):
     )
 
     leftright_mask = Int(
-        defaults.scan_leftright, help="Bit mask value for left-to-right scans"
+        defaults.shared_mask_scan_leftright,
+        help="Bit mask value for left-to-right scans",
     )
 
     rightleft_mask = Int(
-        defaults.scan_rightleft, help="Bit mask value for right-to-left scans"
+        defaults.shared_mask_scan_rightleft,
+        help="Bit mask value for right-to-left scans",
     )
 
     poly_filter_order = Int(1, allow_none=True, help="Polynomial order")
@@ -615,6 +628,27 @@ class FilterBin(Operator):
     )
 
     report_memory = Bool(False, help="Report memory throughout the execution")
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("det_flag_mask")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
+        return check
 
     @traitlets.validate("binning")
     def _check_binning(self, proposal):
@@ -739,7 +773,7 @@ class FilterBin(Operator):
 
         t1 = time()
         for iobs, obs in enumerate(data.obs):
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if self.grank == 0:
                 log.debug(
                     f"{self.group:4} : FilterBin: Processing observation "
@@ -1087,7 +1121,17 @@ class FilterBin(Operator):
             good.astype(np.float64),
             invcov,
         )
-        rcond = 1 / np.linalg.cond(invcov)
+        try:
+            rcond = 1 / np.linalg.cond(invcov)
+        except np.linalg.LinAlgError:
+            print(
+                f"Failed condition number calculation for {ntemplate}x{ntemplate} matrix:"
+            )
+            print(f"{invcov}", flush=True)
+            print(f"Diagonal:")
+            for row in range(ntemplate):
+                print(f"{row:03d} {invcov[row, row]}")
+            raise
         if self.grank == 0:
             log.debug(
                 f"{self.group:4} : FilterBin: Template covariance matrix "
@@ -1566,6 +1610,7 @@ class FilterBin(Operator):
                 inverse_covariance=invcov_name,
                 hits=hits_name,
                 rcond=rcond_name,
+                det_mask=self.binning.det_mask,
                 det_flags=self.binning.det_flags,
                 det_flag_mask=self.binning.det_flag_mask,
                 det_data_units=self._det_data_units,

@@ -14,9 +14,9 @@ from ..atm import available_atm, available_utils
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
-from ..utils import Environment, Logger, Timer
+from ..utils import Environment, Logger
 from .operator import Operator
 from .pipeline import Pipeline
 from .sim_tod_atm_generate import GenerateAtmosphere
@@ -81,6 +81,11 @@ class SimAtmosphere(Operator):
         defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -88,7 +93,7 @@ class SimAtmosphere(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid, help="Bit mask value for detector sample flagging"
     )
 
     turnaround_interval = Unicode(
@@ -195,6 +200,13 @@ class SimAtmosphere(Operator):
         help="Override the focalplane field of view",
     )
 
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
@@ -243,7 +255,6 @@ class SimAtmosphere(Operator):
             # Check that this operator has the traits we expect
             for trt in [
                 "view",
-                "quats",
                 "weights",
                 "mode",
             ]:
@@ -369,6 +380,7 @@ class SimAtmosphere(Operator):
             view=temporary_view,
             shared_flags=shared_flags,
             shared_flag_mask=shared_flag_mask,
+            det_mask=self.det_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             det_data_units=self.det_data_units,
@@ -393,7 +405,7 @@ class SimAtmosphere(Operator):
                 raise RuntimeError(msg)
 
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors)
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue

@@ -16,7 +16,8 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Float, Int, Unicode, trait_docs
-from ..utils import Environment, Logger, Timer, rate_from_times
+from ..timing import Timer
+from ..utils import Environment, Logger, rate_from_times
 from ..vis import set_matplotlib_backend
 from .operator import Operator
 
@@ -88,7 +89,8 @@ class AzimuthIntervals(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for bad azimuth pointing"
+        defaults.shared_mask_invalid,
+        help="Bit mask value for bad azimuth pointing",
     )
 
     window_seconds = Float(0.25, help="Smoothing window in seconds")

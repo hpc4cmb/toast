@@ -311,6 +311,104 @@ void build_template_covariance(std::vector <int64_t> & starts,
     }
 }
 
+// Alternative implementation which uses the buffer extraction helper functions
+// and is closer to the techniques we have been using for omp target offload
+// kernels.  Left here as a future starting point.
+//
+// The python calling code then also needs updated, for example:
+//
+// array_starts = np.array(templates.starts, dtype=np.int64)
+// array_stops = np.array(templates.stops, dtype=np.int64)
+// fgood = good.astype(np.float64)
+// build_template_covariance(
+//     array_starts,
+//     array_stops,
+//     templates.templates,
+//     fgood,
+//     invcov,
+// ) 
+//
+// void build_template_covariance(
+//     py::buffer starts,
+//     py::buffer stops,
+//     py::list templates,
+//     py::buffer good,
+//     py::buffer template_covariance
+// ) {
+//     // The total number of templates
+//     int64_t n_template = templates.size();
+
+//     // This is used to return the actual shape of each buffer
+//     std::vector <int64_t> temp_shape(2);
+
+//     // The "good" array is the length of the full number of samples
+//     double * raw_good = extract_buffer <double> (
+//         good, "good", 1, temp_shape, {-1}
+//     );
+//     int64_t n_sample = temp_shape[0];
+
+//     // Start and stop samples of each template
+//     int64_t * raw_starts = extract_buffer <int64_t> (
+//         starts, "starts", 1, temp_shape, {n_template}
+//     );
+//     int64_t * raw_stops = extract_buffer <int64_t> (
+//         stops, "stops", 1, temp_shape, {n_template}
+//     );
+
+//     // Template covariance
+//     double * raw_template_cov = extract_buffer <double> (
+//         template_covariance,
+//         "template_covariance",
+//         2,
+//         temp_shape,
+//         {n_template, n_template}
+//     );
+
+//     //#pragma omp parallel for private(temp_shape) schedule(static)
+//     for (int64_t row = 0; row < n_template; ++row) {
+//         int64_t row_start = raw_starts[row];
+//         int64_t row_stop = raw_stops[row];
+
+//         // Extract the row template
+//         double * raw_row = extract_buffer <double> (
+//             templates[row], "row", 1, temp_shape, {row_stop-row_start}
+//         );
+
+//         for (int64_t col = row; col < n_template; ++col) {
+//             int64_t col_start = raw_starts[col];
+//             int64_t col_stop = raw_stops[col];
+
+//             // Extract the column template
+//             double * raw_col = extract_buffer <double> (
+//                 templates[col], "col", 1, temp_shape, {col_stop-col_start}
+//             );
+
+//             // The sample intersection
+//             int64_t istart = std::max(row_start, col_start);
+//             int64_t istop = std::min(row_stop, col_stop);
+
+//             double val = 0;
+//             if ((row == col) && (istop - istart <= 1)) {
+//                 val = 1;
+//             }
+//             for (int64_t isample = istart; isample < istop; ++isample) {
+//                 //std::cerr << "DBG: (" << row << "," << col << "," << isample << ")
+// trow[" << isample << "-" << row_start << "]=" << raw_row[isample - row_start] << "
+// tcol[" << isample << "-" << col_start << "]=" << raw_col[isample - col_start] << "
+// g=" << raw_good[isample] << std::endl;
+//                 val += raw_row[isample - row_start]
+//                        * raw_col[isample - col_start]
+//                        * raw_good[isample];
+//             }
+//             raw_template_cov[row * n_template + col] = val;
+//             if (row != col) {
+//                 raw_template_cov[col * n_template + row] = val;
+//             }
+//         }
+//     }
+//     return;
+// }
+
 void accumulate_observation_matrix(py::array_t <double,
                                                 py::array::c_style | py::array::forcecast> c_obs_matrix,
                                    py::array_t <int64_t, py::array::c_style | py::array::forcecast> c_pixels,

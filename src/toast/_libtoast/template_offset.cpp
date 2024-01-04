@@ -18,6 +18,7 @@ void init_template_offset(py::module & m) {
             int64_t amp_offset,
             py::buffer n_amp_views,
             py::buffer amplitudes,
+            py::buffer amplitude_flags,
             int32_t data_index,
             py::buffer det_data,
             py::buffer intervals,
@@ -143,6 +144,7 @@ void init_template_offset(py::module & m) {
             int64_t amp_offset,
             py::buffer n_amp_views,
             py::buffer amplitudes,
+            py::buffer amplitude_flags,
             py::buffer intervals,
             bool use_accel
         ) {
@@ -306,6 +308,7 @@ void init_template_offset(py::module & m) {
         "template_offset_apply_diag_precond", [](
             py::buffer offset_var,
             py::buffer amplitudes_in,
+            py::buffer amplitude_flags,
             py::buffer amplitudes_out,
             bool use_accel
         ) {

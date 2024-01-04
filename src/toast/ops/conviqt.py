@@ -14,13 +14,11 @@ from astropy import units as u
 from .. import qarray as qa
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Dict, Instance, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import (
     Environment,
-    GlobalTimers,
     Logger,
-    Timer,
     dtype_to_aligned,
     unit_conversion,
 )
@@ -62,6 +60,11 @@ class SimConviqt(Operator):
         help="Operator that translates boresight pointing into detector frame",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -69,7 +72,7 @@ class SimConviqt(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_invalid, help="Bit mask value for detector sample flagging"
     )
 
     shared_flags = Unicode(
@@ -215,6 +218,13 @@ class SimConviqt(Operator):
         "replaced with the detector name.",
     )
 
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
         check = proposal["value"]
@@ -315,7 +325,9 @@ class SimConviqt(Operator):
         my_dets = set()
         for obs in data.obs:
             # Get the detectors we are using for this observation
-            obs_dets = obs.select_local_detectors(detectors)
+            obs_dets = obs.select_local_detectors(
+                detectors, flagmask=self.det_mask
+            )
             for det in obs_dets:
                 my_dets.add(det)
             # Make sure detector data output exists

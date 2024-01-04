@@ -64,23 +64,21 @@ def set_default_values(values=None):
         # flag masks
         #
         "shared_mask_invalid": 1,
-        "shared_mask_unstable_scanrate": 2,
-        "shared_mask_irregular": 4,
+        "shared_mask_processing": 2,
+        "shared_mask_unstable_scanrate": 4,
+        "shared_mask_irregular": 8,
         "det_mask_invalid": 1,
-        "det_mask_sso": 1 + 2,
         "det_mask_processing": 2,
+        "det_mask_sso": 4,
         #
         # ground-specific flag masks
         #
-        # This marks the turnarounds as "invalid".  To simulate data
-        # in the turnarounds, set the turnaround mask in SimGround to
-        # just "2".
-        "turnaround": 1 + 2,
-        "scan_leftright": 8,
-        "scan_rightleft": 16,
-        "sun_up": 32,
-        "sun_close": 64,
-        "elnod": 1 + 2 + 4,
+        "shared_mask_turnaround": 2,
+        "shared_mask_elnod": 4,
+        "shared_mask_scan_leftright": 8,
+        "shared_mask_scan_rightleft": 16,
+        "shared_mask_sun_up": 32,
+        "shared_mask_sun_close": 64,
         #
         # ground-specific interval names
         #
@@ -101,6 +99,18 @@ def set_default_values(values=None):
         #
         "det_data_units": u.Kelvin,
     }
+
+    # composite masks for convenience
+    defaults["shared_mask_nonscience"] = (
+        defaults["shared_mask_invalid"]
+        | defaults["shared_mask_unstable_scanrate"]
+        | defaults["shared_mask_irregular"]
+    )
+    defaults["det_mask_nonscience"] = (
+        defaults["det_mask_invalid"]
+        | defaults["det_mask_processing"]
+        | defaults["det_mask_sso"]
+    )
 
     if values is not None:
         defaults.update(values)
@@ -396,7 +406,7 @@ class Observation(MutableMapping):
     def select_local_detectors(
         self,
         selection=None,
-        flagmask=(default_values.det_mask_invalid | default_values.det_mask_processing),
+        flagmask=0,
     ):
         """Get the local detectors assigned to this process.
 
@@ -433,6 +443,7 @@ class Observation(MutableMapping):
             for det in self.local_detectors:
                 if (det in sel_set) and (det in good):
                     dets.append(det)
+        # print(f"SELECT mask {int(flagmask)} {selection}: {dets}", flush=True)
         return dets
 
     # Detector set distribution

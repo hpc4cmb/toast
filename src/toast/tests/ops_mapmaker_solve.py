@@ -86,6 +86,8 @@ class MapmakerSolveTest(MPITestCase):
         )
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
         tmatrix.amplitudes = "RHS"
+        tmatrix.det_data = sim_noise.det_data
+        tmatrix.initialize(data)
 
         # Set up RHS operator and run it.
 
@@ -177,7 +179,7 @@ class MapmakerSolveTest(MPITestCase):
         # matrix so that it can be consistent with constant-valued timestreams.
 
         # Manually set the data for this template (normally done by
-        # TemplateMatrix.exec()) so we can pre-generate amplitudes.
+        # TemplateMatrix.initialize()) so we can pre-generate amplitudes.
         tmpl.data = data
         data["amplitudes"] = AmplitudesMap()
         data["amplitudes"][tmpl.name] = tmpl.zeros()
@@ -187,8 +189,8 @@ class MapmakerSolveTest(MPITestCase):
 
         tmatrix.amplitudes = "amplitudes"
         tmatrix.det_data = defaults.det_data
-        tmatrix.data = data
         tmatrix.transpose = False
+        tmatrix.initialize(data)
         tmatrix.apply(data)
 
         # Pointing operator

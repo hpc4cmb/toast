@@ -9,6 +9,7 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops
+from ..observation import default_values as defaults
 from ..templates import GainTemplate
 from ..utils import rate_from_times
 from ._helpers import close_data, create_outdir, create_satellite_data
@@ -79,7 +80,7 @@ class TemplateGainTest(MPITestCase):
         calibration.apply(data)
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 np.testing.assert_allclose(
                     ob.detdata["calibrated"][det], np.ones(ob.n_local_samples)
                 )

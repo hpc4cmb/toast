@@ -18,7 +18,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
-from ..utils import Environment, Logger, Timer
+from ..utils import Environment, Logger
 from .operator import Operator
 from .pipeline import Pipeline
 
@@ -97,7 +97,9 @@ class SimScanSynchronousSignal(Operator):
         comm = data.comm.comm_group
 
         for obs in data.obs:
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(
+                detectors, flagmask=defaults.det_mask_invalid
+            )
             log_prefix = f"{group} : {obs.name} : "
 
             exists = obs.detdata.ensure(

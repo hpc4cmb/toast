@@ -39,16 +39,6 @@ class BuildPixelDistribution(Operator):
         help="The Data key where the PixelDist object should be stored",
     )
 
-    shared_flags = Unicode(
-        defaults.shared_flags,
-        allow_none=True,
-        help="Observation shared key for telescope flags to use",
-    )
-
-    shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional flagging"
-    )
-
     pixel_pointing = Instance(
         klass=Operator,
         allow_none=True,
@@ -129,8 +119,6 @@ class BuildPixelDistribution(Operator):
 
     def _requires(self):
         req = self.pixel_pointing.requires()
-        if self.shared_flags is not None:
-            req["shared"].append(self.shared_flags)
         return req
 
     def _provides(self):

@@ -213,11 +213,13 @@ class ElevationNoise(Operator):
             noise = obs[self.noise_model]
 
             # We will be collectively building the scale factor for all detectors.
-            # Allocate arrays for communication
+            # Allocate arrays for communication.
 
-            local_net_factors = np.zeros(len(obs.local_detectors), dtype=np.float64)
-            local_tot_factors = np.zeros(len(obs.local_detectors), dtype=np.float64)
-            local_rates = np.zeros(len(obs.local_detectors), dtype=np.float64)
+            local_dets = obs.select_local_detectors(flagmask=defaults.det_mask_invalid)
+
+            local_net_factors = np.zeros(len(local_dets), dtype=np.float64)
+            local_tot_factors = np.zeros(len(local_dets), dtype=np.float64)
+            local_rates = np.zeros(len(local_dets), dtype=np.float64)
             local_weights_in = list()
 
             # We are building up a data product (a noise model) which has values for
@@ -244,7 +246,7 @@ class ElevationNoise(Operator):
                         flags = None
                 view_flags.append(flags)
 
-            for idet, det in enumerate(obs.local_detectors):
+            for idet, det in enumerate(local_dets):
                 local_rates[idet] = focalplane.sample_rate.to_value(u.Hz)
                 local_weights_in.append(noise.detector_weight(det))
 
@@ -350,11 +352,11 @@ class ElevationNoise(Operator):
 
             # Modify all psds first, since the first call to detector_weight()
             # will trigger the calculation for all detectors.
-            for idet, det in enumerate(obs.local_detectors):
+            for idet, det in enumerate(local_dets):
                 out_noise.psd(det)[:] *= local_tot_factors[idet]
 
             local_weights_out = list()
-            for idet, det in enumerate(obs.local_detectors):
+            for idet, det in enumerate(local_dets):
                 local_weights_out.append(out_noise.detector_weight(det))
 
             if obs.comm_row_rank == 0:

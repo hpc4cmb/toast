@@ -6,8 +6,7 @@ import os
 
 import numpy as np
 
-from ..timing import function_timer
-from ..utils import GlobalTimers, Logger, Timer, dtype_to_aligned, memreport
+from ..utils import Logger, dtype_to_aligned, memreport
 from .memory_counter import MemoryCounter
 
 
@@ -57,10 +56,11 @@ def stage_local(
     interval_starts,
     nnz,
     nnz_stride,
+    det_mask,
     shared_flags,
     shared_mask,
     det_flags,
-    det_mask,
+    det_flag_mask,
     do_purge=False,
     operator=None,
 ):
@@ -79,8 +79,9 @@ def stage_local(
             )
     for ob in data.obs:
         views = ob.view[view]
+        local_dets = set(ob.select_local_detectors(flagmask=det_mask))
         for idet, det in enumerate(dets):
-            if det not in ob.local_detectors:
+            if det not in local_dets:
                 continue
             if operator is not None:
                 # Synthesize data for staging
@@ -119,7 +120,7 @@ def stage_local(
                         detflags = flags
                     else:
                         detflags = np.copy(flags)
-                        detflags |= views.detdata[det_flags][ivw][det] & det_mask
+                        detflags |= views.detdata[det_flags][ivw][det] & det_flag_mask
                     madam_buffer[slc][detflags != 0] = -1
         if do_purge:
             del ob.detdata[detdata_name]
@@ -139,10 +140,11 @@ def stage_in_turns(
     interval_starts,
     nnz,
     nnz_stride,
+    det_mask,
     shared_flags,
     shared_mask,
     det_flags,
-    det_mask,
+    det_flag_mask,
     operator=None,
 ):
     """When purging data, take turns staging it."""
@@ -164,10 +166,11 @@ def stage_in_turns(
                 interval_starts,
                 nnz,
                 nnz_stride,
+                det_mask,
                 shared_flags,
                 shared_mask,
                 det_flags,
-                det_mask,
+                det_flag_mask,
                 do_purge=True,
                 operator=operator,
             )
@@ -185,6 +188,7 @@ def restore_local(
     madam_buffer,
     interval_starts,
     nnz,
+    det_mask,
 ):
     """Helper function to create a detdata buffer from madam data."""
     n_det = len(dets)
@@ -195,6 +199,7 @@ def restore_local(
             ob.detdata.create(detdata_name, dtype=detdata_dtype)
         else:
             ob.detdata.create(detdata_name, dtype=detdata_dtype, sample_shape=(nnz,))
+        local_dets = ob.select_local_detectors(flagmask=det_mask)
         # Loop over views
         views = ob.view[view]
         for ivw, vw in enumerate(views):
@@ -205,23 +210,21 @@ def restore_local(
             else:
                 view_samples = vw.stop - vw.start
             offset = interval_starts[interval]
-            ldet = 0
-            for det in dets:
-                if det not in ob.local_detectors:
+            for idet, det in enumerate(dets):
+                if det not in local_dets:
                     continue
-                idet = ob.local_detectors.index(det)
+                idet = local_dets.index(det)
                 slc = slice(
                     (idet * nsamp + offset) * nnz,
                     (idet * nsamp + offset + view_samples) * nnz,
                     1,
                 )
                 if nnz > 1:
-                    views.detdata[detdata_name][ivw][ldet] = madam_buffer[slc].reshape(
+                    views.detdata[detdata_name][ivw][det] = madam_buffer[slc].reshape(
                         (-1, nnz)
                     )
                 else:
-                    views.detdata[detdata_name][ivw][ldet] = madam_buffer[slc]
-                ldet += 1
+                    views.detdata[detdata_name][ivw][det] = madam_buffer[slc]
             interval += 1
     return
 
@@ -239,6 +242,7 @@ def restore_in_turns(
     madam_buffer_raw,
     interval_starts,
     nnz,
+    det_mask,
 ):
     """When restoring data, take turns copying it."""
     for copying in range(n_copy_groups):
@@ -254,6 +258,7 @@ def restore_in_turns(
                 madam_buffer,
                 interval_starts,
                 nnz,
+                det_mask,
             )
             madam_buffer_raw.clear()
         nodecomm.barrier()

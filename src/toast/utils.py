@@ -28,9 +28,7 @@ from ._libtoast import (
     AlignedU32,
     AlignedU64,
     Environment,
-    GlobalTimers,
     Logger,
-    Timer,
     threading_state,
     vatan2,
     vcos,
@@ -548,15 +546,15 @@ def rate_from_times(timestamps, mean=False):
         (tuple):  The (rate, dt, dt_min, dt_max, dt_std) values.
 
     """
-    tdiff = np.diff(timestamps)
+    tdiff = np.array(np.diff(timestamps))
     dt_min = np.min(tdiff)
     dt_max = np.max(tdiff)
     dt_std = np.std(tdiff)
     dt = None
     if mean:
-        dt = np.mean(np.diff(timestamps))
+        dt = np.mean(tdiff)
     else:
-        dt = np.median(np.diff(timestamps))
+        dt = np.median(tdiff)
     return (1.0 / dt, dt, dt_min, dt_max, dt_std)
 
 

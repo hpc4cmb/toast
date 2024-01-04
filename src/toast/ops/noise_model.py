@@ -130,9 +130,9 @@ class FitNoiseModel(Operator):
         None, allow_none=True, help="Create a new noise model with this name"
     )
 
-    det_flag_mask = Int(
+    det_mask = Int(
         defaults.det_mask_invalid,
-        help="Bit mask value for excluding bad detectors",
+        help="Bit mask value for per-detector flagging",
     )
 
     bad_fit_mask = Int(
@@ -171,6 +171,13 @@ class FitNoiseModel(Operator):
         help="The gtol value passed to the least_squares solver",
     )
 
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -199,14 +206,21 @@ class FitNoiseModel(Operator):
             nse_alpha = dict()
             nse_NET = dict()
             nse_indx = dict()
-            dets = ob.select_local_detectors(detectors, flagmask=self.det_flag_mask)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
-            for det in dets:
+
+            # We are building a noise model with entries for all local detectors,
+            # even ones that are flagged.
+            for det in ob.local_detectors:
                 freqs = in_model.freq(det)
                 in_psd = in_model.psd(det)
                 cur_flag = ob.local_detector_flags[det]
+                nse_indx[det] = in_model.index(det)
+                nse_rate[det] = 2.0 * freqs[-1]
+                nse_NET[det] = 0.0 * np.sqrt(1.0 * in_psd.unit)
+                nse_fmin[det] = 0.0 * u.Hz
+                nse_fknee[det] = 0.0 * u.Hz
+                nse_alpha[det] = 0.0
+                if cur_flag & self.det_mask != 0:
+                    continue
                 props = self._fit_log_psd(freqs, in_psd, guess=params)
                 if props["fit_result"].success:
                     # This was a good fit
@@ -220,8 +234,7 @@ class FitNoiseModel(Operator):
                     log.verbose(msg)
                     new_flag = cur_flag | self.bad_fit_mask
                     ob.update_local_detector_flags({det: new_flag})
-                nse_indx[det] = in_model.index(det)
-                nse_rate[det] = 2.0 * freqs[-1]
+
                 nse_fmin[det] = props["fmin"]
                 nse_fknee[det] = props["fknee"]
                 nse_alpha[det] = props["alpha"]
@@ -426,6 +439,16 @@ class FitNoiseModel(Operator):
         return J
 
     def _get_err_ret(self, psd_unit):
+        eret = dict()
+        eret["fit_result"] = types.SimpleNamespace()
+        eret["fit_result"].success = False
+        eret["NET"] = 0.0 * np.sqrt(1.0 * psd_unit)
+        eret["fmin"] = 0.0 * u.Hz
+        eret["fknee"] = 0.0 * u.Hz
+        eret["alpha"] = 0.0
+        return eret
+
+    def _get_err_ret(self, psd_unit):
         # Internal function to build a fake return result
         # when the fitting fails for some reason.
         eret = dict()
@@ -597,9 +620,9 @@ class FlagNoiseFit(Operator):
         help="Observation detdata key for flags to use",
     )
 
-    det_flag_mask = Int(
-        defaults.det_mask_invalid | defaults.det_mask_processing,
-        help="Bit mask for considering detectors",
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
     )
 
     outlier_flag_mask = Int(
@@ -622,7 +645,7 @@ class FlagNoiseFit(Operator):
             raise RuntimeError("You must set det_flags before calling exec()")
 
         for obs in data.obs:
-            dets = obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -722,8 +745,8 @@ class FlagNoiseFit(Operator):
                         msg += f"{local_fknee[idet]} that is > {self.sigma_fknee} "
                         msg += f"x {fknee_std} from {fknee_mean}"
                         log.debug(msg)
-                        obs.detdata[self.det_flags][det, :] |= self.det_flag_mask
-                        new_flags[det] = cur_flag | self.det_flag_mask
+                        obs.detdata[self.det_flags][det, :] |= self.outlier_flag_mask
+                        new_flags[det] = cur_flag | self.outlier_flag_mask
             obs.update_local_detector_flags(new_flags)
 
     def _finalize(self, data, **kwargs):

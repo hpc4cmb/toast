@@ -57,6 +57,11 @@ class BinMap(Operator):
 
     det_data_units = Unit(defaults.det_data_units, help="Desired timestream units")
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -64,7 +69,8 @@ class BinMap(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for optional detector flagging"
+        defaults.det_mask_nonscience,
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -74,7 +80,7 @@ class BinMap(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional telescope flagging",
     )
 
@@ -108,11 +114,25 @@ class BinMap(Operator):
         False, help="If True, expand pointing for all detectors and save"
     )
 
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
+
     @traitlets.validate("det_flag_mask")
     def _check_flag_mask(self, proposal):
         check = proposal["value"]
         if check < 0:
             raise traitlets.TraitError("Flag mask should be a positive integer")
+        return check
+    
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Shared flag mask should be a positive integer")
         return check
 
     @traitlets.validate("sync_type")
@@ -209,6 +229,13 @@ class BinMap(Operator):
             data[self.binned].reset()
             data[self.binned].update_units(1.0 / self.det_data_units)
 
+        # Use the same detector mask in the pointing
+        self.pixel_pointing.detector_pointing.det_mask = self.det_mask
+        self.pixel_pointing.detector_pointing.det_flag_mask = self.det_flag_mask
+        if hasattr(self.stokes_weights, "detector_pointing"):
+            self.stokes_weights.detector_pointing.det_mask = self.det_mask
+            self.stokes_weights.detector_pointing.det_flag_mask = self.det_flag_mask
+
         # Noise weighted map.  We output this to the final binned map location,
         # since we will multiply by the covariance in-place.
 
@@ -221,6 +248,7 @@ class BinMap(Operator):
             noise_model=self.noise_model,
             det_data=self.det_data,
             det_data_units=self.det_data_units,
+            det_mask=self.det_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,

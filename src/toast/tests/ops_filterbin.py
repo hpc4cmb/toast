@@ -84,18 +84,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             hwp_filter_order=4,
             ground_filter_order=5,
@@ -159,6 +159,53 @@ class FilterBinTest(MPITestCase):
                 self.assertTrue(check)
 
         close_data(data)
+
+    def plot_obsmatrix_result(
+        self, suffix, input_map_file, obsmat_file, name, nest, filtered=None
+    ):
+        import matplotlib.pyplot as plt
+
+        rot = [42, -42]
+        reso = 4
+        fig = plt.figure(figsize=[18, 12])
+        cmap = "coolwarm"
+
+        obs_matrix = scipy.sparse.load_npz(obsmat_file)
+
+        input_map = hp.read_map(input_map_file, None, nest=nest)
+
+        fname_filtered = os.path.join(self.outdir, f"{name}_filtered_map.fits")
+        if filtered is None:
+            filtered = hp.read_map(fname_filtered, None, nest=nest)
+
+        test_map = obs_matrix.dot(input_map.ravel()).reshape([3, -1])
+
+        good = filtered[0] != 0
+
+        nrow, ncol = 2, 2
+        args = {"rot": rot, "reso": reso, "cmap": cmap, "nest": nest}
+
+        diffmap = test_map - filtered
+        diffmap[filtered == 0] = hp.UNSEEN
+        filtered[filtered == 0] = hp.UNSEEN
+        test_map[test_map == 0] = hp.UNSEEN
+        hp.gnomview(filtered[0], sub=[nrow, ncol, 1], title="Filtered map", **args)
+        hp.gnomview(
+            test_map[0], sub=[nrow, ncol, 2], title="Input x obs.matrix", **args
+        )
+        hp.gnomview(input_map[0], sub=[nrow, ncol, 3], title="Input map", **args)
+        hp.gnomview(diffmap[0], sub=[nrow, ncol, 4], title="Difference", **args)
+        fname = os.path.join(self.outdir, f"obs_matrix_{suffix}.png")
+        fig.savefig(fname)
+
+        for i in range(3):
+            rms1 = np.std(filtered[i][good])
+            rms2 = np.std((filtered - test_map)[i][good])
+            if rms2 >= 1e-5 * rms1:
+                msg = f"rms1 (filtered) = {rms1}, rms2 (filtered - test) = {rms2},"
+                msg += f" rms2/rms1 = {rms2 / rms1}"
+                print(msg)
+            self.assertTrue(rms2 < 1e-5 * rms1)
 
     def test_filterbin_obsmatrix(self):
         if sys.platform.lower() == "darwin":
@@ -228,18 +275,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -250,53 +297,12 @@ class FilterBinTest(MPITestCase):
         filterbin.apply(data)
 
         if data.comm.world_rank == 0:
-            import matplotlib.pyplot as plt
-
-            rot = [42, -42]
-            reso = 4
-            fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
-            nest = pixels.nest
-
             rootname = os.path.join(self.outdir, f"{filterbin.name}_obs_matrix")
             fname_matrix = ops.combine_observation_matrix(rootname)
-
-            obs_matrix = scipy.sparse.load_npz(fname_matrix)
-
-            input_map = hp.read_map(input_map_file, None, nest=nest)
-
-            fname_filtered = os.path.join(
-                self.outdir, f"{filterbin.name}_filtered_map.fits"
+            self.plot_obsmatrix_result(
+                "test", input_map_file, fname_matrix, filterbin.name, pixels.nest
             )
-            filtered = hp.read_map(fname_filtered, None, nest=nest)
 
-            test_map = obs_matrix.dot(input_map.ravel()).reshape([3, -1])
-
-            good = filtered[0] != 0
-
-            nrow, ncol = 2, 2
-            args = {"rot": rot, "reso": reso, "cmap": cmap, "nest": nest}
-
-            diffmap = test_map - filtered
-            diffmap[filtered == 0] = hp.UNSEEN
-            filtered[filtered == 0] = hp.UNSEEN
-            test_map[test_map == 0] = hp.UNSEEN
-            hp.gnomview(filtered[0], sub=[nrow, ncol, 1], title="Filtered map", **args)
-            hp.gnomview(
-                test_map[0], sub=[nrow, ncol, 2], title="Input x obs.matrix", **args
-            )
-            hp.gnomview(input_map[0], sub=[nrow, ncol, 3], title="Input map", **args)
-            hp.gnomview(diffmap[0], sub=[nrow, ncol, 4], title="Difference", **args)
-            fname = os.path.join(self.outdir, "obs_matrix_test.png")
-            fig.savefig(fname)
-
-            for i in range(3):
-                rms1 = np.std(filtered[i][good])
-                rms2 = np.std((filtered - test_map)[i][good])
-                print(f"rms1 = {rms1}, rms2 = {rms2}, rms2/rms1 = {rms2 / rms1}")
-                if rms2 > 1e-5 * rms1:
-                    print(f"rms2 = {rms2}, rms1 = {rms1}")
-                assert rms2 < 1e-5 * rms1
         close_data(data)
 
     def test_filterbin_obsmatrix_flags(self):
@@ -365,18 +371,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=0,
+            det_flag_mask=255,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin_flagged",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -387,74 +393,15 @@ class FilterBinTest(MPITestCase):
         filterbin.apply(data)
 
         if data.comm.world_rank == 0:
-            import matplotlib.pyplot as plt
-
-            rot = [42, -42]
-            reso = 4
-            fig = plt.figure(figsize=[18, 12])
-            cmap = "coolwarm"
-            nest = pixels.nest
-
             rootname = os.path.join(self.outdir, f"{filterbin.name}_obs_matrix")
             fname_matrix = ops.combine_observation_matrix(rootname)
-
-            obs_matrix = scipy.sparse.load_npz(fname_matrix)
-
-            input_map = hp.read_map(input_map_file, None, nest=nest)
-
-            fname_filtered = os.path.join(
-                self.outdir, f"{filterbin.name}_filtered_map.fits"
+            self.plot_obsmatrix_result(
+                "flagged_test",
+                input_map_file,
+                fname_matrix,
+                filterbin.name,
+                pixels.nest,
             )
-            filtered = hp.read_map(fname_filtered, None, nest=nest)
-
-            test_map = obs_matrix.dot(input_map.ravel()).reshape([3, -1])
-
-            good = filtered[0] != 0
-
-            nrow, ncol = 2, 2
-            args = {"rot": rot, "reso": reso, "cmap": cmap, "nest": nest}
-
-            diffmap = test_map - filtered
-            diffmap[filtered == 0] = hp.UNSEEN
-            filtered[filtered == 0] = hp.UNSEEN
-            test_map[test_map == 0] = hp.UNSEEN
-            rms1 = np.std(filtered[0, good])
-            hp.gnomview(
-                filtered[0],
-                sub=[nrow, ncol, 1],
-                title=f"Filtered map, RMS = {rms1}",
-                **args,
-            )
-            rms2 = np.std(test_map[0, good])
-            hp.gnomview(
-                test_map[0],
-                sub=[nrow, ncol, 2],
-                title=f"Input x obs.matrix, RMS = {rms2}",
-                **args,
-            )
-            rms3 = np.std(input_map[0, good])
-            hp.gnomview(
-                input_map[0],
-                sub=[nrow, ncol, 3],
-                title=f"Input map, RMS = {rms3}",
-                **args,
-            )
-            rms4 = np.std(diffmap[0, good])
-            hp.gnomview(
-                diffmap[0],
-                sub=[nrow, ncol, 4],
-                title=f"Difference, RMS = {rms4}",
-                **args,
-            )
-            fname = os.path.join(self.outdir, "obs_matrix_flagged_test.png")
-            fig.savefig(fname)
-
-            for i in range(3):
-                rms1 = np.std(filtered[i][good])
-                rms2 = np.std((filtered - test_map)[i][good])
-                if rms2 > 1e-5 * rms1:
-                    print(f"rms2 = {rms2}, rms1 = {rms1}")
-                assert rms2 < 1e-5 * rms1
 
         close_data(data)
 
@@ -523,18 +470,18 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_invalid,
         )
 
         filterbin = ops.FilterBin(
             name="filterbin",
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
-            det_flag_mask=255,
+            det_flag_mask=defaults.det_mask_nonscience,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=1,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -732,8 +679,11 @@ class FilterBinTest(MPITestCase):
         filterbin.name = "split_run"
         filterbin.apply(data)
 
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
+
         filterbin.name = "noiseweighted_run"
-        filterbin.write_invcov = True
+        filterbin.reset_pix_dist = True
         filterbin.det_data = "signal_copy"
         filterbin.noiseweight_obs_matrix = True
 
@@ -746,22 +696,23 @@ class FilterBinTest(MPITestCase):
             obs_data = data.select(obs_uid=obs.uid)
             # Replace comm_world with the group communicator
             obs_data._comm = new_comm
-            filterbin.reset_pix_dist = True
             filterbin.name = f"{orig_name_filterbin}_{obs.name}"
             filterbin.apply(obs_data)
-            close_data(obs_data)
+            del obs_data
+            # close_data(obs_data)
 
         if data.comm.comm_world is not None:
             # Make sure all observations are processed before proceeding
-            data.comm.comm_world.Barrier()
+            data.comm.comm_world.barrier()
 
         if data.comm.world_rank == 0:
-            import matplotlib.pyplot as plt
-
             # Assemble the single-run matrix
-
             rootname = os.path.join(self.outdir, f"split_run_obs_matrix")
             fname_matrix = ops.combine_observation_matrix(rootname)
+            self.plot_obsmatrix_result(
+                "split_run", input_map_file, fname_matrix, "split_run", pixels.nest
+            )
+
             obs_matrix1 = scipy.sparse.load_npz(fname_matrix)
             obs_matrix1.sort_indices()
 
@@ -786,15 +737,35 @@ class FilterBinTest(MPITestCase):
             fname_matrix = ops.coadd_observation_matrix(
                 filenames, fname_matrix, double_precision=True, comm=comm_self
             )
+            split_file = os.path.join(self.outdir, "split_run_filtered_map.fits")
+            self.plot_obsmatrix_result(
+                "noiseweighted_run",
+                input_map_file,
+                fname_matrix,
+                "noiseweighted_run",
+                pixels.nest,
+                filtered=hp.read_map(split_file, None, nest=pixels.nest),
+            )
+
             obs_matrix2 = scipy.sparse.load_npz(fname_matrix)
             obs_matrix2.sort_indices()
 
+            input_map = hp.read_map(input_map_file, None, nest=pixels.nest)
+
+            # Compare the results from application of the observation matrix
+            test_map1 = obs_matrix1.dot(input_map.ravel())
+            test_map2 = obs_matrix2.dot(input_map.ravel())
+            disagree = np.logical_not(
+                np.isclose(test_map1, test_map2, rtol=1e-3, atol=1e-5)
+            )
+            for elem in np.arange(len(test_map1))[disagree]:
+                print(f"obs x input {elem}:  {test_map1[elem]} != {test_map2[elem]}")
+            self.assertTrue(np.allclose(test_map1, test_map2, rtol=1e-5, atol=1e-6))
+
             # Compare the values that are not tiny. Some of the tiny
             # values may be missing in one matrix
-
             values1 = obs_matrix1.data[np.abs(obs_matrix1.data) > 1e-10]
             values2 = obs_matrix2.data[np.abs(obs_matrix2.data) > 1e-10]
-
-            assert np.allclose(values1, values2)
+            self.assertTrue(np.allclose(values1, values2))
 
         close_data(data)

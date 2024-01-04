@@ -9,11 +9,11 @@ import traitlets
 from astropy import units as u
 
 from .. import rng
-from ..observation import default_values as defaults
 from ..mpi import MPI
-from ..timing import Timer, function_timer
+from ..observation import default_values as defaults
+from ..timing import function_timer
 from ..traits import Int, Quantity, Unicode, trait_docs
-from ..utils import GlobalTimers, Logger, Timer, dtype_to_aligned, name_UID
+from ..utils import Logger, dtype_to_aligned, name_UID
 from .operator import Operator
 
 

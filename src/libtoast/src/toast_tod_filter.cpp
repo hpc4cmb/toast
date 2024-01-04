@@ -81,6 +81,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                 last = &full_templates[(iorder - 1) * scanlen];
                 lastlast = &full_templates[(iorder - 2) * scanlen];
                 double orderinv = 1. / iorder;
+
                 #pragma omp simd
                 for (size_t i = 0; i < scanlen; ++i) {
                     const double x = xstart + i * dx;
@@ -130,6 +131,16 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                                     singular_values.data(), rcond_limit,
                                     &rank, WORK.data(), LWORK, &info);
 
+        if (info != 0) {
+            auto log = toast::Logger::get();
+            std::ostringstream o;
+            o << "DGELLS:  " << ngood << "/" << scanlen << " good samples, order " <<
+            norder;
+            o << " failed with info " << info;
+            log.error(o.str().c_str(), TOAST_HERE());
+            throw std::runtime_error(o.str().c_str());
+        }
+
         for (int iorder = 0; iorder < norder; ++iorder) {
             double * temp = &full_templates[iorder * scanlen];
             for (int isignal = 0; isignal < nsignal; ++isignal) {
@@ -142,16 +153,6 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
                     for (size_t i = 0; i < scanlen; ++i) signal[i] -= amp * temp[i];
                 }
             }
-        }
-
-        if (info != 0) {
-            auto log = toast::Logger::get();
-            std::ostringstream o;
-            o << "DGELLS:  " << ngood << "/" << scanlen << " good samples, order " <<
-            norder;
-            o << " failed with info " << info;
-            log.error(o.str().c_str(), TOAST_HERE());
-            throw std::runtime_error(o.str().c_str());
         }
     }
 }

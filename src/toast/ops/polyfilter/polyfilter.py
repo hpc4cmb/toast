@@ -16,15 +16,13 @@ from ..._libtoast import subtract_mean, sum_detectors
 from ...accelerator import ImplementationType
 from ...mpi import MPI, Comm, MPI_Comm, use_mpi
 from ...observation import default_values as defaults
-from ...timing import function_timer
+from ...timing import function_timer, GlobalTimers, Timer
 from ...traits import Bool, Dict, Instance, Int, Quantity, Unicode, UseEnum, trait_docs
 from ...utils import (
     AlignedF64,
     AlignedU8,
     Environment,
-    GlobalTimers,
     Logger,
-    Timer,
     dtype_to_aligned,
 )
 from ..operator import Operator
@@ -58,6 +56,11 @@ class PolyFilter2D(Operator):
 
     order = Int(1, allow_none=False, help="Polynomial order")
 
+    det_mask = Int(
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -66,10 +69,13 @@ class PolyFilter2D(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_invalid | defaults.det_mask_processing,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
-    poly_flag_mask = Int(1, help="Bit mask value for intervals that fail to filter")
+    poly_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for samples that fail to filter",
+    )
 
     shared_flags = Unicode(
         defaults.shared_flags,
@@ -78,7 +84,8 @@ class PolyFilter2D(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_invalid,
+        help="Bit mask value for optional shared flagging",
     )
 
     view = Unicode(
@@ -88,6 +95,13 @@ class PolyFilter2D(Operator):
     focalplane_key = Unicode(
         None, allow_none=True, help="Which focalplane key to match"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -151,9 +165,12 @@ class PolyFilter2D(Operator):
 
             gt.start("Poly2D:  Detector setup")
 
-            # Detectors to process
+            # Detectors to process.  We apply the detector flag mask to this
+            # selection, in order to avoid bad detectors in the fit.
             detectors = []
-            for det in temp_ob.all_detectors:
+            for det in temp_ob.select_local_detectors(
+                selection=None, flagmask=self.det_mask
+            ):
                 if pat.match(det) is None:
                     continue
                 detectors.append(det)
@@ -254,6 +271,8 @@ class PolyFilter2D(Operator):
             detector_templates = np.zeros([ndet, nmode])
             for det in temp_ob.local_detectors:
                 if det not in detector_index:
+                    # Skip detectors that were cut by per-detector flags or
+                    # pattern match.
                     continue
                 idet = detector_index[det]
                 theta, phi = detector_position[det]
@@ -388,6 +407,8 @@ class PolyFilter2D(Operator):
             # Copy data to original observation
             gt.start("Poly2D:  Copy output")
             obs.detdata[self.det_data][:] = temp_ob.detdata[self.det_data][:]
+            if self.det_flags is not None:
+                obs.detdata[self.det_flags][:] = temp_ob.detdata[self.det_flags][:]
             gt.stop("Poly2D:  Copy output")
 
             # Free data copy
@@ -440,6 +461,11 @@ class PolyFilter(Operator):
 
     order = Int(1, allow_none=False, help="Polynomial order")
 
+    det_mask = Int(
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -448,12 +474,12 @@ class PolyFilter(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_invalid | defaults.det_mask_processing,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     poly_flag_mask = Int(
         defaults.shared_mask_invalid,
-        help="Shared flag bit mask for samples that are not filtered",
+        help="Shared flag bit mask for samples outside of filtering view",
     )
 
     shared_flags = Unicode(
@@ -463,12 +489,20 @@ class PolyFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_invalid | defaults.shared_mask_turnaround,
+        help="Bit mask value for optional shared flagging",
     )
 
     view = Unicode(
         "throw", allow_none=True, help="Use this view of the data in all observations"
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -502,7 +536,7 @@ class PolyFilter(Operator):
 
         for obs in data.obs:
             # Get the detectors we are using for this observation
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -534,27 +568,29 @@ class PolyFilter(Operator):
                 shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
             signals = []
-            idets = []
+            filter_dets = []
             last_flags = None
             in_place = True
-            for idet, det in enumerate(dets):
+            for det in dets:
                 # Test the detector pattern
                 if pat.match(det) is None:
                     continue
 
-                ref = obs.detdata[self.det_data][idet]
-                signal = ref.astype(np.float64, copy=False)
-                if not signal is ref:
+                ref = obs.detdata[self.det_data][det]
+                if isinstance(ref[0], np.float64):
+                    signal = ref
+                else:
                     in_place = False
+                    signal = np.array(ref, dtype=np.float64)
                 if self.det_flags is not None:
-                    det_flags = obs.detdata[self.det_flags][idet] & self.det_flag_mask
+                    det_flags = obs.detdata[self.det_flags][det] & self.det_flag_mask
                     flags = shared_flags | det_flags
                 else:
                     flags = shared_flags
 
                 if last_flags is None or np.all(last_flags == flags):
+                    filter_dets.append(det)
                     signals.append(signal)
-                    idets.append(idet)
                 else:
                     filter_polynomial(
                         self.order,
@@ -566,10 +602,10 @@ class PolyFilter(Operator):
                         use_accel=use_accel,
                     )
                     if not in_place:
-                        for i, x in zip(idets, signals):
-                            obs.detdata[self.det_data][i] = x
+                        for fdet, x in zip(filter_dets, signals):
+                            obs.detdata[self.det_data][fdet] = x
                     signals = [signal]
-                    idets = [idet]
+                    filter_dets = [det]
                 last_flags = flags.copy()
 
             if len(signals) > 0:
@@ -583,8 +619,8 @@ class PolyFilter(Operator):
                     use_accel=use_accel,
                 )
                 if not in_place:
-                    for i, x in zip(idets, signals):
-                        obs.detdata[self.det_data][i] = x
+                    for fdet, x in zip(filter_dets, signals):
+                        obs.detdata[self.det_data][fdet] = x
 
             # Optionally flag unfiltered data
             if self.shared_flags is not None and self.poly_flag_mask is not None:
@@ -643,6 +679,11 @@ class CommonModeFilter(Operator):
         "match the pattern are filtered.",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid | defaults.det_mask_processing,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
@@ -651,7 +692,7 @@ class CommonModeFilter(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_invalid | defaults.det_mask_processing,
-        help="Bit mask value for optional detector flagging",
+        help="Bit mask value for detector sample flagging",
     )
 
     shared_flags = Unicode(
@@ -661,7 +702,8 @@ class CommonModeFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid, help="Bit mask value for optional shared flagging"
+        defaults.shared_mask_invalid,
+        help="Bit mask value for optional shared flagging",
     )
 
     focalplane_key = Unicode(
@@ -673,6 +715,13 @@ class CommonModeFilter(Operator):
         help="If True, redistribute data before and after filtering for "
         "optimal data locality.",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
@@ -695,8 +744,8 @@ class CommonModeFilter(Operator):
     @function_timer
     def _redistribute(self, data, obs, timer, log):
         if self.redistribute:
-            # Redistribute the data so each process has all detectors for some sample range
-            # Duplicate just the fields of the observation we will use
+            # Redistribute the data so each process has all detectors for some sample
+            # range.  Duplicate just the fields of the observation we will use.
             dup_shared = list()
             if self.shared_flags is not None:
                 dup_shared.append(self.shared_flags)
@@ -727,7 +776,6 @@ class CommonModeFilter(Operator):
         else:
             comm = obs.comm_col
             temp_ob = obs
-            proc_rows = None
 
         return comm, temp_ob
 
@@ -795,8 +843,8 @@ class CommonModeFilter(Operator):
             # Loop over all values of the focalplane key
             for value in values:
                 local_dets = []
-                for idet, det in enumerate(temp_ob.local_detectors):
-                    if temp_ob.local_detector_flags[det] & self.det_flag_mask:
+                for det in temp_ob.local_detectors:
+                    if temp_ob.local_detector_flags[det] & self.det_mask:
                         continue
                     if pat.match(det) is None:
                         continue
@@ -805,8 +853,12 @@ class CommonModeFilter(Operator):
                         and focalplane[det][self.focalplane_key] != value
                     ):
                         continue
-                    local_dets.append(idet)
-                local_dets = np.array(local_dets)
+                    local_dets.append(det)
+
+                # The indices into the detector data, which may be different than
+                # the index into the full set of local detectors.
+                data_indices = temp_ob.detdata[self.det_data].indices(local_dets)
+                flag_indices = temp_ob.detdata[self.det_flags].indices(local_dets)
 
                 # Average all detectors that match the key
                 template = np.zeros(nsample)
@@ -822,7 +874,8 @@ class CommonModeFilter(Operator):
                     det_flags = np.zeros([ndet, nsample], dtype=np.uint8)
 
                 sum_detectors(
-                    local_dets,
+                    data_indices,
+                    flag_indices,
                     shared_flags,
                     self.shared_flag_mask,
                     temp_ob.detdata[self.det_data].data,
@@ -838,7 +891,7 @@ class CommonModeFilter(Operator):
                     comm.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
 
                 subtract_mean(
-                    local_dets,
+                    data_indices,
                     temp_ob.detdata[self.det_data].data,
                     template,
                     hits,

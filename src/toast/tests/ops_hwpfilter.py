@@ -61,7 +61,7 @@ class HWPFilterTest(MPITestCase):
         hwpfilter.apply(data)
 
         for ob in data.obs:
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=hwpfilter.det_flag_mask):
                 flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
                 flags |= ob.detdata[defaults.det_flags][det]
                 good = flags == 0
