@@ -66,6 +66,20 @@ def parse_config(operators, templates, comm):
         help="The output directory",
     )
 
+    parser.add_argument(
+        "--sample_rate",
+        required=False,
+        type=float,
+        help="Override focalplane sampling rate [Hz]",
+    )
+
+    parser.add_argument(
+        "--thinfp",
+        required=False,
+        type=int,
+        help="Only sample the provided focalplane pixels",
+    )
+
     # Build a config dictionary starting from the operator defaults, overriding with any
     # config files specified with the '--config' commandline option, followed by any
     # individually specified parameter overrides.
@@ -96,7 +110,15 @@ def load_instrument_and_schedule(args, comm):
     timer = toast.timing.Timer()
     timer.start()
 
-    focalplane = toast.instrument.Focalplane()
+    if args.sample_rate is not None:
+        sample_rate = args.sample_rate * u.Hz
+    else:
+        sample_rate = None
+    focalplane = toast.instrument.Focalplane(
+        sample_rate=sample_rate,
+        thinfp=args.thinfp,
+    )
+
     with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
         focalplane.load_hdf5(f.handle, comm=comm)
     log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
