@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -739,6 +739,7 @@ class NoiseEstim(Operator):
         log = Logger.get()
         timer = Timer()
         timer.start()
+        os.makedirs(self.output_dir, exist_ok=True)
         if det1 == det2:
             fn_out = os.path.join(self.output_dir, f"{rootname}_{det1}.fits")
         else:
