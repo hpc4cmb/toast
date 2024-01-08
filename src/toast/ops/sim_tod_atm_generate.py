@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -370,9 +370,6 @@ class GenerateAtmosphere(Operator):
             ystep_current = u.Quantity(self.ystep) / np.sqrt(scale)**(ncone - 1)
             zstep_current = u.Quantity(self.zstep) / np.sqrt(scale)**(ncone - 1)
             counter1 = counter1start
-            # xstep_current = u.Quantity(self.xstep)
-            # ystep_current = u.Quantity(self.ystep)
-            # zstep_current = u.Quantity(self.zstep)
 
             sim_list = list()
 
