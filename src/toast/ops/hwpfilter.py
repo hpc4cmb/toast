@@ -298,9 +298,7 @@ class HWPFilter(Operator):
             last_invcov = None
             last_cov = None
             last_rcond = None
-            for det in obs.select_local_detectors(
-                detectors, flagmask=self.det_mask
-            ):
+            for det in obs.select_local_detectors(detectors, flagmask=self.det_mask):
                 if data.comm.group_rank == 0:
                     msg = f"{log_prefix} OpHWPFilter: " f"Processing detector {det}"
                     log.verbose(msg)

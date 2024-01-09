@@ -38,10 +38,15 @@ def offset_add_to_signal_inner(
        det_data (double)
     """
     # Computes the index of the amplitude
-    amplitude_index = (amplitude_offset + amplitude_view_offset + (sample_index // step_length))
+    amplitude_index = (
+        amplitude_offset + amplitude_view_offset + (sample_index // step_length)
+    )
     # Mask out contributions where amplitude_flags are non-zero
-    amplitude = jnp.where( (amplitude_flags[amplitude_index] == 0), amplitudes[amplitude_index], 0.0)
+    amplitude = jnp.where(
+        (amplitude_flags[amplitude_index] == 0), amplitudes[amplitude_index], 0.0
+    )
     return det_data + amplitude
+
 
 # maps over intervals
 offset_add_to_signal_inner = imap(
@@ -380,12 +385,12 @@ def offset_project_signal_intervals(
     )
 
     # Mask out contributions where amplitude_flags are non-zero
-    non_flagged_amplitude = (amplitude_flags[amplitude_indices] == 0)
-    valid_contributions = jnp.where(non_flagged_amplitude, contributions, 0.0)
+    non_flagged_amplitudes = amplitude_flags[amplitude_indices] == 0
+    contributions = jnp.where(non_flagged_amplitudes, contributions, 0.0)
 
     # updates det_data and returns
     # NOTE: add is atomic
-    amplitudes = amplitudes.at[amplitude_indices].add(valid_contributions)
+    amplitudes = amplitudes.at[amplitude_indices].add(contributions)
     return amplitudes
 
 
@@ -468,7 +473,10 @@ def offset_project_signal_jax(
 # ----------------------------------------------------------------------------------------
 # offset_apply_diag_precond
 
-def offset_apply_diag_precond_inner(offset_var, amplitudes_in, amplitude_flags, amplitudes_out):
+
+def offset_apply_diag_precond_inner(
+    offset_var, amplitudes_in, amplitude_flags, amplitudes_out
+):
     """
     Simple multiplication with amplitude flags.
 
@@ -481,8 +489,8 @@ def offset_apply_diag_precond_inner(offset_var, amplitudes_in, amplitude_flags, 
     Returns:
         amplitudes_out (array, double): size n_amp
     """
-    good = (amplitude_flags != 0)
-    amplitudes_out = jnp.where(good, amplitudes_in * offset_var, 0.0)
+    non_flagged_amplitudes = amplitude_flags != 0
+    amplitudes_out = jnp.where(non_flagged_amplitudes, amplitudes_in * offset_var, 0.0)
     return amplitudes_out
 
 

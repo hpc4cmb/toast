@@ -127,7 +127,7 @@ class BinMap(Operator):
         if check < 0:
             raise traitlets.TraitError("Flag mask should be a positive integer")
         return check
-    
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_mask(self, proposal):
         check = proposal["value"]

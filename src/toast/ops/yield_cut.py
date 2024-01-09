@@ -74,7 +74,7 @@ class YieldCut(Operator):
         if check < 0:
             raise traitlets.TraitError("Det mask should be a positive integer")
         return check
-    
+
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]

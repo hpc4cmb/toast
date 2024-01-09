@@ -326,7 +326,7 @@ void build_template_covariance(std::vector <int64_t> & starts,
 //     templates.templates,
 //     fgood,
 //     invcov,
-// ) 
+// )
 //
 // void build_template_covariance(
 //     py::buffer starts,

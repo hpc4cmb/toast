@@ -336,9 +336,7 @@ class SimTotalconvolve(Operator):
         my_dets = set()
         for obs in data.obs:
             # Get the detectors we are using for this observation
-            obs_dets = obs.select_local_detectors(
-                detectors, flagmask=self.det_mask
-            )
+            obs_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             for det in obs_dets:
                 my_dets.add(det)
             # Make sure detector data output exists

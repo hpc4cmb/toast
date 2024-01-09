@@ -83,14 +83,14 @@ class CadenceMap(Operator):
         if check < 0:
             raise traitlets.TraitError("Det mask should be a positive integer")
         return check
-    
+
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
         if check < 0:
             raise traitlets.TraitError("Det flag mask should be a positive integer")
         return check
-    
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_mask(self, proposal):
         check = proposal["value"]
@@ -181,9 +181,7 @@ class CadenceMap(Operator):
             buf[:, :] = False
             for obs in data.obs:
                 obs_data = data.select(obs_uid=obs.uid)
-                dets = obs.select_local_detectors(
-                    detectors, flagmask=self.det_mask
-                )
+                dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
                 times = obs.shared[self.times].data
                 days = to_MJD(times).astype(int)
                 if days[0] >= day_stop or days[-1] < day_start:

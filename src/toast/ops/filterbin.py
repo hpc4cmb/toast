@@ -635,14 +635,14 @@ class FilterBin(Operator):
         if check < 0:
             raise traitlets.TraitError("Det mask should be a positive integer")
         return check
-    
+
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
         if check < 0:
             raise traitlets.TraitError("Det flag mask should be a positive integer")
         return check
-    
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_mask(self, proposal):
         check = proposal["value"]
@@ -1624,9 +1624,7 @@ class FilterBin(Operator):
                 save_pointing=self.binning.full_pointing,
             )
             cov.apply(data, detectors=detectors)
-            log.info_rank(
-                f"Binned covariance and hits in", comm=self.comm, timer=timer
-            )
+            log.info_rank(f"Binned covariance and hits in", comm=self.comm, timer=timer)
 
         self.binning.apply(data, detectors=detectors)
         log.info_rank(f"Binned signal in", comm=self.comm, timer=timer)

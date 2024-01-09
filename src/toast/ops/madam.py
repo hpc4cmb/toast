@@ -541,7 +541,7 @@ class Madam(Operator):
             #         for plocal in pdets:
             #             for d in plocal:
             #                 obs_dets.add(d)
-            #     obs_dets = ob.comm.comm_group.bcast(obs_dets, root=0) 
+            #     obs_dets = ob.comm.comm_group.bcast(obs_dets, root=0)
             # else:
             #     obs_dets = set(local_dets)
             # all_dets.update(obs_dets)
