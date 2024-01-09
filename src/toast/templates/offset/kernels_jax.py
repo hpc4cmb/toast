@@ -450,26 +450,28 @@ def offset_project_signal_jax(
 # ----------------------------------------------------------------------------------------
 # offset_apply_diag_precond
 
-
-def offset_apply_diag_precond_inner(offset_var, amplitudes_in, amplitudes_out):
+def offset_apply_diag_precond_inner(offset_var, amplitudes_in, amplitude_flags, amplitudes_out):
     """
-    Simple multiplication.
+    Simple multiplication with amplitude flags.
 
     Args:
         offset_var (array, double): size n_amp
         amplitudes_in (array, double): size n_amp
+        amplitude_flags (array, int): size n_amp
         amplitudes_out (array, double): size n_amp
 
     Returns:
         amplitudes_out (array, double): size n_amp
     """
-    return amplitudes_in * offset_var
+    good = (amplitude_flags != 0)
+    amplitudes_out = jnp.where(good, amplitudes_in * offset_var, 0.0)
+    return amplitudes_out
 
 
 # jit compilation
 offset_apply_diag_precond_inner = jax.jit(
     offset_apply_diag_precond_inner,
-    donate_argnums=[2],
+    donate_argnums=[3],
 )  # donate amplitudes_out
 
 
@@ -478,11 +480,12 @@ def offset_apply_diag_precond_jax(
     offset_var, amplitudes_in, amplitude_flags, amplitudes_out, use_accel
 ):
     """
-    Simple multiplication.
+    Simple multiplication with amplitude flags.
 
     Args:
         offset_var (array, double): size n_amp
         amplitudes_in (array, double): size n_amp
+        amplitude_flags (array, int): size n_amp
         amplitudes_out (array, double): size n_amp
         use_accel (bool): should we use the accelerator
 
@@ -492,11 +495,13 @@ def offset_apply_diag_precond_jax(
     # cast the data if needed
     offset_var = MutableJaxArray.to_array(offset_var)
     amplitudes_in = MutableJaxArray.to_array(amplitudes_in)
+    amplitude_flags = MutableJaxArray.to_array(amplitude_flags)
 
     # runs the computation
     amplitudes_out[:] = offset_apply_diag_precond_inner(
-        offset_var, amplitudes_in, amplitudes_out
+        offset_var, amplitudes_in, amplitude_flags, amplitudes_out
     )
+
 
 
 # To test:
