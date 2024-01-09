@@ -305,6 +305,7 @@ def offset_project_signal_intervals(
     flag_mask,
     step_length,
     amplitudes,
+    amplitude_flags,
     amp_offset,
     n_amp_views,
     interval_starts,
@@ -327,6 +328,7 @@ def offset_project_signal_intervals(
         flag_mask (int),
         step_length (int64):  The minimum number of samples for each offset.
         amplitudes (array, double): The float64 amplitude values (size n_amp)
+        amplitude_flags (array, int): flags for each amplitude value (size n_amp)
         amp_offset (int)
         n_amp_views (array, int): size n_view
         interval_starts (array, int): size n_view
@@ -368,9 +370,13 @@ def offset_project_signal_intervals(
         interval_ends,
     )
 
+    # Mask out contributions where amplitude_flags are non-zero
+    non_flagged_amplitude = (amplitude_flags[amplitude_indices] == 0)
+    valid_contributions = jnp.where(non_flagged_amplitude, contributions, 0.0)
+
     # updates det_data and returns
     # NOTE: add is atomic
-    amplitudes = amplitudes.at[amplitude_indices].add(contributions)
+    amplitudes = amplitudes.at[amplitude_indices].add(valid_contributions)
     return amplitudes
 
 
@@ -416,6 +422,7 @@ def offset_project_signal_jax(
         amp_offset (int)
         n_amp_views (array, int): size n_view
         amplitudes (array, double): The float64 amplitude values (size n_amp)
+        amplitude_flags (array, int): flags for each amplitude value (size n_amp)
         intervals (array, Interval): size n_view
         use_accel (bool): should we use the accelerator
 
@@ -427,6 +434,7 @@ def offset_project_signal_jax(
     det_data = MutableJaxArray.to_array(det_data)
     flag_data = MutableJaxArray.to_array(flag_data)
     amplitudes_input = MutableJaxArray.to_array(amplitudes)
+    amplitude_flags_input = MutableJaxArray.to_array(amplitude_flags)
     intervals_max_length = INTERVALS_JAX.compute_max_intervals_length(intervals)
 
     # run computation
@@ -439,6 +447,7 @@ def offset_project_signal_jax(
         flag_mask,
         step_length,
         amplitudes_input,
+        amplitude_flags_input,
         amp_offset,
         n_amp_views,
         intervals.first,
@@ -503,6 +512,5 @@ def offset_apply_diag_precond_jax(
     )
 
 
-
 # To test:
-# export TOAST_GPU_JAX=true; export TOAST_GPU_HYBRID_PIPELINES=true; export TOAST_LOGLEVEL=DEBUG; python -c 'import toast.tests; toast.tests.run("template_offset"); toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_mapmaker");'
+# export TOAST_GPU_JAX=true; export TOAST_GPU_HYBRID_PIPELINES=true; export TOAST_LOGLEVEL=DEBUG; python -c 'import toast.tests; toast.tests.run("ops_pointing_wcs"); toast.tests.run("template_offset"); toast.tests.run("ops_mapmaker_solve"); toast.tests.run("ops_mapmaker");'
