@@ -142,6 +142,7 @@ class PixelsWCS(Operator):
         # have been called yet.
         if not hasattr(self, "_local_submaps"):
             self._set_wcs(
+                self.coord_frame,
                 self.projection,
                 self.center,
                 self.bounds,
@@ -224,6 +225,7 @@ class PixelsWCS(Operator):
         log.verbose(
             f"PixelsWCS: set_wcs {coord}, {proj}, {center}, {bounds}, {dims}, {res}"
         )
+        print(f"PixelsWCS: set_wcs {coord}, {proj}, {center}, {bounds}, {dims}, {res}")
         center_deg = None
         bounds_deg = None
         res_deg = None
@@ -259,9 +261,8 @@ class PixelsWCS(Operator):
                 center_deg = np.array([0.0, 0.0])
         else:
             # Using bounds
-            bounds_deg = np.array(
-                x.to_value(u.degree) for x in bounds
-            )
+            bounds_deg = np.array([x.to_value(u.degree) for x in bounds])
+            bounds_deg = np.reshape(bounds_deg, (2, 2)).T
             # Exactly one of resolution or dimensions specified
             if (len(res) > 0) and (len(dims) > 0):
                 # Cannot calculate yet
@@ -269,12 +270,12 @@ class PixelsWCS(Operator):
             if (len(res) == 0) and (len(dims) == 0):
                 # Cannot calculate yet
                 return
-            
+
             if self.center_offset is None:
                 center_deg = np.array(
                     [
-                        0.5 * (bounds_deg[0] + bounds_deg[1]),
-                        0.5 * (bounds_deg[2] + bounds_deg[3]),
+                        0.5 * (bounds_deg[0, 0] + bounds_deg[1, 0]),
+                        0.5 * (bounds_deg[0, 1] + bounds_deg[1, 1]),
                     ]
                 )
             else:
@@ -354,7 +355,7 @@ class PixelsWCS(Operator):
             print(f"DBG: using center, crpix set to {self.wcs.wcs.crpix}", flush=True)
         else:
             # Compute the center from the bounding box
-            off = self.wcs.wcs_world2pix(bounds_deg[0, None], 0)[0] + 0.5
+            off = self.wcs.wcs_world2pix(bounds_deg, 0)[0] + 0.5
             self.wcs.wcs.crpix -= off
             print(f"DBG: using bounds, crpix set to {self.wcs.wcs.crpix}", flush=True)
 
@@ -440,11 +441,11 @@ class PixelsWCS(Operator):
                 latmin.to(u.degree),
                 latmax.to(u.degree),
             )
-            if self.center_offset is None:
-                log.verbose(f"PixelsWCS auto_bounds set to {new_bounds}")
-                self.bounds = new_bounds
-            else:
-
+            self.bounds = new_bounds
+            print(f"PixelsWCS auto_bounds set to {self.bounds}", flush=True)
+            print(f"PixelsWCS wcs now {self.wcs}", flush=True)
+            print(f"PixelsWCS wcs_shape now {self.wcs_shape}", flush=True)
+            log.verbose(f"PixelsWCS auto_bounds set to {self.bounds}")
             self._done_auto = True
 
         if self._local_submaps is None and self.create_dist is not None:

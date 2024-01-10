@@ -126,6 +126,19 @@ class ConfigOperator(ops.Operator):
         (None, True, "", "foo", 4.56, 7.89 * u.meter), help="Tuple mixed"
     )
 
+    list_of_tuples = List(
+        [(None, True), ("foo", 1.23), (4.56, 7.89 * u.meter)], help="list of tuples"
+    )
+
+    dict_of_lists_of_tuples = Dict(
+        {
+            "a": (None, True),
+            "b": ("foo", 1.23),
+            "c": (4.56, 7.89 * u.meter),
+        },
+        help="dict of list of tuples",
+    )
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
