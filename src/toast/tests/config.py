@@ -16,9 +16,11 @@ from tomlkit import comment, document, dumps, loads, nl, table
 from .. import ops
 from ..config import (
     build_config,
-    create_from_config,
     dump_toml,
+    dump_yaml,
+    dump_json,
     load_config,
+    dump_config,
     parse_config,
 )
 from ..data import Data
@@ -38,8 +40,9 @@ from ..traits import (
     Unicode,
     Unit,
     trait_docs,
-    trait_scalar_to_string,
+    create_from_config,
 )
+from ..trait_utils import trait_to_string, string_to_trait
 from ..utils import Environment, Logger
 from ._helpers import close_data, create_comm, create_outdir, create_space_telescope
 from .mpi import MPITestCase
@@ -126,6 +129,19 @@ class ConfigOperator(ops.Operator):
         (None, True, "", "foo", 4.56, 7.89 * u.meter), help="Tuple mixed"
     )
 
+    list_of_tuples = List(
+        [(None, True), ("foo", 1.23), (4.56, 7.89 * u.meter)], help="list of tuples"
+    )
+
+    dict_of_lists_of_tuples = Dict(
+        {
+            "a": (None, True),
+            "b": ("foo", 1.23),
+            "c": (4.56, 7.89 * u.meter),
+        },
+        help="dict of list of tuples",
+    )
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -203,34 +219,26 @@ class ConfigOperator(ops.Operator):
                     targs.append("None")
                 elif isinstance(v, set):
                     if len(v) == 0:
-                        targs.append("{}")
+                        targs.append("set()")
                     else:
-                        formatted = set([trait_scalar_to_string(x) for x in v])
-                        targs.append(str(formatted))
+                        targs.append(trait_to_string(v))
                 elif isinstance(v, tuple):
                     if len(v) == 0:
                         targs.append("()")
                     else:
-                        formatted = tuple([trait_scalar_to_string(x) for x in v])
-                        targs.append(str(formatted))
+                        targs.append(trait_to_string(v))
                 elif isinstance(v, dict):
                     if len(v) == 0:
                         targs.append("{}")
                     else:
-                        formatted = {x: trait_scalar_to_string(y) for x, y in v.items()}
-                        targs.append(str(formatted))
+                        targs.append(trait_to_string(v))
                 elif isinstance(v, list):
                     if len(v) == 0:
                         targs.append("[]")
                     else:
-                        formatted = [trait_scalar_to_string(x) for x in v]
-                        targs.append(str(formatted))
-                elif isinstance(v, u.Unit):
-                    targs.append(str(v))
-                elif isinstance(v, u.Quantity):
-                    targs.append(f"{v.value:0.14e} {v.unit}")
+                        targs.append(trait_to_string(v))
                 else:
-                    targs.append(str(v))
+                    targs.append(trait_to_string(v))
         return targs
 
     def _exec(self, data, detectors=None, **kwargs):
@@ -308,6 +316,24 @@ class ConfigTest(MPITestCase):
         tmpls = [Offset(name="baselines"), SubHarmonic(name="subharmonic")]
         return {x.name: x for x in tmpls}
 
+    def test_trait_utils(self):
+        fake = ConfigOperator(name="fake")
+        tdict = dict()
+        for trait_name, trait in fake.traits().items():
+            tdict[trait_name] = trait_to_string(trait.get(fake))
+
+        check_fake = ConfigOperator(name="check_fake")
+        for trait_name, trait in check_fake.traits().items():
+            trait.set(check_fake, string_to_trait(tdict[trait_name]))
+
+        # Compare
+        for tname, trait in check_fake.traits().items():
+            oval = trait.get(fake)
+            tval = trait.get(check_fake)
+            if not self.compare_trait(tval, oval):
+                print(f"{tval} != {oval}")
+                self.assertTrue(False)
+
     def test_trait_types(self):
         fake = ConfigOperator(name="fake")
 
@@ -336,7 +362,6 @@ class ConfigTest(MPITestCase):
 
     def test_trait_types_argparse(self):
         fake = ConfigOperator(name="fake")
-
         test_args = fake.args_test()
 
         parser = argparse.ArgumentParser(description="Test")
@@ -364,105 +389,123 @@ class ConfigTest(MPITestCase):
                     self.assertTrue(False)
 
     def test_config_multi(self):
-        testops = self.create_operators()
-        testops["fake"] = ConfigOperator(name="fake")
-        testops["scan_map"] = ops.ScanHealpixMap(name="scan_map")
+        for case in ["toml", "json", "yaml"]:
+            testops = self.create_operators()
+            testops["fake"] = ConfigOperator(name="fake")
+            testops["scan_map"] = ops.ScanHealpixMap(name="scan_map")
 
-        objs = [y for x, y in testops.items()]
-        defaults = build_config(objs)
+            objs = [y for x, y in testops.items()]
+            defaults = build_config(objs)
 
-        conf_defaults_file = os.path.join(self.outdir, "multi_defaults.toml")
-        if self.toastcomm.world_rank == 0:
-            dump_toml(conf_defaults_file, defaults)
-        if self.toastcomm.comm_world is not None:
-            self.toastcomm.comm_world.barrier()
-
-        # Now change some values
-        testops["mem_count"].prefix = "newpref"
-        testops["mem_count"].enabled = False
-        testops["sim_noise"].serial = False
-        testops["sim_satellite"].hwp_rpm = 8.0
-        testops["sim_satellite"].distribute_time = True
-        testops["sim_satellite"].shared_flags = None
-        testops["scan_map"].file = "blat"
-        testops["fake"].unicode_none = "foo"
-
-        # Dump these to 2 disjoint configs
-        testops_fake = {"fake": testops["fake"]}
-        testops_notfake = dict(testops)
-        del testops_notfake["fake"]
-
-        conf_fake = build_config([y for x, y in testops_fake.items()])
-        conf_notfake = build_config([y for x, y in testops_notfake.items()])
-
-        conf_notfake_file = os.path.join(self.outdir, "multi_notfake.toml")
-        if self.toastcomm.world_rank == 0:
-            dump_toml(conf_notfake_file, conf_notfake)
-        if self.toastcomm.comm_world is not None:
-            self.toastcomm.comm_world.barrier()
-
-        conf_fake_file = os.path.join(self.outdir, "multi_fake.toml")
-        if self.toastcomm.world_rank == 0:
-            dump_toml(conf_fake_file, conf_fake)
-        if self.toastcomm.comm_world is not None:
-            self.toastcomm.comm_world.barrier()
-
-        # Load the configs in either order (since they are disjoint)
-        # and verify that the final result is the same
-
-        iter = 1
-        for conf_order in (
-            [conf_notfake_file, conf_fake_file],
-            [conf_fake_file, conf_notfake_file],
-        ):
-            # Options for testing
-            arg_opts = [
-                "--mem_count.prefix",
-                "altpref",
-                "--mem_count.enable",
-                "--sim_noise.serial",
-                "--sim_satellite.hwp_rpm",
-                "3.0",
-                "--sim_satellite.no_distribute_time",
-                "--pixels.resolution",
-                "(0.05 deg, 0.05 deg)",
-                "--scan_map.file",
-                "foobar",
-                "--fake.unicode_none",
-                "None",
-                "--config",
-            ]
-            arg_opts.extend(conf_order)
-
-            parser = argparse.ArgumentParser(description="Test")
-            config, remaining, jobargs = parse_config(
-                parser,
-                operators=[y for x, y in testops.items()],
-                templates=list(),
-                prefix="",
-                opts=arg_opts,
-            )
-            debug_file = os.path.join(self.outdir, f"debug_{iter}.toml")
+            conf_defaults_file = os.path.join(self.outdir, f"multi_defaults.{case}")
             if self.toastcomm.world_rank == 0:
-                dump_toml(debug_file, config)
+                dump_config(
+                    conf_defaults_file,
+                    defaults,
+                    format=case,
+                    comm=self.toastcomm.comm_world,
+                )
             if self.toastcomm.comm_world is not None:
                 self.toastcomm.comm_world.barrier()
 
-            iter += 1
+            # Now change some values
+            testops["mem_count"].prefix = "newpref"
+            testops["mem_count"].enabled = False
+            testops["sim_noise"].serial = False
+            testops["sim_satellite"].hwp_rpm = 8.0
+            testops["sim_satellite"].distribute_time = True
+            testops["sim_satellite"].shared_flags = None
+            testops["scan_map"].file = "blat"
+            testops["fake"].unicode_none = "foo"
 
-            # Instantiate
-            run = create_from_config(config)
-            runops = run.operators
+            # Dump these to 2 disjoint configs
+            testops_fake = {"fake": testops["fake"]}
+            testops_notfake = dict(testops)
+            del testops_notfake["fake"]
 
-            # Check
-            self.assertTrue(runops.mem_count.prefix == "altpref")
-            self.assertTrue(runops.mem_count.enabled == True)
-            self.assertTrue(runops.sim_noise.serial == True)
-            self.assertTrue(runops.sim_satellite.distribute_time == False)
-            self.assertTrue(runops.sim_satellite.hwp_rpm == 3.0)
-            self.assertTrue(runops.sim_satellite.shared_flags is None)
-            self.assertTrue(runops.fake.unicode_none is None)
-            self.assertTrue(runops.scan_map.file == "foobar")
+            conf_fake = build_config([y for x, y in testops_fake.items()])
+            conf_notfake = build_config([y for x, y in testops_notfake.items()])
+
+            conf_notfake_file = os.path.join(self.outdir, f"multi_notfake.{case}")
+            if self.toastcomm.world_rank == 0:
+                dump_config(
+                    conf_notfake_file,
+                    conf_notfake,
+                    format=case,
+                    comm=self.toastcomm.comm_world,
+                )
+            if self.toastcomm.comm_world is not None:
+                self.toastcomm.comm_world.barrier()
+
+            conf_fake_file = os.path.join(self.outdir, f"multi_fake.{case}")
+            if self.toastcomm.world_rank == 0:
+                dump_config(
+                    conf_fake_file,
+                    conf_fake,
+                    format=case,
+                    comm=self.toastcomm.comm_world,
+                )
+            if self.toastcomm.comm_world is not None:
+                self.toastcomm.comm_world.barrier()
+
+            # Load the configs in either order (since they are disjoint)
+            # and verify that the final result is the same
+
+            iter = 1
+            for conf_order in (
+                [conf_notfake_file, conf_fake_file],
+                [conf_fake_file, conf_notfake_file],
+            ):
+                # Options for testing
+                arg_opts = [
+                    "--mem_count.prefix",
+                    "altpref",
+                    "--mem_count.enable",
+                    "--sim_noise.serial",
+                    "--sim_satellite.hwp_rpm",
+                    "3.0",
+                    "--sim_satellite.no_distribute_time",
+                    "--pixels.resolution",
+                    "(Quantity('0.05 deg'), Quantity('0.05 deg'))",
+                    "--scan_map.file",
+                    "foobar",
+                    "--fake.unicode_none",
+                    "None",
+                    "--config",
+                ]
+                arg_opts.extend(conf_order)
+
+                parser = argparse.ArgumentParser(description="Test")
+                config, remaining, jobargs = parse_config(
+                    parser,
+                    operators=[y for x, y in testops.items()],
+                    templates=list(),
+                    prefix="",
+                    opts=arg_opts,
+                )
+                debug_file = os.path.join(self.outdir, f"debug_{iter}.{case}")
+                if self.toastcomm.world_rank == 0:
+                    dump_config(
+                        debug_file, config, format=case, comm=self.toastcomm.comm_world
+                    )
+                if self.toastcomm.comm_world is not None:
+                    self.toastcomm.comm_world.barrier()
+
+                iter += 1
+
+                # Instantiate
+                run = create_from_config(config)
+                runops = run.operators
+
+                # Check
+                self.assertTrue(runops.mem_count.prefix == "altpref")
+                self.assertTrue(runops.mem_count.enabled == True)
+                self.assertTrue(runops.sim_noise.serial == True)
+                self.assertTrue(runops.sim_satellite.distribute_time == False)
+                self.assertTrue(runops.sim_satellite.hwp_rpm == 3.0)
+                self.assertTrue(runops.sim_satellite.shared_flags is None)
+                self.assertTrue(runops.fake.unicode_none is None)
+                self.assertTrue(runops.scan_map.file == "foobar")
 
     def test_roundtrip(self):
         testops = self.create_operators()

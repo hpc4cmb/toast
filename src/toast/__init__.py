@@ -85,7 +85,7 @@ except ImportError:
         raise ImportError("Cannot read RELEASE file")
 
 
-from .config import create_from_config, load_config, parse_config
+from .config import load_config, parse_config
 from .data import Data
 from .instrument import Focalplane, GroundSite, SpaceSite, Telescope
 from .instrument_sim import fake_hexagon_focalplane
@@ -95,4 +95,5 @@ from .mpi import Comm, get_world
 from .observation import Observation
 from .pixels import PixelData, PixelDistribution
 from .timing import GlobalTimers, Timer
+from .traits import create_from_config
 from .weather import Weather

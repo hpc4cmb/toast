@@ -11,9 +11,10 @@ import argparse
 import re
 import sys
 import traceback
+from collections import OrderedDict
 
 import toast
-from toast.config import dump_toml, load_config
+from toast.config import dump_toml, dump_yaml, dump_json, load_config
 from toast.mpi import Comm, get_world
 from toast.utils import Environment, Logger, import_from_name, object_fullname
 
@@ -36,7 +37,17 @@ def main():
     in_class = False
     in_conf = False
     while iop < len(opts):
-        if opts[iop] == "--out":
+        if opts[iop] == "--out_toml":
+            user_opts.append(opts[iop])
+            iop += 1
+            user_opts.append(opts[iop])
+            iop += 1
+        if opts[iop] == "--out_json":
+            user_opts.append(opts[iop])
+            iop += 1
+            user_opts.append(opts[iop])
+            iop += 1
+        if opts[iop] == "--out_yaml":
             user_opts.append(opts[iop])
             iop += 1
             user_opts.append(opts[iop])
@@ -76,11 +87,25 @@ def main():
 
     parser = argparse.ArgumentParser(description=help)
     parser.add_argument(
-        "--out",
+        "--out_toml",
         required=False,
-        default="out.toml",
+        default=None,
         type=str,
-        help="The output config file to write",
+        help="The output TOML config file to write",
+    )
+    parser.add_argument(
+        "--out_yaml",
+        required=False,
+        default=None,
+        type=str,
+        help="The output YAML config file to write",
+    )
+    parser.add_argument(
+        "--out_json",
+        required=False,
+        default=None,
+        type=str,
+        help="The output JSON config file to write",
     )
     parser.add_argument(
         "--class",
@@ -139,8 +164,23 @@ def main():
         opts=conf_opts,
     )
 
+    # Instantiate everything and then convert back to a config for dumping.
+    # This will automatically prune stale traits, etc.
+    run = toast.create_from_config(config)
+    out_config = OrderedDict()
+    for sect_key, sect_val in vars(run).items():
+        obj_list = list()
+        for obj_name, obj in vars(sect_val).items():
+            obj_list.append(obj)
+        out_config[sect_key] = toast.config.build_config(obj_list)
+
     # Write the final config out
-    dump_toml(user_args.out, config)
+    if user_args.out_toml is not None:
+        dump_toml(user_args.out_toml, out_config, comm=mpiworld)
+    if user_args.out_json is not None:
+        dump_json(user_args.out_json, out_config, comm=mpiworld)
+    if user_args.out_yaml is not None:
+        dump_yaml(user_args.out_yaml, out_config, comm=mpiworld)
 
     return
 

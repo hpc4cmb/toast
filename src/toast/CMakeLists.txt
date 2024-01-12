@@ -119,7 +119,7 @@ install(FILES
     mpi.py
     timing.py
     traits.py
-    config.py
+    trait_utils.py
     job.py
     pixels.py
     pixels_io_healpix.py
@@ -163,6 +163,7 @@ install(DIRECTORY
 )
 
 # Process the sub directories
+add_subdirectory(config)
 add_subdirectory(io)
 add_subdirectory(accelerator)
 add_subdirectory(tests)
