@@ -550,23 +550,39 @@ class PixelsWCS(Operator):
                 for vslice in view_slices:
                     # Timestream of detector quaternions
                     quats = ob.detdata[quats_name][det][vslice]
-
                     view_samples = len(quats)
-                    theta, phi, _ = qa.to_iso_angles(quats)
-                    to_deg = 180.0 / np.pi
-                    theta *= to_deg
-                    phi *= to_deg
-                    shift = phi >= 360.0
-                    phi[shift] -= 360.0
-                    shift = phi < 0.0
-                    phi[shift] += 360.0
 
-                    world_in = np.column_stack([phi, 90.0 - theta])
+                    to_deg = 180.0 / np.pi
 
                     if center_lonlat is not None:
-                        world_in[:, 0] -= center_lonlat[vslice, 0]
-                        world_in[:, 1] -= center_lonlat[vslice, 1]
+                        q_center = qa.from_lonlat_angles(
+                            np.radians(center_lonlat[vslice, 0]),
+                            np.radians(center_lonlat[vslice, 1]),
+                            np.zeros_like(center_lonlat[vslice, 0])
+                        )
 
+                        q_final = qa.mult(qa.inv(q_center), quats)
+
+                        coord1, coord2, _ = qa.to_xietagamma(q_final)
+
+                        coord1 *= to_deg
+                        coord2 *= to_deg
+
+                    else:
+
+                        coord2, coord1, _ = qa.to_iso_angles(quats)
+
+                        coord2 *= to_deg
+                        coord1 *= to_deg
+                        shift = coord1 >= 360.0
+                        coord1[shift] -= 360.0
+                        shift = coord1 < 0.0
+                        coord1[shift] += 360.0
+
+                        coord2 = 90. - coord2
+
+                    world_in = np.column_stack([coord1, coord2])
+                    
                     rdpix = self.wcs.wcs_world2pix(world_in, 0)
                     if flags is not None:
                         # Set bad pointing to pixel -1

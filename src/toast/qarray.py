@@ -530,6 +530,47 @@ def to_lonlat_angles(q):
     return (phi.array(), lat.array(), psi.array())
 
 
+def from_xietagamma(xi, eta, gamma):
+
+    """Convert focal plane coordinates xi, eta and gamma to quaternions
+
+    Args:
+        xi (array):  Array or scalar lon values in radians
+        eta (array):  Array or scalar lat values in radians
+        gamma (array):  Array or scalar psi values in radians
+
+    Returns:
+        (array):  The quaternions.
+
+    """
+
+    phi = np.arctan2(-xi, -eta)
+    theta = np.arcsin(np.sqrt(xi**2 + eta**2))
+    psi = gamma - phi
+
+    return from_iso_angles(theta, phi, psi)
+
+
+def to_xietagamma(q):
+    """Convert quaterions to focal plane coordinates xi, eta and gamma
+
+    Args:
+        q (array_like):  The input quaternions.
+
+    Returns:
+        (tuple):  The xi, eta, gamma angles in radians.
+
+    """
+
+    theta, phi, psi = to_iso_angles(q)
+
+    xi = -np.sin(theta) * np.sin(phi)
+    eta = -np.sin(theta) * np.cos(phi)
+    gamma = psi + phi
+
+    return (xi, eta, gamma)
+
+
 def from_angles(theta, phi, pa, IAU=False):
     """Create quaternions from spherical coordinates.
 
