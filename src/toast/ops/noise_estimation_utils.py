@@ -79,30 +79,124 @@ def highpass_flagged_signal(sig, good, naverage):
         (array):  The processed array.
 
     """
-    # First fit and remove a linear trend.  Loss of power from this
-    # filter is assumed negligible in the frequency bins of interest
     ngood = np.sum(good)
     if ngood == 0:
         raise RuntimeError("No valid samples")
+    """
+    De-trending disabled as unnecessary. It also changes results at
+    different concurrencies.
+    # First fit and remove a linear trend.  Loss of power from this
+    # filter is assumed negligible in the frequency bins of interest
     templates = np.vstack([np.ones(ngood), np.arange(good.size)[good]])
     invcov = np.dot(templates, templates.T)
     cov = np.linalg.inv(invcov)
     proj = np.dot(templates, sig[good])
     coeff = np.dot(cov, proj)
     sig[good] -= coeff[0] + coeff[1] * templates[1]
+    """
     # Then prewhiten the data.  This filter will be corrected in the
     # PSD estimates.
     trend = flagged_running_average(sig, good == 0, naverage)
-    sig[good] -= trend[good]
-    return sig
+    return sig - trend
+
+
+@function_timer
+def communicate_overlap(times, signal1, signal2, flags, lagmax, naverage, comm):
+    """Send and receive TOD to have margin for filtering and lag """
+
+    if comm is None:
+        rank = 0
+        ntask = 1
+    else:
+        rank = comm.rank
+        ntask = comm.size
+
+    # Communicate naverage + lagmax samples between processes so that
+    # running averages do not change with distributed data.
+
+    nsamp = signal1.size
+
+    if lagmax > nsamp and comm is not None and comm.size > 1:
+        msg = (
+            f"communicate_overlap: lagmax = {lagmax} and nsample = {nsamp}.  "
+            f"Communicating TOD beyond nearest neighbors is not "
+            f"implemented. Reduce lagmax or the size of the MPI communicator."
+        )
+        raise RuntimeError(msg)
+
+    half_average = naverage // 2 + 1
+    nextend_backward = half_average
+    nextend_forward = half_average + lagmax
+    if rank == 0:
+        nextend_backward = 0
+    if rank == ntask - 1:
+        nextend_forward = 0
+    nextend = nextend_backward + nextend_forward
+
+    extended_signal1 = np.zeros(nsamp + nextend, dtype=np.float64)
+    if signal2 is None:
+        extended_signal2 = None
+    else:
+        extended_signal2 = np.zeros(nsamp + nextend, dtype=np.float64)
+    extended_flags = np.zeros(nsamp + nextend, dtype=bool)
+    extended_times = np.zeros(nsamp + nextend, dtype=times.dtype)
+
+    ind = slice(nextend_backward, nextend_backward + nsamp)
+    extended_signal1[ind] = signal1
+    if signal2 is not None:
+        extended_signal2[ind] = signal2
+    extended_flags[ind] = flags
+    extended_times[ind] = times
+
+    if comm is not None:
+        for evenodd in range(2):
+            if rank % 2 == evenodd % 2:
+                # Send to rank - 1
+                if rank != 0:
+                    nsend = lagmax + half_average
+                    comm.send(signal1[:nsend], dest=rank - 1, tag=1)
+                    if signal2 is not None:
+                        comm.send(signal2[:nsend], dest=rank - 1, tag=2)
+                    comm.send(flags[:nsend], dest=rank - 1, tag=3)
+                    comm.send(times[:nsend], dest=rank - 1, tag=4)
+                # Send to rank + 1
+                if rank != ntask - 1:
+                    nsend = half_average
+                    comm.send(signal1[-nsend:], dest=rank + 1, tag=1)
+                    if signal2 is not None:
+                        comm.send(signal2[-nsend:], dest=rank + 1, tag=2)
+                    comm.send(flags[-nsend:], dest=rank + 1, tag=3)
+                    comm.send(times[-nsend:], dest=rank + 1, tag=4)
+            else:
+                # Receive from rank + 1
+                if rank != ntask - 1:
+                    nrecv = lagmax + half_average
+                    extended_signal1[-nrecv:] = comm.recv(source=rank + 1, tag=1)
+                    if signal2 is not None:
+                        extended_signal2[-nrecv:] = comm.recv(source=rank + 1, tag=2)
+                    extended_flags[-nrecv:] = comm.recv(source=rank + 1, tag=3)
+                    extended_times[-nrecv:] = comm.recv(source=rank + 1, tag=4)
+                # Receive from rank - 1
+                if rank != 0:
+                    nrecv = half_average
+                    extended_signal1[:nrecv] = comm.recv(source=rank - 1, tag=1)
+                    if signal2 is not None:
+                        extended_signal2[:nrecv] = comm.recv(source=rank - 1, tag=2)
+                    extended_flags[:nrecv] = comm.recv(source=rank - 1, tag=3)
+                    extended_times[:nrecv] = comm.recv(source=rank - 1, tag=4)
+
+    return extended_times, extended_flags, extended_signal1, extended_signal2
 
 
 @function_timer
 def autocov_psd(
     times,
-    signal,
-    flags,
+    extended_times,
+    global_intervals,
+    extended_signal,
+    extended_flags,
     lagmax,
+    naverage,
     stationary_period,
     fsample,
     comm=None,
@@ -117,9 +211,12 @@ def autocov_psd(
 
     Args:
         times (float):  Signal time stamps.
+        global_intervals (list):  Time stamp ranges over which to
+            perform independent analysis
         signal (float):  Regularly sampled signal vector.
         flags (float):  Signal quality flags.
         lagmax (int):  Largest sample separation to evaluate.
+        naverage (int):  Length of running average in highpass filter
         stationary_period (float):  Length of a stationary interval in
             units of the times vector.
         fsample (float):  The sampling frequency in Hz
@@ -132,21 +229,36 @@ def autocov_psd(
 
     """
     return crosscov_psd(
-        times, signal, None, flags, lagmax, stationary_period, fsample, comm, return_cov
+        times,
+        extended_times,
+        global_intervals,
+        extended_signal,
+        None,
+        extended_flags,
+        lagmax,
+        naverage,
+        stationary_period,
+        fsample,
+        comm,
+        return_cov,
     )
 
 
 @function_timer
 def crosscov_psd(
     times,
-    signal1,
-    signal2,
-    flags,
+    extended_times,
+    global_intervals,
+    extended_signal1,
+    extended_signal2,
+    extended_flags,
     lagmax,
+    naverage,
     stationary_period,
     fsample,
     comm=None,
     return_cov=False,
+    symmetric=False,
 ):
     """Compute the sample (cross)covariance.
 
@@ -157,120 +269,88 @@ def crosscov_psd(
 
     Args:
         times (float):  Signal time stamps.
+        global_intervals (list):  Time stamp ranges over which to
+            perform independent analysis
         signal1 (float):  Regularly sampled signal vector.
         signal2 (float):  Regularly sampled signal vector or None.
         flags (float):  Signal quality flags.
         lagmax (int):  Largest sample separation to evaluate.
+        naverage (int):  Length of running average in highpass filter
         stationary_period (float):  Length of a stationary interval in
             units of the times vector.
         fsample (float):  The sampling frequency in Hz
         comm (MPI.Comm):  The MPI communicator or None.
-        return_cov (bool): Return also the covariance function
+        return_cov (bool):  Return also the covariance function
+        symmetric (bool):  Treat positive and negative lags as equivalent
 
     Returns:
         (list):  List of local tuples of (start_time, stop_time, bin_frequency,
             bin_value)
 
     """
-    rank = 0
-    ntask = 1
-    time_start = times[0]
-    time_stop = times[-1]
-    if comm is not None:
+    if comm is None:
+        rank = 0
+        ntask = 1
+        time_start = extended_times[0]
+        time_stop = extended_times[-1]
+    else:
         rank = comm.rank
         ntask = comm.size
-        time_start = comm.bcast(times[0], root=0)
-        time_stop = comm.bcast(times[-1], root=ntask - 1)
-
-    # We apply a prewhitening filter to the signal.  To accommodate the
-    # quality flags, the filter is a moving average that only accounts
-    # for the unflagged samples
-    naverage = lagmax
+        time_start = comm.bcast(extended_times[0], root=0)
+        time_stop = comm.bcast(extended_times[-1], root=ntask - 1)
 
     nreal = int(np.ceil((time_stop - time_start) / stationary_period))
-
-    # Communicate lagmax samples from the beginning of the array
-    # backwards in the MPI communicator
-
-    nsamp = signal1.size
-
-    if lagmax > nsamp and comm is not None and comm.size > 1:
-        msg = (
-            f"crosscov_psd: lagmax = {lagmax} and nsample = {nsamp}.  "
-            f"Communicating TOD beyond nearest neighbors is not "
-            f"implemented. Reduce lagmax or the size of the MPI communicator."
-        )
-        raise RuntimeError(msg)
-
-    if rank != ntask - 1:
-        nextend = lagmax
-    else:
-        nextend = 0
-
-    extended_signal1 = np.zeros(nsamp + nextend, dtype=np.float64)
-    if signal2 is not None:
-        extended_signal2 = np.zeros(nsamp + nextend, dtype=np.float64)
-    extended_flags = np.zeros(nsamp + nextend, dtype=bool)
-    extended_times = np.zeros(nsamp + nextend, dtype=times.dtype)
-
-    extended_signal1[:nsamp] = signal1
-    if signal2 is not None:
-        extended_signal2[:nsamp] = signal2
-    extended_flags[:nsamp] = flags
-    extended_times[:nsamp] = times
-
-    if comm is not None:
-        for evenodd in range(2):
-            if rank % 2 == evenodd % 2:
-                # Send
-                if rank == 0:
-                    continue
-                comm.send(signal1[:lagmax], dest=rank - 1, tag=0)
-                if signal2 is not None:
-                    comm.send(signal1[:lagmax], dest=rank - 1, tag=3)
-                comm.send(flags[:lagmax], dest=rank - 1, tag=1)
-                comm.send(times[:lagmax], dest=rank - 1, tag=2)
-            else:
-                # Receive
-                if rank == ntask - 1:
-                    continue
-                extended_signal1[-lagmax:] = comm.recv(source=rank + 1, tag=0)
-                if signal2 is not None:
-                    extended_signal1[-lagmax:] = comm.recv(source=rank + 1, tag=3)
-                extended_flags[-lagmax:] = comm.recv(source=rank + 1, tag=1)
-                extended_times[-lagmax:] = comm.recv(source=rank + 1, tag=2)
-
     realization = ((extended_times - time_start) / stationary_period).astype(np.int64)
 
     # Set flagged elements to zero
 
     extended_signal1[extended_flags != 0] = 0
-    if signal2 is not None:
+    if extended_signal2 is not None:
         extended_signal2[extended_flags != 0] = 0
 
     covs = {}
 
+    # Loop over local realizations
     for ireal in range(realization[0], realization[-1] + 1):
         # Evaluate the covariance
         realflg = realization == ireal
-        good = extended_flags[realflg] == 0
-        ngood = np.sum(good)
-        if ngood == 0:
-            continue
-        sig1 = extended_signal1[realflg].copy()
-        sig1 = highpass_flagged_signal(sig1, good, naverage)
-        # High pass filter does not work at the ends
-        ind = slice(naverage // 2, -naverage // 2)
+        realtimes = extended_times[realflg]
+        realgood = extended_flags[realflg] == 0
+        realsig1 = extended_signal1[realflg].copy()
+        if extended_signal2 is not None:
+            realsig2 = extended_signal2[realflg].copy()
         cov_hits = np.zeros(lagmax, dtype=np.int64)
         cov = np.zeros(lagmax, dtype=np.float64)
-        if signal2 is None:
-            fod_autosums(sig1[ind], good[ind].astype(np.uint8), lagmax, cov, cov_hits)
-        else:
-            sig2 = extended_signal2[realflg].copy()
-            sig2 = highpass_flagged_signal(sig2, good, lagmax)
-            fod_crosssums(
-                sig1[ind], sig2[ind], good[ind].astype(np.uint8), lagmax, cov, cov_hits
-            )
+        # Process all global intervals that overlap this realization
+        for start_time, stop_time in global_intervals:
+            if start_time > times[-1]:
+                # This interval is owned by another process
+                continue
+            if stop_time < realtimes[0] or start_time > realtimes[-1]:
+                # no overlap
+                continue
+            # Avoid double-counting sample pairs
+            all_sums = stop_time < realtimes[-1]
+            # Find the correct range of samples
+            istart, istop = np.searchsorted(realtimes, [start_time, stop_time])
+            ind = slice(istart, istop + 1)
+            good = realgood[ind].astype(np.uint8)
+            ngood = np.sum(good)
+            if ngood == 0:
+                continue
+            if extended_signal2 is None:
+                fod_autosums(realsig1[ind], good, lagmax, cov, cov_hits, all_sums)
+            else:
+                fod_crosssums(
+                    realsig1[ind],
+                    realsig2[ind],
+                    good,
+                    lagmax,
+                    cov,
+                    cov_hits,
+                    all_sums,
+                    symmetric,
+                )
         covs[ireal] = (cov_hits, cov)
 
     # Collect the estimated covariance functions

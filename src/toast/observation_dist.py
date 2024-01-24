@@ -917,4 +917,4 @@ def redistribute_data(
             glb = global_intervals[field]
         new_intervals_manager.create(field, glb, new_shared_manager[times], fromrank=0)
 
-    return new_shared_manager, new_detdata_manager, new_intervals_manager
+    return new_shared_manager, new_detdata_manager, new_intervals_manager, global_intervals

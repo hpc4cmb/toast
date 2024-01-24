@@ -19,7 +19,13 @@ from ..utils import Logger
 from .arithmetic import Combine
 from .copy import Copy
 from .delete import Delete
-from .noise_estimation_utils import autocov_psd, crosscov_psd, flagged_running_average
+from .noise_estimation_utils import (
+    autocov_psd,
+    crosscov_psd,
+    flagged_running_average,
+    communicate_overlap,
+    highpass_flagged_signal,
+)
 from .operator import Operator
 from .polyfilter import CommonModeFilter
 from .scan_healpix import ScanHealpixMap, ScanHealpixMask
@@ -131,9 +137,19 @@ class NoiseEstim(Operator):
 
     save_cov = Bool(False, help="Save also the sample covariance")
 
+    symmetric = Bool(
+        False,
+        help="If True, treat positive and negative lags as equivalent "
+        "in the cross correlator",
+    )
+
     nbin_psd = Int(1000, allow_none=True, help="Bin the resulting PSD")
 
-    lagmax = Int(10000, help="Maximum lag to consider for the covariance function")
+    lagmax = Int(
+        10000,
+        help="Maximum lag to consider for the covariance function. "
+        "Will be truncated the length of the longest view.",
+    )
 
     stationary_period = Quantity(
         86400 * u.s,
@@ -244,7 +260,9 @@ class NoiseEstim(Operator):
                 timer=timer,
             )
             # Redistribute this temporary observation to be distributed by samples
-            temp_obs.redistribute(1, times=self.times, override_sample_sets=None)
+            global_intervals = temp_obs.redistribute(
+                1, times=self.times, override_sample_sets=None, return_global_intervals=True)
+            global_intervals = global_intervals[self.view]
             log.debug_rank(
                 f"{obs.comm.group:4} : Redistributed observation in",
                 comm=temp_obs.comm.comm_group,
@@ -254,8 +272,11 @@ class NoiseEstim(Operator):
         else:
             self.redistribute = False
             temp_obs = obs
+            global_intervals = []
+            for ival in obs.intervals[self.view]:
+                global_intervals.append((ival.start, ival.stop))
 
-        return temp_obs
+        return temp_obs, global_intervals
 
     @function_timer
     def _re_redistribute(self, obs, temp_obs):
@@ -346,9 +367,9 @@ class NoiseEstim(Operator):
             scan_mask.apply(data, detectors=detectors)
 
         for orig_obs in data.obs:
-            obs = self._redistribute(orig_obs)
+            obs, global_intervals = self._redistribute(orig_obs)
 
-            # Get the set of all detector we are considering for this obs
+            # Get the set of all detectors we are considering for this obs
             local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if obs.comm.comm_group is not None:
                 pdets = obs.comm.comm_group.gather(local_dets, root=0)
@@ -401,6 +422,13 @@ class NoiseEstim(Operator):
                                 continue
                             pairs.append([det1, det2])
 
+            if self.symmetric:
+                # Remove duplicate entries in pair list
+                unordered_pairs = set()
+                for pair in pairs:
+                    unordered_pairs.add(tuple(sorted(pair)))
+                pairs = list(unordered_pairs)
+
             times = np.array(obs.shared[self.times])
             nsample = times.size
 
@@ -413,31 +441,6 @@ class NoiseEstim(Operator):
             fsample = obs.telescope.focalplane.sample_rate.to_value(u.Hz)
 
             fileroot = f"{self.name}_{obs.name}"
-
-            intervals = obs.intervals[self.view].data
-
-            # self.highpass_signal(obs, comm, intervals)
-
-            # Extend the gap between intervals to prevent sample pairs
-            # that cross the gap.
-
-            gap_min = self.lagmax + 1
-            # Downsampled data requires longer gaps
-            gap_min_nsum = self.lagmax * self.nsum + 1
-
-            gapflags = np.zeros_like(shared_flags)
-            gapflags_nsum = np.zeros_like(shared_flags)
-            for ival1, ival2 in zip(intervals[:-1], intervals[1:]):
-                gap_start = ival1.last + 1
-                gap_stop = max(gap_start + gap_min, ival2.first)
-                if gap_stop >= ival2.last:
-                    msg = f"Gap from samples {ival1.last+1} to {ival2.first}"
-                    msg += " extended through next good data interval.  Use "
-                    msg += "different / no intervals or shorter lagmax."
-                    log.warning(msg)
-                gap_stop_nsum = max(gap_start + gap_min_nsum, ival2.first)
-                gapflags[gap_start:gap_stop] = True
-                gapflags_nsum[gap_start:gap_stop_nsum] = True
 
             # Re-use this flag array
             flags = np.zeros(times.size, dtype=bool)
@@ -491,17 +494,16 @@ class NoiseEstim(Operator):
 
                     nse_freqs, nse_psd = self.process_noise_estimate(
                         obs,
+                        global_intervals,
                         signal1,
                         signal2,
                         flags,
-                        gapflags,
-                        gapflags_nsum,
                         times,
                         fsample,
                         fileroot,
                         det1_name,
                         det2_name,
-                        intervals,
+                        self.lagmax,
                     )
                 if obs.comm.group_rank == 0:
                     det_units = obs.detdata[self.det_data].units
@@ -539,58 +541,9 @@ class NoiseEstim(Operator):
             del obs
 
     @function_timer
-    def highpass_signal(self, obs, intervals):
-        """Suppress the sub-harmonic modes in the TOD by high-pass
-        filtering.
-        """
-        log = Logger.get()
-        timer = Timer()
-        timer.start()
-        log.debug_rank("High-pass-filtering signal", comm=obs.comm.comm_group)
-        for det in obs.local_detectors:
-            signal = obs.detdata[self.det_data][det]
-            flags = obs.detdata[self.det_flags][det] & self.det_flag_mask
-            for ival in intervals:
-                ind = slice(ival.first, ival.last + 1)
-                sig = signal[ind]
-                flg = flags[ind]
-                trend = flagged_running_average(
-                    sig, flg, self.lagmax, return_flags=False
-                )
-                sig -= trend
-        log.debug_rank("TOD high pass", comm=obs.comm.comm_group, timer=timer)
-        return
-
-    @function_timer
-    def decimate(self, x, flg, gapflg, intervals):
-        # Low-pass filter with running average, then downsample
-        xx = x.copy()
-        flags = flg.copy()
-        for ival in intervals:
-            ind = slice(ival.first, ival.last + 1)
-            xx[ind], flags[ind] = flagged_running_average(
-                x[ind], flg[ind], self.naverage, return_flags=True
-            )
-        return xx[:: self.nsum].copy(), (flags + gapflg)[:: self.nsum].copy()
-
-    # def highpass(self, x, flg):
-    #     # Flagged real-space high pass filter
-    #     xx = x.copy()
-    #
-    #     j = 0
-    #     while j < x.size and flg[j]: j += 1
-    #
-    #     alpha = .999
-    #
-    #     for i in range(j+1, x.size):
-    #         if flg[i]:
-    #             xx[i] = x[j]
-    #         else:
-    #             xx[i] = alpha*(xx[j] + x[i] - x[j])
-    #             j = i
-    #
-    #     xx /= alpha
-    #     return xx
+    def decimate(self, signal, flags):
+        """Downsample previously highpass-filtered signal"""
+        return signal[:: self.nsum].copy(), flags[:: self.nsum].copy()
 
     @function_timer
     def log_bin(self, freq, nbin=100, fmin=None, fmax=None):
@@ -806,11 +759,10 @@ class NoiseEstim(Operator):
         signal1,
         signal2,
         flags,
-        gapflags_nsum,
-        local_intervals,
         my_psds1,
         my_cov1,
         comm,
+        lagmax,
     ):
         # Get another PSD for a down-sampled TOD to measure the
         # low frequency power
@@ -818,16 +770,12 @@ class NoiseEstim(Operator):
         timestamps_decim = timestamps[:: self.nsum]
         # decimate() will smooth and downsample the signal in
         # each valid interval separately
-        signal1_decim, flags_decim = self.decimate(
-            signal1, flags, gapflags_nsum, local_intervals
-        )
+        signal1_decim, flags_decim = self.decimate(signal1, flags)
         if signal2 is not None:
-            signal2_decim, flags_decim = self.decimate(
-                signal2, flags, gapflags_nsum, local_intervals
-            )
+            signal2_decim, flags_decim = self.decimate(signal2, flags)
 
         stationary_period = self.stationary_period.to_value(u.s)
-        lagmax = min(self.lagmax, timestamps_decim.size)
+        lagmax = min(lagmax, timestamps_decim.size)
         if signal2 is None:
             result = autocov_psd(
                 timestamps_decim,
@@ -904,22 +852,56 @@ class NoiseEstim(Operator):
     def process_noise_estimate(
         self,
         obs,
+        global_intervals,
         signal1,
         signal2,
         flags,
-        gapflags,
-        gapflags_nsum,
         timestamps,
         fsample,
         fileroot,
         det1,
         det2,
-        local_intervals,
+        lagmax,
     ):
         log = Logger.get()
+
+        # We apply a prewhitening filter to the signal.  To accommodate the
+        # quality flags, the filter is a moving average that only accounts
+        # for the unflagged samples
+        naverage = lagmax
+
+        # Extend the local arrays to remove boundary effects from filtering
+        comm = obs.comm_row
+        extended_times, extended_flags, extended_signal1, extended_signal2 = \
+            communicate_overlap(
+                timestamps, signal1, signal2, flags, lagmax, naverage, comm
+            )
         # High pass filter the signal to avoid aliasing
-        # self.highpass(signal1, noise_flags)
-        # self.highpass(signal2, noise_flags)
+        extended_signal1 = highpass_flagged_signal(
+            extended_signal1,
+            extended_flags==0,
+            naverage,
+        )
+        if signal2 is not None:
+            extended_signal2 = highpass_flagged_signal(
+                extended_signal2,
+                extended_flags==0,
+                naverage,
+            )
+        # Crop the filtering margin but keep up to lagmax samples
+        half_average = naverage // 2 + 1
+        if comm is not None and comm.rank > 0:
+            extended_times = extended_times[half_average:]
+            extended_flags = extended_flags[half_average:]
+            extended_signal1 = extended_signal1[half_average:]
+            if extended_signal2 is not None:
+                extended_signal2 = extended_signal2[half_average:]
+        if comm is not None and comm.rank < comm.size - 1:
+            extended_times = extended_times[:-half_average]
+            extended_flags = extended_flags[:-half_average]
+            extended_signal1 = extended_signal1[:-half_average]
+            if extended_signal2 is not None:
+                extended_signal2 = extended_signal2[:-half_average]
 
         # Compute the autocovariance function and the matching
         # PSD for each stationary interval
@@ -930,25 +912,32 @@ class NoiseEstim(Operator):
         if signal2 is None:
             result = autocov_psd(
                 timestamps,
-                signal1,
-                flags + gapflags,
-                self.lagmax,
+                extended_times,
+                global_intervals,
+                extended_signal1,
+                extended_flags,
+                lagmax,
+                naverage,
                 stationary_period,
                 fsample,
-                comm=obs.comm_row,
+                comm=comm,
                 return_cov=self.save_cov,
             )
         else:
             result = crosscov_psd(
                 timestamps,
-                signal1,
-                signal2,
-                flags + gapflags,
-                self.lagmax,
+                extended_times,
+                global_intervals,
+                extended_signal1,
+                extended_signal2,
+                extended_flags,
+                lagmax,
+                naverage,
                 stationary_period,
                 fsample,
-                comm=obs.comm_row,
+                comm=comm,
                 return_cov=self.save_cov,
+                symmetric=self.symmetric,
             )
         if self.save_cov:
             my_psds1, my_cov1 = result
@@ -962,16 +951,15 @@ class NoiseEstim(Operator):
                 my_psds2,
                 my_cov2,
             ) = self.process_downsampled_noise_estimate(
-                timestamps,
+                extended_times,
                 fsample,
-                signal1,
-                signal2,
-                flags,
-                gapflags_nsum,
-                local_intervals,
+                extended_signal1,
+                extended_signal2,
+                extended_flags,
                 my_psds1,
                 my_cov1,
-                obs.comm_row,
+                comm,
+                lagmax,
             )
 
         log.debug_rank(
@@ -999,14 +987,15 @@ class NoiseEstim(Operator):
 
         # concatenate
 
+        if self.save_cov:
+            my_cov = my_cov1  # Only store the fully sampled covariance
+
         if binfreq10 is None:
             my_times = []
             my_binned_psds = []
             binfreq0 = None
         else:
             my_times = my_times1
-            if self.save_cov:
-                my_cov = my_cov1  # Only store the fully sampled covariance
             if self.nsum > 1:
                 # frequencies that are usable in the down-sampled PSD
                 fcut = fsample / 2 / self.naverage / 100
