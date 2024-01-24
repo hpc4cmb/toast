@@ -323,17 +323,24 @@ def crosscov_psd(
         cov = np.zeros(lagmax, dtype=np.float64)
         # Process all global intervals that overlap this realization
         for start_time, stop_time in global_intervals:
-            if start_time > times[-1]:
+            if start_time is not None \
+               and (start_time > times[-1] or start_time > realtimes[-1]):
                 # This interval is owned by another process
                 continue
-            if stop_time < realtimes[0] or start_time > realtimes[-1]:
+            if stop_time is not None and stop_time < realtimes[0]:
                 # no overlap
                 continue
             # Avoid double-counting sample pairs
-            all_sums = stop_time < realtimes[-1]
+            if stop_time is None:
+                all_sums = rank == ntask - 1
+            else:
+                all_sums = stop_time > realtimes[-1]
             # Find the correct range of samples
-            istart, istop = np.searchsorted(realtimes, [start_time, stop_time])
-            ind = slice(istart, istop + 1)
+            if start_time is None or stop_time is None:
+                ind = slice(realsig1.size)
+            else:
+                istart, istop = np.searchsorted(realtimes, [start_time, stop_time])
+                ind = slice(istart, istop )
             good = realgood[ind].astype(np.uint8)
             ngood = np.sum(good)
             if ngood == 0:

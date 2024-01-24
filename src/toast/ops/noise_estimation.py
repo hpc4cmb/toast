@@ -262,19 +262,22 @@ class NoiseEstim(Operator):
             # Redistribute this temporary observation to be distributed by samples
             global_intervals = temp_obs.redistribute(
                 1, times=self.times, override_sample_sets=None, return_global_intervals=True)
-            global_intervals = global_intervals[self.view]
+            if self.view is not None:
+                global_intervals = global_intervals[self.view]
             log.debug_rank(
                 f"{obs.comm.group:4} : Redistributed observation in",
                 comm=temp_obs.comm.comm_group,
                 timer=timer,
             )
-            comm = None
         else:
             self.redistribute = False
             temp_obs = obs
             global_intervals = []
-            for ival in obs.intervals[self.view]:
-                global_intervals.append((ival.start, ival.stop))
+            if self.view is not None:
+                for ival in obs.intervals[self.view]:
+                    global_intervals.append((ival.start, ival.stop))
+        if self.view is None:
+            global_intervals = [(None, None)]
 
         return temp_obs, global_intervals
 
@@ -505,6 +508,7 @@ class NoiseEstim(Operator):
                         det2_name,
                         self.lagmax,
                     )
+
                 if obs.comm.group_rank == 0:
                     det_units = obs.detdata[self.det_data].units
                     if det_units == u.dimensionless_unscaled:
@@ -754,6 +758,8 @@ class NoiseEstim(Operator):
     @function_timer
     def process_downsampled_noise_estimate(
         self,
+        obs,
+        global_intervals,
         timestamps,
         fsample,
         signal1,
@@ -771,17 +777,67 @@ class NoiseEstim(Operator):
         # decimate() will smooth and downsample the signal in
         # each valid interval separately
         signal1_decim, flags_decim = self.decimate(signal1, flags)
-        if signal2 is not None:
+        if signal2 is None:
+            signal2_decim = None
+        else:
             signal2_decim, flags_decim = self.decimate(signal2, flags)
 
         stationary_period = self.stationary_period.to_value(u.s)
         lagmax = min(lagmax, timestamps_decim.size)
+
+        # We apply a prewhitening filter to the signal.  To accommodate the
+        # quality flags, the filter is a moving average that only accounts
+        # for the unflagged samples
+        naverage = lagmax
+
+        # Extend the local arrays to remove boundary effects from filtering
+        comm = obs.comm_row
+        extended_times, extended_flags, extended_signal1, extended_signal2 = \
+            communicate_overlap(
+                timestamps_decim,
+                signal1_decim,
+                signal2_decim,
+                flags_decim,
+                lagmax,
+                naverage,
+                comm
+            )
+        # High pass filter the signal to avoid aliasing
+        extended_signal1 = highpass_flagged_signal(
+            extended_signal1,
+            extended_flags==0,
+            naverage,
+        )
+        if signal2 is not None:
+            extended_signal2 = highpass_flagged_signal(
+                extended_signal2,
+                extended_flags==0,
+                naverage,
+            )
+        # Crop the filtering margin but keep up to lagmax samples
+        half_average = naverage // 2 + 1
+        if comm is not None and comm.rank > 0:
+            extended_times = extended_times[half_average:]
+            extended_flags = extended_flags[half_average:]
+            extended_signal1 = extended_signal1[half_average:]
+            if extended_signal2 is not None:
+                extended_signal2 = extended_signal2[half_average:]
+        if comm is not None and comm.rank < comm.size - 1:
+            extended_times = extended_times[:-half_average]
+            extended_flags = extended_flags[:-half_average]
+            extended_signal1 = extended_signal1[:-half_average]
+            if extended_signal2 is not None:
+                extended_signal2 = extended_signal2[:-half_average]
+
         if signal2 is None:
             result = autocov_psd(
                 timestamps_decim,
-                signal1_decim,
-                flags_decim,
+                extended_times,
+                global_intervals,
+                extended_signal1,
+                extended_flags,
                 lagmax,
+                naverage,
                 stationary_period,
                 fsample / self.nsum,
                 comm=comm,
@@ -790,14 +846,18 @@ class NoiseEstim(Operator):
         else:
             result = crosscov_psd(
                 timestamps_decim,
-                signal1_decim,
-                signal2_decim,
-                flags_decim,
+                extended_times,
+                global_intervals,
+                extended_signal1,
+                extended_signal2,
+                extended_flags,
                 lagmax,
+                naverage,
                 stationary_period,
                 fsample / self.nsum,
                 comm=comm,
                 return_cov=self.save_cov,
+                symmetric=self.symmetric,
             )
         if self.save_cov:
             my_psds2, my_cov2 = result
@@ -863,6 +923,10 @@ class NoiseEstim(Operator):
         det2,
         lagmax,
     ):
+        """Measure the sample (cross) covariance in the signal-subtracted
+        TOD and Fourier-transform it for noise PSD.
+        """
+
         log = Logger.get()
 
         # We apply a prewhitening filter to the signal.  To accommodate the
@@ -951,6 +1015,8 @@ class NoiseEstim(Operator):
                 my_psds2,
                 my_cov2,
             ) = self.process_downsampled_noise_estimate(
+                obs,
+                global_intervals,
                 extended_times,
                 fsample,
                 extended_signal1,
