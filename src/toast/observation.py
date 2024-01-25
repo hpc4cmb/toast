@@ -656,6 +656,7 @@ class Observation(MutableMapping):
             sample_sets=self.all_sample_sets,
             process_rows=self.dist.process_rows,
         )
+        new_obs.set_local_detector_flags(self.local_detector_flags)
         for k, v in self._internal.items():
             if meta is None or k in meta:
                 new_obs[k] = copy.deepcopy(v)
@@ -817,6 +818,7 @@ class Observation(MutableMapping):
         self.intervals = new_intervals_manager
 
         # Restore detector flags for our new local detectors
+        self._detflags = {x: int(0) for x in self.dist.dets[self.dist.comm.group_rank]}
         self.set_local_detector_flags(
             {x: all_det_flags[x] for x in self.local_detectors}
         )

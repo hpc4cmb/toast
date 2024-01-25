@@ -402,7 +402,7 @@ class NoiseEstimTest(MPITestCase):
             shared_flag_mask=1,
             # view="scanning",
             output_dir=self.outdir,
-            lagmax=1000,
+            lagmax=200,
             nbin_psd=300,
         )
         estim.apply(data)
@@ -417,7 +417,7 @@ class NoiseEstimTest(MPITestCase):
             stokes_weights=weights,
             # view="scanning",
             output_dir=self.outdir,
-            lagmax=1000,
+            lagmax=200,
             nbin_psd=300,
         )
         estim.apply(data)
@@ -490,7 +490,7 @@ class NoiseEstimTest(MPITestCase):
             name="estimate_model",
             output_dir=self.outdir,
             out_model="noise_estimate",
-            lagmax=1000,
+            lagmax=200,
             nbin_psd=128,
             nsum=4,
         )
