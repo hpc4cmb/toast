@@ -81,7 +81,8 @@ def highpass_flagged_signal(sig, good, naverage):
     """
     ngood = np.sum(good)
     if ngood == 0:
-        raise RuntimeError("No valid samples")
+        # No valid samples
+        return np.zeros_like(sig)
     """
     De-trending disabled as unnecessary. It also changes results at
     different concurrencies.
@@ -101,8 +102,8 @@ def highpass_flagged_signal(sig, good, naverage):
 
 
 @function_timer
-def communicate_overlap(times, signal1, signal2, flags, lagmax, naverage, comm):
-    """Send and receive TOD to have margin for filtering and lag """
+def communicate_overlap(times, signal1, signal2, flags, lagmax, naverage, comm, group):
+    """Send and receive TOD to have margin for filtering and lag"""
 
     if comm is None:
         rank = 0
@@ -116,14 +117,6 @@ def communicate_overlap(times, signal1, signal2, flags, lagmax, naverage, comm):
 
     nsamp = signal1.size
 
-    if lagmax > nsamp and comm is not None and comm.size > 1:
-        msg = (
-            f"communicate_overlap: lagmax = {lagmax} and nsample = {nsamp}.  "
-            f"Communicating TOD beyond nearest neighbors is not "
-            f"implemented. Reduce lagmax or the size of the MPI communicator."
-        )
-        raise RuntimeError(msg)
-
     half_average = naverage // 2 + 1
     nextend_backward = half_average
     nextend_forward = half_average + lagmax
@@ -132,6 +125,15 @@ def communicate_overlap(times, signal1, signal2, flags, lagmax, naverage, comm):
     if rank == ntask - 1:
         nextend_forward = 0
     nextend = nextend_backward + nextend_forward
+
+    if lagmax + half_average > nsamp and comm is not None and comm.size > 1:
+        msg = (
+            f"communicate_overlap: lagmax + half_average = {lagmax+half_average} and "
+            f"nsample = {nsamp}.  Communicating TOD beyond nearest neighbors is not "
+            f"implemented. Reduce lagmax, the size of the averaging window, or the "
+            f"size of the MPI communicator."
+        )
+        raise RuntimeError(msg)
 
     extended_signal1 = np.zeros(nsamp + nextend, dtype=np.float64)
     if signal2 is None:
@@ -151,39 +153,60 @@ def communicate_overlap(times, signal1, signal2, flags, lagmax, naverage, comm):
     if comm is not None:
         for evenodd in range(2):
             if rank % 2 == evenodd % 2:
+                # Tag offset is based on the sending rank
+                tag = 8 * (comm.rank + group * comm.size)
                 # Send to rank - 1
                 if rank != 0:
                     nsend = lagmax + half_average
-                    comm.send(signal1[:nsend], dest=rank - 1, tag=1)
+                    comm.send(signal1[:nsend], dest=rank - 1, tag=tag + 0)
                     if signal2 is not None:
-                        comm.send(signal2[:nsend], dest=rank - 1, tag=2)
-                    comm.send(flags[:nsend], dest=rank - 1, tag=3)
-                    comm.send(times[:nsend], dest=rank - 1, tag=4)
+                        comm.send(signal2[:nsend], dest=rank - 1, tag=tag + 1)
+                    comm.send(flags[:nsend], dest=rank - 1, tag=tag + 2)
+                    comm.send(times[:nsend], dest=rank - 1, tag=tag + 3)
                 # Send to rank + 1
                 if rank != ntask - 1:
                     nsend = half_average
-                    comm.send(signal1[-nsend:], dest=rank + 1, tag=1)
+                    comm.send(signal1[-nsend:], dest=rank + 1, tag=tag + 4)
                     if signal2 is not None:
-                        comm.send(signal2[-nsend:], dest=rank + 1, tag=2)
-                    comm.send(flags[-nsend:], dest=rank + 1, tag=3)
-                    comm.send(times[-nsend:], dest=rank + 1, tag=4)
+                        comm.send(signal2[-nsend:], dest=rank + 1, tag=tag + 5)
+                    comm.send(flags[-nsend:], dest=rank + 1, tag=tag + 6)
+                    comm.send(times[-nsend:], dest=rank + 1, tag=tag + 7)
             else:
                 # Receive from rank + 1
                 if rank != ntask - 1:
+                    tag = 8 * ((comm.rank + 1) + group * comm.size)
                     nrecv = lagmax + half_average
-                    extended_signal1[-nrecv:] = comm.recv(source=rank + 1, tag=1)
+                    extended_signal1[-nrecv:] = comm.recv(
+                        source=rank + 1, tag=tag + 0
+                    )
                     if signal2 is not None:
-                        extended_signal2[-nrecv:] = comm.recv(source=rank + 1, tag=2)
-                    extended_flags[-nrecv:] = comm.recv(source=rank + 1, tag=3)
-                    extended_times[-nrecv:] = comm.recv(source=rank + 1, tag=4)
+                        extended_signal2[-nrecv:] = comm.recv(
+                            source=rank + 1, tag=tag + 1
+                        )
+                    extended_flags[-nrecv:] = comm.recv(
+                        source=rank + 1, tag=tag + 2
+                    )
+                    extended_times[-nrecv:] = comm.recv(
+                        source=rank + 1, tag=tag + 3
+                    )
                 # Receive from rank - 1
                 if rank != 0:
+                    tag = 8 * ((comm.rank - 1) + group * comm.size)
                     nrecv = half_average
-                    extended_signal1[:nrecv] = comm.recv(source=rank - 1, tag=1)
+                    extended_signal1[:nrecv] = comm.recv(
+                        source=rank - 1, tag=tag + 4
+                    )
                     if signal2 is not None:
-                        extended_signal2[:nrecv] = comm.recv(source=rank - 1, tag=2)
-                    extended_flags[:nrecv] = comm.recv(source=rank - 1, tag=3)
-                    extended_times[:nrecv] = comm.recv(source=rank - 1, tag=4)
+                        extended_signal2[:nrecv] = comm.recv(
+                            source=rank - 1, tag=tag + 5
+                        )
+                    extended_flags[:nrecv] = comm.recv(
+                        source=rank - 1, tag=tag + 6
+                    )
+                    extended_times[:nrecv] = comm.recv(
+                        source=rank - 1, tag=tag + 7
+                    )
+            comm.barrier()
 
     return extended_times, extended_flags, extended_signal1, extended_signal2
 
@@ -323,8 +346,9 @@ def crosscov_psd(
         cov = np.zeros(lagmax, dtype=np.float64)
         # Process all global intervals that overlap this realization
         for start_time, stop_time in global_intervals:
-            if start_time is not None \
-               and (start_time > times[-1] or start_time > realtimes[-1]):
+            if start_time is not None and (
+                start_time > times[-1] or start_time > realtimes[-1]
+            ):
                 # This interval is owned by another process
                 continue
             if stop_time is not None and stop_time < realtimes[0]:
@@ -340,7 +364,7 @@ def crosscov_psd(
                 ind = slice(realsig1.size)
             else:
                 istart, istop = np.searchsorted(realtimes, [start_time, stop_time])
-                ind = slice(istart, istop )
+                ind = slice(istart, istop)
             good = realgood[ind].astype(np.uint8)
             ngood = np.sum(good)
             if ngood == 0:

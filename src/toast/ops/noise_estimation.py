@@ -179,6 +179,8 @@ class NoiseEstim(Operator):
         None, allow_none=True, help="When set, PSDs are measured over averaged TODs"
     )
 
+    remove_common_mode = Bool(True, help="Remove common mode signal before estimation")
+
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
         detpointing = proposal["value"]
@@ -261,7 +263,11 @@ class NoiseEstim(Operator):
             )
             # Redistribute this temporary observation to be distributed by samples
             global_intervals = temp_obs.redistribute(
-                1, times=self.times, override_sample_sets=None, return_global_intervals=True)
+                1,
+                times=self.times,
+                override_sample_sets=None,
+                return_global_intervals=True,
+            )
             if self.view is not None:
                 global_intervals = global_intervals[self.view]
             log.debug_rank(
@@ -318,29 +324,27 @@ class NoiseEstim(Operator):
 
         log = Logger.get()
 
-        # FIXME:  The common mode filter would be more efficient if we moved
-        # this block of code to working on a data view with a single observation
-        # that is already re-distributed below.
         if self.focalplane_key is not None:
             if len(self.pairs) > 0:
                 msg = "focalplane_key is not compatible with pairs"
                 raise RuntimeError(msg)
-            # Measure the averages of the signal across the focalplane.
-            Copy(detdata=[(self.det_data, "temp_signal")]).apply(data)
-            CommonModeFilter(
-                det_data="temp_signal",
-                det_mask=self.det_mask,
-                det_flags=self.det_flags,
-                det_flag_mask=self.det_flag_mask,
-                focalplane_key=self.focalplane_key,
-            ).apply(data)
-            Combine(
-                op="subtract",
-                first=self.det_data,
-                second="temp_signal",
-                output=self.det_data,
-            ).apply(data)
-            Delete(detdata="temp_signal")
+            if self.remove_common_mode:
+                # Measure and subtract the common mode signal across the focalplane.
+                Copy(detdata=[(self.det_data, "temp_signal")]).apply(data)
+                CommonModeFilter(
+                    det_data="temp_signal",
+                    det_mask=self.det_mask,
+                    det_flags=self.det_flags,
+                    det_flag_mask=self.det_flag_mask,
+                    focalplane_key=self.focalplane_key,
+                ).apply(data)
+                Combine(
+                    op="subtract",
+                    first=self.det_data,
+                    second="temp_signal",
+                    output=self.det_data,
+                ).apply(data)
+                Delete(detdata="temp_signal")
 
         if self.mapfile is not None:
             if self.pol:
@@ -372,19 +376,11 @@ class NoiseEstim(Operator):
         for orig_obs in data.obs:
             obs, global_intervals = self._redistribute(orig_obs)
 
-            # Get the set of all detectors we are considering for this obs
+            # Get the set of all detectors we are considering for this obs.  Since
+            # we have already redistributed the data, every process has a time slice
+            # and the same set of local detectors.
             local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
-            if obs.comm.comm_group is not None:
-                pdets = obs.comm.comm_group.gather(local_dets, root=0)
-                good_dets = None
-                if obs.comm.group_rank == 0:
-                    good_dets = set()
-                    for plocal in pdets:
-                        for d in plocal:
-                            good_dets.add(d)
-                good_dets = obs.comm.comm_group.bcast(good_dets, root=0)
-            else:
-                good_dets = set(local_dets)
+            good_dets = set(local_dets)
 
             if self.focalplane_key is not None:
                 # Pick just one detector to represent each key value
@@ -392,7 +388,7 @@ class NoiseEstim(Operator):
                 det_names = []
                 key2det = {}
                 det2key = {}
-                for det in obs.all_detectors:
+                for det in local_dets:
                     key = fp[det][self.focalplane_key]
                     if key not in key2det:
                         det_names.append(det)
@@ -792,26 +788,31 @@ class NoiseEstim(Operator):
 
         # Extend the local arrays to remove boundary effects from filtering
         comm = obs.comm_row
-        extended_times, extended_flags, extended_signal1, extended_signal2 = \
-            communicate_overlap(
-                timestamps_decim,
-                signal1_decim,
-                signal2_decim,
-                flags_decim,
-                lagmax,
-                naverage,
-                comm
-            )
+        (
+            extended_times,
+            extended_flags,
+            extended_signal1,
+            extended_signal2,
+        ) = communicate_overlap(
+            timestamps_decim,
+            signal1_decim,
+            signal2_decim,
+            flags_decim,
+            lagmax,
+            naverage,
+            comm,
+            obs.comm.group,
+        )
         # High pass filter the signal to avoid aliasing
         extended_signal1 = highpass_flagged_signal(
             extended_signal1,
-            extended_flags==0,
+            extended_flags == 0,
             naverage,
         )
         if signal2 is not None:
             extended_signal2 = highpass_flagged_signal(
                 extended_signal2,
-                extended_flags==0,
+                extended_flags == 0,
                 naverage,
             )
         # Crop the filtering margin but keep up to lagmax samples
@@ -936,20 +937,24 @@ class NoiseEstim(Operator):
 
         # Extend the local arrays to remove boundary effects from filtering
         comm = obs.comm_row
-        extended_times, extended_flags, extended_signal1, extended_signal2 = \
-            communicate_overlap(
-                timestamps, signal1, signal2, flags, lagmax, naverage, comm
-            )
+        (
+            extended_times,
+            extended_flags,
+            extended_signal1,
+            extended_signal2,
+        ) = communicate_overlap(
+            timestamps, signal1, signal2, flags, lagmax, naverage, comm, obs.comm.group
+        )
         # High pass filter the signal to avoid aliasing
         extended_signal1 = highpass_flagged_signal(
             extended_signal1,
-            extended_flags==0,
+            extended_flags == 0,
             naverage,
         )
         if signal2 is not None:
             extended_signal2 = highpass_flagged_signal(
                 extended_signal2,
-                extended_flags==0,
+                extended_flags == 0,
                 naverage,
             )
         # Crop the filtering margin but keep up to lagmax samples
