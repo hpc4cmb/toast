@@ -489,7 +489,7 @@ def offset_apply_diag_precond_inner(
     Returns:
         amplitudes_out (array, double): size n_amp
     """
-    non_flagged_amplitudes = amplitude_flags != 0
+    non_flagged_amplitudes = amplitude_flags == 0
     amplitudes_out = jnp.where(non_flagged_amplitudes, amplitudes_in * offset_var, 0.0)
     return amplitudes_out
 

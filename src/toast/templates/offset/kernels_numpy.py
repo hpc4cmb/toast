@@ -122,7 +122,7 @@ def offset_apply_diag_precond_numpy(
     Returns:
         None (the result is put in amplitudes_out).
     """
-    good = amplitude_flags != 0
+    good = amplitude_flags == 0
     bad = np.logical_not(good)
     amplitudes_out[good] = amplitudes_in[good] * offset_var[good]
     amplitudes_out[bad] = 0.0
