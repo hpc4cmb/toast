@@ -36,6 +36,10 @@ void init_template_offset(py::module & m) {
             );
             int64_t n_amp = temp_shape[0];
 
+            uint8_t * raw_amplitude_flags = extract_buffer <uint8_t> (
+                amplitude_flags, "amplitude_flags", 1, temp_shape, {n_amp}
+            );
+
             double * raw_det_data = extract_buffer <double> (
                 det_data, "det_data", 2, temp_shape, {-1, -1}
             );
@@ -63,6 +67,7 @@ void init_template_offset(py::module & m) {
                 double * dev_det_data = omgr.device_ptr(raw_det_data);
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                 double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
+                uint8_t * dev_amp_flags = omgr.device_ptr(raw_amplitude_flags);
 
                 // Calculate the maximum interval size on the CPU
                 int64_t max_interval_size = 0;
@@ -86,6 +91,7 @@ void init_template_offset(py::module & m) {
                     # pragma omp target teams distribute parallel for collapse(2) \
                     is_device_ptr(                                                \
                     dev_amplitudes,                                               \
+                    dev_amp_flags,                                                \
                     dev_det_data,                                                 \
                     dev_intervals                                                 \
                     )
@@ -105,7 +111,9 @@ void init_template_offset(py::module & m) {
                                 (adjusted_isamp - dev_intervals[iview].first) /
                                 step_length
                             );
-                            dev_det_data[d] += dev_amplitudes[amp];
+                            if (dev_amp_flags[amp] == 0) {
+                                dev_det_data[d] += dev_amplitudes[amp];
+                            }
                         }
                     }
                 }
@@ -123,7 +131,9 @@ void init_template_offset(py::module & m) {
                         int64_t amp = amp_offset + amp_view_off[iview] + (int64_t)(
                             (isamp - raw_intervals[iview].first) / step_length
                         );
-                        raw_det_data[d] += raw_amplitudes[amp];
+                        if (raw_amplitude_flags[amp] == 0) {
+                            raw_det_data[d] += raw_amplitudes[amp];
+                        }
                     }
                 }
             }
@@ -159,6 +169,10 @@ void init_template_offset(py::module & m) {
                 amplitudes, "amplitudes", 1, temp_shape, {-1}
             );
             int64_t n_amp = temp_shape[0];
+
+            uint8_t * raw_amplitude_flags = extract_buffer <uint8_t> (
+                amplitude_flags, "amplitude_flags", 1, temp_shape, {n_amp}
+            );
 
             double * raw_det_data = extract_buffer <double> (
                 det_data, "det_data", 2, temp_shape, {-1, -1}
@@ -198,6 +212,7 @@ void init_template_offset(py::module & m) {
                 uint8_t * dev_det_flags = omgr.device_ptr(raw_det_flags);
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                 double * dev_amplitudes = omgr.device_ptr(raw_amplitudes);
+                uint8_t * dev_amp_flags = omgr.device_ptr(raw_amplitude_flags);
 
                 // Calculate the maximum interval size on the CPU
                 int64_t max_interval_size = 0;
@@ -224,6 +239,7 @@ void init_template_offset(py::module & m) {
                     # pragma omp target teams distribute collapse(2) \
                     is_device_ptr(                                   \
                     dev_amplitudes,                                  \
+                    dev_amp_flags,                                   \
                     dev_det_data,                                    \
                     dev_det_flags,                                   \
                     dev_intervals                                    \
@@ -249,25 +265,27 @@ void init_template_offset(py::module & m) {
                                 dev_intervals[iview].last - adjusted_isamp + 1
                             );
 
-                            // Reduce on a chunk of `step_length` samples.
-                            double contrib = 0.0;
-                            # pragma omp parallel for reduction(+ : contrib)
-                            for (int64_t i = 0; i < max_step_length; i++) {
-                                int64_t d = data_index * n_samp + adjusted_isamp + i;
-                                if (use_flags) {
-                                    int64_t f = flag_index * n_samp + adjusted_isamp + i;
-                                    uint8_t check = dev_det_flags[f] & flag_mask;
-                                    if (check == 0) {
-                                        contrib += dev_det_data[d];
-                                    }
-                                } else {
-                                    contrib += dev_det_data[d];
-                                }
-                            }
-
                             int64_t amp = amp_offset + amp_view_off[iview] +
                                           (int64_t)(isamp / step_length);
-                            dev_amplitudes[amp] += contrib;
+
+                            if (dev_amp_flags[amp] == 0) {
+                                // Reduce on a chunk of `step_length` samples.
+                                double contrib = 0.0;
+                                # pragma omp parallel for reduction(+ : contrib)
+                                for (int64_t i = 0; i < max_step_length; i++) {
+                                    int64_t d = data_index * n_samp + adjusted_isamp + i;
+                                    if (use_flags) {
+                                        int64_t f = flag_index * n_samp + adjusted_isamp + i;
+                                        uint8_t check = dev_det_flags[f] & flag_mask;
+                                        if (check == 0) {
+                                            contrib += dev_det_data[d];
+                                        }
+                                    } else {
+                                        contrib += dev_det_data[d];
+                                    }
+                                }
+                                dev_amplitudes[amp] += contrib;
+                            }
                         }
                     }
                 }
@@ -285,18 +303,20 @@ void init_template_offset(py::module & m) {
                         int64_t amp = amp_offset + amp_view_off[iview] + (int64_t)(
                             (isamp - raw_intervals[iview].first) / step_length
                         );
-                        double contrib = 0.0;
-                        if (use_flags) {
-                            int64_t f = flag_index * n_samp + isamp;
-                            uint8_t check = raw_det_flags[f] & flag_mask;
-                            if (check == 0) {
+                        if (raw_amplitude_flags[amp] == 0) {
+                            double contrib = 0.0;
+                            if (use_flags) {
+                                int64_t f = flag_index * n_samp + isamp;
+                                uint8_t check = raw_det_flags[f] & flag_mask;
+                                if (check == 0) {
+                                    contrib = raw_det_data[d];
+                                }
+                            } else {
                                 contrib = raw_det_data[d];
                             }
-                        } else {
-                            contrib = raw_det_data[d];
+                            #pragma omp atomic update
+                            raw_amplitudes[amp] += contrib;
                         }
-                        #pragma omp atomic update
-                        raw_amplitudes[amp] += contrib;
                     }
                 }
             }
@@ -324,6 +344,10 @@ void init_template_offset(py::module & m) {
             );
             int64_t n_amp = temp_shape[0];
 
+            uint8_t * raw_amplitude_flags = extract_buffer <uint8_t> (
+                amplitude_flags, "amplitude_flags", 1, temp_shape, {n_amp}
+            );
+
             double * raw_amp_out = extract_buffer <double> (
                 amplitudes_out, "amplitudes_out", 1, temp_shape, {n_amp}
             );
@@ -338,6 +362,7 @@ void init_template_offset(py::module & m) {
                 double * dev_amp_in = omgr.device_ptr(raw_amp_in);
                 double * dev_amp_out = omgr.device_ptr(raw_amp_out);
                 double * dev_offset_var = omgr.device_ptr(raw_offset_var);
+                uint8_t * dev_amp_flags = omgr.device_ptr(raw_amplitude_flags);
 
                 # pragma omp target data map(to : n_amp)
                 {
@@ -345,11 +370,16 @@ void init_template_offset(py::module & m) {
                     is_device_ptr(                                    \
                     dev_amp_in,                                       \
                     dev_amp_out,                                      \
+                    dev_amp_flags,                                    \
                     dev_offset_var                                    \
                     )
                     for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                        dev_amp_out[iamp] = dev_amp_in[iamp];
-                        dev_amp_out[iamp] *= dev_offset_var[iamp];
+                        if (dev_amp_flags[iamp] == 0) {
+                            dev_amp_out[iamp] = dev_amp_in[iamp];
+                            dev_amp_out[iamp] *= dev_offset_var[iamp];
+                        } else {
+                            dev_amp_out[iamp] = 0.0;
+                        }
                     }
                 }
 
@@ -357,8 +387,12 @@ void init_template_offset(py::module & m) {
             } else {
                 #pragma omp parallel for default(shared)
                 for (int64_t iamp = 0; iamp < n_amp; iamp++) {
-                    raw_amp_out[iamp] = raw_amp_in[iamp];
-                    raw_amp_out[iamp] *= raw_offset_var[iamp];
+                    if (raw_amplitude_flags[iamp] == 0) {
+                        raw_amp_out[iamp] = raw_amp_in[iamp];
+                        raw_amp_out[iamp] *= raw_offset_var[iamp];
+                    } else {
+                        raw_amp_out[iamp] = 0.0;
+                    }
                 }
             }
             return;

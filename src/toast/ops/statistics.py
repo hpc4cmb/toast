@@ -117,9 +117,7 @@ class Statistics(Operator):
                 fname_out = os.path.join(self.output_dir, fname_out)
 
             # Get the list of all detectors that are not cut
-            obs_dets = obs.select_local_detectors(
-                detectors, flagmask=self.det_mask
-            )
+            obs_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if obs.comm.group_size == 1:
                 all_dets = obs_dets
             else:

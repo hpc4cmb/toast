@@ -28,6 +28,7 @@ def offset_add_to_signal_numpy(
         amp_offset (int)
         n_amp_views (array, int): size n_view
         amplitudes (array, double): The float64 amplitude values (size n_amp)
+        amplitude_flags (array, int): flags for each amplitude value (size n_amp)
         data_index (int)
         det_data (array, double): The float64 timestream values (size n_all_det*n_samp).
         intervals (array, Interval): size n_view
@@ -76,6 +77,7 @@ def offset_project_signal_numpy(
         amp_offset (int)
         n_amp_views (array, int): size n_view
         amplitudes (array, double): The float64 amplitude values (size n_amp)
+        amplitude_flags (array, int): flags for each amplitude value (size n_amp)
         intervals (array, Interval): size n_view
         use_accel (bool): should we use the accelerator
 
@@ -113,13 +115,14 @@ def offset_apply_diag_precond_numpy(
     Args:
         offset_var (array, double): size n_amp
         amplitudes_in (array, double): size n_amp
+        amplitude_flags (array, int): flags for each amplitude value (size n_amp)
         amplitudes_out (array, double): size n_amp
         use_accel (bool): should we use the accelerator
 
     Returns:
         None (the result is put in amplitudes_out).
     """
-    good = amplitude_flags != 0
+    good = amplitude_flags == 0
     bad = np.logical_not(good)
     amplitudes_out[good] = amplitudes_in[good] * offset_var[good]
     amplitudes_out[bad] = 0.0

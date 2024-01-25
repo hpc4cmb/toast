@@ -145,14 +145,14 @@ class Demodulate(Operator):
         if check < 0:
             raise traitlets.TraitError("Det mask should be a positive integer")
         return check
-    
+
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
         if check < 0:
             raise traitlets.TraitError("Det flag mask should be a positive integer")
         return check
-    
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_mask(self, proposal):
         check = proposal["value"]
@@ -219,9 +219,7 @@ class Demodulate(Operator):
         timer.start()
         for obs in demodulate_obs:
             # Get the detectors which are not cut with per-detector flags
-            local_dets = obs.select_local_detectors(
-                detectors, flagmask=self.det_mask
-            )
+            local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if obs.comm.comm_group is None:
                 all_dets = local_dets
             else:
