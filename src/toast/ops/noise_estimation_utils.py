@@ -358,7 +358,7 @@ def crosscov_psd(
             if stop_time is None:
                 all_sums = rank == ntask - 1
             else:
-                all_sums = stop_time > realtimes[-1]
+                all_sums = stop_time < realtimes[-1]
             # Find the correct range of samples
             if start_time is None or stop_time is None:
                 ind = slice(realsig1.size)
