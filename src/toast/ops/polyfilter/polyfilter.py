@@ -226,16 +226,12 @@ class PolyFilter2D(Operator):
 
             # Enumerate detectors to process
 
-            # Mapping from detector name to index
+            # Mapping from good detector name to index
             detector_index = {y: x for x, y in enumerate(detectors)}
-
-            # The integer group ID for a given detector index
-            group_det = np.array([group_index[x] for x in detectors])
 
             # Measure offset for each group, translate and scale
             # detector positions to [-1, 1]
 
-            group_offset = {}
             all_positions = []
             for group, detectors_group in groups.items():
                 ndet_group = len(detectors_group)
@@ -269,11 +265,7 @@ class PolyFilter2D(Operator):
             yorders = yorders.ravel()
 
             detector_templates = np.zeros([ndet, nmode])
-            for det in temp_ob.local_detectors:
-                if det not in detector_index:
-                    # Skip detectors that were cut by per-detector flags or
-                    # pattern match.
-                    continue
+            for det in detectors:
                 idet = detector_index[det]
                 theta, phi = detector_position[det]
                 detector_templates[idet] = theta**xorders * phi**yorders
@@ -322,16 +314,14 @@ class PolyFilter2D(Operator):
                 else:
                     shared_mask = np.ones(nsample, dtype=bool)
 
-                for idet, det in enumerate(temp_ob.local_detectors):
-                    if det not in detector_index:
-                        continue
+                for det in detectors:
                     ind_det = detector_index[det]
                     ind_group = group_index[det]
                     det_groups[ind_det] = ind_group
 
-                    signal = temp_ob.detdata[self.det_data][idet, vslice]
+                    signal = temp_ob.detdata[self.det_data][det, vslice]
                     if self.det_flags is not None:
-                        det_flags = temp_ob.detdata[self.det_flags][idet, vslice]
+                        det_flags = temp_ob.detdata[self.det_flags][det, vslice]
                         det_mask = (det_flags & self.det_flag_mask) == 0
                         mask = np.logical_and(shared_mask, det_mask)
                     else:
@@ -358,16 +348,15 @@ class PolyFilter2D(Operator):
                 gt.start("Poly2D:  Update detector flags")
 
                 for igroup in range(ngroup):
-                    local_dets = temp_ob.local_detectors
-                    dets_in_group = np.zeros(len(local_dets), dtype=bool)
-                    for idet, det in enumerate(local_dets):
+                    dets_in_group = np.zeros(ndet, dtype=bool)
+                    for idet, det in enumerate(detectors):
                         if group_index[det] == igroup:
                             dets_in_group[idet] = True
                     if not np.any(dets_in_group):
                         continue
                     if self.det_flags is not None:
                         sample_flags = np.ones(
-                            len(local_dets),
+                            ndet,
                             dtype=temp_ob.detdata[self.det_flags].dtype,
                         )
                         sample_flags *= self.poly_flag_mask
@@ -375,7 +364,7 @@ class PolyFilter2D(Operator):
                         for isample in range(nsample):
                             if np.all(coeff[isample, igroup] == 0):
                                 temp_ob.detdata[self.det_flags][
-                                    :, view.first + isample
+                                    detectors, view.first + isample
                                 ] |= sample_flags
 
                 gt.stop("Poly2D:  Update detector flags")
@@ -386,12 +375,10 @@ class PolyFilter2D(Operator):
                     np.array(coeff), [1, 0, 2]
                 )  # ngroup x nsample x nmode
                 trmasks = np.array(masks).T  # ndet x nsample
-                for idet, det in enumerate(temp_ob.local_detectors):
-                    if det not in detector_index:
-                        continue
+                for idet, det in enumerate(detectors):
                     igroup = group_index[det]
                     ind = detector_index[det]
-                    signal = temp_ob.detdata[self.det_data][idet, vslice]
+                    signal = temp_ob.detdata[self.det_data][det, vslice]
                     mask = trmasks[idet]
                     signal -= np.sum(trcoeff[igroup] * templates[ind], 1) * mask
 
@@ -406,9 +393,14 @@ class PolyFilter2D(Operator):
 
             # Copy data to original observation
             gt.start("Poly2D:  Copy output")
-            obs.detdata[self.det_data][:] = temp_ob.detdata[self.det_data][:]
-            if self.det_flags is not None:
-                obs.detdata[self.det_flags][:] = temp_ob.detdata[self.det_flags][:]
+            for det in obs.select_local_detectors(
+                selection=None, flagmask=self.det_mask
+            ):
+                obs.detdata[self.det_data][det] = temp_ob.detdata[self.det_data][det]
+                if self.det_flags is not None:
+                    obs.detdata[self.det_flags][det] = temp_ob.detdata[self.det_flags][
+                        det
+                    ]
             gt.stop("Poly2D:  Copy output")
 
             # Free data copy
