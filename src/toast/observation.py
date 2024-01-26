@@ -656,6 +656,7 @@ class Observation(MutableMapping):
             sample_sets=self.all_sample_sets,
             process_rows=self.dist.process_rows,
         )
+        new_obs.set_local_detector_flags(self.local_detector_flags)
         for k, v in self._internal.items():
             if meta is None or k in meta:
                 new_obs[k] = copy.deepcopy(v)
@@ -720,6 +721,7 @@ class Observation(MutableMapping):
         times=None,
         override_sample_sets=False,
         override_detector_sets=False,
+        return_global_intervals=False,
     ):
         """Take the currently allocated observation and redistribute in place.
 
@@ -738,9 +740,11 @@ class Observation(MutableMapping):
                 existing sample set boundaries in the redistributed data.
             override_detector_sets (False, None or list):  If not False, override
                 existing detector set boundaries in the redistributed data.
+            return_global_intervals (bool):  Return a list of global intervals for
+                reference
 
         Returns:
-            None
+            None or global_intervals
 
         """
         log = Logger.get()
@@ -781,15 +785,16 @@ class Observation(MutableMapping):
         )
 
         # Do the actual redistribution
-        new_shr_manager, new_det_manager, new_intervals_manager = redistribute_data(
-            self.dist,
-            new_dist,
-            self.shared,
-            self.detdata,
-            self.intervals,
-            times=times,
-            dbg=self.name,
-        )
+        new_shr_manager, new_det_manager, new_intervals_manager, global_intervals = \
+            redistribute_data(
+                self.dist,
+                new_dist,
+                self.shared,
+                self.detdata,
+                self.intervals,
+                times=times,
+                dbg=self.name,
+            )
 
         # Redistribute any metadata objects that support it.
         for k, v in self._internal.items():
@@ -813,9 +818,16 @@ class Observation(MutableMapping):
         self.intervals = new_intervals_manager
 
         # Restore detector flags for our new local detectors
+        self._detflags = {x: int(0) for x in self.dist.dets[self.dist.comm.group_rank]}
         self.set_local_detector_flags(
             {x: all_det_flags[x] for x in self.local_detectors}
         )
+
+        if return_global_intervals:
+            global_intervals = self.dist.comm.comm_group.bcast(global_intervals)
+            return global_intervals
+        else:
+            return
 
     # Accelerator use
 

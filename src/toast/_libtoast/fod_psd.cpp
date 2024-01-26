@@ -1,5 +1,5 @@
 
-// Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
@@ -8,7 +8,8 @@
 
 void init_fod_psd(py::module & m) {
     m.def("fod_crosssums", [](py::buffer x, py::buffer y, py::buffer good,
-                              int64_t lagmax, py::buffer sums, py::buffer hits) {
+                              int64_t lagmax, py::buffer sums, py::buffer hits,
+			      int64_t all_sums, int64_t symmetric) {
               pybuffer_check_1D <double> (x);
               pybuffer_check_1D <double> (y);
               pybuffer_check_1D <uint8_t> (good);
@@ -42,11 +43,12 @@ void init_fod_psd(py::module & m) {
               uint8_t * rawgood = reinterpret_cast <uint8_t *> (info_good.ptr);
               double * rawsums = reinterpret_cast <double *> (info_sums.ptr);
               int64_t * rawhits = reinterpret_cast <int64_t *> (info_hits.ptr);
-              toast::fod_crosssums(n, rawx, rawy, rawgood, lagmax, rawsums, rawhits);
+              toast::fod_crosssums(n, rawx, rawy, rawgood, lagmax,
+				   rawsums, rawhits, all_sums, symmetric);
               return;
           }, py::arg("x"), py::arg("y"), py::arg("good"), py::arg("lagmax"),
-          py::arg("sums"), py::arg(
-              "hits"), R"(
+          py::arg("sums"), py::arg("hits"), py::arg("all_sums"),
+	  py::arg("symmetric"), R"(
         Accumulate the time domain covariance between two vectors.
 
         Args:
@@ -56,6 +58,8 @@ void init_fod_psd(py::module & m) {
             lagmax (int): The maximum sample distance to consider.
             sums (array like, float64): The vector of sums^2 to accumulate for each lag.
             hits (array_like, int64):  The vector of hits to accumulate for each lag.
+            all_sums (int):  If non-zero, evaluate lags < `lagmax` even in the last
+                `lagmax` samples of `x` and `y`.
 
         Returns:
             None.
@@ -63,7 +67,8 @@ void init_fod_psd(py::module & m) {
     )");
 
     m.def("fod_autosums", [](py::buffer x, py::buffer good, int64_t lagmax,
-                             py::buffer sums, py::buffer hits) {
+                             py::buffer sums, py::buffer hits,
+			     int64_t all_sums) {
               pybuffer_check_1D <double> (x);
               pybuffer_check_1D <uint8_t> (good);
               pybuffer_check_1D <double> (sums);
@@ -93,11 +98,11 @@ void init_fod_psd(py::module & m) {
               uint8_t * rawgood = reinterpret_cast <uint8_t *> (info_good.ptr);
               double * rawsums = reinterpret_cast <double *> (info_sums.ptr);
               int64_t * rawhits = reinterpret_cast <int64_t *> (info_hits.ptr);
-              toast::fod_autosums(n, rawx, rawgood, lagmax, rawsums, rawhits);
+              toast::fod_autosums(n, rawx, rawgood, lagmax,
+				  rawsums, rawhits, all_sums);
               return;
           }, py::arg("x"), py::arg("good"), py::arg("lagmax"),
-          py::arg("sums"), py::arg(
-              "hits"), R"(
+          py::arg("sums"), py::arg("hits"), py::arg("all_sums"), R"(
         Accumulate the time domain covariance.
 
         Args:
@@ -106,6 +111,8 @@ void init_fod_psd(py::module & m) {
             lagmax (int): The maximum sample distance to consider.
             sums (array like, float64): The vector of sums^2 to accumulate for each lag.
             hits (array_like, int64):  The vector of hits to accumulate for each lag.
+            all_sums (int):  If non-zero, evaluate lags < `lagmax` even in the last
+                `lagmax` samples of `x`.
 
         Returns:
             None.
