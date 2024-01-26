@@ -16,17 +16,18 @@ from tomlkit import comment, document, dumps, loads, nl, table
 from .. import ops
 from ..config import (
     build_config,
+    dump_config,
+    dump_json,
     dump_toml,
     dump_yaml,
-    dump_json,
     load_config,
-    dump_config,
     parse_config,
 )
 from ..data import Data
 from ..instrument import Focalplane, Telescope
 from ..schedule_sim_satellite import create_satellite_schedule
 from ..templates import Offset, SubHarmonic
+from ..trait_utils import string_to_trait, trait_to_string
 from ..traits import (
     Bool,
     Dict,
@@ -39,10 +40,9 @@ from ..traits import (
     Tuple,
     Unicode,
     Unit,
-    trait_docs,
     create_from_config,
+    trait_docs,
 )
-from ..trait_utils import trait_to_string, string_to_trait
 from ..utils import Environment, Logger
 from ._helpers import close_data, create_comm, create_outdir, create_space_telescope
 from .mpi import MPITestCase

@@ -14,7 +14,7 @@ import traceback
 from collections import OrderedDict
 
 import toast
-from toast.config import dump_toml, dump_yaml, dump_json, load_config
+from toast.config import dump_json, dump_toml, dump_yaml, load_config
 from toast.mpi import Comm, get_world
 from toast.utils import Environment, Logger, import_from_name, object_fullname
 

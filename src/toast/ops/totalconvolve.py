@@ -13,7 +13,7 @@ from astropy import units as u
 from .. import qarray as qa
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
-from ..timing import function_timer, Timer
+from ..timing import Timer, function_timer
 from ..traits import (
     Bool,
     Dict,

@@ -12,7 +12,7 @@ from astropy import units as u
 from ..mpi import MPI, use_mpi
 from ..observation import default_values as defaults
 from ..templates import Offset
-from ..timing import function_timer, Timer
+from ..timing import Timer, function_timer
 from ..traits import Bool, Dict, Instance, Int, Unicode, trait_docs
 from ..utils import Environment, Logger, dtype_to_aligned
 from .delete import Delete

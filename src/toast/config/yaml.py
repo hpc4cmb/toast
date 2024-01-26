@@ -14,7 +14,7 @@ from collections import OrderedDict
 from astropy import units as u
 from ruamel.yaml import YAML, CommentedMap
 
-from ..trait_utils import trait_to_string, string_to_trait
+from ..trait_utils import string_to_trait, trait_to_string
 from ..utils import Environment, Logger
 from .utils import merge_config
 

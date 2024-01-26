@@ -5,7 +5,6 @@
 import argparse
 import ast
 import copy
-
 import re
 import sys
 import types
@@ -16,11 +15,10 @@ import numpy as np
 from astropy import units as u
 from tomlkit.exceptions import TOMLKitError
 
-from ..trait_utils import trait_to_string, string_to_trait
 from ..trait_utils import scalar_to_string as trait_scalar_to_string
 from ..trait_utils import string_to_scalar as trait_string_to_scalar
+from ..trait_utils import string_to_trait, trait_to_string
 from ..utils import Environment, Logger
-
 from .json import dump_json, load_json
 from .toml import dump_toml, load_toml
 from .yaml import dump_yaml, load_yaml

@@ -5,10 +5,10 @@
 from .cli import (
     add_config_args,
     args_update_config,
-    parse_config,
-    load_config,
-    dump_config,
     build_config,
+    dump_config,
+    load_config,
+    parse_config,
 )
 from .json import dump_json
 from .toml import dump_toml

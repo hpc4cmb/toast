@@ -11,16 +11,17 @@ back to their native values for ease of use and editing.
 
 from collections import OrderedDict
 
-from astropy import units as u
 import tomlkit
+from astropy import units as u
 from tomlkit import comment, document, dumps, loads, nl, table
 
-from ..trait_utils import trait_to_string, string_to_trait
-from ..utils import Environment
+from ..trait_utils import string_to_trait, trait_to_string
+from ..utils import Environment, Logger
 from .utils import merge_config
 
 
 def _load_toml_element(elem):
+    log = Logger.get()
     # See if we are loading one of the TOML supported types
     if isinstance(elem, bool):
         if elem:
@@ -38,6 +39,10 @@ def _load_toml_element(elem):
     # the TOML files).  Remove this code after a suitable
     # deprecation period.
     if isinstance(elem, list):
+        msg = f"Storing trait '{elem}' as a TOML array is deprecated. "
+        msg += f"All containers should be stored as a string representation."
+        msg += f"You can use toast_config_verify to update your config files."
+        log.warning(msg)
         elist = "["
         for el in elem:
             if isinstance(el, str):

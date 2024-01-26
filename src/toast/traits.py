@@ -30,9 +30,8 @@ from traitlets import (
 )
 
 from .accelerator import ImplementationType, use_accel_jax, use_accel_omp
-from .trait_utils import trait_to_string, string_to_trait, fix_quotes
+from .trait_utils import fix_quotes, string_to_trait, trait_to_string
 from .utils import Logger, import_from_name, object_fullname
-
 
 # Add mixin methods to built-in Trait types
 

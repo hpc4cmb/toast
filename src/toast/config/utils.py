@@ -11,7 +11,9 @@ def merge_config(loaded, original):
         if section in original.keys():
             # We have this section
             if isinstance(original[section], str):
-                # Just some metadata
+                # This is not a real section, but rather a string value of
+                # top-level metadata.  Just copy it into place, overriding
+                # the existing value.
                 original[section] = objs
                 continue
             for objname, objprops in objs.items():
@@ -30,6 +32,16 @@ def merge_config(loaded, original):
                             cursor["value"] = v["value"]
                             if "type" not in cursor:
                                 cursor["type"] = v["type"]
+                            elif (
+                                v["type"] is not None
+                                and v["type"] != "unknown"
+                                and cursor["type"] != "enum"
+                            ):
+                                # The loaded data has at type, check for consistency
+                                if v["type"] != cursor["type"]:
+                                    msg = f"Loaded trait {v} has different type than "
+                                    msg += f"existing trait {cursor}"
+                                    raise ValueError(msg)
                         else:
                             # We have a config option that does not exist
                             # in the current object.  Warn user that this may

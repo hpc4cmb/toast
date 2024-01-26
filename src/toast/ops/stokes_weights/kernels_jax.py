@@ -12,7 +12,6 @@ from ...jax.math import qarray
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import Logger
 
-
 # ----------------------------------------------------------------------------------------
 # IQU
 

@@ -16,8 +16,9 @@ from ..accelerator import accel_enabled
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
-from ..timing import GlobalTimers, gather_timers
+from ..timing import GlobalTimers
 from ..timing import dump as dump_timers
+from ..timing import gather_timers
 from ..vis import set_matplotlib_backend
 from ._helpers import close_data, create_fake_sky, create_outdir, create_satellite_data
 from .mpi import MPITestCase

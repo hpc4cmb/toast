@@ -4,6 +4,7 @@
 
 import jax
 import jax.numpy as jnp
+
 from ...accelerator import ImplementationType, kernel
 from ...jax.intervals import INTERVALS_JAX
 from ...jax.maps import imap

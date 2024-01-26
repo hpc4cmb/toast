@@ -16,15 +16,9 @@ from ..._libtoast import subtract_mean, sum_detectors
 from ...accelerator import ImplementationType
 from ...mpi import MPI, Comm, MPI_Comm, use_mpi
 from ...observation import default_values as defaults
-from ...timing import function_timer, GlobalTimers, Timer
+from ...timing import GlobalTimers, Timer, function_timer
 from ...traits import Bool, Dict, Instance, Int, Quantity, Unicode, UseEnum, trait_docs
-from ...utils import (
-    AlignedF64,
-    AlignedU8,
-    Environment,
-    Logger,
-    dtype_to_aligned,
-)
+from ...utils import AlignedF64, AlignedU8, Environment, Logger, dtype_to_aligned
 from ..operator import Operator
 from .kernels import filter_poly2D, filter_polynomial
 
