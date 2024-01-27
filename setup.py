@@ -297,7 +297,7 @@ conf["install_requires"] = [
     "psutil",
     "h5py",
     "pshmem>=0.2.10",
-    "pyyaml",
+    "ruamel.yaml",
     "astropy",
     "healpy",
     "ephem",
@@ -310,7 +310,7 @@ conf["extras_require"] = {
         "ipywidgets",
         "plotly",
         "plotly-resampler",
-    ]
+    ],
 }
 conf["packages"] = find_packages(
     "src",

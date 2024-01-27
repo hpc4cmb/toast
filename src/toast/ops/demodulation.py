@@ -20,7 +20,7 @@ from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..noise import Noise
 from ..observation import Observation
 from ..observation import default_values as defaults
-from ..timing import function_timer, Timer
+from ..timing import Timer, function_timer
 from ..traits import Bool, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import Logger, dtype_to_aligned, name_UID
 from .operator import Operator

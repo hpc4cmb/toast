@@ -34,6 +34,7 @@ from .mpi import MPITestCase
 
 if use_accel_jax:
     import jax
+
     from ..jax.mutableArray import MutableJaxArray, _zero_out_jitted
 
 

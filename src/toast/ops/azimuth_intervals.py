@@ -14,9 +14,8 @@ from .._libtoast import add_templates, bin_invcov, bin_proj, legendre
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Int, Unicode, trait_docs
-from ..timing import Timer
 from ..utils import Environment, Logger, rate_from_times
 from ..vis import set_matplotlib_backend
 from .operator import Operator

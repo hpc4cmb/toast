@@ -1,10 +1,12 @@
-import jax
-from jax import vmap, lax
-from jax import numpy as jnp
-from copy import deepcopy
-from types import EllipsisType
-from inspect import Signature, Parameter
 import itertools
+from copy import deepcopy
+from inspect import Parameter, Signature
+from types import EllipsisType
+
+import jax
+from jax import lax
+from jax import numpy as jnp
+from jax import vmap
 
 # ----------------------------------------------------------------------------------------
 # PYTREE FUNCTIONS
