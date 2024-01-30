@@ -13,6 +13,10 @@ on: workflow_dispatch
 #       - master
 #       - toast3
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build_wheels:
     name: Build wheel for cp${{ matrix.python }}-${{ matrix.platform_id }}-${{ matrix.manylinux_image }}
@@ -107,11 +111,6 @@ jobs:
         source {project}/packaging/wheels/cibw_run_tests.sh
       CIBW_TEST_SKIP: "*-macosx_arm64 *-macosx_universal2:arm64"
     steps:
-      - name: Cancel Previous Runs
-        uses: styfle/cancel-workflow-action@0.11.0
-        with:
-          access_token: ${{ github.token }}
-
       - name: Checkout
         uses: actions/checkout@v3
 

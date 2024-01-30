@@ -148,7 +148,11 @@ class SaveHDF5(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    volume = Unicode("toast_out_hdf5", help="Top-level directory for the data volume")
+    volume = Unicode(
+        "toast_out_hdf5",
+        allow_none=True,
+        help="Top-level directory for the data volume",
+    )
 
     # FIXME:  We should add a filtering mechanism here to dump a subset of
     # observations and / or detectors, as well as figure out subdirectory organization.
@@ -195,6 +199,11 @@ class SaveHDF5(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        if self.volume is None:
+            msg = "You must set the volume trait prior to calling exec()"
+            log.error(msg)
+            raise RuntimeError(msg)
 
         # One process creates the top directory
         if data.comm.world_rank == 0:
