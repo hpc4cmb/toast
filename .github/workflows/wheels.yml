@@ -1,7 +1,7 @@
 
 name:  Test Binary Wheels
 
-# on: workflow_dispatch
+on: workflow_dispatch
 # FIXME:  Remove these lines once this workflow merged
 # to main branch.
 # on:
