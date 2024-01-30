@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -131,14 +131,14 @@ class GroundFilter(Operator):
         False, help="Apply a different template for left and right scans"
     )
 
-    leftright_mask = Int(
-        defaults.shared_mask_scan_leftright,
-        help="Bit mask value for left-to-right scans",
+    leftright_interval = Unicode(
+        defaults.throw_leftright_interval,
+        help="Intervals for left-to-right scans",
     )
 
-    rightleft_mask = Int(
-        defaults.shared_mask_scan_rightleft,
-        help="Bit mask value for right-to-left scans",
+    rightleft_interval = Unicode(
+        defaults.throw_rightleft_interval,
+        help="Intervals for right-to-left scans",
     )
 
     @traitlets.validate("det_mask")
@@ -226,10 +226,14 @@ class GroundFilter(Operator):
             # Create separate templates for alternating scans
             common_flags = obs.shared[self.shared_flags].data
             legendre_filter = []
-            mask1 = (common_flags & self.rightleft_mask) == 0
-            mask2 = (common_flags & self.leftright_mask) == 0
+            masks = []
+            for name in self.leftright_interval, self.rightleft_interval:
+                mask = np.zeros(phase.size, dtype=bool)
+                for ival in obs.intervals[name]:
+                    mask[ival.first : ival.last + 1] = True
+                masks.append(mask)
             for template in legendre_templates:
-                for mask in mask1, mask2:
+                for mask in masks:
                     temp = template.copy()
                     temp[mask] = 0
                     legendre_filter.append(temp)

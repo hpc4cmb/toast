@@ -475,7 +475,7 @@ class PolyFilter(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_invalid | defaults.shared_mask_turnaround,
+        defaults.shared_mask_nonscience,
         help="Bit mask value for optional shared flagging",
     )
 
