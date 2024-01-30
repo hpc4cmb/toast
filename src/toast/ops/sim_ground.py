@@ -298,17 +298,8 @@ class SimGround(Operator):
     )
 
     turnaround_mask = Int(
-        defaults.shared_mask_turnaround, help="Bit mask to raise turnaround flags with"
-    )
-
-    leftright_mask = Int(
-        defaults.shared_mask_scan_leftright,
-        help="Bit mask to raise left-to-right flags with",
-    )
-
-    rightleft_mask = Int(
-        defaults.shared_mask_scan_rightleft,
-        help="Bit mask to raise right-to-left flags with",
+        defaults.shared_mask_unstable_scanrate,
+        help="Bit mask to raise turnaround flags with"
     )
 
     sun_up_mask = Int(
@@ -320,7 +311,8 @@ class SimGround(Operator):
     )
 
     elnod_mask = Int(
-        defaults.shared_mask_elnod, help="Bit mask to raise elevation nod flags with"
+        defaults.shared_mask_irregular,
+        help="Bit mask to raise elevation nod flags with",
     )
 
     @traitlets.validate("telescope")
@@ -809,8 +801,6 @@ class SimGround(Operator):
             shared_flag_bytes=1,
             view_mask=[
                 (self.turnaround_interval, self.turnaround_mask),
-                (self.throw_leftright_interval, self.leftright_mask),
-                (self.throw_rightleft_interval, self.rightleft_mask),
                 (self.sun_up_interval, self.sun_up_mask),
                 (self.sun_close_interval, self.sun_close_mask),
                 (self.elnod_interval, self.elnod_mask),
