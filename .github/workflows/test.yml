@@ -57,19 +57,22 @@ jobs:
             ompdisable: 1
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Conda Base
-        uses: conda-incubator/setup-miniconda@v2
-        with:
-          miniconda-version: "latest"
-          channels: conda-forge
-          use-only-tar-bz2: true  # IMPORTANT: Needs for caching to work properly!
-          auto-update-conda: true
-          auto-activate-base: true
+        run: |
+          rm -rf /usr/share/miniconda
+          rm -rf /usr/local/miniconda
+          curl -SL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh
+          bash miniforge.sh -b -f -p ~/conda
+          source ~/conda/etc/profile.d/conda.sh
+          conda activate base
+          conda update -n base --yes conda
 
       - name: Check Conda Config
         run: |
+          source ~/conda/etc/profile.d/conda.sh
+          conda activate base
           conda info
           conda list
           conda config --show-sources
@@ -77,16 +80,20 @@ jobs:
 
       - name: Create Conda Env
         run: |
+          source ~/conda/etc/profile.d/conda.sh
+          conda activate base
           ./platforms/conda_dev_setup.sh toast ${{ matrix.python }} yes
 
       - name: Install
         run: |
+          source ~/conda/etc/profile.d/conda.sh
           conda activate toast
           export TOAST_BUILD_DISABLE_OPENMP=${{ matrix.ompdisable }}
           ./platforms/conda.sh
 
       - name: Run Serial Tests
         run: |
+          source ~/conda/etc/profile.d/conda.sh
           conda activate toast
           export OMP_NUM_THREADS=2
           export MPI_DISABLE=1
@@ -96,6 +103,7 @@ jobs:
 
       - name: Run MPI Tests
         run: |
+          source ~/conda/etc/profile.d/conda.sh
           conda activate toast
           export OMP_NUM_THREADS=1
           mpirun -np 2 python -c 'import toast.tests; toast.tests.run()'
