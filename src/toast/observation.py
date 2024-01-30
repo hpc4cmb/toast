@@ -73,12 +73,8 @@ def set_default_values(values=None):
         #
         # ground-specific flag masks
         #
-        "shared_mask_turnaround": 2,
-        "shared_mask_elnod": 4,
-        "shared_mask_scan_leftright": 8,
-        "shared_mask_scan_rightleft": 16,
-        "shared_mask_sun_up": 32,
-        "shared_mask_sun_close": 64,
+        "shared_mask_sun_up": 16,
+        "shared_mask_sun_close": 32,
         #
         # ground-specific interval names
         #
