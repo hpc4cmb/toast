@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -80,6 +80,7 @@ class SimAtmTest(MPITestCase):
         # Simulate atmosphere signal and accumulate
         sim_atm = ops.SimAtmosphere(
             detector_pointing=detpointing_azel,
+            zmax=200 * u.m,
         )
         sim_atm.apply(data)
 
@@ -136,7 +137,7 @@ class SimAtmTest(MPITestCase):
             mdata = hp.read_map(mapfile, nest=False, dtype=float)
             mdata[mdata == 0] = hp.UNSEEN
 
-            outfile = "{}.png".format(mapfile)
+            outfile = f"{mapfile}.png"
             hp.gnomview(mdata, xsize=1600, rot=(42.0, -42.0), reso=0.5, nest=False)
             plt.savefig(outfile)
             plt.close()
@@ -145,7 +146,7 @@ class SimAtmTest(MPITestCase):
             mdata = hp.read_map(mapfile, None, nest=False)
             mdata[mdata == 0] = hp.UNSEEN
 
-            outfile = "{}.png".format(mapfile)
+            outfile = f"{mapfile}.png"
             fig = plt.figure(figsize=[8 * 3, 12])
             hp.gnomview(
                 mdata[0],
@@ -180,7 +181,7 @@ class SimAtmTest(MPITestCase):
             mdata = hp.read_map(mapfile, None, nest=False)
             mdata[mdata == 0] = hp.UNSEEN
 
-            outfile = "{}.png".format(mapfile)
+            outfile = f"{mapfile}.png"
             fig = plt.figure(figsize=[8 * 3, 12])
             hp.gnomview(
                 mdata[0],
@@ -226,7 +227,7 @@ class SimAtmTest(MPITestCase):
             rank = self.comm.rank
 
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, sample_rate=100 * u.Hz)
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
@@ -240,6 +241,7 @@ class SimAtmTest(MPITestCase):
         sim_atm = ops.SimAtmosphere(
             detector_pointing=detpointing_azel,
             det_data="full_signal",
+            zmax=200 * u.m,
         )
         sim_atm.apply(data)
 
@@ -248,6 +250,7 @@ class SimAtmTest(MPITestCase):
             detector_pointing=detpointing_azel,
             sample_rate=data.obs[0].telescope.focalplane.sample_rate / 4,
             det_data="interpolated_signal",
+            zmax=200 * u.m,
         )
         sim_atm.apply(data)
 
@@ -329,6 +332,7 @@ class SimAtmTest(MPITestCase):
             detector_weights=azel_weights,
             polarization_fraction=0.2,
             add_loading=False,  # Loading is not polarized
+            zmax=200 * u.m,
         )
         sim_atm.apply(data)
 
@@ -381,7 +385,7 @@ class SimAtmTest(MPITestCase):
             mdata = hp.read_map(mapfile, nest=False, dtype=float)
             mdata[mdata == 0] = hp.UNSEEN
 
-            outfile = "{}.png".format(mapfile)
+            outfile = f"{mapfile}.png"
             hp.gnomview(mdata, xsize=1600, rot=(42.0, -42.0), reso=0.5, nest=False)
             plt.savefig(outfile)
             plt.close()
@@ -390,7 +394,7 @@ class SimAtmTest(MPITestCase):
             mdata = hp.read_map(mapfile, None, nest=False)
             mdata[mdata == 0] = hp.UNSEEN
 
-            outfile = "{}.png".format(mapfile)
+            outfile = f"{mapfile}.png"
             fig = plt.figure(figsize=[8 * 3, 12])
             hp.gnomview(
                 mdata[0],
@@ -460,6 +464,7 @@ class SimAtmTest(MPITestCase):
         sim_atm = ops.SimAtmosphere(
             detector_pointing=detpointing_azel,
             gain=0,
+            zmax=200 * u.m,
         )
         sim_atm.apply(data)
 
@@ -526,6 +531,7 @@ class SimAtmTest(MPITestCase):
         sim_atm = ops.SimAtmosphere(
             detector_pointing=detpointing_azel,
             cache_dir=cache_dir,
+            zmax=200 * u.m,
         )
         sim_atm.apply(data)
 
@@ -627,6 +633,7 @@ class SimAtmTest(MPITestCase):
         sim_atm = ops.SimAtmosphere(
             detector_pointing=detpointing_azel,
             detector_weights=weights_azel,
+            zmax=200 * u.m,
         )
 
         # Build hit map and covariance

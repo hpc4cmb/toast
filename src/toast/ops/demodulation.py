@@ -731,6 +731,8 @@ class StokesWeightsDemod(Operator):
 
         for obs in data.obs:
             dets = obs.select_local_detectors(detectors)
+            if len(dets) == 0:
+                continue
 
             exists_weights = obs.detdata.ensure(
                 self.weights,
