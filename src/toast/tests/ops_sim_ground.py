@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -235,19 +235,15 @@ class SimGroundTest(MPITestCase):
 
         assert np.std(az1 - az2) > 1e-10
 
-        # Verify that the flags still identify left-right scans correctly
+        # Verify that the intervals still identify left-right scans correctly
 
-        flags1 = data1.obs[0].shared["flags"][:]
-        flags2 = data2.obs[0].shared["flags"][:]
+        good1 = np.zeros(az1.size, dtype=bool)
+        good2 = np.zeros(az2.size, dtype=bool)
 
-        good1 = np.logical_and(
-            (flags1 & sim_ground.leftright_mask) != 0,
-            (flags1 & sim_ground.turnaround_mask) == 0,
-        )
-        good2 = np.logical_and(
-            (flags2 & sim_ground.leftright_mask) != 0,
-            (flags2 & sim_ground.turnaround_mask) == 0,
-        )
+        for ival in data1.obs[0].intervals[defaults.scan_leftright_interval]:
+            good1[ival.first : ival.last + 1] = True
+        for ival in data2.obs[0].intervals[defaults.scan_leftright_interval]:
+            good2[ival.first : ival.last + 1] = True
 
         step1 = np.median(np.diff(az1[good1]))
         step2 = np.median(np.diff(az2[good2]))

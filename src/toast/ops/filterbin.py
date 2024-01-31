@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -534,14 +534,14 @@ class FilterBin(Operator):
         False, help="Apply a different template for left and right scans"
     )
 
-    leftright_mask = Int(
-        defaults.shared_mask_scan_leftright,
-        help="Bit mask value for left-to-right scans",
+    leftright_interval = Unicode(
+        defaults.throw_leftright_interval,
+        help="Intervals for left-to-right scans",
     )
 
-    rightleft_mask = Int(
-        defaults.shared_mask_scan_rightleft,
-        help="Bit mask value for right-to-left scans",
+    rightleft_interval = Unicode(
+        defaults.throw_rightleft_interval,
+        help="Intervals for right-to-left scans",
     )
 
     poly_filter_order = Int(1, allow_none=True, help="Polynomial order")
@@ -1006,13 +1006,16 @@ class FilterBin(Operator):
         if not self.split_ground_template:
             legendre_filter = legendre_templates
         else:
-            # Separate ground filter by scan direction.  These bit masks are
-            # hard-coded in sim_ground.py
+            # Separate ground filter by scan direction.
             legendre_filter = []
-            mask1 = (shared_flags & self.leftright_mask) != 0
-            mask2 = (shared_flags & self.rightleft_mask) != 0
+            masks = []
+            for name in self.leftright_interval, self.rightleft_interval:
+                mask = np.zeros(phase.size, dtype=bool)
+                for ival in obs.intervals[name]:
+                    mask[ival.first : ival.last + 1] = True
+                masks.append(mask)
             for template in legendre_templates:
-                for mask in mask1, mask2:
+                for mask in masks:
                     temp = template.copy()
                     temp[mask] = 0
                     legendre_filter.append(temp)

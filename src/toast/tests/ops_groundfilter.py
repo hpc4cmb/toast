@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class GroundFilterTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, fixture_name)
         np.random.seed(123456)
-        self.shared_flag_mask = 1
+        self.shared_flag_mask = defaults.shared_mask_invalid
 
     def test_groundfilter(self):
         # Create a fake ground data set for testing
@@ -102,10 +102,13 @@ class GroundFilterTest(MPITestCase):
 
         rms = dict()
         for ob in data.obs:
-            shared_flags = ob.shared[defaults.shared_flags].data
-            rightgoing = (shared_flags & defaults.shared_mask_scan_leftright) != 0
-            leftgoing = (shared_flags & defaults.shared_mask_scan_rightleft) != 0
             az = ob.shared[defaults.azimuth].data * 100
+            rightgoing = np.zeros(az.size, dtype=bool)
+            for ival in ob.intervals[defaults.throw_leftright_interval]:
+                rightgoing[ival.first : ival.last + 1] = True
+            leftgoing = np.zeros(az.size, dtype=bool)
+            for ival in ob.intervals[defaults.throw_rightleft_interval]:
+                leftgoing[ival.first : ival.last + 1] = True
             rms[ob.name] = dict()
             for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
