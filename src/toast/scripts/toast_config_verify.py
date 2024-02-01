@@ -42,12 +42,12 @@ def main():
             iop += 1
             user_opts.append(opts[iop])
             iop += 1
-        if opts[iop] == "--out_json":
+        elif opts[iop] == "--out_json":
             user_opts.append(opts[iop])
             iop += 1
             user_opts.append(opts[iop])
             iop += 1
-        if opts[iop] == "--out_yaml":
+        elif opts[iop] == "--out_yaml":
             user_opts.append(opts[iop])
             iop += 1
             user_opts.append(opts[iop])
