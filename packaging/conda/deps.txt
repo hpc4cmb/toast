@@ -16,4 +16,3 @@ coverage
 pytest
 coveralls
 pytest-cov
-ducc0
