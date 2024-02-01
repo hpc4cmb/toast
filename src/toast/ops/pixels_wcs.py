@@ -379,9 +379,9 @@ class PixelsWCS(Operator):
             self.wcs_shape = tuple(grid_dims)
         log.verbose(f"PixelsWCS: wcs_shape = {self.wcs_shape}")
 
-        self.pix_ra = self.wcs_shape[0]
-        self.pix_dec = self.wcs_shape[1]
-        self._n_pix = self.pix_ra * self.pix_dec
+        self.pix_lon = self.wcs_shape[0]
+        self.pix_lat = self.wcs_shape[1]
+        self._n_pix = self.pix_lon * self.pix_lat
         self._n_pix_submap = self._n_pix // self.submaps
         if self._n_pix_submap * self.submaps < self._n_pix:
             self._n_pix_submap += 1
@@ -575,7 +575,7 @@ class PixelsWCS(Operator):
                     rdpix = np.array(np.around(rdpix), dtype=np.int64)
 
                     ob.detdata[self.pixels][det, vslice] = (
-                        rdpix[:, 0] * self.pix_dec + rdpix[:, 1]
+                        rdpix[:, 0] * self.pix_lat + rdpix[:, 1]
                     )
                     bad_pointing = ob.detdata[self.pixels][det, vslice] >= self._n_pix
                     (ob.detdata[self.pixels][det, vslice])[bad_pointing] = -1
