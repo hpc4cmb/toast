@@ -9,7 +9,7 @@
 void init_fod_psd(py::module & m) {
     m.def("fod_crosssums", [](py::buffer x, py::buffer y, py::buffer good,
                               int64_t lagmax, py::buffer sums, py::buffer hits,
-			      int64_t all_sums, int64_t symmetric) {
+                              int64_t all_sums, int64_t symmetric) {
               pybuffer_check_1D <double> (x);
               pybuffer_check_1D <double> (y);
               pybuffer_check_1D <uint8_t> (good);
@@ -44,11 +44,12 @@ void init_fod_psd(py::module & m) {
               double * rawsums = reinterpret_cast <double *> (info_sums.ptr);
               int64_t * rawhits = reinterpret_cast <int64_t *> (info_hits.ptr);
               toast::fod_crosssums(n, rawx, rawy, rawgood, lagmax,
-				   rawsums, rawhits, all_sums, symmetric);
+                                   rawsums, rawhits, all_sums, symmetric);
               return;
           }, py::arg("x"), py::arg("y"), py::arg("good"), py::arg("lagmax"),
           py::arg("sums"), py::arg("hits"), py::arg("all_sums"),
-	  py::arg("symmetric"), R"(
+          py::arg(
+              "symmetric"), R"(
         Accumulate the time domain covariance between two vectors.
 
         Args:
@@ -68,7 +69,7 @@ void init_fod_psd(py::module & m) {
 
     m.def("fod_autosums", [](py::buffer x, py::buffer good, int64_t lagmax,
                              py::buffer sums, py::buffer hits,
-			     int64_t all_sums) {
+                             int64_t all_sums) {
               pybuffer_check_1D <double> (x);
               pybuffer_check_1D <uint8_t> (good);
               pybuffer_check_1D <double> (sums);
@@ -99,10 +100,11 @@ void init_fod_psd(py::module & m) {
               double * rawsums = reinterpret_cast <double *> (info_sums.ptr);
               int64_t * rawhits = reinterpret_cast <int64_t *> (info_hits.ptr);
               toast::fod_autosums(n, rawx, rawgood, lagmax,
-				  rawsums, rawhits, all_sums);
+                                  rawsums, rawhits, all_sums);
               return;
           }, py::arg("x"), py::arg("good"), py::arg("lagmax"),
-          py::arg("sums"), py::arg("hits"), py::arg("all_sums"), R"(
+          py::arg("sums"), py::arg("hits"), py::arg(
+              "all_sums"), R"(
         Accumulate the time domain covariance.
 
         Args:

@@ -6,6 +6,7 @@ install(FILES
     template.py
     amplitudes.py
     fourier2d.py
+    hwpss.py
     periodic.py
     subharmonic.py
     gaintemplate.py

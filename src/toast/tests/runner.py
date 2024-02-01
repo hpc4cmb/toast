@@ -72,6 +72,7 @@ from . import rng as test_rng
 from . import template_amplitudes as test_template_amplitudes
 from . import template_fourier2d as test_template_fourier2d
 from . import template_gain as test_template_gain
+from . import template_hwpss as test_template_hwpss
 from . import template_offset as test_template_offset
 from . import template_periodic as test_template_periodic
 from . import template_subharmonic as test_template_subharmonic
@@ -224,6 +225,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_template_periodic))
         suite.addTest(loader.loadTestsFromModule(test_template_offset))
         suite.addTest(loader.loadTestsFromModule(test_template_fourier2d))
+        suite.addTest(loader.loadTestsFromModule(test_template_hwpss))
         suite.addTest(loader.loadTestsFromModule(test_template_subharmonic))
         suite.addTest(loader.loadTestsFromModule(test_template_gain))
 

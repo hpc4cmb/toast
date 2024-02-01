@@ -299,7 +299,7 @@ class SimGround(Operator):
 
     turnaround_mask = Int(
         defaults.shared_mask_unstable_scanrate,
-        help="Bit mask to raise turnaround flags with"
+        help="Bit mask to raise turnaround flags with",
     )
 
     sun_up_mask = Int(

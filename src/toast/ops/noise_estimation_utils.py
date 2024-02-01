@@ -176,36 +176,24 @@ def communicate_overlap(times, signal1, signal2, flags, lagmax, naverage, comm, 
                 if rank != ntask - 1:
                     tag = 8 * ((comm.rank + 1) + group * comm.size)
                     nrecv = lagmax + half_average
-                    extended_signal1[-nrecv:] = comm.recv(
-                        source=rank + 1, tag=tag + 0
-                    )
+                    extended_signal1[-nrecv:] = comm.recv(source=rank + 1, tag=tag + 0)
                     if signal2 is not None:
                         extended_signal2[-nrecv:] = comm.recv(
                             source=rank + 1, tag=tag + 1
                         )
-                    extended_flags[-nrecv:] = comm.recv(
-                        source=rank + 1, tag=tag + 2
-                    )
-                    extended_times[-nrecv:] = comm.recv(
-                        source=rank + 1, tag=tag + 3
-                    )
+                    extended_flags[-nrecv:] = comm.recv(source=rank + 1, tag=tag + 2)
+                    extended_times[-nrecv:] = comm.recv(source=rank + 1, tag=tag + 3)
                 # Receive from rank - 1
                 if rank != 0:
                     tag = 8 * ((comm.rank - 1) + group * comm.size)
                     nrecv = half_average
-                    extended_signal1[:nrecv] = comm.recv(
-                        source=rank - 1, tag=tag + 4
-                    )
+                    extended_signal1[:nrecv] = comm.recv(source=rank - 1, tag=tag + 4)
                     if signal2 is not None:
                         extended_signal2[:nrecv] = comm.recv(
                             source=rank - 1, tag=tag + 5
                         )
-                    extended_flags[:nrecv] = comm.recv(
-                        source=rank - 1, tag=tag + 6
-                    )
-                    extended_times[:nrecv] = comm.recv(
-                        source=rank - 1, tag=tag + 7
-                    )
+                    extended_flags[:nrecv] = comm.recv(source=rank - 1, tag=tag + 6)
+                    extended_times[:nrecv] = comm.recv(source=rank - 1, tag=tag + 7)
             comm.barrier()
 
     return extended_times, extended_flags, extended_signal1, extended_signal2

@@ -103,7 +103,9 @@ def close_data(data):
     del cm
 
 
-def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1):
+def create_space_telescope(
+    group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1, width=5.0 * u.degree
+):
     """Create a fake satellite telescope with at least one pixel per process."""
     npix = 1
     ring = 1
@@ -116,6 +118,7 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proces
         psd_fmin=1.0e-5 * u.Hz,
         psd_net=0.05 * u.K * np.sqrt(1 * u.second),
         psd_fknee=(sample_rate / 2000.0),
+        width=width,
     )
     site = SpaceSite("L2")
     return Telescope("test", focalplane=fp, site=site)
@@ -223,8 +226,10 @@ def create_satellite_data(
     obs_per_group=1,
     sample_rate=10.0 * u.Hz,
     obs_time=10.0 * u.minute,
+    gap_time=0.0 * u.minute,
     pixel_per_process=1,
     hwp_rpm=9.0,
+    width=5.0 * u.degree,
     single_group=False,
     flagged_pixels=True,
 ):
@@ -256,6 +261,7 @@ def create_satellite_data(
         toastcomm.group_size,
         sample_rate=sample_rate,
         pixel_per_process=pixel_per_process,
+        width=width,
     )
 
     # Create a schedule
@@ -264,7 +270,7 @@ def create_satellite_data(
         prefix="test_",
         mission_start=datetime(2023, 2, 23),
         observation_time=obs_time,
-        gap_time=0 * u.minute,
+        gap_time=gap_time,
         num_observations=(toastcomm.ngroups * obs_per_group),
         prec_period=10 * u.minute,
         spin_period=1 * u.minute,
@@ -282,8 +288,8 @@ def create_satellite_data(
         schedule=sch,
         hwp_angle=hwp_angle,
         hwp_rpm=hwp_rpm,
-        spin_angle=5.0 * u.degree,
-        prec_angle=10.0 * u.degree,
+        spin_angle=3.0 * u.degree,
+        prec_angle=7.0 * u.degree,
         detset_key="pixel",
     )
     sim_sat.apply(data)

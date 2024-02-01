@@ -164,9 +164,7 @@ class TemplateTest(MPITestCase):
 
             dup = amps.duplicate()
             cdot = dup.dot(amps, comm_bytes=cbytes)
-            np.testing.assert_equal(
-                cdot, (check_even**2 + check_odd**2) * n_global / 2
-            )
+            np.testing.assert_equal(cdot, (check_even**2 + check_odd**2) * n_global / 2)
 
     def test_amplitudes_group(self):
         # Create a toast communicator with groups if possible

@@ -254,9 +254,9 @@ def collect_healpix_submaps(pix, comm_bytes=10000000):
                         if global_offset + n_copy > dist.n_pix:
                             n_copy = dist.n_pix - global_offset
                         for col in range(pix.n_value):
-                            fview[col][
-                                global_offset : global_offset + n_copy
-                            ] = recvview[c, 0:n_copy, col]
+                            fview[col][global_offset : global_offset + n_copy] = (
+                                recvview[c, 0:n_copy, col]
+                            )
                 sendbuf.fill(0)
                 if rank == 0:
                     recvbuf.fill(0)
