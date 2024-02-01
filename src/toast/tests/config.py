@@ -4,6 +4,7 @@
 
 import argparse
 import copy
+import json
 import os
 import types
 from datetime import datetime
@@ -359,6 +360,46 @@ class ConfigTest(MPITestCase):
                 flush=True,
             )
         self.assertTrue(run.operators.fake == fake)
+
+    def test_flexible_types(self):
+        fake = ConfigOperator(name="fake")
+
+        fakeconf = fake.get_config()
+
+        fakefile = os.path.join(self.outdir, "types_flex_original.json")
+        if self.toastcomm.world_rank == 0:
+            dump_json(fakefile, fakeconf)
+        if self.toastcomm.comm_world is not None:
+            self.toastcomm.comm_world.barrier()
+
+        # Manually load and modify some values
+        with open(fakefile, "r") as f:
+            raw = json.load(f)
+        raw["operators"]["fake"]["float_default"]["value"] = "123"
+        raw["operators"]["fake"]["float_default"]["type"] = "int"
+        raw["operators"]["fake"]["list_float"]["value"] = "(12, 34, 56)"
+        raw["operators"]["fake"]["list_float"]["type"] = "tuple"
+        raw["operators"]["fake"]["int_default"]["value"] = "True"
+        raw["operators"]["fake"]["int_default"]["type"] = "bool"
+
+        fakefile = os.path.join(self.outdir, "types_flex.json")
+        if self.toastcomm.world_rank == 0:
+            with open(fakefile, "w") as f:
+                json.dump(raw, f, indent=2)
+        if self.toastcomm.comm_world is not None:
+            self.toastcomm.comm_world.barrier()
+
+        loadconf = None
+        if self.toastcomm.world_rank == 0:
+            loadconf = load_config(fakefile)
+        if self.toastcomm.comm_world is not None:
+            loadconf = self.toastcomm.comm_world.bcast(loadconf, root=0)
+
+        run = create_from_config(loadconf)
+
+        self.assertTrue(run.operators.fake.float_default == 123.0)
+        self.assertTrue(run.operators.fake.int_default == 1)
+        self.assertTrue(run.operators.fake.list_float == [12.0, 34.0, 56.0])
 
     def test_trait_types_argparse(self):
         fake = ConfigOperator(name="fake")
