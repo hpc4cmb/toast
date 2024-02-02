@@ -167,12 +167,15 @@ def main():
     # Instantiate everything and then convert back to a config for dumping.
     # This will automatically prune stale traits, etc.
     run = toast.create_from_config(config)
+    run_vars = vars(run)
+
     out_config = OrderedDict()
-    for sect_key, sect_val in vars(run).items():
+    for sect_key, sect_val in run_vars.items():
+        sect_vars = vars(sect_val)
         obj_list = list()
-        for obj_name, obj in vars(sect_val).items():
+        for obj_name, obj in sect_vars.items():
             obj_list.append(obj)
-        out_config[sect_key] = toast.config.build_config(obj_list)
+        out_config.update(toast.config.build_config(obj_list))
 
     # Write the final config out
     if user_args.out_toml is not None:
