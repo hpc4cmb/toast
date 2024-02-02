@@ -7,6 +7,20 @@ from ..utils import Environment, Logger
 
 def merge_config(loaded, original):
     log = Logger.get()
+    allowed = {
+        "float": set(["float", "int", "bool"]),
+        "int": set(["int", "bool"]),
+        "bool": set(["int", "bool"]),
+        "str": set(["str"]),
+        "Quantity": set(["Quantity", "Unit"]),
+        "Unit": set(["Unit"]),
+        "list": set(["list", "tuple", "set"]),
+        "tuple": set(["list", "tuple", "set"]),
+        "set": set(["list", "tuple", "set"]),
+        "dict": set(["dict"]),
+        "enum": set(["enum", "int"]),
+        "str": set(["str"]),
+    }
     for section, objs in loaded.items():
         if section in original.keys():
             # We have this section
@@ -32,15 +46,15 @@ def merge_config(loaded, original):
                             cursor["value"] = v["value"]
                             if "type" not in cursor:
                                 cursor["type"] = v["type"]
-                            elif (
-                                v["type"] is not None
-                                and v["type"] != "unknown"
-                                and cursor["type"] != "enum"
-                            ):
-                                # The loaded data has at type, check for consistency
-                                if v["type"] != cursor["type"]:
-                                    msg = f"Loaded trait {v} has different type than "
-                                    msg += f"existing trait {cursor}"
+                            elif v["type"] is not None and v["type"] != "unknown":
+                                # The loaded data has a type, check for consistency
+                                if cursor["type"] not in allowed:
+                                    # This is not one of the types we can check.  It
+                                    # is likely the class name of an Instance trait.
+                                    pass
+                                elif v["type"] not in allowed[cursor["type"]]:
+                                    msg = f"Loaded trait {v} has type not compatible "
+                                    msg += f"with existing trait {cursor}"
                                     raise ValueError(msg)
                         else:
                             # We have a config option that does not exist
