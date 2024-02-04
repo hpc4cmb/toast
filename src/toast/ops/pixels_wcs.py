@@ -8,6 +8,7 @@ import numpy as np
 import traitlets
 from astropy import units as u
 from astropy.wcs import WCS
+import astropy.io.fits as af
 
 from .. import qarray as qa
 from ..mpi import MPI
@@ -50,6 +51,12 @@ class PixelsWCS(Operator):
         help="Operator that translates boresight pointing into detector frame",
     )
 
+    fits_header = Unicode(
+        None,
+        allow_none=True, 
+        help="FITS file containing header to use with pre-existing WCS parameters",
+    )
+
     coord_frame = Unicode("EQU", help="Supported values are AZEL, EQU, GAL, ECL")
 
     projection = Unicode(
@@ -58,7 +65,6 @@ class PixelsWCS(Operator):
 
     center = Tuple(
         (180 * u.degree, 0 * u.degree),
-        allow_none=True,
         help="The center Lon/Lat coordinates (Quantities) of the projection",
     )
 
@@ -138,87 +144,37 @@ class PixelsWCS(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # If running with all default values, the 'observe' function will not
-        # have been called yet.
-        if not hasattr(self, "_local_submaps"):
-            self._set_wcs(
-                self.coord_frame,
-                self.projection,
-                self.center,
-                self.bounds,
-                self.dimensions,
-                self.resolution,
-            )
+        # Track whether we need to recompute autobounds
         self._done_auto = False
+        # Track whether we need to recompute the WCS projection
+        self._done_wcs = False
 
     @traitlets.observe("auto_bounds")
     def _reset_auto_bounds(self, change):
         # Track whether we need to recompute the bounds.
-        if change["new"]:
-            # enabling
+        old_val = change["old"]
+        new_val = change["new"]
+        if new_val != old_val:
             self._done_auto = False
-        else:
-            self._done_auto = True
+            self._done_wcs = False
 
     @traitlets.observe("center_offset")
     def _reset_auto_center(self, change):
-        # Track whether we need to recompute the bounds.
-        if change["new"] is not None:
+        old_val = change["old"]
+        new_val = change["new"]
+        # Track whether we need to recompute the projection
+        if new_val != old_val:
+            self._done_wcs = False
             if self.auto_bounds:
                 self._done_auto = False
 
-    @traitlets.observe(
-        "coord_frame", "projection", "center", "bounds", "dimensions", "resolution"
-    )
+    @traitlets.observe("projection", "center", "bounds", "dimensions", "resolution")
     def _reset_wcs(self, change):
         # (Re-)initialize the WCS projection when one of these traits change.
-        # Current values:
-        proj = str(self.projection)
-        coord = str(self.coord_frame)
-        center = self.center
-        if len(center) > 0:
-            center = tuple(self.center)
-        bounds = self.bounds
-        if len(bounds) > 0:
-            bounds = tuple(self.bounds)
-        dims = self.dimensions
-        if len(dims) > 0:
-            dims = tuple(self.dimensions)
-        res = self.resolution
-        if len(res) > 0:
-            res = tuple(self.resolution)
-
-        # Update to the trait that changed
-        if change["name"] == "coord_frame":
-            coord = change["new"]
-        if change["name"] == "projection":
-            proj = change["new"]
-        if change["name"] == "center":
-            center = change["new"]
-            if len(center) > 0:
-                bounds = tuple()
-        if change["name"] == "bounds":
-            bounds = change["new"]
-            if len(bounds) > 0:
-                center = tuple()
-                if len(dims) > 0 and len(res) > 0:
-                    # Most likely the user cares about the resolution more...
-                    dims = tuple()
-        if change["name"] == "dimensions":
-            dims = change["new"]
-            if len(dims) > 0 and len(bounds) > 0:
-                res = tuple()
-        if change["name"] == "resolution":
-            res = change["new"]
-            if len(res) > 0 and len(bounds) > 0:
-                dims = tuple()
-        self._set_wcs(coord, proj, center, bounds, dims, res)
-        self.coord_frame = coord
-        self.projection = proj
-        self.center = center
-        self.bounds = bounds
-        self.dimensions = dims
-        self.resolution = res
+        old_val = change["old"]
+        new_val = change["new"]
+        if old_val != new_val:
+            self._done_wcs = False
 
     def _set_wcs(self, coord, proj, center, bounds, dims, res):
         log = Logger.get()
@@ -226,65 +182,93 @@ class PixelsWCS(Operator):
             f"PixelsWCS: set_wcs {coord}, {proj}, {center}, {bounds}, {dims}, {res}"
         )
         print(f"PixelsWCS: set_wcs {coord}, {proj}, {center}, {bounds}, {dims}, {res}")
-        center_deg = None
-        bounds_deg = None
-        res_deg = None
-        grid_dims = None
-        if len(res) > 0:
-            # We are specifying the resolution, convert to degrees.
-            res_deg = np.array(
-                [
-                    res[0].to_value(u.degree),
-                    res[1].to_value(u.degree),
-                ]
-            )
-        if len(dims) > 0:
-            # We have specified the image dimensions
-            grid_dims = np.array(dims)
 
-        if len(bounds) == 0:
-            # Using center, need both resolution and dimensions
-            if len(center) == 0:
-                # Cannot calculate yet
-                return
-            if (len(res) == 0) or (len(dims) == 0):
-                # Cannot calculate yet
-                return
+        # Center value, in degrees
+        crval = None
+        # Resolution, in degrees
+        cdelt = None
+        # Pixel value of center (crval)
+        crpix = None
+        # Shape of projection
+        wcs_shape = None
+
+        bounds_deg = None
+        grid_dims = None
+        if len(center) > 0:
+            # We are specifying the center.  Bounds should not be set and we should
+            # have both resolution and dimensions
+            if len(bounds) > 0:
+                msg = f"PixelsWCS: only one of center and bounds should be set."
+                log.error(msg)
+                raise RuntimeError(msg)
+            if len(res) == 0 or len(dims) == 0:
+                msg = f"PixelsWCS: when center is set, both resolution and dimensions"
+                msg += f" are required."
+                log.error(msg)
+                raise RuntimeError(msg)
             if self.center_offset is None:
-                center_deg = np.array(
+                crval = np.array(
                     [
                         center[0].to_value(u.degree),
                         center[1].to_value(u.degree),
                     ]
                 )
             else:
-                center_deg = np.array([0.0, 0.0])
+                crval = np.array([0.0, 0.0])
+            cdelt = np.array(
+                [
+                    res[0].to_value(u.degree),
+                    res[1].to_value(u.degree),
+                ]
+            )
+            grid_dims = np.array(dims, dtype=np.int32)
         else:
-            # Using bounds
+            # Not using center, bounds is required
+            if len(bounds) == 0:
+                msg = f"PixelsWCS: when center is not specified, bounds required."
+                log.error(msg)
+                raise RuntimeError(msg)
             bounds_deg = np.array([x.to_value(u.degree) for x in bounds])
             bounds_deg = np.reshape(bounds_deg, (2, 2)).T
-            # Exactly one of resolution or dimensions specified
-            if (len(res) > 0) and (len(dims) > 0):
-                # Cannot calculate yet
-                return
-            if (len(res) == 0) and (len(dims) == 0):
-                # Cannot calculate yet
-                return
-
-            if self.center_offset is None:
-                center_deg = np.array(
+            crval = np.array(
+                [
+                    0.5 * (bounds_deg[0, 0] + bounds_deg[0, 1]),
+                    0.5 * (bounds_deg[1, 0] + bounds_deg[1, 1]),
+                ]
+            )
+            # Either resolution or dimensions should be specified
+            if len(res) > 0:
+                # Using resolution
+                if len(dims) > 0:
+                    msg = f"PixelsWCS: when using bounds, only one of resolution or"
+                    msg += f" dimensions must be specified."
+                    log.error(msg)
+                    raise RuntimeError(msg)
+                cdelt = np.array(
                     [
-                        0.5 * (bounds_deg[0, 0] + bounds_deg[1, 0]),
-                        0.5 * (bounds_deg[0, 1] + bounds_deg[1, 1]),
+                        res[0].to_value(u.degree),
+                        res[1].to_value(u.degree),
                     ]
                 )
             else:
-                center_deg = np.array([0.0, 0.0])
+                # Using dimensions
+                if len(res) > 0:
+                    msg = f"PixelsWCS: when using bounds, only one of resolution or"
+                    msg += f" dimensions must be specified."
+                    log.error(msg)
+                    raise RuntimeError(msg)
+                grid_dims = np.array(dims, dtype=np.int32)
+                # Compute CDELT from the bounding box and image size.
+                cdelt = np.array(
+                    [
+                        (bounds_deg[0, 1] - bounds_deg[0, 0]) / grid_dims[0],
+                        (bounds_deg[1, 1] - bounds_deg[1, 0]) / grid_dims[1],
+                    ]
+                )
 
         # Create the WCS object.  We will assume:
         # CTYPE1 = Longitude
         # CTYPE2 = Latitude
-        # The reference pixel is set to the center of the projection.
 
         if coord == "AZEL":
             coordstr = ("AZ--", "EL--")
@@ -301,56 +285,39 @@ class PixelsWCS(Operator):
         self.wcs = WCS(naxis=2)
         if proj == "CAR":
             self.wcs.wcs.ctype = [f"{coordstr[0]}-CAR", f"{coordstr[1]}-CAR"]
-            self.wcs.wcs.crval = center_deg
+            self.wcs.wcs.crval = crval
+            self.wcs.wcs.cdelt = cdelt
         elif proj == "CEA":
             self.wcs.wcs.ctype = [f"{coordstr[0]}-CEA", f"{coordstr[1]}-CEA"]
-            self.wcs.wcs.crval = center_deg
-            lam = np.cos(np.deg2rad(center_deg[1])) ** 2
+            self.wcs.wcs.crval = crval
+            lam = np.cos(np.deg2rad(crval[1])) ** 2
             self.wcs.wcs.set_pv([(2, 1, lam)])
+            self.wcs.wcs.cdelt = cdelt
         elif proj == "MER":
             self.wcs.wcs.ctype = [f"{coordstr[0]}-MER", f"{coordstr[1]}-MER"]
-            self.wcs.wcs.crval = center_deg
+            self.wcs.wcs.crval = crval
+            self.wcs.wcs.cdelt = cdelt
         elif proj == "ZEA":
             self.wcs.wcs.ctype = [f"{coordstr[0]}-ZEA", f"{coordstr[1]}-ZEA"]
-            self.wcs.wcs.crval = center_deg
+            self.wcs.wcs.crval = crval
+            self.wcs.wcs.cdelt = cdelt
         elif proj == "TAN":
             self.wcs.wcs.ctype = [f"{coordstr[0]}-TAN", f"{coordstr[1]}-TAN"]
-            self.wcs.wcs.crval = center_deg
+            self.wcs.wcs.crval = crval
+            self.wcs.wcs.cdelt = cdelt
         elif proj == "SFL":
             self.wcs.wcs.ctype = [f"{coordstr[0]}-SFL", f"{coordstr[1]}-SFL"]
-            self.wcs.wcs.crval = center_deg
+            self.wcs.wcs.crval = crval
+            self.wcs.wcs.cdelt = cdelt
         else:
             msg = f"Invalid WCS projection name '{proj}'"
             raise ValueError(msg)
-        print(f"DBG: ctype set to {self.wcs.wcs.ctype}", flush=True)
+        print(f"DBG: WCS set to {self.wcs.wcs.ctype}, crval={self.wcs.wcs.crval}, cdelt={self.wcs.wcs.cdelt}", flush=True)
 
-        # self.wcs.wcs.crpix = [1, 1]
-        if len(res) == 0:
-            # Resolution not specified, compute CDELT from the bounding box
-            # and image size.
-            res_deg = np.array(
-                [
-                    (bounds_deg[1] - bounds_deg[0]) / grid_dims[0],
-                    (bounds_deg[3] - bounds_deg[2]) / grid_dims[1],
-                ]
-            )
-            self.wcs.wcs.cdelt = res_deg
-            print(
-                f"DBG: len(res)=0, cdelt={self.wcs.wcs.cdelt}, crpix={self.wcs.wcs.crpix}",
-                flush=True,
-            )
-        else:
-            # Use resolution for CDELT
-            self.wcs.wcs.cdelt = res_deg
-            # if bounds_deg is not None:
-            #     self.wcs.wcs.cdelt[bounds_deg[1] < bounds_deg[0]] *= -1
-            print(
-                f"DBG: len(res)!=0, cdelt={self.wcs.wcs.cdelt}, crpix={self.wcs.wcs.crpix}",
-                flush=True,
-            )
+        # The reference pixel is set to the center of the projection.
         if len(center) > 0:
             # We have the center position, and hence also the resolution and dims
-            off = self.wcs.wcs_world2pix(center_deg[None], 0)[0]
+            off = self.wcs.wcs_world2pix(crval.reshape((1, 2)), 0)[0]
             self.wcs.wcs.crpix = grid_dims / 2.0 + 0.5 - off
             print(f"DBG: using center, crpix set to {self.wcs.wcs.crpix}", flush=True)
         else:
@@ -398,6 +365,10 @@ class PixelsWCS(Operator):
 
         if not self.use_astropy:
             raise NotImplementedError("Only astropy conversion is currently supported")
+        
+        if self.fits_header is not None:
+            with open(self.fits_header, "rb") as f:
+                header = af.Header.fromfile(f)
 
         if self.auto_bounds and not self._done_auto:
             # Pass through the boresight pointing for every observation and build
@@ -416,6 +387,7 @@ class PixelsWCS(Operator):
                     field_of_view=None,
                     center_offset=self.center_offset,
                 )
+                print(f"AUTO {ob.name}: {lnmin}, {lnmax}, {ltmin}, {ltmax}", flush=True)
                 lonmin = min(lonmin, lnmin)
                 lonmax = max(lonmax, lnmax)
                 latmin = min(latmin, ltmin)
@@ -443,10 +415,20 @@ class PixelsWCS(Operator):
             )
             self.bounds = new_bounds
             print(f"PixelsWCS auto_bounds set to {self.bounds}", flush=True)
-            print(f"PixelsWCS wcs now {self.wcs}", flush=True)
-            print(f"PixelsWCS wcs_shape now {self.wcs_shape}", flush=True)
             log.verbose(f"PixelsWCS auto_bounds set to {self.bounds}")
             self._done_auto = True
+        
+        # Compute the projection
+        if not self._done_wcs:
+            self._set_wcs(
+                self.coord_frame,
+                self.projection,
+                self.center,
+                self.bounds,
+                self.dimensions,
+                self.resolution,
+            )
+            self._done_wcs = True
 
         if self._local_submaps is None and self.create_dist is not None:
             self._local_submaps = np.zeros(self.submaps, dtype=np.uint8)
