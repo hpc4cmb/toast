@@ -97,3 +97,4 @@ from .pixels import PixelData, PixelDistribution
 from .timing import GlobalTimers, Timer
 from .traits import create_from_config
 from .weather import Weather
+from .ops import ObsMat
