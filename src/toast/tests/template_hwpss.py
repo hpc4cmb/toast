@@ -25,6 +25,8 @@ from ._helpers import (
     create_ground_data,
     create_outdir,
     create_satellite_data,
+    fake_hwpss,
+    fake_hwpss_data,
     plot_healpix_maps,
     plot_wcs_maps,
 )
@@ -46,36 +48,6 @@ class TemplateHwpssTest(MPITestCase):
         else:
             self.make_plots = True
 
-    def fake_hwpss_data(self, ang, scale):
-        # Generate a timestream of fake HWPSS
-        n_harmonic = 5
-        coscoeff = scale * np.array([1.0, 0.6, 0.2, 0.001, 0.003])
-        sincoeff = scale * np.array([0.7, 0.9, 0.1, 0.002, 0.0005])
-        out = np.zeros_like(ang)
-        for h in range(n_harmonic):
-            out[:] += coscoeff[h] * np.cos(h * ang) + sincoeff[h] * np.sin(h * ang)
-        return out, coscoeff, sincoeff
-
-    def fake_hwpss(self, data, field, scale):
-        # Create a fake HWP synchronous signal
-        coeff = dict()
-        for ob in data.obs:
-            hwpss, ccos, csin = self.fake_hwpss_data(
-                ob.shared[defaults.hwp_angle].data, scale
-            )
-            n_harm = len(ccos)
-            coeff[ob.name] = np.zeros(4 * n_harm)
-            for h in range(n_harm):
-                coeff[ob.name][4 * h] = csin[h]
-                coeff[ob.name][4 * h + 1] = 0
-                coeff[ob.name][4 * h + 2] = ccos[h]
-                coeff[ob.name][4 * h + 3] = 0
-            if field not in ob.detdata:
-                ob.detdata.create(field, units=defaults.det_data_units)
-            for det in ob.local_detectors:
-                ob.detdata[field][det, :] += hwpss
-        return coeff
-
     def test_algorithm(self):
         sample_rate = 100.0
         hwp_rate = 2.0
@@ -87,7 +59,7 @@ class TemplateHwpssTest(MPITestCase):
         flags = np.zeros(n_samp, dtype=np.uint8)
         # Get some hwpss and input coefficients
         hwpss_scale = 20.0
-        hwpss, ccos, csin = self.fake_hwpss_data(hwp_ang, hwpss_scale)
+        hwpss, ccos, csin = fake_hwpss_data(hwp_ang, hwpss_scale)
         dc_level = np.mean(hwpss)
         n_harmonics = len(ccos)
         # Estimate coefficients
@@ -141,7 +113,7 @@ class TemplateHwpssTest(MPITestCase):
         # Get some hwpss and input coefficients
         hwpss_scale = 1.0
         compare = dict()
-        coeff = self.fake_hwpss(data, defaults.det_data, hwpss_scale)
+        coeff = fake_hwpss(data, defaults.det_data, hwpss_scale)
 
         do_plot = True
         for ob in data.obs:
@@ -625,7 +597,7 @@ class TemplateHwpssTest(MPITestCase):
         # Add HWPSS and make a copy for plotting
         hwpss_scale = 20.0
         tod_rms = np.std(data.obs[0].detdata["input"][0])
-        coeff = self.fake_hwpss(data, "hwpss", hwpss_scale * tod_rms)
+        coeff = fake_hwpss(data, "hwpss", hwpss_scale * tod_rms)
         ops.Combine(
             op="add",
             first="hwpss",
@@ -787,7 +759,7 @@ class TemplateHwpssTest(MPITestCase):
         # Add HWPSS and make a copy for plotting
         hwpss_scale = 2.0
         tod_rms = np.std(data.obs[0].detdata["input"][0])
-        coeff = self.fake_hwpss(data, "hwpss", hwpss_scale * tod_rms)
+        coeff = fake_hwpss(data, "hwpss", hwpss_scale * tod_rms)
         ops.Combine(
             op="add",
             first="hwpss",
