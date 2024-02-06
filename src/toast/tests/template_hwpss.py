@@ -228,14 +228,13 @@ class TemplateHwpssTest(MPITestCase):
 
         for ob in data.obs:
             n_samp = ob.n_local_samples
-            if full:
-                plot_dets = ob.select_local_detectors(
-                    flagmask=defaults.det_mask_invalid
-                )
-            else:
-                plot_dets = [ob.local_detectors[0]]
+            plot_dets = ob.select_local_detectors(
+                flagmask=defaults.det_mask_invalid
+            )
+            if not full:
+                plot_dets = [plot_dets[0]]
             for det in plot_dets:
-                for ns in [500, n_samp]:
+                for ns in [1000]:
                     plot_slc = slice(0, ns, 1)
                     savefile = os.path.join(
                         outdir,
@@ -312,10 +311,10 @@ class TemplateHwpssTest(MPITestCase):
         # Create a fake satellite data set for testing
         data = create_satellite_data(
             self.comm,
-            sample_rate=10.0 * u.Hz,
+            sample_rate=30.0 * u.Hz,
             obs_time=10.0 * u.minute,
             gap_time=0.5 * u.minute,
-            hwp_rpm=12,
+            hwp_rpm=1.0,
             obs_per_group=10,
             pixel_per_process=7,
             single_group=True,
@@ -415,7 +414,6 @@ class TemplateHwpssTest(MPITestCase):
         # Create a fake ground data set for testing
         data = create_ground_data(
             self.comm,
-            sample_rate=122.0 * u.Hz,
             pixel_per_process=7,
             single_group=True,
             fp_width=width,
@@ -677,49 +675,50 @@ class TemplateHwpssTest(MPITestCase):
         # Make the map
         mapper.apply(data)
 
-        # Write offset amplitudes
-        oamps = data[f"{mapper.name}_solve_amplitudes"][offset_tmpl.name]
-        oroot = os.path.join(testdir, f"{mapper.name}_offset")
-        offset_tmpl.write(oamps, oroot)
+        if self.make_plots:
+            # Write offset amplitudes
+            oamps = data[f"{mapper.name}_solve_amplitudes"][offset_tmpl.name]
+            oroot = os.path.join(testdir, f"{mapper.name}_offset")
+            offset_tmpl.write(oamps, oroot)
 
-        # Dump out the hwpss template amplitudes
-        pamps = data[f"{mapper.name}_solve_amplitudes"][hwpss_tmpl.name]
-        pfile = os.path.join(testdir, f"{mapper.name}_hwpss.h5")
-        hwpssplot_root = os.path.join(testdir, f"{mapper.name}_hwpss-template")
-        hwpss_tmpl.write(pamps, pfile)
+            # Dump out the hwpss template amplitudes
+            pamps = data[f"{mapper.name}_solve_amplitudes"][hwpss_tmpl.name]
+            pfile = os.path.join(testdir, f"{mapper.name}_hwpss.h5")
+            hwpssplot_root = os.path.join(testdir, f"{mapper.name}_hwpss-template")
+            hwpss_tmpl.write(pamps, pfile)
 
-        # Plot some results
-        if data.comm.world_rank == 0 and self.make_plots:
-            hwpssplot(pfile, out_root=hwpssplot_root)
-            for ob in data.obs:
-                offplot(
-                    f"{oroot}_{ob.name}.h5",
-                    compare={x: ob.detdata["input"][x, :] for x in ob.local_detectors},
-                    out=f"{oroot}_{ob.name}",
+            # Plot some results
+            if data.comm.world_rank == 0:
+                hwpssplot(pfile, out_root=hwpssplot_root)
+                for ob in data.obs:
+                    offplot(
+                        f"{oroot}_{ob.name}.h5",
+                        compare={x: ob.detdata["input"][x, :] for x in ob.local_detectors},
+                        out=f"{oroot}_{ob.name}",
+                    )
+                self.plot_compare(
+                    testdir, data, mapper.name, comps=["sky", "noise", "hwpss"], full=False
                 )
-            self.plot_compare(
-                testdir, data, mapper.name, comps=["sky", "noise", "hwpss"], full=False
-            )
-            hit_file = os.path.join(testdir, f"{mapper.name}_hits.fits")
-            map_file = os.path.join(testdir, f"{mapper.name}_map.fits")
-            binmap_file = os.path.join(testdir, f"{mapper.name}_binmap.fits")
-            truth_file = os.path.join(testdir, f"sky_{self.nside}_input.fits")
-            plot_healpix_maps(
-                hitfile=hit_file,
-                mapfile=map_file,
-                truth=truth_file,
-                range_I=(-2, 2),
-                range_Q=(-0.5, 0.5),
-                range_U=(-0.5, 0.5),
-            )
-            plot_healpix_maps(
-                hitfile=hit_file,
-                mapfile=binmap_file,
-                truth=truth_file,
-                range_I=(-2, 2),
-                range_Q=(-0.5, 0.5),
-                range_U=(-0.5, 0.5),
-            )
+                hit_file = os.path.join(testdir, f"{mapper.name}_hits.fits")
+                map_file = os.path.join(testdir, f"{mapper.name}_map.fits")
+                binmap_file = os.path.join(testdir, f"{mapper.name}_binmap.fits")
+                truth_file = os.path.join(testdir, f"sky_{self.nside}_input.fits")
+                plot_healpix_maps(
+                    hitfile=hit_file,
+                    mapfile=map_file,
+                    truth=truth_file,
+                    range_I=(-2, 2),
+                    range_Q=(-0.5, 0.5),
+                    range_U=(-0.5, 0.5),
+                )
+                plot_healpix_maps(
+                    hitfile=hit_file,
+                    mapfile=binmap_file,
+                    truth=truth_file,
+                    range_I=(-2, 2),
+                    range_Q=(-0.5, 0.5),
+                    range_U=(-0.5, 0.5),
+                )
 
         # Compare the cleaned timestreams to the original
         for ob in data.obs:

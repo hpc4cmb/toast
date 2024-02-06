@@ -272,8 +272,8 @@ def create_satellite_data(
         observation_time=obs_time,
         gap_time=gap_time,
         num_observations=(toastcomm.ngroups * obs_per_group),
-        prec_period=10 * u.minute,
-        spin_period=1 * u.minute,
+        prec_period=5 * u.minute,
+        spin_period=0.5 * u.minute,
     )
 
     # Scan fast enough to cover some sky in a short amount of time.  Reduce the
@@ -765,7 +765,8 @@ def fake_hwpss(data, field, scale):
 
 def create_ground_data(
     mpicomm,
-    sample_rate=10.0 * u.Hz,
+    sample_rate=60.0 * u.Hz,
+    hwp_rpm=59.0,
     fp_width=5.0 * u.degree,
     temp_dir=None,
     el_nod=False,
@@ -862,7 +863,7 @@ def create_ground_data(
         session_split_key=split_key,
         schedule=schedule,
         hwp_angle=defaults.hwp_angle,
-        hwp_rpm=120.0,
+        hwp_rpm=hwp_rpm,
         weather="atacama",
         median_weather=True,
         detset_key="pixel",

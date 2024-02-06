@@ -41,7 +41,7 @@ class HWPFilterTest(MPITestCase):
 
     def test_hwpfilter(self):
         # Create a fake ground observations set for testing
-        data = create_ground_data(self.comm, sample_rate=60.0 * u.Hz)
+        data = create_ground_data(self.comm)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
