@@ -57,7 +57,8 @@ class DemodulateTest(MPITestCase):
         dist = data[dist_key]
         pix_data = PixelData(dist, np.float64, n_value=3, units=u.K)
         off = 0
-        map_values = [10, -1, 2]
+        # map_values = [10, -1, 2]
+        map_values = [10, 2, 0]
         for submap in range(dist.n_submap):
             if submap in dist.local_submaps:
                 pix_data.data[off, :, 0] = map_values[0]
@@ -116,10 +117,7 @@ class DemodulateTest(MPITestCase):
         # Demodulate
 
         demod = ops.Demodulate(stokes_weights=weights, purge=True)
-        # demod.purge = False
         demod_data = demod.apply(data)
-
-        # ops.Delete(detdata=[defaults.weights]).apply(demod_data)
 
         # Map again
 
@@ -152,12 +150,15 @@ class DemodulateTest(MPITestCase):
                 rms = np.sqrt(np.mean((m[good] - value) ** 2))
                 m[m == 0] = hp.UNSEEN
                 stokes = "IQU"[i]
+                amp = 0.0001
                 hp.gnomview(
                     m,
                     sub=[nrow, ncol, 1 + i],
                     reso=reso,
                     rot=rot,
                     title=f"Modulated {stokes} : rms = {rms}",
+                    min=value - amp,
+                    max=value + amp,
                     cmap="coolwarm",
                 )
 
