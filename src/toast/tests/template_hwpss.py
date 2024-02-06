@@ -228,9 +228,7 @@ class TemplateHwpssTest(MPITestCase):
 
         for ob in data.obs:
             n_samp = ob.n_local_samples
-            plot_dets = ob.select_local_detectors(
-                flagmask=defaults.det_mask_invalid
-            )
+            plot_dets = ob.select_local_detectors(flagmask=defaults.det_mask_invalid)
             if not full:
                 plot_dets = [plot_dets[0]]
             for det in plot_dets:
@@ -693,11 +691,17 @@ class TemplateHwpssTest(MPITestCase):
                 for ob in data.obs:
                     offplot(
                         f"{oroot}_{ob.name}.h5",
-                        compare={x: ob.detdata["input"][x, :] for x in ob.local_detectors},
+                        compare={
+                            x: ob.detdata["input"][x, :] for x in ob.local_detectors
+                        },
                         out=f"{oroot}_{ob.name}",
                     )
                 self.plot_compare(
-                    testdir, data, mapper.name, comps=["sky", "noise", "hwpss"], full=False
+                    testdir,
+                    data,
+                    mapper.name,
+                    comps=["sky", "noise", "hwpss"],
+                    full=False,
                 )
                 hit_file = os.path.join(testdir, f"{mapper.name}_hits.fits")
                 map_file = os.path.join(testdir, f"{mapper.name}_map.fits")

@@ -129,11 +129,7 @@ class DemodulateTest(MPITestCase):
         # Demodulate
 
         downsample = 3
-        demod = ops.Demodulate(
-            stokes_weights=weights,
-            nskip=downsample,
-            purge=True
-        )
+        demod = ops.Demodulate(stokes_weights=weights, nskip=downsample, purge=True)
         demod_data = demod.apply(data)
 
         # Map again
@@ -181,19 +177,25 @@ class DemodulateTest(MPITestCase):
             ax = fig.add_subplot(2, 1, 2, aspect="auto")
             ax.plot(
                 demod_data.obs[0].shared[defaults.times].data[slc_demod],
-                demod_data.obs[0].detdata[defaults.det_data][f"demod0_{dname}", slc_demod],
+                demod_data.obs[0].detdata[defaults.det_data][
+                    f"demod0_{dname}", slc_demod
+                ],
                 c="red",
                 label=f"Demod0",
             )
             ax.plot(
                 demod_data.obs[0].shared[defaults.times].data[slc_demod],
-                demod_data.obs[0].detdata[defaults.det_data][f"demod4r_{dname}", slc_demod],
+                demod_data.obs[0].detdata[defaults.det_data][
+                    f"demod4r_{dname}", slc_demod
+                ],
                 c="blue",
                 label=f"Demod4r",
             )
             ax.plot(
                 demod_data.obs[0].shared[defaults.times].data[slc_demod],
-                demod_data.obs[0].detdata[defaults.det_data][f"demod4i_{dname}", slc_demod],
+                demod_data.obs[0].detdata[defaults.det_data][
+                    f"demod4i_{dname}", slc_demod
+                ],
                 c="green",
                 label=f"Demod4i",
             )

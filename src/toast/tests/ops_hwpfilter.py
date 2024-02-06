@@ -127,10 +127,7 @@ class HWPFilterTest(MPITestCase):
                         ax.legend(loc="best")
 
                         ax = fig.add_subplot(n_plot, 1, n_plot, aspect="auto")
-                        residual = (
-                            original[plot_slc]
-                            - output[plot_slc]
-                        )
+                        residual = original[plot_slc] - output[plot_slc]
                         ax.plot(
                             ob.shared[defaults.times].data[plot_slc],
                             original[plot_slc],
