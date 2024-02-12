@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -20,15 +20,14 @@ import numpy as np
 from astropy import units as u
 from astropy.table import QTable
 from pkg_resources import resource_filename
-
-import toast
-import toast.ops
 from toast.instrument import Focalplane
 from toast.instrument_sim import fake_hexagon_focalplane
 from toast.job import get_node_mem, job_size
-from toast.timing import function_timer
+from toast.timing import Timer, function_timer
+from toast.utils import Environment, Logger
 
-from ..utils import Environment, Logger, Timer
+import toast
+import toast.ops
 
 
 def python_startup_time(rank):
