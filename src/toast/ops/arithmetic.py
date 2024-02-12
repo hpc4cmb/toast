@@ -75,17 +75,15 @@ class Combine(Operator):
                 # Nothing to do for this observation
                 continue
             if self.first not in ob.detdata:
-                msg = "The first detdata key '{}' does not exist in observation {}".format(
-                    self.first, ob.name
-                )
-                log.error(msg)
-                raise RuntimeError(msg)
+                msg = f"The first detdata key '{self.first}' does not exist in"
+                msg += f" observation {ob.name}, skipping"
+                log.verbose(msg)
+                continue
             if self.second not in ob.detdata:
-                msg = "The second detdata key '{}' does not exist in observation {}".format(
-                    self.second, ob.name
-                )
-                log.error(msg)
-                raise RuntimeError(msg)
+                msg = f"The second detdata key '{self.first}' does not exist in"
+                msg += f" observation {ob.name}, skipping"
+                log.verbose(msg)
+                continue
 
             first_units = ob.detdata[self.first].units
             second_units = ob.detdata[self.second].units
