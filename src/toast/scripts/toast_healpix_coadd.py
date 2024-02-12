@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -16,10 +16,6 @@ import traceback
 import h5py
 import healpy as hp
 import numpy as np
-
-import toast
-from toast import PixelData, PixelDistribution
-from toast._libtoast import cov_apply_diag, cov_eigendecompose_diag
 from toast.covariance import covariance_apply, covariance_invert
 from toast.mpi import MPI, Comm, get_world
 from toast.pixels_io_healpix import (
@@ -30,7 +26,12 @@ from toast.pixels_io_healpix import (
     write_healpix_fits,
     write_healpix_hdf5,
 )
-from toast.utils import Environment, Logger, Timer
+from toast.timing import Timer
+from toast.utils import Environment, Logger
+
+import toast
+from toast import PixelData, PixelDistribution
+from toast._libtoast import cov_apply_diag, cov_eigendecompose_diag
 
 
 def main():

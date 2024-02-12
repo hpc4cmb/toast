@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -15,8 +15,6 @@ import traceback
 import h5py
 import healpy as hp
 import numpy as np
-
-import toast
 from toast.mpi import Comm, get_world
 from toast.pixels_io_healpix import (
     filename_is_fits,
@@ -24,7 +22,10 @@ from toast.pixels_io_healpix import (
     read_healpix,
     write_healpix,
 )
-from toast.utils import Environment, Logger, Timer
+from toast.timing import Timer
+from toast.utils import Environment, Logger
+
+import toast
 
 
 def main():
