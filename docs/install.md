@@ -29,6 +29,11 @@ You should use whatever MPI launcher is appropriate for your system (e.g.  `mpir
 `mpiexec`, `srun`, etc).  In general, be sure to set the `OMP_NUM_THREADS` environment
 variable so that the number of MPI processes times this number of threads is not greater
 than the number of physical CPU cores.
+
+The example above uses 4 MPI processes.
+While you can change this number to something smaller such as 2,
+do not change it to something larger than 4,
+otherwise it will fail.
 ```
 
 The runtime configuration of toast can also be checked with an included script:
