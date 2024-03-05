@@ -5,6 +5,7 @@
 import argparse
 import ast
 import copy
+import os
 import re
 import sys
 import types
@@ -19,7 +20,7 @@ from ..trait_utils import scalar_to_string as trait_scalar_to_string
 from ..trait_utils import string_to_scalar as trait_string_to_scalar
 from ..trait_utils import string_to_trait, trait_to_string
 from ..utils import Environment, Logger
-from .json import dump_json, load_json
+from .json import dump_json, load_json, JSONDecodeError
 from .toml import dump_toml, load_toml
 from .yaml import dump_yaml, load_yaml
 
@@ -60,14 +61,23 @@ def load_config(file, input=None, comm=None):
 
     """
     ret = None
-    try:
-        ret = load_toml(file, input=input, comm=comm)
-    except TOMLKitError:
+    # If the file has a recognized extension, just use that instead of guessing.
+    ext = os.path.splitext(file)
+    if ext in [".yml", ".yaml"]:
+        return load_yaml(file, input=input, comm=comm)
+    elif ext in [".json", ".jsn"]:
+        return load_json(file, input=input, comm=comm)
+    elif ext in [".toml", ".tml"]:
+        return load_toml(file, input=input, comm=comm)
+    else:
         try:
-            ret = load_json(file, input=input, comm=comm)
-        except ValueError:
-            ret = load_yaml(file, input=input, comm=comm)
-    return ret
+            ret = load_toml(file, input=input, comm=comm)
+        except TOMLKitError:
+            try:
+                ret = load_json(file, input=input, comm=comm)
+            except (ValueError, JSONDecodeError):
+                ret = load_yaml(file, input=input, comm=comm)
+        return ret
 
 
 def dump_config(file, conf, format="toml", comm=None):
