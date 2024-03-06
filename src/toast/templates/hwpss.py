@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 import h5py
 import numpy as np
-from scipy.linalg import lu_factor, lu_solve
+from scipy.linalg import lu_factor, lu_solve, eigvalsh
 
 from ..data import Data
 from ..mpi import MPI
@@ -143,12 +143,27 @@ class Hwpss(Template):
                 self._n_local, op=MPI.SUM
             )
 
+        # Boolean flags
+        self._amp_flags = np.zeros(self._n_local, dtype=bool)
+
+        for det in self._all_dets:
+            amp_offset = self._det_offset[det]
+            for iob, ob in enumerate(new_data.obs):
+                if self.hwp_angle not in ob.shared:
+                    continue
+                if det not in self._obs_dets[iob]:
+                    continue
+                if self._obs_cov[iob] is None:
+                    # This observation has poorly conditioned covariance
+                    self._amp_flags[amp_offset : amp_offset + self._n_coeff] = True
+                amp_offset += self._n_coeff
+
     def _detectors(self):
         return self._all_dets
 
     def _zeros(self):
         z = Amplitudes(self.data.comm, self._n_global, self._n_local)
-        z.local_flags[:] = 0
+        z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
     @classmethod
@@ -240,6 +255,11 @@ class Hwpss(Template):
         for hr in range(0, 4 * n_harmonics):
             for hc in range(0, hr):
                 cov[hr, hc] = cov[hc, hr]
+        # Check that condition number is reasonable
+        evals = eigvalsh(cov)
+        rcond = np.min(evals) / np.max(evals)
+        if rcond < 1.0e-8:
+            return None
         # LU factorization for later solve
         cov_lu, cov_piv = lu_factor(cov)
         return cov_lu, cov_piv
@@ -334,15 +354,19 @@ class Hwpss(Template):
                     flags[vw_slc] = 1
             if self.det_flags is not None:
                 flags |= ob.detdata[self.det_flags][detector] & self.det_flag_mask
-            coeff = self.compute_coeff(
-                ob.detdata[self.det_data][detector],
-                flags,
-                self._obs_reltime[iob],
-                self._obs_sincos[iob],
-                self._obs_cov[iob][0],
-                self._obs_cov[iob][1],
-            )
-            amplitudes.local[amp_offset : amp_offset + self._n_coeff] = coeff
+            if self._obs_cov[iob] is None:
+                # Flagged
+                amplitudes.local[amp_offset : amp_offset + self._n_coeff] = 0
+            else:
+                coeff = self.compute_coeff(
+                    ob.detdata[self.det_data][detector],
+                    flags,
+                    self._obs_reltime[iob],
+                    self._obs_sincos[iob],
+                    self._obs_cov[iob][0],
+                    self._obs_cov[iob][1],
+                )
+                amplitudes.local[amp_offset : amp_offset + self._n_coeff] = coeff
             amp_offset += self._n_coeff
 
     def _add_prior(self, amplitudes_in, amplitudes_out, **kwargs):

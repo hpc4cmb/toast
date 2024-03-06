@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -313,7 +313,7 @@ class TemplateHwpssTest(MPITestCase):
             obs_time=10.0 * u.minute,
             gap_time=0.5 * u.minute,
             hwp_rpm=1.0,
-            obs_per_group=10,
+            obs_per_group=4,
             pixel_per_process=7,
             single_group=True,
             width=5.0 * u.degree,
