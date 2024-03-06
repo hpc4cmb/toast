@@ -5,11 +5,13 @@
 import argparse
 import ast
 import copy
+import os
 import re
 import sys
 import types
 from collections import OrderedDict
 from collections.abc import MutableMapping
+from json import JSONDecodeError
 
 import numpy as np
 from astropy import units as u
@@ -60,14 +62,23 @@ def load_config(file, input=None, comm=None):
 
     """
     ret = None
-    try:
-        ret = load_toml(file, input=input, comm=comm)
-    except TOMLKitError:
+    # If the file has a recognized extension, just use that instead of guessing.
+    ext = os.path.splitext(file)[1]
+    if ext in [".yml", ".yaml"]:
+        return load_yaml(file, input=input, comm=comm)
+    elif ext in [".json", ".jsn"]:
+        return load_json(file, input=input, comm=comm)
+    elif ext in [".toml", ".tml"]:
+        return load_toml(file, input=input, comm=comm)
+    else:
         try:
-            ret = load_json(file, input=input, comm=comm)
-        except ValueError:
-            ret = load_yaml(file, input=input, comm=comm)
-    return ret
+            ret = load_toml(file, input=input, comm=comm)
+        except TOMLKitError:
+            try:
+                ret = load_json(file, input=input, comm=comm)
+            except (ValueError, JSONDecodeError):
+                ret = load_yaml(file, input=input, comm=comm)
+        return ret
 
 
 def dump_config(file, conf, format="toml", comm=None):

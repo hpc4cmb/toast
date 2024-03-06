@@ -2,6 +2,8 @@
 
 set -e
 
+INSTALL=$1
+
 if [ "x${CONDA_PREFIX}" = "x" ]; then
     echo "You must activate a conda environment before using this script."
     exit 1
@@ -53,4 +55,8 @@ export TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS="${LIBDIR}"
 # Ensure that stale build products are removed
 rm -rf "${topdir}/build"
 
-pip install -vvv .
+if [ -z "${INSTALL}" ]; then
+    pip install -vvv .
+else
+    pip install -vvv --prefix "${INSTALL}" .
+fi
