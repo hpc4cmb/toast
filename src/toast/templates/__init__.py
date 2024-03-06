@@ -7,6 +7,7 @@
 from .amplitudes import Amplitudes, AmplitudesMap
 from .fourier2d import Fourier2D
 from .gaintemplate import GainTemplate
+from .hwpss import Hwpss
 from .offset import Offset
 from .periodic import Periodic
 from .subharmonic import SubHarmonic

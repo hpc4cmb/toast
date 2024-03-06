@@ -781,7 +781,7 @@ class Observation(MutableMapping):
         )
 
         # Do the actual redistribution
-        new_shr_manager, new_det_manager, new_intervals_manager, global_intervals = \
+        new_shr_manager, new_det_manager, new_intervals_manager, global_intervals = (
             redistribute_data(
                 self.dist,
                 new_dist,
@@ -791,6 +791,7 @@ class Observation(MutableMapping):
                 times=times,
                 dbg=self.name,
             )
+        )
 
         # Redistribute any metadata objects that support it.
         for k, v in self._internal.items():

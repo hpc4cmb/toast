@@ -363,12 +363,12 @@ class GenerateAtmosphere(Operator):
                 )
 
             rmin = 10
-            while rmax_tot / scale**(ncone - 1) < rmin:
+            while rmax_tot / scale ** (ncone - 1) < rmin:
                 ncone -= 1
-            rmax = rmax_tot / scale**(ncone - 1)
-            xstep_current = u.Quantity(self.xstep) / np.sqrt(scale)**(ncone - 1)
-            ystep_current = u.Quantity(self.ystep) / np.sqrt(scale)**(ncone - 1)
-            zstep_current = u.Quantity(self.zstep) / np.sqrt(scale)**(ncone - 1)
+            rmax = rmax_tot / scale ** (ncone - 1)
+            xstep_current = u.Quantity(self.xstep) / np.sqrt(scale) ** (ncone - 1)
+            ystep_current = u.Quantity(self.ystep) / np.sqrt(scale) ** (ncone - 1)
+            zstep_current = u.Quantity(self.zstep) / np.sqrt(scale) ** (ncone - 1)
             counter1 = counter1start
 
             sim_list = list()
@@ -703,15 +703,15 @@ class GenerateAtmosphere(Operator):
 
     @function_timer
     def _plot_snapshots(
-            self,
-            sim_list,
-            prefix,
-            obsname,
-            scan_range,
-            tmin,
-            tmax,
-            comm,
-            realization,
+        self,
+        sim_list,
+        prefix,
+        obsname,
+        scan_range,
+        tmin,
+        tmax,
+        comm,
+        realization,
     ):
         """Create snapshots of the atmosphere"""
         log = Logger.get()
@@ -778,9 +778,7 @@ class GenerateAtmosphere(Operator):
 
         if self.debug_snapshots:
             fn = os.path.join(
-                outdir,
-                f"atm_{obsname}_{rank}_"
-                f"t_{int(tmin)}_{int(tmax)}.pck"
+                outdir, f"atm_{obsname}_{rank}_" f"t_{int(tmin)}_{int(tmax)}.pck"
             )
             with open(fn, "wb") as fout:
                 pickle.dump([azgrid, elgrid, my_snapshots], fout)
@@ -797,7 +795,7 @@ class GenerateAtmosphere(Operator):
                 print(
                     f"DEBUG : rank = {rank}, t = {t}, r = {r}, "
                     f"RMS = {rms}, real {realization}",
-                    flush=True
+                    flush=True,
                 )
                 # DEBUG end
                 plt.figure(figsize=[12, 4])

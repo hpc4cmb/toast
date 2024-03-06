@@ -12,7 +12,7 @@
 namespace toast {
 void fod_autosums(int64_t n, const double * x, const uint8_t * good,
                   int64_t lagmax, double * sums, int64_t * hits,
-		  int64_t all_sums);
+                  int64_t all_sums);
 
 void fod_crosssums(int64_t n, const double * x, const double * y,
                    const uint8_t * good, int64_t lagmax, double * sums,

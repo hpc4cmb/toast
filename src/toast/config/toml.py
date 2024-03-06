@@ -15,7 +15,7 @@ import tomlkit
 from astropy import units as u
 from tomlkit import comment, document, dumps, loads, nl, table
 
-from ..trait_utils import string_to_trait, trait_to_string, fix_quotes
+from ..trait_utils import fix_quotes, string_to_trait, trait_to_string
 from ..utils import Environment, Logger
 from .utils import merge_config
 

@@ -175,9 +175,9 @@ class PixelTest(MPITestCase):
                             if global_offset + n_copy > pdata.distribution.n_pix:
                                 n_copy = pdata.distribution.n_pix - global_offset
                             for col in range(pdata.n_value):
-                                fdata[col][
-                                    global_offset : global_offset + n_copy
-                                ] = pdata.data[lc, 0:n_copy, col]
+                                fdata[col][global_offset : global_offset + n_copy] = (
+                                    pdata.data[lc, 0:n_copy, col]
+                                )
                         serialfile = os.path.join(
                             self.outdir,
                             "serial_N{}_sub{}_type-{}.fits".format(
@@ -251,9 +251,9 @@ class PixelTest(MPITestCase):
                             if global_offset + n_copy > pdata.distribution.n_pix:
                                 n_copy = pdata.distribution.n_pix - global_offset
                             for col in range(pdata.n_value):
-                                fdata[col][
-                                    global_offset : global_offset + n_copy
-                                ] = pdata.data[lc, 0:n_copy, col]
+                                fdata[col][global_offset : global_offset + n_copy] = (
+                                    pdata.data[lc, 0:n_copy, col]
+                                )
                         serialfile = os.path.join(
                             self.outdir,
                             "serial_N{}_sub{}_type-{}.h5".format(

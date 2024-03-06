@@ -103,7 +103,9 @@ def close_data(data):
     del cm
 
 
-def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1):
+def create_space_telescope(
+    group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1, width=5.0 * u.degree
+):
     """Create a fake satellite telescope with at least one pixel per process."""
     npix = 1
     ring = 1
@@ -116,6 +118,7 @@ def create_space_telescope(group_size, sample_rate=10.0 * u.Hz, pixel_per_proces
         psd_fmin=1.0e-5 * u.Hz,
         psd_net=0.05 * u.K * np.sqrt(1 * u.second),
         psd_fknee=(sample_rate / 2000.0),
+        width=width,
     )
     site = SpaceSite("L2")
     return Telescope("test", focalplane=fp, site=site)
@@ -223,8 +226,10 @@ def create_satellite_data(
     obs_per_group=1,
     sample_rate=10.0 * u.Hz,
     obs_time=10.0 * u.minute,
+    gap_time=0.0 * u.minute,
     pixel_per_process=1,
     hwp_rpm=9.0,
+    width=5.0 * u.degree,
     single_group=False,
     flagged_pixels=True,
 ):
@@ -256,6 +261,7 @@ def create_satellite_data(
         toastcomm.group_size,
         sample_rate=sample_rate,
         pixel_per_process=pixel_per_process,
+        width=width,
     )
 
     # Create a schedule
@@ -264,10 +270,10 @@ def create_satellite_data(
         prefix="test_",
         mission_start=datetime(2023, 2, 23),
         observation_time=obs_time,
-        gap_time=0 * u.minute,
+        gap_time=gap_time,
         num_observations=(toastcomm.ngroups * obs_per_group),
-        prec_period=10 * u.minute,
-        spin_period=1 * u.minute,
+        prec_period=5 * u.minute,
+        spin_period=0.5 * u.minute,
     )
 
     # Scan fast enough to cover some sky in a short amount of time.  Reduce the
@@ -282,8 +288,8 @@ def create_satellite_data(
         schedule=sch,
         hwp_angle=hwp_angle,
         hwp_rpm=hwp_rpm,
-        spin_angle=5.0 * u.degree,
-        prec_angle=10.0 * u.degree,
+        spin_angle=3.0 * u.degree,
+        prec_angle=7.0 * u.degree,
         detset_key="pixel",
     )
     sim_sat.apply(data)
@@ -727,9 +733,40 @@ def fake_flags(
             ob.detdata[det_name][det, :half] |= det_val
 
 
+def fake_hwpss_data(ang, scale):
+    # Generate a timestream of fake HWPSS
+    n_harmonic = 5
+    coscoeff = scale * np.array([1.0, 0.6, 0.2, 0.001, 0.003])
+    sincoeff = scale * np.array([0.7, 0.9, 0.1, 0.002, 0.0005])
+    out = np.zeros_like(ang)
+    for h in range(n_harmonic):
+        out[:] += coscoeff[h] * np.cos(h * ang) + sincoeff[h] * np.sin(h * ang)
+    return out, coscoeff, sincoeff
+
+
+def fake_hwpss(data, field, scale):
+    # Create a fake HWP synchronous signal
+    coeff = dict()
+    for ob in data.obs:
+        hwpss, ccos, csin = fake_hwpss_data(ob.shared[defaults.hwp_angle].data, scale)
+        n_harm = len(ccos)
+        coeff[ob.name] = np.zeros(4 * n_harm)
+        for h in range(n_harm):
+            coeff[ob.name][4 * h] = csin[h]
+            coeff[ob.name][4 * h + 1] = 0
+            coeff[ob.name][4 * h + 2] = ccos[h]
+            coeff[ob.name][4 * h + 3] = 0
+        if field not in ob.detdata:
+            ob.detdata.create(field, units=defaults.det_data_units)
+        for det in ob.local_detectors:
+            ob.detdata[field][det, :] += hwpss
+    return coeff
+
+
 def create_ground_data(
     mpicomm,
-    sample_rate=10.0 * u.Hz,
+    sample_rate=60.0 * u.Hz,
+    hwp_rpm=59.0,
     fp_width=5.0 * u.degree,
     temp_dir=None,
     el_nod=False,
@@ -826,7 +863,7 @@ def create_ground_data(
         session_split_key=split_key,
         schedule=schedule,
         hwp_angle=defaults.hwp_angle,
-        hwp_rpm=120.0,
+        hwp_rpm=hwp_rpm,
         weather="atacama",
         median_weather=True,
         detset_key="pixel",

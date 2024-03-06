@@ -57,7 +57,8 @@ class DemodulateTest(MPITestCase):
         dist = data[dist_key]
         pix_data = PixelData(dist, np.float64, n_value=3, units=u.K)
         off = 0
-        map_values = [10, -1, 2]
+        # map_values = [10, -1, 2]
+        map_values = [10, 2, 0]
         for submap in range(dist.n_submap):
             if submap in dist.local_submaps:
                 pix_data.data[off, :, 0] = map_values[0]
@@ -110,21 +111,28 @@ class DemodulateTest(MPITestCase):
             output_dir=self.outdir,
             map_rcond_threshold=1e-2,
         )
-
         mapper.apply(data)
+
+        # Write one timestream for comparison
+        if data.comm.world_rank == 0:
+            oname = data.obs[0].name
+            valid_dets = data.obs[0].select_local_detectors(
+                flagmask=defaults.det_mask_invalid
+            )
+            dname = valid_dets[0]
+            tod_input = os.path.join(
+                self.outdir,
+                f"tod_{oname}_{dname}_in.np",
+            )
+            data.obs[0].detdata[defaults.det_data][dname].tofile(tod_input)
 
         # Demodulate
 
-        demod = ops.Demodulate(stokes_weights=weights, purge=True)
-        # demod.purge = False
+        downsample = 3
+        demod = ops.Demodulate(stokes_weights=weights, nskip=downsample, purge=True)
         demod_data = demod.apply(data)
 
-        # ops.Delete(detdata=[defaults.weights]).apply(demod_data)
-
         # Map again
-
-        default_model.apply(demod_data)
-
         demod_weights = ops.StokesWeightsDemod()
 
         mapper.name = "demodulated"
@@ -134,6 +142,67 @@ class DemodulateTest(MPITestCase):
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
             import matplotlib.pyplot as plt
+
+            # Plot demodulated timestreams for comparison
+            oname = data.obs[0].name
+            valid_dets = data.obs[0].select_local_detectors(
+                flagmask=defaults.det_mask_invalid
+            )
+            dname = valid_dets[0]
+            tod_in_file = os.path.join(
+                self.outdir,
+                f"tod_{oname}_{dname}_in.np",
+            )
+            tod_in = np.fromfile(tod_in_file)
+            tod_plot = os.path.join(self.outdir, f"tod_{oname}_{dname}.pdf")
+
+            slc_in = slice(0, 50)
+            slc_demod = slice(0, 50 // downsample)
+
+            fig = plt.figure(figsize=(12, 12), dpi=72)
+            ax = fig.add_subplot(2, 1, 1, aspect="auto")
+            ax.plot(
+                data.obs[0].shared[defaults.times].data[slc_in],
+                tod_in[slc_in],
+                c="black",
+                label=f"Original Signal",
+            )
+            ax.plot(
+                data.obs[0].shared[defaults.times].data[slc_in],
+                data.obs[0].shared[defaults.hwp_angle].data[slc_in],
+                c="purple",
+                label=f"HWP Angle",
+            )
+            ax.legend(loc="best")
+            ax = fig.add_subplot(2, 1, 2, aspect="auto")
+            ax.plot(
+                demod_data.obs[0].shared[defaults.times].data[slc_demod],
+                demod_data.obs[0].detdata[defaults.det_data][
+                    f"demod0_{dname}", slc_demod
+                ],
+                c="red",
+                label=f"Demod0",
+            )
+            ax.plot(
+                demod_data.obs[0].shared[defaults.times].data[slc_demod],
+                demod_data.obs[0].detdata[defaults.det_data][
+                    f"demod4r_{dname}", slc_demod
+                ],
+                c="blue",
+                label=f"Demod4r",
+            )
+            ax.plot(
+                demod_data.obs[0].shared[defaults.times].data[slc_demod],
+                demod_data.obs[0].detdata[defaults.det_data][
+                    f"demod4i_{dname}", slc_demod
+                ],
+                c="green",
+                label=f"Demod4i",
+            )
+            ax.legend(loc="best")
+            plt.title(f"Demodulation")
+            plt.savefig(tod_plot)
+            plt.close()
 
             fname_mod = os.path.join(self.outdir, "modulated_map.fits")
             fname_demod = os.path.join(self.outdir, "demodulated_map.fits")
@@ -152,12 +221,15 @@ class DemodulateTest(MPITestCase):
                 rms = np.sqrt(np.mean((m[good] - value) ** 2))
                 m[m == 0] = hp.UNSEEN
                 stokes = "IQU"[i]
+                amp = 0.0001
                 hp.gnomview(
                     m,
                     sub=[nrow, ncol, 1 + i],
                     reso=reso,
                     rot=rot,
                     title=f"Modulated {stokes} : rms = {rms}",
+                    min=value - amp,
+                    max=value + amp,
                     cmap="coolwarm",
                 )
 
@@ -183,7 +255,7 @@ class DemodulateTest(MPITestCase):
                         f"WARNING:  demodulated map RMS = {rms}, which is larger than 1e-3",
                         flush=True,
                     )
-                    # self.assertTrue(False)
+                    self.assertTrue(False)
 
             outfile = os.path.join(self.outdir, "map_comparison.png")
             fig.savefig(outfile)

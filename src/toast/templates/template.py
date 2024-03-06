@@ -64,7 +64,7 @@ class Template(TraitConfig):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid, help="Bit mask value for solver flags"
+        defaults.det_mask_nonscience, help="Bit mask value for solver flags"
     )
 
     @traitlets.validate("det_mask")

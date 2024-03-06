@@ -270,12 +270,19 @@ class HWPFilter(Operator):
             # Prefix for logging
             log_prefix = f"{data.comm.group} : {obs.name} :"
 
-            if data.comm.group_rank == 0:
-                msg = (
-                    f"{log_prefix} OpHWPFilter: "
-                    f"Processing observation {iobs + 1} / {nobs}"
-                )
-                log.debug(msg)
+            if self.hwp_angle in obs.shared:
+                if data.comm.group_rank == 0:
+                    msg = f"{log_prefix} HWPSS Filter: "
+                    msg += f"Processing observation {iobs + 1} / {nobs}"
+                    msg += f" ({obs.name})"
+                    log.debug(msg)
+            else:
+                # This observation has no HWP
+                if data.comm.group_rank == 0:
+                    msg = f"{log_prefix} HWPSS Filter:  skipping observation {obs.name},"
+                    msg += f" which has no HWP"
+                    log.debug(msg)
+                continue
 
             # Cache the output common flags
             if self.shared_flags is not None:
@@ -289,7 +296,7 @@ class HWPFilter(Operator):
             templates, legendre_trend, fourier_filter = self.build_templates(obs)
             if data.comm.group_rank == 0:
                 msg = (
-                    f"{log_prefix} OpHWPFilter: "
+                    f"{log_prefix} HWPSS Filter: "
                     f"Built templates in {time() - t1:.1f}s"
                 )
                 log.debug(msg)
@@ -300,7 +307,7 @@ class HWPFilter(Operator):
             last_rcond = None
             for det in obs.select_local_detectors(detectors, flagmask=self.det_mask):
                 if data.comm.group_rank == 0:
-                    msg = f"{log_prefix} OpHWPFilter: " f"Processing detector {det}"
+                    msg = f"{log_prefix} HWPSS Filter: " f"Processing detector {det}"
                     log.verbose(msg)
 
                 ref = obs.detdata[self.det_data][det]
@@ -324,7 +331,7 @@ class HWPFilter(Operator):
                 last_good = good
                 if data.comm.group_rank == 0:
                     msg = (
-                        f"{log_prefix} OpHWPFilter: "
+                        f"{log_prefix} HWPSS Filter: "
                         f"Fit templates in {time() - t1:.1f}s"
                     )
                     log.verbose(msg)
@@ -341,7 +348,7 @@ class HWPFilter(Operator):
                 )
                 if data.comm.group_rank == 0:
                     msg = (
-                        f"{log_prefix} OpGroundFilter: "
+                        f"{log_prefix} HWPSS Filter: "
                         f"Subtract templates in {time() - t1:.1f}s"
                     )
                     log.verbose(msg)
@@ -356,12 +363,17 @@ class HWPFilter(Operator):
             self.rcondsum = wcomm.allreduce(self.rcondsum)
 
         if wcomm is None or wcomm.rank == 0:
-            rcond_mean = self.rcondsum / (self.nsingular + self.ngood)
-            msg = (
-                f"Applied ground filter in {time() - t0:.1f} s.  "
-                f"Average rcond of template matrix was {rcond_mean}"
-            )
-            log.debug(msg)
+            denominator = self.nsingular + self.ngood
+            if denominator == 0:
+                msg = f"HWPSS filter had no observations with a HWP"
+                log.debug(msg)
+            else:
+                rcond_mean = self.rcondsum / denominator
+                msg = (
+                    f"Applied HWPSS filter in {time() - t0:.1f} s.  "
+                    f"Average rcond of template matrix was {rcond_mean}"
+                )
+                log.debug(msg)
 
         return
 

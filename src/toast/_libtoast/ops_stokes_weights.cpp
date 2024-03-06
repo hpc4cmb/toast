@@ -127,15 +127,25 @@ void stokes_weights_IQU_inner_hwp(
     double alpha;
     stokes_weights_alpha(&(quats[qoff]), alpha);
 
-    double ang = 2.0 * (2.0 * (gamma[idet] - hwp[isamp]) - alpha);
+    // Original, Case 1, Case 2
+    // double ang = 2.0 * (2.0 * (gamma[idet] - hwp[isamp]) - alpha);
+    // Case 3
+    double ang = 2.0 * (2.0 * (gamma[idet] - hwp[isamp]) + alpha);
 
     double cang = ::cos(ang);
     double sang = ::sin(ang);
 
     int64_t woff = (w_indx * 3 * n_samp) + 3 * isamp;
     weights[woff] = cal[idet];
+    // Original, Case 3
     weights[woff + 1] = cang * eta * cal[idet];
     weights[woff + 2] = -sang * eta * cal[idet] * U_sign;
+    // Case 1
+    // weights[woff + 1] = cang * eta * cal[idet];
+    // weights[woff + 2] = sang * eta * cal[idet] * U_sign;
+    // Case 2
+    // weights[woff + 1] = -cang * eta * cal[idet];
+    // weights[woff + 2] = sang * eta * cal[idet] * U_sign;
     return;
 }
 

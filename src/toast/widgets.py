@@ -397,9 +397,9 @@ class ObservationWidget(object):
         for k in self.obs.detdata.keys():
             ddata = self.obs.detdata[k]
             ndet = len(ddata.detectors)
-            det_info[
-                k
-            ] = f"{ndet} dets: {ddata.shape} of {ddata.dtype} (unit='{ddata.units}')"
+            det_info[k] = (
+                f"{ndet} dets: {ddata.shape} of {ddata.dtype} (unit='{ddata.units}')"
+            )
         w_detdata = self._key_value_table(
             "Detector Data", det_info, "Field", "Info", 200, width_percent=100
         )

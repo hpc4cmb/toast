@@ -21,9 +21,9 @@ from .copy import Copy
 from .delete import Delete
 from .noise_estimation_utils import (
     autocov_psd,
+    communicate_overlap,
     crosscov_psd,
     flagged_running_average,
-    communicate_overlap,
     highpass_flagged_signal,
 )
 from .operator import Operator
