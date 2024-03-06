@@ -11,6 +11,7 @@ import sys
 import types
 from collections import OrderedDict
 from collections.abc import MutableMapping
+from json import JSONDecodeError
 
 import numpy as np
 from astropy import units as u
@@ -20,7 +21,7 @@ from ..trait_utils import scalar_to_string as trait_scalar_to_string
 from ..trait_utils import string_to_scalar as trait_string_to_scalar
 from ..trait_utils import string_to_trait, trait_to_string
 from ..utils import Environment, Logger
-from .json import dump_json, load_json, JSONDecodeError
+from .json import dump_json, load_json
 from .toml import dump_toml, load_toml
 from .yaml import dump_yaml, load_yaml
 
@@ -62,7 +63,7 @@ def load_config(file, input=None, comm=None):
     """
     ret = None
     # If the file has a recognized extension, just use that instead of guessing.
-    ext = os.path.splitext(file)
+    ext = os.path.splitext(file)[1]
     if ext in [".yml", ".yaml"]:
         return load_yaml(file, input=input, comm=comm)
     elif ext in [".json", ".jsn"]:
