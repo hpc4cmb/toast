@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
 from collections import OrderedDict
 
 import numpy as np
@@ -16,6 +17,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import AlignedF64, Logger
+from ..vis import set_matplotlib_backend
 from .amplitudes import Amplitudes
 from .template import Template
 
@@ -55,6 +57,12 @@ class Fourier2D(Template):
         None,
         allow_none=True,
         help="Observation key containing the optional noise model",
+    )
+
+    debug_plots = Unicode(
+        None,
+        allow_none=True,
+        help="If not None, make debugging plots in this directory",
     )
 
     @traitlets.validate("order")
@@ -253,11 +261,47 @@ class Fourier2D(Template):
                     corr[ihalf:] = corr[ihalf - 1 :: -1]
                 else:
                     corr[ihalf + 1 :] = corr[ihalf - 1 :: -1]
+
                 fcorr = np.fft.rfft(corr)
+                fcorr_orig = np.copy(fcorr)
                 too_small = fcorr < (1.0e-6 * self.correlation_amplitude)
                 fcorr[too_small] = 1.0e-6 * self.correlation_amplitude
                 invcorr = np.fft.irfft(1 / fcorr)
                 self._filters[iob].append(invcorr)
+
+                if self.debug_plots is not None and ob.comm.group_rank == 0:
+                    os.makedirs(self.debug_plots, exist_ok=True)
+                    set_matplotlib_backend(backend="pdf")
+
+                    import matplotlib.pyplot as plt
+
+                    figdpi = 100
+                    plotfile = os.path.join(
+                        self.debug_plots, f"f2d_{ob.name}_{ivw}_filter.pdf"
+                    )
+                    fig = plt.figure(dpi=figdpi, figsize=(8, 12))
+                    xdata = np.arange(len(corr))
+                    fxdata = np.arange(len(fcorr))
+                    ax = fig.add_subplot(3, 1, 1)
+                    ax.plot(xdata, corr, label=f"Input Corr")
+                    ax.set_yscale("log")
+                    ax.set_xlabel("Sample")
+                    ax.set_ylabel("Amplitude")
+                    ax.legend(loc="best")
+                    ax = fig.add_subplot(3, 1, 2)
+                    ax.plot(fxdata, fcorr_orig, label=f"Fcorr original")
+                    ax.plot(fxdata, fcorr, label=f"Fcorr cut")
+                    ax.set_yscale("log")
+                    ax.set_xlabel("Frequency")
+                    ax.set_ylabel("Amplitude")
+                    ax.legend(loc="best")
+                    ax = fig.add_subplot(3, 1, 3)
+                    ax.plot(xdata, invcorr, label=f"Inverse Corr")
+                    ax.set_xlabel("Sample")
+                    ax.set_ylabel("Amplitude")
+                    ax.legend(loc="best")
+                    plt.savefig(plotfile, dpi=figdpi, bbox_inches="tight", format="pdf")
+                    plt.close()
 
                 # Now compute templates and norm for this view
 
