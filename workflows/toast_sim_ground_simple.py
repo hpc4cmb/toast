@@ -24,6 +24,10 @@ from astropy import units as u
 import toast
 from toast.mpi import MPI
 
+import toast.io
+import toast.schedule
+import toast.ops
+
 
 def main():
     env = toast.utils.Environment.get()
@@ -43,6 +47,21 @@ def main():
         "--schedule", required=True, default=None, help="Input observing schedule"
     )
 
+    parser.add_argument(
+        "--thinfp",
+        required=False,
+        default=1,
+        help="Focalplane thinning factor",
+        type=int,
+    )
+
+    parser.add_argument(
+        "--weather",
+        required=False,
+        default=None,
+        help="Weather information. Infer from observing site if not provided.",
+    )
+
     args = parser.parse_args()
 
     # Create our output directory
@@ -52,7 +71,7 @@ def main():
             os.makedirs(out_dir)
 
     # Load a generic focalplane file.
-    focalplane = toast.instrument.Focalplane()
+    focalplane = toast.instrument.Focalplane(thinfp=args.thinfp)
     with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
         focalplane.load_hdf5(f.handle, comm=comm)
 
@@ -67,7 +86,6 @@ def main():
         schedule.site_lat,
         schedule.site_lon,
         schedule.site_alt,
-        weather=None,
     )
     telescope = toast.instrument.Telescope(
         schedule.telescope_name, focalplane=focalplane, site=site
@@ -82,11 +100,19 @@ def main():
     # Simulate data
     # ---------------------------------------------------------------
 
+    # Try using site name for weather if not user-provided
+    weather = None
+    if args.weather is None:
+        weather = schedule.site_name.lower()
+    else:
+        weather = args.weather
+
     # Simulate the telescope pointing
     sim_ground = toast.ops.SimGround(
         telescope=telescope,
         schedule=schedule,
         detset_key="pixel",
+        weather=weather,
     )
     sim_ground.apply(data)
 
@@ -113,14 +139,16 @@ def main():
 
     # Set up the pointing matrix.  We will use the same pointing matrix for the
     # template solve and the final binning.
-    pointing = toast.ops.PointingHealpix(
-        nside=2048, mode="IQU", detector_pointing=det_pointing_radec
+    pixel_pointing = toast.ops.PixelsHealpix(
+        nside=256, mode="IQU", detector_pointing=det_pointing_radec
+    )
+    weights = toast.ops.StokesWeights(
+        nside=256, mode="IQU", detector_pointing=det_pointing_radec
     )
 
     # Simulate sky signal from a map and accumulate.
-    # scan_map = toast.ops.ScanHealpix(
-    #     pointing=pointing,
-    #     file="input.fits"
+    # scan_map = toast.ops.ScanHealpixMap(
+    #     pixel_pointing=pixel_pointing, file="input.fits"
     # )
     # scan_map.apply(data)
 
@@ -137,7 +165,11 @@ def main():
 
     # Set up the binning operator.  We will use the same binning for the template solve
     # and the final map.
-    binner = toast.ops.BinMap(pointing=pointing, noise_model=elevation_model.out_model)
+    binner = toast.ops.BinMap(
+        pixel_pointing=pixel_pointing,
+        stokes_weights=weights,
+        noise_model=elevation_model.out_model,
+    )
 
     # FIXME:  Apply filtering here, and optionally pass an empty template
     # list to disable the template solve and just make a binned map.
