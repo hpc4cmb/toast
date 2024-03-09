@@ -52,6 +52,7 @@ install(FILES
     demodulation.py
     pixels_wcs.py
     filterbin.py
+    obsmat.py
     save_hdf5.py
     load_hdf5.py
     noise_estimation.py
