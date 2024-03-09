@@ -339,6 +339,7 @@ conf["entry_points"] = {
         "toast_obsmatrix_combine = toast.scripts.toast_obsmatrix_combine:main",
         "toast_obsmatrix_coadd = toast.scripts.toast_obsmatrix_coadd:main",
         "toast_config_verify = toast.scripts.toast_config_verify:main",
+        "toast_plot_wcs = toast.scripts.toast_plot_wcs:main",
     ]
 }
 conf["cmdclass"] = {"build_ext": CMakeBuild}

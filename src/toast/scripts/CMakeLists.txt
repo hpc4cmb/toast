@@ -18,6 +18,7 @@ set(ENTRY_POINTS
     toast_obsmatrix_coadd.py
     toast_config_verify.py
     toast_merge_timings.py
+    toast_plot_wcs.py
 )
 
 foreach(pyscript ${ENTRY_POINTS})
