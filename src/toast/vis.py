@@ -10,6 +10,8 @@ import numpy as np
 from astropy import units as u
 from astropy.wcs import WCS
 
+from . import qarray as qa
+
 _matplotlib_backend = None
 
 
@@ -447,7 +449,8 @@ def plot_healpix_maps(
         )
         mlon = np.mean(lon)
         mlat = np.mean(lat)
-        gnomrot = (mlon, mlat, 0.0)
+        if gnomview:
+            gnomrot = (mlon, mlat, 0.0)
         plot_single(hitdata, 0, maxhits, f"{hitfile}.pdf", gnomrot=gnomrot)
     badhits = np.logical_not(goodhits)
 

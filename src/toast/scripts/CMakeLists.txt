@@ -19,6 +19,7 @@ set(ENTRY_POINTS
     toast_config_verify.py
     toast_merge_timings.py
     toast_plot_wcs.py
+    toast_plot_healpix.py
 )
 
 foreach(pyscript ${ENTRY_POINTS})

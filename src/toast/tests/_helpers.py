@@ -29,7 +29,12 @@ from ..pixels_io_healpix import write_healpix_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..schedule_sim_satellite import create_satellite_schedule
-from ..vis import set_matplotlib_backend
+from ..vis import (
+    set_matplotlib_backend,
+    plot_wcs_maps,
+    plot_projected_quats,
+    plot_healpix_maps,
+)
 
 ZAXIS = np.array([0.0, 0.0, 1.0])
 
@@ -889,4 +894,3 @@ def create_ground_data(
             ob.update_local_detector_flags(det_flags)
 
     return data
-
