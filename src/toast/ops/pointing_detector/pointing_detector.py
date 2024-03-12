@@ -105,6 +105,7 @@ class PointingDetectorSimple(Operator):
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         coord_rot = None
+        bore_suffix = ""
         if self.coord_in is None:
             if self.coord_out is not None:
                 msg = "Input and output coordinate systems should both be None or valid"
@@ -116,18 +117,60 @@ class PointingDetectorSimple(Operator):
             if self.coord_in == "C":
                 if self.coord_out == "E":
                     coord_rot = qa.equ2ecl()
+                    bore_suffix = "_C2E"
                 elif self.coord_out == "G":
                     coord_rot = qa.equ2gal()
+                    bore_suffix = "_C2G"
             elif self.coord_in == "E":
                 if self.coord_out == "G":
                     coord_rot = qa.ecl2gal()
+                    bore_suffix = "_E2G"
                 elif self.coord_out == "C":
                     coord_rot = qa.inv(qa.equ2ecl())
+                    bore_suffix = "_E2C"
             elif self.coord_in == "G":
                 if self.coord_out == "C":
                     coord_rot = qa.inv(qa.equ2gal())
+                    bore_suffix = "_G2C"
                 if self.coord_out == "E":
                     coord_rot = qa.inv(qa.ecl2gal())
+                    bore_suffix = "_G2E"
+
+        # Ensure that we have boresight pointing in the required coordinate
+        # frame.  We will potentially re-use this boresight pointing for every
+        # iteration of the amplitude solver, so it makes sense to compute and 
+        # store this.
+        bore_name = self.boresight
+        if bore_suffix != "":
+            bore_name = f"{self.boresight}{bore_suffix}"
+            for ob in data.obs:
+                if bore_name not in ob.shared:
+                    # Does not yet exist, create it
+                    ob.shared.create_column(
+                        bore_name,
+                        ob.shared[self.boresight].shape,
+                        ob.shared[self.boresight].dtype,
+                    )
+                    # First process in each column computes the quaternions
+                    bore_rot = None
+                    if ob.comm_col_rank == 0:
+                        bore_rot = qa.mult(coord_rot, ob.shared[self.boresight].data)
+                    ob.shared[bore_name].set(bore_rot, fromrank=0)
+
+        # Ensure that our boresight data is on the right device.  In the case of
+        # no coordinate rotation, this would already be done by the outer pipeline.
+        for ob in data.obs:
+            if use_accel:
+                if not ob.shared.accel_in_use(bore_name):
+                    # Not currently on the device
+                    if not ob.shared.accel_exists(bore_name):
+                        # Does not even exist yet on the device
+                        ob.shared.accel_create(bore_name)
+                    ob.shared.accel_update_device(bore_name)
+            else:
+                if ob.shared.accel_in_use(bore_name):
+                    # Back to host
+                    ob.shared.accel_update_host(bore_name)
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -171,14 +214,9 @@ class PointingDetectorSimple(Operator):
                 comm=data.comm.comm_group,
             )
 
-            if coord_rot is None:
-                boresight = ob.shared[self.boresight].data
-            else:
-                boresight = qa.mult(coord_rot, ob.shared[self.boresight].data)
-
             pointing_detector(
                 fp_quats,
-                boresight,
+                ob.shared[bore_name].data,
                 quat_indx,
                 ob.detdata[self.quats].data,
                 ob.intervals[self.view].data,
