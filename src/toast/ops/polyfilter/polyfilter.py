@@ -611,10 +611,10 @@ class PolyFilter(Operator):
             # Optionally flag unfiltered data
             if self.shared_flags is not None and self.poly_flag_mask is not None:
                 shared_flags = np.array(obs.shared[self.shared_flags])
-                last_stop = None
-                for stop, start in zip(local_starts, local_stops):
-                    if last_stop is not None and last_stop < start:
-                        shared_flags[last_stop:start] |= self.poly_flag_mask
+                not_filtered = np.ones(shared_flags.size, dtype=bool)
+                for start, stop in zip(local_starts, local_stops):
+                    not_filtered[start : stop + 1] = False
+                shared_flags[not_filtered] |= self.poly_flag_mask
                 obs.shared[self.shared_flags].set(shared_flags, fromrank=0)
 
         return
