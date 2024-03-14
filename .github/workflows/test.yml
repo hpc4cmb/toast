@@ -105,6 +105,7 @@ jobs:
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate toast \
+            && echo "ulimit -Sn 4096" >> ~/.bash_profile \
             && export OMP_NUM_THREADS=1 \
             && mpirun -np 2 python -c 'import toast.tests; toast.tests.run()' \
             && unset OMP_NUM_THREADS
