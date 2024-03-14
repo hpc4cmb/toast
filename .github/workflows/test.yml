@@ -61,7 +61,14 @@ jobs:
 
       - name: Setup Conda Base
         run: |
-          sudo rm -rf /usr/share/miniconda \
+          echo "ulimit -Sn 4096" >> ~/.bash_profile \
+            && echo "ulimit -Sn 4096" >> ~/.bashrc \
+            && echo "ulimit -Sn 4096" >> ~/.profile \
+            && if [ "${{ matrix.os }}" = "macos-latest" ]; then \
+              sudo sysctl -w kern.maxfiles=20480; \
+              sudo sysctl -w kern.maxfilesperproc=18000; \
+            fi \
+            && sudo rm -rf /usr/share/miniconda \
             && sudo rm -rf /usr/local/miniconda \
             && curl -SL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh \
             && bash miniforge.sh -b -f -p ~/conda \
@@ -71,7 +78,8 @@ jobs:
 
       - name: Check Conda Config
         run: |
-          source ~/conda/etc/profile.d/conda.sh \
+          ulimit -a \
+            && source ~/conda/etc/profile.d/conda.sh \
             && conda activate base \
             && conda info \
             && conda list \
@@ -105,8 +113,8 @@ jobs:
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate toast \
-            && echo "ulimit -Sn 4096" >> ~/.bash_profile \
             && export OMP_NUM_THREADS=1 \
+            && mpirun -np 2 ulimit -a \
             && mpirun -np 2 python -c 'import toast.tests; toast.tests.run()' \
             && unset OMP_NUM_THREADS
 
