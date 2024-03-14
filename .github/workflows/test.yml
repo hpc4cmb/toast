@@ -61,13 +61,9 @@ jobs:
 
       - name: Setup Conda Base
         run: |
-          echo "ulimit -Sn 4096" >> ~/.bash_profile \
-            && echo "ulimit -Sn 4096" >> ~/.bashrc \
-            && echo "ulimit -Sn 4096" >> ~/.profile \
-            && if [ "${{ matrix.os }}" = "macos-latest" ]; then \
-              sudo sysctl -w kern.maxfiles=20480; \
-              sudo sysctl -w kern.maxfilesperproc=18000; \
-            fi \
+          echo "ulimit -n 65536" >> ~/.bash_profile \
+            && echo "ulimit -n 65536" >> ~/.bashrc \
+            && echo "ulimit -n 65536" >> ~/.profile \
             && sudo rm -rf /usr/share/miniconda \
             && sudo rm -rf /usr/local/miniconda \
             && curl -SL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh \
