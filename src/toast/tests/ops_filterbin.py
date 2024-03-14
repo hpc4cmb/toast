@@ -14,7 +14,7 @@ from astropy import units as u
 from astropy.table import Column
 
 from .. import ops as ops
-from ..mpi import MPI, Comm, get_world
+from ..mpi import MPI, Comm
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
