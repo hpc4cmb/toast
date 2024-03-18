@@ -99,7 +99,8 @@ class PointingHealpixTest(MPITestCase):
         nside = 64
         nest = True
         psivec = np.radians([-180, -135, -90, -45, 0, 45, 90, 135, 180])
-        # psivec = np.radians([-180, 180])
+        expected_Q = np.array([1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0])
+        expected_U = np.array([0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0])
         nsamp = psivec.size
 
         eps = np.array([0.0])
@@ -108,7 +109,10 @@ class PointingHealpixTest(MPITestCase):
         mode = "IQU"
         nnz = 3
 
-        hwpang = np.zeros(nsamp)
+        # With no HWP, we set this to some array whose length is not
+        # nsamp.
+        hwpang = np.zeros(1, dtype=np.float64)
+
         flags = np.zeros(nsamp, dtype=np.uint8)
         weights = np.zeros([nsamp, nnz], dtype=np.float64)
         zero_index = np.array([0], dtype=np.int32)
@@ -141,21 +145,19 @@ class PointingHealpixTest(MPITestCase):
             False,
         )
         weights_ref = []
-        for quat in quats:
-            theta, phi, psi = qa.to_iso_angles(quat)
-            weights_ref.append(np.array([1, np.cos(2 * psi), np.sin(2 * psi)]))
+        for q, u in zip(expected_Q, expected_U):
+            weights_ref.append(np.array([1, q, u]))
         weights_ref = np.vstack(weights_ref)
         failed = False
-        for w1, w2, psi, quat in zip(weights_ref, weights, psivec, quats):
-            # print("\npsi = {}, quat = {} : ".format(psi, quat), end="")
+        for w1, w2 in zip(weights_ref, weights):
             if not np.allclose(w1, w2):
                 print(
-                    f"Pointing weights do not agree: {w2} != {w1} ({psi}, {quat})",
+                    f"Pointing weights do not agree: {w2} != {w1}",
                     flush=True,
                 )
                 failed = True
             else:
-                # print("Pointing weights agree: {} == {}".format(w1, w2), flush=True)
+                print("Pointing weights agree: {} == {}".format(w1, w2), flush=True)
                 pass
         self.assertFalse(failed)
         return
@@ -192,7 +194,7 @@ class PointingHealpixTest(MPITestCase):
             quats.append(qa.mult(pixrot, psirot))
         quats = np.vstack(quats)
 
-        # First with HWP angle == 0.0
+        # With HWP angle == 0.0
         hwpang = np.zeros(nsamp)
         weights_zero = np.zeros([nsamp, nnz], dtype=np.float64)
 
@@ -202,22 +204,6 @@ class PointingHealpixTest(MPITestCase):
             zero_index,
             weights_zero.reshape(1, nsamp, nnz),
             hwpang,
-            intervals.data,
-            eps,
-            gamma,
-            cal,
-            False,
-            False,
-        )
-
-        # Now passing hwpang == None
-        weights_none = np.zeros([nsamp, nnz], dtype=np.float64)
-        stokes_weights_IQU(
-            zero_index,
-            quats.reshape(1, nsamp, 4),
-            zero_index,
-            weights_none.reshape(1, nsamp, nnz),
-            np.zeros(1),
             intervals.data,
             eps,
             gamma,
@@ -237,18 +223,6 @@ class PointingHealpixTest(MPITestCase):
             msg += f" != {expected_U}"
             print(msg)
             failed = True
-
-        if not np.allclose(weights_none[:, 1], expected_Q):
-            msg = f"Q weights_none do not match expected values {weights_none[:, 1]}"
-            msg += f" != {expected_Q}"
-            print(msg)
-            failed = True
-        if not np.allclose(weights_none[:, 2], expected_U):
-            msg = f"U weights_none do not match expected values {weights_none[:, 1]}"
-            msg += f" != {expected_U}"
-            print(msg)
-            failed = True
-
         self.assertFalse(failed)
         return
 

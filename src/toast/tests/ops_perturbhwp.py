@@ -25,7 +25,11 @@ class PerturbHWPTest(MPITestCase):
 
     def test_perturbhwp(self):
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(
+            self.comm, 
+            sample_rate=10.0 * u.Hz,
+            hwp_rpm=1.0,
+        )
 
         # Copy original HWP to a different field for later comparison
         ops.Copy(
@@ -89,7 +93,11 @@ class PerturbHWPTest(MPITestCase):
 
     def test_perturbhwp_stepped(self):
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(
+            self.comm,
+            sample_rate=10.0 * u.Hz,
+            hwp_rpm=1.0,
+        )
 
         for ob in data.obs:
             # Only one process in column communicator should
