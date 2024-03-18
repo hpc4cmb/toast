@@ -162,11 +162,11 @@ class MapMaker(Operator):
     mc_index = Int(None, allow_none=True, help="The Monte-Carlo index")
 
     save_cleaned = Bool(
-        True, help="If True, save the template-subtracted detector timestreams"
+        False, help="If True, save the template-subtracted detector timestreams"
     )
 
     overwrite_cleaned = Bool(
-        True, help="If True and save_cleaned is True, overwrite the input data"
+        False, help="If True and save_cleaned is True, overwrite the input data"
     )
 
     reset_pix_dist = Bool(
