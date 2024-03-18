@@ -67,6 +67,8 @@ def stokes_weights_IQU_numpy(
             if hwp is None:
                 ang = 2.0 * alpha
             else:
+                # The U coefficient is negated in this case
+                U_sign *= -1
                 ang = 2.0 * (2.0 * (gamma[idet] - hwp) - alpha)
 
             weights[widx][samples, 0] = cal[idet]

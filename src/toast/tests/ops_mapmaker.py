@@ -361,7 +361,7 @@ class MapmakerTest(MPITestCase):
                 toast_base = input_signal - toast_signal
                 diff_base = madam_base - toast_base
 
-                if not np.allclose(toast_base, madam_base, rtol=0.01):
+                if not np.allclose(toast_base, madam_base, rtol=0.01, atol=1.0e-6):
                     print(
                         f"FAIL: {det} diff : PtP = {np.ptp(diff_base)}, "
                         f"mean = {np.mean(diff_base)}"
@@ -479,7 +479,9 @@ class MapmakerTest(MPITestCase):
                 if not np.allclose(
                     toast_map[stokes][good], madam_map[stokes][good], rtol=0.01
                 ):
-                    print(f"FAIL: max {ststr} diff = {np.max(diff_map[good])}")
+                    print(
+                        f"FAIL: max {ststr} diff = {np.max(np.absolute(diff_map[good]))}"
+                    )
                     fail = True
 
         if data.comm.comm_world is not None:

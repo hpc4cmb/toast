@@ -28,7 +28,7 @@ class IoHdf5Test(MPITestCase):
         # Create fake observing of a small patch.  Use a multifrequency
         # focalplane so we can test split sessions.
 
-        ppp = 10
+        ppp = 2
         freq_list = [(100 + 10 * x) * u.GHz for x in range(3)]
         data = create_ground_data(
             self.comm,

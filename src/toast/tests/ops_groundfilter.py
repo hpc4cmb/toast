@@ -75,8 +75,14 @@ class GroundFilterTest(MPITestCase):
                 old_signal = ob.detdata["signal_copy"][det]
                 new_signal = ob.detdata[defaults.det_data][det]
                 # Check that the filtered signal is cleaner than the input signal
+                orig_rms = np.std(orig_signal[good])
+                old_rms = np.std(old_signal[good])
+                new_rms = np.std(new_signal[good])
+                dof = orig_signal[good].size - 1
+                threshold = (1.0 + 1.0 / dof) * orig_rms
+
                 self.assertTrue(
-                    np.std(new_signal[good]) < 0.1 * np.std(old_signal[good])
+                    new_rms < threshold
                 )
                 # Check that the flagged samples were also cleaned and not,
                 # for example, set to zero

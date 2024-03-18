@@ -8,11 +8,12 @@ import re
 import numpy as np
 import scipy.io
 import scipy.sparse
-from toast.covariance import covariance_invert
-from toast.pixels import PixelData, PixelDistribution
-from toast.pixels_io_healpix import read_healpix
-from toast.timing import Timer, function_timer
-from toast.utils import Logger
+from ..covariance import covariance_invert
+from ..mpi import get_world
+from ..pixels import PixelData, PixelDistribution
+from ..pixels_io_healpix import read_healpix
+from ..timing import Timer, function_timer
+from ..utils import Logger
 
 
 class ObsMat(object):
