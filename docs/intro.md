@@ -19,10 +19,10 @@ The TOAST framework contains:
 - Basic classes for performing I/O in a limited set of formats
 - Well-defined interfaces for adding custom I/O classes and processing operators
 
-The highest-level control of the workflow is done by the user, often by writing a small
-Python script or notebook (some examples are included).  Such scripts make use of TOAST
-functions for distributing data and then call built-in or custom operators to process
-the timestream data.
+The highest-level control of the workflow is done by the user, often by writing
+a small Python script or notebook (some examples are included). Such scripts
+make use of TOAST functionality for distributing data and then call built-in or
+custom operators to simulate and / or process the timestream data.
 
 The Time-Ordered Astrophysics Scalable Tools (TOAST) package is a software framework
 designed for simulation and reduction of data from telescope receivers which acquire
@@ -72,6 +72,7 @@ If you are a member of one of these projects:
 - Simons Array
 - Simons Observatory
 - CMB-S4
+- TolTEC
 
 Then there are additional software repositories you have access to that contain extra
 TOAST classes and scripts for processing data from your experiment.
