@@ -505,7 +505,7 @@ class TemplatePeriodicTest(MPITestCase):
             write_map=True,
             write_cov=False,
             write_rcond=False,
-            keep_solver_products=False,
+            keep_solver_products=True,
             keep_final_products=False,
             save_cleaned=True,
             overwrite_cleaned=True,

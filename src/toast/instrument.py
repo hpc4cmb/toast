@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2019-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -267,6 +267,7 @@ class SpaceSite(Site):
         vel_z = np.zeros(n_sparse, np.float64)
         for i, t in enumerate(sparse_times):
             atime = astime.Time(t, format="unix")
+            # Get the satellite position and velocity in the equatorial frame (ICRS)
             p, v = coord.get_body_barycentric_posvel("earth", atime)
             # FIXME:  apply translation from earth center to L2.
             pm = p.xyz.to_value(u.kilometer)

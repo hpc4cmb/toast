@@ -723,7 +723,7 @@ def equ2ecl():
             ]
         ).reshape([3, 3])
     if _equ2ecl is None:
-        _equ2ecl = from_rotmat(coordmat_J2000radec2ecl)
+        _equ2ecl = from_rotmat(_coordmat_J2000radec2ecl)
     return _equ2ecl
 
 

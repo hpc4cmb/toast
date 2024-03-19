@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -112,15 +112,11 @@ class SolverRHS(Operator):
         comm = data.comm.comm_world
         rank = data.comm.world_rank
 
-        # Check that the inputs are set
-        if self.det_data is None:
-            raise RuntimeError("You must set the det_data trait before calling exec()")
-        if self.binning is None:
-            raise RuntimeError("You must set the binning trait before calling exec()")
-        if self.template_matrix is None:
-            raise RuntimeError(
-                "You must set the template_matrix trait before calling exec()"
-            )
+        # Check that input traits are set
+        for trait in ("det_data", "binning", "template_matrix"):
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
 
         # Make a binned map
 
@@ -352,14 +348,10 @@ class SolverLHS(Operator):
         rank = data.comm.world_rank
 
         # Check that input traits are set
-        if self.binning is None:
-            raise RuntimeError("You must set the binning trait before calling exec()")
-        if self.template_matrix is None:
-            raise RuntimeError(
-                "You must set the template_matrix trait before calling exec()"
-            )
-        if self.out is None:
-            raise RuntimeError("You must set the 'out' trait before calling exec()")
+        for trait in ("binning", "template_matrix", "out"):
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
 
         # Clear temp detector data if it exists
         for ob in data.obs:
@@ -571,7 +563,7 @@ def solve(
     rank = data.comm.world_rank
 
     if rhs_key not in data:
-        msg = "rhs_key '{}' does not exist in data".format(rhs_key)
+        msg = f"rhs_key '{rhs_key}' does not exist in data"
         log.error(msg)
         raise RuntimeError(msg)
     rhs = data[rhs_key]
@@ -590,18 +582,10 @@ def solve(
             raise RuntimeError("starting guess must have same keys as RHS")
         for k, v in result.items():
             if v.n_global != rhs[k].n_global:
-                msg = (
-                    "starting guess['{}'] has different n_global than rhs['{}']".format(
-                        k, k
-                    )
-                )
+                msg = f"starting guess['{k}'] has different n_global than rhs['{k}']"
                 raise RuntimeError(msg)
             if v.n_local != rhs[k].n_local:
-                msg = (
-                    "starting guess['{}'] has different n_global than rhs['{}']".format(
-                        k, k
-                    )
-                )
+                msg = f"starting guess['{k}'] has different n_global than rhs['{k}']"
                 raise RuntimeError(msg)
 
     # Solving A * x = b ...
@@ -614,7 +598,7 @@ def solve(
     residual = None
 
     # The result of the LHS operator "q"
-    lhs_out_key = "{}_out".format(lhs_op.name)
+    lhs_out_key = f"{lhs_op.name}_out"
     if lhs_out_key in data:
         data[lhs_out_key].clear()
         del data[lhs_out_key]
@@ -625,7 +609,7 @@ def solve(
     precond = None
 
     # The new proposed direction "d"
-    proposal_key = "{}_in".format(lhs_op.name)
+    proposal_key = f"{lhs_op.name}_in"
     if proposal_key in data:
         data[proposal_key].clear()
         del data[proposal_key]
@@ -673,16 +657,9 @@ def solve(
     delta = proposal.dot(residual)
     delta_init = delta
 
-    if comm is not None:
-        comm.barrier()
-    timer.stop()
-    if rank == 0:
-        msg = "MapMaker initial residual = {}, {:0.2f} s".format(
-            sqsum_init, timer.seconds()
-        )
-        log.info(msg)
-    timer.clear()
-    timer.start()
+    log.info_rank(
+        f"MapMaker initial residual = {sqsum_init} in", comm=comm, timer=timer
+    )
 
     for iter in range(n_iter_max):
         if not np.isfinite(sqsum):
@@ -720,26 +697,20 @@ def solve(
         sqsum = residual.dot(residual)
         # print(f"{comm.rank} LHS {iter}:  sqsum = {sqsum}", flush=True)
 
-        if comm is not None:
-            comm.barrier()
-        timer.stop()
-        if rank == 0:
-            msg = "MapMaker iteration {:4d}, relative residual = {:0.6e}, {:0.2f} s".format(
-                iter, sqsum / sqsum_init, timer.seconds()
-            )
-            log.info(msg)
-        timer.clear()
-        timer.start()
+        relative = sqsum / sqsum_init
+        log.info_rank(
+            f"MapMaker iteration {iter:4d}, relative residual = {relative:0.6e} in",
+            comm=comm,
+            timer=timer,
+        )
 
         # Check for convergence
-        if (sqsum / sqsum_init) < convergence or sqsum < 1e-30:
-            timer.stop()
-            timer_full.stop()
-            if rank == 0:
-                msg = "MapMaker PCG converged after {:4d} iterations and {:0.2f} seconds".format(
-                    iter, timer_full.seconds()
-                )
-                log.info(msg)
+        if relative < convergence or sqsum < 1e-30:
+            log.info_rank(
+                f"MapMaker PCG converged after {iter:4d} iterations and",
+                comm=comm,
+                timer=timer_full,
+            )
             break
 
         sqsum_best = min(sqsum, sqsum_best)
@@ -747,13 +718,11 @@ def solve(
         # Check for stall / divergence
         if iter % 10 == 0 and iter >= n_iter_min:
             if last_best < sqsum_best * 2:
-                timer.stop()
-                timer_full.stop()
-                if rank == 0:
-                    msg = "MapMaker PCG stalled after {:4d} iterations and {:0.2f} seconds".format(
-                        iter, timer_full.seconds()
-                    )
-                    log.info(msg)
+                log.info_rank(
+                    f"MapMaker PCG stalled after {iter:4d} iterations and",
+                    comm=comm,
+                    timer=timer_full,
+                )
                 break
             last_best = sqsum_best
 
@@ -774,3 +743,12 @@ def solve(
         # d = s + beta * d
         proposal *= beta
         proposal += precond
+
+    # Delete the temporary objects
+    del temp
+    del proposal
+    del data[proposal_key]
+    del lhs_out
+    del data[lhs_out_key]
+
+    return
