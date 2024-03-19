@@ -100,7 +100,7 @@ class PixelsWCS(Operator):
 
     pixels = Unicode("pixels", help="Observation detdata key for output pixel indices")
 
-    submaps = Int(10, help="Number of submaps to use")
+    submaps = Int(100, help="Number of submaps to use")
 
     create_dist = Unicode(
         None,
@@ -268,6 +268,10 @@ class PixelsWCS(Operator):
         # CTYPE2 = Latitude
 
         self.wcs = WCS(naxis=2)
+
+        # Start with reference pixel at the corner
+        self.wcs.wcs.crpix = [1, 1]
+
         if self.coord_frame == "AZEL":
             coordstr = ("AZ--", "EL--")
         elif self.coord_frame == "EQU":
@@ -304,9 +308,8 @@ class PixelsWCS(Operator):
             msg = f"Invalid WCS projection name '{self.projection}'"
             raise ValueError(msg)
 
-        # Compute resolution and reference pixel
+        # Compute resolution
         grid_dims = None
-        self.wcs.wcs.crpix = [1, 1]
         if len(self.center) > 0:
             grid_dims = np.array(self.dimensions, dtype=np.int32)
             self.wcs.wcs.cdelt = np.array(
@@ -333,24 +336,7 @@ class PixelsWCS(Operator):
                     ]
                 )
 
-        # Set the reference pixel
-        self.wcs.wcs.crpix = [1, 1]
-        if len(r) == 0:
-            w.wcs.cdelt = [1, 1]
-            corners = w.wcs_world2pix(p, 1)
-            w.wcs.cdelt *= (corners[1] - corners[0]) / d
-        else:
-            w.wcs.cdelt = r
-            if p.ndim == 2:
-                w.wcs.cdelt[p[1] < p[0]] *= -1
-        if p.ndim == 1:
-            if len(dims) > 0:
-                off = w.wcs_world2pix(p[None], 0)[0]
-                w.wcs.crpix = np.array(d) / 2.0 + 0.5 - off
-        else:
-            off = w.wcs_world2pix(p[0, None], 0)[0] + 0.5
-            w.wcs.crpix -= off
-
+        # Set the reference pixel to the center
         if len(self.center) > 0:
             # We have the center position, and hence also the resolution and dims
             off = self.wcs.wcs_world2pix(crval.reshape((1, 2)), 0)[0]
@@ -361,7 +347,6 @@ class PixelsWCS(Operator):
             )
         else:
             # Compute the center from the bounding box
-
             off = self.wcs.wcs_world2pix(bounds_deg, 0)[0] + 0.5
             print(f"PixelsWCS: world2pix({bounds_deg}) + 0.5 --> {off}")
             self.wcs.wcs.crpix -= off
@@ -369,9 +354,6 @@ class PixelsWCS(Operator):
                 f"PixelsWCS: using bounds, crpix set to {self.wcs.wcs.crpix}",
                 flush=True,
             )
-
-            0.5 * (bounds_deg[0, 0] + bounds_deg[1, 0]),
-                    0.5 * (bounds_deg[0, 1] + bounds_deg[1, 1]),
 
         # Get the shape of the projection
         if len(self.dimensions) == 0:
