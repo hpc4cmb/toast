@@ -14,6 +14,7 @@ from .crosslinking import CrossLinking
 from .delete import Delete
 from .demodulation import Demodulate, StokesWeightsDemod
 from .elevation_noise import ElevationNoise
+from .signal_diff_noise_model import SignalDiffNoiseModel
 from .filterbin import FilterBin, combine_observation_matrix
 from .obsmat import ObsMat, coadd_observation_matrix
 from .flag_intervals import FlagIntervals
