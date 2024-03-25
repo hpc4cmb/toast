@@ -119,6 +119,7 @@ def plot_wcs_maps(
     range_I=None,
     range_Q=None,
     range_U=None,
+    max_hits=None,
     truth=None,
     xmin=None,
     xmax=None,
@@ -135,6 +136,7 @@ def plot_wcs_maps(
         range_I (tuple):  The min / max values of the Intensity map to plot.
         range_Q (tuple):  The min / max values of the Q map to plot.
         range_U (tuple):  The min / max values of the U map to plot.
+        max_hits (int):  The max hits to plot.
         truth (str):  Path to the input truth map in the case of simulations.
         xmin (float):  Fraction (0.0-1.0) of the minimum X view.
         xmax (float):  Fraction (0.0-1.0) of the maximum X view.
@@ -195,6 +197,8 @@ def plot_wcs_maps(
         hitdata = np.array(hdu.data[0, :, :])
         wcs = WCS(hdu.header)
         maxhits = np.amax(hdu.data[0, :, :])
+        if max_hits is not None:
+            maxhits = max_hits
         plot_single(wcs, hdu, 0, 0, maxhits, f"{hitfile}.pdf")
         del hdu
         hdulist.close()
@@ -375,6 +379,7 @@ def plot_healpix_maps(
     range_I=None,
     range_Q=None,
     range_U=None,
+    max_hits=None,
     truth=None,
     gnomview=False,
 ):
@@ -388,6 +393,7 @@ def plot_healpix_maps(
         range_I (tuple):  The min / max values of the Intensity map to plot.
         range_Q (tuple):  The min / max values of the Q map to plot.
         range_U (tuple):  The min / max values of the U map to plot.
+        max_hits (int):  The max hits value to plot.
         truth (str):  Path to the input truth map in the case of simulations.
         gnomview (bool):  If True, use a gnomview projection centered on the
             mean of hit pixel locations.
@@ -400,20 +406,20 @@ def plot_healpix_maps(
     figsize = (12, 6)
     figdpi = 100
 
-    def plot_single(data, vmin, vmax, out, gnomrot=None):
+    def plot_single(data, vmin, vmax, out, gnomrot=None, reso=4.0, xsize=1000):
         if gnomrot is not None:
             hp.gnomview(
                 map=data,
                 rot=gnomrot,
-                xsize=1000,
-                reso=4.0,
+                xsize=xsize,
+                reso=reso,
                 nest=True,
                 cmap="jet",
                 min=vmin,
                 max=vmax,
             )
         else:
-            hp.mollview(data, xsize=1600, nest=True, cmap="jet", min=vmin, max=vmax)
+            hp.mollview(data, xsize=xsize, nest=True, cmap="jet", min=vmin, max=vmax)
         plt.savefig(out, format="pdf")
         plt.close()
 
@@ -434,10 +440,14 @@ def plot_healpix_maps(
 
     hitdata = None
     gnomrot = None
+    gnomres = None
+    xsize = 1600
     goodhits = slice(None)
     if hitfile is not None:
         hitdata = hp.read_map(hitfile, field=None, nest=True)
         maxhits = np.amax(hitdata)
+        if max_hits is not None:
+            maxhits = max_hits
         npix = len(hitdata)
         goodhits = hitdata > 0
         goodindx = np.arange(npix, dtype=np.int32)[goodhits]
@@ -449,9 +459,13 @@ def plot_healpix_maps(
         )
         mlon = np.mean(lon)
         mlat = np.mean(lat)
+        mlon_deg = 180 * mlon / np.pi
+        mlat_deg = 180 * mlat / np.pi
+        gnomres = (np.amax(lat) - np.amin(lat)) / xsize
+        gnomres *= 180 * 60 / np.pi
         if gnomview:
-            gnomrot = (mlon, mlat, 0.0)
-        plot_single(hitdata, 0, maxhits, f"{hitfile}.pdf", gnomrot=gnomrot)
+            gnomrot = (mlon_deg, mlat_deg, 0.0)
+        plot_single(hitdata, 0, maxhits, f"{hitfile}.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize)
     badhits = np.logical_not(goodhits)
 
     mapdata = None
@@ -461,36 +475,44 @@ def plot_healpix_maps(
         if truth is not None:
             truthdata = hp.read_map(truth, field=None, nest=True)
 
+        if len(mapdata.shape) > 1:
+            # We have Q/U data too
+            imapdata = mapdata[0]
+            qmapdata = mapdata[1]
+            umapdata = mapdata[2]
+        else:
+            # Only I
+            imapdata = mapdata
         # Stokes I
-        mapdata[0][badhits] = hp.UNSEEN
-        mono = np.mean(mapdata[0][goodhits])
+        imapdata[badhits] = hp.UNSEEN
+        mono = np.mean(imapdata[goodhits])
         print(f"Monopole = {mono}")
-        mapdata[0][goodhits] -= mono
+        imapdata[goodhits] -= mono
 
-        mmin, mmax = sym_range(mapdata[0][goodhits])
+        mmin, mmax = sym_range(imapdata[goodhits])
         if range_I is not None:
             mmin, mmax = range_I
-        plot_single(mapdata[0], mmin, mmax, f"{mapfile}_I.pdf", gnomrot=gnomrot)
+        plot_single(imapdata, mmin, mmax, f"{mapfile}_I.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize)
         if truth is not None:
             truthdata[0][badhits] = hp.UNSEEN
             tmin, tmax = sym_range(truthdata[0][goodhits])
             plot_single(
-                truthdata[0], tmin, tmax, f"{mapfile}_input_I.pdf", gnomrot=gnomrot
+                truthdata[0], tmin, tmax, f"{mapfile}_input_I.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize
             )
-            mapdata[0][goodhits] -= truthdata[0][goodhits]
+            imapdata[goodhits] -= truthdata[0][goodhits]
             plot_single(
-                mapdata[0], tmin, tmax, f"{mapfile}_resid_I.pdf", gnomrot=gnomrot
+                imapdata, tmin, tmax, f"{mapfile}_resid_I.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize
             )
 
-        if len(mapdata) > 1:
-            mapdata[1][badhits] = hp.UNSEEN
-            mapdata[2][badhits] = hp.UNSEEN
+        if len(mapdata.shape) > 1:
+            qmapdata[badhits] = hp.UNSEEN
+            umapdata[badhits] = hp.UNSEEN
 
             # Stokes Q
-            mmin, mmax = sym_range(mapdata[1][goodhits])
+            mmin, mmax = sym_range(qmapdata[goodhits])
             if range_Q is not None:
                 mmin, mmax = range_Q
-            plot_single(mapdata[1], mmin, mmax, f"{mapfile}_Q.pdf", gnomrot=gnomrot)
+            plot_single(qmapdata, mmin, mmax, f"{mapfile}_Q.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize)
             if truth is not None:
                 truthdata[1][badhits] = hp.UNSEEN
                 tmin, tmax = sym_range(truthdata[1][goodhits])
@@ -500,21 +522,23 @@ def plot_healpix_maps(
                     tmax,
                     f"{mapfile}_input_Q.pdf",
                     gnomrot=gnomrot,
+                    reso=gnomres,
+                    xsize=xsize,
                 )
-                mapdata[1][goodhits] -= truthdata[1][goodhits]
+                qmapdata[goodhits] -= truthdata[1][goodhits]
                 plot_single(
-                    mapdata[1],
+                    qmapdata,
                     tmin,
                     tmax,
                     f"{mapfile}_resid_Q.pdf",
-                    gnomrot=gnomrot,
+                    gnomrot=gnomrot, reso=gnomres, xsize=xsize,
                 )
 
             # Stokes U
-            mmin, mmax = sym_range(mapdata[2][goodhits])
+            mmin, mmax = sym_range(umapdata[goodhits])
             if range_U is not None:
                 mmin, mmax = range_U
-            plot_single(mapdata[2], mmin, mmax, f"{mapfile}_U.pdf", gnomrot=gnomrot)
+            plot_single(umapdata, mmin, mmax, f"{mapfile}_U.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize)
             if truth is not None:
                 truthdata[2][badhits] = hp.UNSEEN
                 tmin, tmax = sym_range(truthdata[2][goodhits])
@@ -523,15 +547,15 @@ def plot_healpix_maps(
                     tmin,
                     tmax,
                     f"{mapfile}_input_U.pdf",
-                    gnomrot=gnomrot,
+                    gnomrot=gnomrot, reso=gnomres, xsize=xsize,
                 )
-                mapdata[2][goodhits] -= truthdata[2][goodhits]
+                umapdata[goodhits] -= truthdata[2][goodhits]
                 plot_single(
-                    mapdata[2],
+                    umapdata,
                     tmin,
                     tmax,
                     f"{mapfile}_resid_U.pdf",
-                    gnomrot=gnomrot,
+                    gnomrot=gnomrot, reso=gnomres, xsize=xsize,
                 )
 
     del truthdata
