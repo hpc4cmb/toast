@@ -321,9 +321,9 @@ class IoCompressionTest(MPITestCase):
             # print(f"RMS (quanta) = {rms_quanta} abs, {rms_quanta / rms_in} rel")
 
             check = np.allclose(
-                new_detdata_precision[:], 
-                new_detdata_quanta[:], 
-                rtol=10 ** (-(precision-1)), 
+                new_detdata_precision[:],
+                new_detdata_quanta[:],
+                rtol=10 ** (-(precision - 1)),
                 atol=1.0e-5,
             )
             if not check:

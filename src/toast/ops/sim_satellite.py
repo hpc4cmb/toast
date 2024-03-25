@@ -353,7 +353,7 @@ class SimSatellite(Operator):
         super().__init__(**kwargs)
 
     def _get_coord_rot(self):
-        """ Get an optional coordinate rotation quaternion to return satellite
+        """Get an optional coordinate rotation quaternion to return satellite
         pointing and velocity in the user-specified frame
         """
         if self.coord == "C":
@@ -363,7 +363,6 @@ class SimSatellite(Operator):
         elif self.coord == "G":
             coord_rot = qa.equ2gal()
         return coord_rot
-
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):

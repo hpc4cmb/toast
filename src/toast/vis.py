@@ -465,7 +465,15 @@ def plot_healpix_maps(
         gnomres *= 180 * 60 / np.pi
         if gnomview:
             gnomrot = (mlon_deg, mlat_deg, 0.0)
-        plot_single(hitdata, 0, maxhits, f"{hitfile}.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize)
+        plot_single(
+            hitdata,
+            0,
+            maxhits,
+            f"{hitfile}.pdf",
+            gnomrot=gnomrot,
+            reso=gnomres,
+            xsize=xsize,
+        )
     badhits = np.logical_not(goodhits)
 
     mapdata = None
@@ -492,16 +500,36 @@ def plot_healpix_maps(
         mmin, mmax = sym_range(imapdata[goodhits])
         if range_I is not None:
             mmin, mmax = range_I
-        plot_single(imapdata, mmin, mmax, f"{mapfile}_I.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize)
+        plot_single(
+            imapdata,
+            mmin,
+            mmax,
+            f"{mapfile}_I.pdf",
+            gnomrot=gnomrot,
+            reso=gnomres,
+            xsize=xsize,
+        )
         if truth is not None:
             truthdata[0][badhits] = hp.UNSEEN
             tmin, tmax = sym_range(truthdata[0][goodhits])
             plot_single(
-                truthdata[0], tmin, tmax, f"{mapfile}_input_I.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize
+                truthdata[0],
+                tmin,
+                tmax,
+                f"{mapfile}_input_I.pdf",
+                gnomrot=gnomrot,
+                reso=gnomres,
+                xsize=xsize,
             )
             imapdata[goodhits] -= truthdata[0][goodhits]
             plot_single(
-                imapdata, tmin, tmax, f"{mapfile}_resid_I.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize
+                imapdata,
+                tmin,
+                tmax,
+                f"{mapfile}_resid_I.pdf",
+                gnomrot=gnomrot,
+                reso=gnomres,
+                xsize=xsize,
             )
 
         if len(mapdata.shape) > 1:
@@ -512,7 +540,15 @@ def plot_healpix_maps(
             mmin, mmax = sym_range(qmapdata[goodhits])
             if range_Q is not None:
                 mmin, mmax = range_Q
-            plot_single(qmapdata, mmin, mmax, f"{mapfile}_Q.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize)
+            plot_single(
+                qmapdata,
+                mmin,
+                mmax,
+                f"{mapfile}_Q.pdf",
+                gnomrot=gnomrot,
+                reso=gnomres,
+                xsize=xsize,
+            )
             if truth is not None:
                 truthdata[1][badhits] = hp.UNSEEN
                 tmin, tmax = sym_range(truthdata[1][goodhits])
@@ -531,14 +567,24 @@ def plot_healpix_maps(
                     tmin,
                     tmax,
                     f"{mapfile}_resid_Q.pdf",
-                    gnomrot=gnomrot, reso=gnomres, xsize=xsize,
+                    gnomrot=gnomrot,
+                    reso=gnomres,
+                    xsize=xsize,
                 )
 
             # Stokes U
             mmin, mmax = sym_range(umapdata[goodhits])
             if range_U is not None:
                 mmin, mmax = range_U
-            plot_single(umapdata, mmin, mmax, f"{mapfile}_U.pdf", gnomrot=gnomrot, reso=gnomres, xsize=xsize)
+            plot_single(
+                umapdata,
+                mmin,
+                mmax,
+                f"{mapfile}_U.pdf",
+                gnomrot=gnomrot,
+                reso=gnomres,
+                xsize=xsize,
+            )
             if truth is not None:
                 truthdata[2][badhits] = hp.UNSEEN
                 tmin, tmax = sym_range(truthdata[2][goodhits])
@@ -547,7 +593,9 @@ def plot_healpix_maps(
                     tmin,
                     tmax,
                     f"{mapfile}_input_U.pdf",
-                    gnomrot=gnomrot, reso=gnomres, xsize=xsize,
+                    gnomrot=gnomrot,
+                    reso=gnomres,
+                    xsize=xsize,
                 )
                 umapdata[goodhits] -= truthdata[2][goodhits]
                 plot_single(
@@ -555,7 +603,9 @@ def plot_healpix_maps(
                     tmin,
                     tmax,
                     f"{mapfile}_resid_U.pdf",
-                    gnomrot=gnomrot, reso=gnomres, xsize=xsize,
+                    gnomrot=gnomrot,
+                    reso=gnomres,
+                    xsize=xsize,
                 )
 
     del truthdata

@@ -30,10 +30,10 @@ from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..schedule_sim_satellite import create_satellite_schedule
 from ..vis import (
-    set_matplotlib_backend,
-    plot_wcs_maps,
-    plot_projected_quats,
     plot_healpix_maps,
+    plot_projected_quats,
+    plot_wcs_maps,
+    set_matplotlib_backend,
 )
 
 ZAXIS = np.array([0.0, 0.0, 1.0])

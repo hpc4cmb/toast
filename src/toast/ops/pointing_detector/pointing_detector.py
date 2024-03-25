@@ -138,7 +138,7 @@ class PointingDetectorSimple(Operator):
 
         # Ensure that we have boresight pointing in the required coordinate
         # frame.  We will potentially re-use this boresight pointing for every
-        # iteration of the amplitude solver, so it makes sense to compute and 
+        # iteration of the amplitude solver, so it makes sense to compute and
         # store this.
         bore_name = self.boresight
         if bore_suffix != "":

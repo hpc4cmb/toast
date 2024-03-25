@@ -87,7 +87,7 @@ def main():
         help="Maximum data value for the U map",
     )
     parser.add_argument(
-	"--max_hits",
+        "--max_hits",
         required=False,
         type=int,
         default=None,

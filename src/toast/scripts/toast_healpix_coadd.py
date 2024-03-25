@@ -16,6 +16,10 @@ import traceback
 import h5py
 import healpy as hp
 import numpy as np
+
+import toast
+from toast import PixelData, PixelDistribution
+from toast._libtoast import cov_apply_diag, cov_eigendecompose_diag
 from toast.covariance import covariance_apply, covariance_invert
 from toast.mpi import MPI, Comm, get_world
 from toast.pixels_io_healpix import (
@@ -28,10 +32,6 @@ from toast.pixels_io_healpix import (
 )
 from toast.timing import Timer
 from toast.utils import Environment, Logger
-
-import toast
-from toast import PixelData, PixelDistribution
-from toast._libtoast import cov_apply_diag, cov_eigendecompose_diag
 
 
 def main():

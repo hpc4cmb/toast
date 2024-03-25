@@ -15,12 +15,12 @@ import traceback
 import h5py
 import healpy as hp
 import numpy as np
-from toast.mpi import Comm, get_world
-from toast.timing import Timer
-from toast.utils import Environment, Logger
 
 import toast
+from toast.mpi import Comm, get_world
 from toast.ops import combine_observation_matrix
+from toast.timing import Timer
+from toast.utils import Environment, Logger
 
 
 def main():

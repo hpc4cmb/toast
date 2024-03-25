@@ -81,9 +81,7 @@ class GroundFilterTest(MPITestCase):
                 dof = orig_signal[good].size - 1
                 threshold = (1.0 + 1.0 / dof) * orig_rms
 
-                self.assertTrue(
-                    new_rms < threshold
-                )
+                self.assertTrue(new_rms < threshold)
                 # Check that the flagged samples were also cleaned and not,
                 # for example, set to zero
                 self.assertTrue(

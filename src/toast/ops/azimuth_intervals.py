@@ -18,8 +18,8 @@ from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Int, Unicode, trait_docs
 from ..utils import Environment, Logger, rate_from_times
 from ..vis import set_matplotlib_backend
-from .operator import Operator
 from .flag_intervals import FlagIntervals
+from .operator import Operator
 
 
 @trait_docs

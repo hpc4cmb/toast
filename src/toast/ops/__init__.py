@@ -15,7 +15,6 @@ from .delete import Delete
 from .demodulation import Demodulate, StokesWeightsDemod
 from .elevation_noise import ElevationNoise
 from .filterbin import FilterBin, combine_observation_matrix
-from .obsmat import ObsMat, coadd_observation_matrix
 from .flag_intervals import FlagIntervals
 from .flag_sso import FlagSSO
 from .gainscrambler import GainScrambler
@@ -37,6 +36,7 @@ from .memory_counter import MemoryCounter
 from .noise_estimation import NoiseEstim
 from .noise_model import DefaultNoiseModel, FitNoiseModel, FlagNoiseFit
 from .noise_weight import NoiseWeight
+from .obsmat import ObsMat, coadd_observation_matrix
 from .operator import Operator
 from .pipeline import Pipeline
 from .pixels_healpix import PixelsHealpix

@@ -8,6 +8,7 @@ import re
 import numpy as np
 import scipy.io
 import scipy.sparse
+
 from ..covariance import covariance_invert
 from ..mpi import get_world
 from ..pixels import PixelData, PixelDistribution
