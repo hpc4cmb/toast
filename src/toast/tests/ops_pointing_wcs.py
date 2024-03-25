@@ -56,6 +56,7 @@ class PointingWCSTest(MPITestCase):
             for plat in range(nlat):
                 px.append([plon, plat])
         coord_deg = wcs.wcs_pix2world(np.array(px, dtype=np.float64), 0)
+        print(f"Fake boresight coord = {coord_deg}", flush=True)
         coord = np.radians(coord_deg)
 
         phi = np.array(coord[:, 0], dtype=np.float64)
@@ -111,24 +112,8 @@ class PointingWCSTest(MPITestCase):
         if self.write_extra:
             outfile = os.path.join(self.outdir, f"{prefix}.fits")
             write_wcs_fits(data[build_hits.hits], outfile)
-
             if data.comm.world_rank == 0:
-                set_matplotlib_backend()
-
-                import matplotlib.pyplot as plt
-
-                hdu = af.open(outfile)[0]
-                wcs = WCS(hdu.header)
-
-                fig = plt.figure(figsize=(6, 6), dpi=100)
-                ax = fig.add_subplot(projection=wcs, slices=("x", "y", 0))
-                # plt.imshow(hdu.data, vmin=-2.e-5, vmax=2.e-4, origin='lower')
-                im = ax.imshow(hdu.data[0, :, :], vmin=0, vmax=4, cmap="jet")
-                ax.grid(color="white", ls="solid")
-                ax.set_xlabel("Longitude")
-                ax.set_ylabel("Latitude")
-                plt.colorbar(im, orientation="vertical")
-                fig.savefig(os.path.join(self.outdir, f"{prefix}.pdf"), format="pdf")
+                plot_wcs_maps(hitfile=outfile)
 
         flat_hits = data[build_hits.hits].data.flatten()
         nonzero = flat_hits != 0
@@ -140,11 +125,53 @@ class PointingWCSTest(MPITestCase):
             expected,
         )
 
+    def test_wcs(self):
+        # Test basic creation of WCS projections and plotting
+        res_deg = (0.01, 0.01)
+        dims = (2000, 1000)
+        center_deg = (130.0, -30.0)
+        bounds_deg = (120.0, 140.0, -35.0, -25.0)
+        for proj in ["CAR", "TAN", "CEA", "MER", "ZEA", "SFL"]:
+            wcs, wcs_shape = ops.PixelsWCS.create_wcs(
+                coord="EQU",
+                proj=proj,
+                center_deg=None,
+                bounds_deg=bounds_deg,
+                res_deg=res_deg,
+                dims=None,
+            )
+            if self.comm is None or self.comm.rank == 0:
+                pixdata = np.ones((1,) + wcs_shape)
+                header = wcs.to_header()
+                hdu = af.PrimaryHDU(data=pixdata, header=header)
+                outfile = os.path.join(self.outdir, f"test_wcs_{proj}_bounds.fits")
+                hdu.writeto(outfile)
+                plot_wcs_maps(hitfile=outfile)
+        for proj in ["CAR", "TAN", "CEA", "MER", "ZEA", "SFL"]:
+            wcs, wcs_shape = ops.PixelsWCS.create_wcs(
+                coord="EQU",
+                proj=proj,
+                center_deg=center_deg,
+                bounds_deg=None,
+                res_deg=res_deg,
+                dims=dims,
+            )
+            if self.comm is None or self.comm.rank == 0:
+                pixdata = np.ones((1,) + wcs_shape)
+                header = wcs.to_header()
+                hdu = af.PrimaryHDU(data=pixdata, header=header)
+                outfile = os.path.join(self.outdir, f"test_wcs_{proj}_center.fits")
+                hdu.writeto(outfile)
+                plot_wcs_maps(hitfile=outfile)
+
     def test_projections(self):
-        centers = list()
-        for lon in [130.0, 180.0, 230.0]:
-            for lat in [-40.0, 0.0, 40.0]:
-                centers.append((lon * u.degree, lat * u.degree))
+        # centers = list()
+        # for lon in [130.0, 180.0]:
+        #     for lat in [-40.0, 0.0]:
+        #         centers.append((lon * u.degree, lat * u.degree))
+        centers = [
+            (180.0 * u.degree, 0.0 * u.degree),
+        ]
 
         detpointing_radec = ops.PointingDetectorSimple(
             boresight=defaults.boresight_radec
@@ -155,14 +182,11 @@ class PointingWCSTest(MPITestCase):
 
         # for proj in ["CAR", "TAN", "CEA", "MER", "ZEA", "SFL"]:
         for proj in ["CAR"]:
-            for center in [centers[0]]:
+            for center in centers:
                 pixels = ops.PixelsWCS(
                     projection=proj,
                     detector_pointing=detpointing_radec,
                     use_astropy=True,
-                    center=center,
-                    dimensions=(710, 350),
-                    resolution=(0.03 * u.degree, 0.03 * u.degree),
                 )
                 # Verify that we can change the projection traits in various ways.
                 # First use non-auto_bounds to create one boresight pointing per
@@ -170,7 +194,7 @@ class PointingWCSTest(MPITestCase):
                 pixels.center = center
                 pixels.bounds = ()
                 pixels.resolution = (0.02 * u.degree, 0.02 * u.degree)
-                pixels.dimensions = (710, 350)
+                pixels.dimensions = (2000, 1000)
 
                 data = self.create_boresight_pointing(pixels)
                 self.check_hits(
@@ -182,23 +206,21 @@ class PointingWCSTest(MPITestCase):
                 self.assertFalse(pixels.auto_bounds)
                 self.assertTrue(pixels.center == center)
                 self.assertTrue(pixels.resolution == (0.02 * u.degree, 0.02 * u.degree))
-                self.assertTrue(pixels.dimensions == (710, 350))
+                self.assertTrue(pixels.dimensions == (2000, 1000))
+                self.assertTrue(pixels.dimensions[0] == pixels.wcs_shape[0])
+                self.assertTrue(pixels.dimensions[1] == pixels.wcs_shape[1])
 
                 # Note, increasing resolution will leave some pixels un-hit, but
                 # the check_hits() helper function will only check pixels with >0 hits
-                # pixels.resolution = (0.01 * u.degree, 0.01 * u.degree)
-                # pixels.center = ()
-                # pixels.dimensions = ()
-                # pixels.auto_bounds = True
-
                 pixels.resolution = (0.01 * u.degree, 0.01 * u.degree)
-                pixels.center = (139.15304891 * u.degree, -35.8073394 * u.degree)
-                pixels.dimensions = (1790, 1123)
+                pixels.center = ()
+                pixels.dimensions = ()
+                pixels.auto_bounds = True
 
                 self.check_hits(f"hits_{proj}_0.01_auto", pixels, data)
 
                 self.assertTrue(pixels.resolution == (0.01 * u.degree, 0.01 * u.degree))
-                # self.assertTrue(pixels.auto_bounds)
+                self.assertTrue(pixels.auto_bounds)
 
                 close_data(data)
                 if self.comm is not None:

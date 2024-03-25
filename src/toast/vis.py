@@ -154,8 +154,8 @@ def plot_wcs_maps(
             np.transpose(hdata.data[hindx, :, :]), cmap="jet", vmin=vmin, vmax=vmax
         )
         ax.grid(color="white", ls="solid")
-        ax.set_xlabel("Longitude")
-        ax.set_ylabel("Latitude")
+        ax.set_xlabel(f"{wcs.wcs.ctype[0]}")
+        ax.set_ylabel(f"{wcs.wcs.ctype[1]}")
         if xmin is not None and xmax is not None:
             ax.set_xlim(xmin, xmax)
         if ymin is not None and ymax is not None:
