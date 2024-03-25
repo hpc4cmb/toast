@@ -31,6 +31,7 @@ from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_demodulate as test_ops_demodulate
 from . import ops_elevation_noise as test_ops_elevation_noise
+from . import ops_signal_diff_noise as test_ops_signal_diff_noise
 from . import ops_filterbin as test_ops_filterbin
 from . import ops_flag_sso as test_ops_flag_sso
 from . import ops_gainscrambler as test_ops_gainscrambler
@@ -218,6 +219,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_noise_estim))
         suite.addTest(loader.loadTestsFromModule(test_ops_yield_cut))
         suite.addTest(loader.loadTestsFromModule(test_ops_elevation_noise))
+        suite.addTest(loader.loadTestsFromModule(test_ops_signal_diff_noise))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
 
