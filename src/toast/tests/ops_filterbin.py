@@ -13,6 +13,8 @@ import scipy.sparse
 from astropy import units as u
 from astropy.table import Column
 
+from toast import ObsMat
+
 from .. import ops as ops
 from ..mpi import MPI, Comm
 from ..noise import Noise
@@ -28,7 +30,6 @@ from ._helpers import (
     fake_flags,
 )
 from .mpi import MPITestCase
-from toast import ObsMat
 
 
 class FilterBinTest(MPITestCase):

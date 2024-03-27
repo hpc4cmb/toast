@@ -26,7 +26,7 @@ class PerturbHWPTest(MPITestCase):
     def test_perturbhwp(self):
         # Create fake observing of a small patch
         data = create_ground_data(
-            self.comm, 
+            self.comm,
             sample_rate=10.0 * u.Hz,
             hwp_rpm=1.0,
         )

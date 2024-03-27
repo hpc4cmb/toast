@@ -86,6 +86,13 @@ def main():
         default=None,
         help="Maximum data value for the U map",
     )
+    parser.add_argument(
+        "--max_hits",
+        required=False,
+        type=int,
+        default=None,
+        help="Maximum data value for the hit map",
+    )
 
     parser.add_argument(
         "--gnomview",
@@ -113,6 +120,7 @@ def main():
         range_I=range_I,
         range_Q=range_Q,
         range_U=range_U,
+        max_hits=args.max_hits,
         truth=args.truth_file,
         gnomview=args.gnomview,
     )

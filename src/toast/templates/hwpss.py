@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 import h5py
 import numpy as np
-from scipy.linalg import lu_factor, lu_solve, eigvalsh
+from scipy.linalg import eigvalsh, lu_factor, lu_solve
 
 from ..data import Data
 from ..mpi import MPI
