@@ -200,6 +200,13 @@ class SimAtmosphere(Operator):
         help="Override the focalplane field of view",
     )
 
+    corr_lim = Float(
+        1e-3,
+        help="Correlation limit is used to measure the correlation length of the "
+        "simulation.  Elements further than correlation length apart have their "
+        "covariance set to zero."
+    )
+
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
@@ -347,6 +354,7 @@ class SimAtmosphere(Operator):
             debug_snapshots=self.debug_snapshots,
             debug_plots=self.debug_plots,
             field_of_view=self.field_of_view,
+            corr_lim=self.corr_lim,
         )
         gen_atm.apply(data)
 
@@ -434,9 +442,8 @@ class SimAtmosphere(Operator):
                     detector_intervals = ob.intervals[self.detector_pointing.view]
                     intersection = detector_intervals & intervals
                     if intersection != intervals:
-                        msg = "view {} is not fully covered by valid detector pointing".format(
-                            self.view
-                        )
+                        msg = f"view {self.view} is not fully covered by valid "
+                        msg += "detector pointing"
                         raise RuntimeError(msg)
 
             # Compute the absorption and loading for this observation

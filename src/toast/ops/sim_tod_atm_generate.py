@@ -154,6 +154,13 @@ class GenerateAtmosphere(Operator):
         help="Override the focalplane field of view",
     )
 
+    corr_lim = Float(
+        1e-3,
+        help="Correlation limit is used to measure the correlation length of the "
+        "simulation.  Elements further than correlation length apart have their "
+        "covariance set to zero."
+    )
+
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
         check = proposal["value"]
@@ -342,10 +349,28 @@ class GenerateAtmosphere(Operator):
 
         # Figure out the optimal size of the concentric
         # observation cones
-        ncone = 3
-        scale = 10
+        scale = 2
         azmin, azmax, elmin, elmax = scan_range
+        rmin_tot = 100  # Don't simulate right at the telescope
         rmax_tot = self.zmax.to_value(u.m) / np.cos(elmin.to_value(u.radian))
+        # count the number of cones
+        rmin = rmin_tot
+        ncone = 1
+        while rmin * scale**ncone < rmax_tot:
+            ncone += 1
+        xstep_min = u.Quantity(self.xstep) / np.sqrt(scale) ** (ncone - 1)
+        ystep_min = u.Quantity(self.ystep) / np.sqrt(scale) ** (ncone - 1)
+        zstep_min = u.Quantity(self.zstep) / np.sqrt(scale) ** (ncone - 1)
+
+        log.debug_rank(
+            f"{log_prefix}Will simulate atmosphere in {ncone} concentric cones. "
+            f"Scale factor between cones is {scale}. "
+            f"First cone ranges from R={rmin_tot}m to R={rmin_tot * scale}m. "
+            f"Last cone ranges from R={rmin_tot * scale**(ncone-1)}m to R={rmax_tot}. "
+            f"Smallest volume element: {xstep_min} x {ystep_min} x {zstep_min}. "
+            f"Largest volume element: {self.xstep} x {self.ystep} x {self.zstep}. ",
+            comm=comm,
+        )
 
         while tmin < tmax_tot:
             if comm is not None:
@@ -362,18 +387,17 @@ class GenerateAtmosphere(Operator):
                     f"out of {tmax_tot - tmin_tot:10.1f} s"
                 )
 
-            rmin = 10
-            while rmax_tot / scale ** (ncone - 1) < rmin:
-                ncone -= 1
-            rmax = rmax_tot / scale ** (ncone - 1)
-            xstep_current = u.Quantity(self.xstep) / np.sqrt(scale) ** (ncone - 1)
-            ystep_current = u.Quantity(self.ystep) / np.sqrt(scale) ** (ncone - 1)
-            zstep_current = u.Quantity(self.zstep) / np.sqrt(scale) ** (ncone - 1)
             counter1 = counter1start
 
             sim_list = list()
 
             for icone in range(ncone):
+                # Scale the size of the observation cone
+                rmin = rmin_tot * scale**icone
+                rmax = min(rmin * scale, rmax_tot)
+                xstep = xstep_min * scale**icone
+                ystep = ystep_min * scale**icone
+                zstep = zstep_min * scale**icone
                 sim = self._simulate_atmosphere(
                     weather,
                     scan_range,
@@ -390,22 +414,16 @@ class GenerateAtmosphere(Operator):
                     log_prefix,
                     tmin_tot,
                     tmax_tot,
-                    xstep_current,
-                    ystep_current,
-                    zstep_current,
+                    xstep,
+                    ystep,
+                    zstep,
                     rmin,
                     rmax,
                 )
                 if not self.cache_only:
                     sim_list.append(sim)
 
-                # Scale the size of the observation cone to
                 # move to the next field
-                rmin = rmax
-                rmax *= scale
-                xstep_current *= np.sqrt(scale)
-                ystep_current *= np.sqrt(scale)
-                zstep_current *= np.sqrt(scale)
                 counter1 += 1
 
             if self.debug_plots or self.debug_snapshots:
@@ -653,6 +671,7 @@ class GenerateAtmosphere(Operator):
             write_debug=self.debug_spectrum,
             node_comm=comm_node,
             node_rank_comm=comm_node_rank,
+            corr_lim=self.corr_lim,
         )
 
         msg = f"{prefix}SimulateAtmosphere:  Initialize atmosphere"

@@ -88,6 +88,9 @@ class AtmSim(object):
         node_rank_comm (mpi4py.MPI.Comm):  The MPI communicator for processes with
             the same rank across nodes.  If None, then it will be created by the
             MPIShared class as needed.
+        corr_lim (float):  Truncate the element-element correlation function
+            when it drops below this threshold.  This controls the number of
+            correlated volume elements to imprint.
 
     """
 
@@ -128,6 +131,7 @@ class AtmSim(object):
         write_debug=False,
         node_comm=None,
         node_rank_comm=None,
+        corr_lim=1e-3,
     ):
         self._azmin = azmin.to_value(u.radian)
         self._azmax = azmax.to_value(u.radian)
@@ -168,7 +172,7 @@ class AtmSim(object):
         self._counter1 = self._counter1start
         self._counter2 = self._counter2start
 
-        self._corrlim = 1e-3
+        self._corrlim = corr_lim
 
         self._ntask = 1
         self._rank = 0
@@ -308,13 +312,16 @@ class AtmSim(object):
             comm_node_rank=self._node_rank_comm,
         )
 
+        mem_shared = self._nelem * 8 / 2**20
         log.debug_rank(
-            "Allocated shared realization buffer in", comm=self._comm, timer=timer
+            f"Allocated {mem_shared:.1f}MB for shared realization buffer in",
+            comm=self._comm,
+            timer=timer,
         )
 
         ind_start = 0
         ind_stop = 0
-        slice = 0
+        slice_ = 0
 
         # Simulate the atmosphere in independent slices, each slice
         # assigned to one process.
@@ -327,11 +334,12 @@ class AtmSim(object):
         gt.start("AtmSim compute slices")
 
         while True:
-            ind_start, ind_stop = self._get_slice(ind_start, ind_stop)
+            my_slice = (slice_ % self._ntask) == self._rank
+            ind_start, ind_stop = self._get_slice(ind_start, ind_stop, verbose=my_slice)
             slice_starts.append(ind_start)
             slice_stops.append(ind_stop)
 
-            if slice % self._ntask == self._rank:
+            if my_slice:
                 atm_sim_compute_slice(
                     ind_start,
                     ind_stop,
@@ -370,11 +378,11 @@ class AtmSim(object):
             if ind_stop == self._nelem:
                 break
 
-            slice += 1
+            slice_ += 1
 
-        if self._rank == 0 and slice + 1 < self._ntask:
+        if self._rank == 0 and slice_ + 1 < self._ntask:
             log.warning(
-                f"Not enough work for all MPI processes: there were {slice + 1} "
+                f"Not enough work for all MPI processes: there were {slice_ + 1} "
                 f"slices and {self._ntask} MPI tasks."
             )
 
@@ -506,7 +514,7 @@ class AtmSim(object):
             log.error(f"Observing {nsamp} samples failed with error {status}")
         return status
 
-    def _get_slice(self, ind_start, ind_stop):
+    def _get_slice(self, ind_start, ind_stop, verbose=False):
         """Identify a manageable slice of compressed indices to simulate next."""
         log = Logger.get()
 
@@ -543,20 +551,15 @@ class AtmSim(object):
             #     break
             ix1 = ix2
 
-        if self._rank == 0:
+        if verbose:
             log.debug(
-                "X-slice: {} -- {} ({} {} m layers) m out of {} m indices {} -- {} ({}) out of {}".format(
-                    ix_start * self._xstep,
-                    ix2 * self._xstep,
-                    ix2 - ix_start,
-                    self._xstep,
-                    self._nx * self._xstep,
-                    ind_start,
-                    ind_stop,
-                    ind_stop - ind_start,
-                    self._nelem,
-                )
-            )
+                f"{self._rank:4} : "
+                f"X-slice: {ix_start * self._xstep} -- {ix2 * self._xstep} "
+                f"({ix2 - ix_start} {self._xstep} m layers) m out of "
+                f"{self._nx * self._xstep} m indices {ind_start} -- {ind_stop} "
+                f"({ind_stop - ind_start}) out of {self._nelem}"
+        )
+
         return (ind_start, ind_stop)
 
     def draw(self):
