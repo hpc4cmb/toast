@@ -123,7 +123,11 @@ class AzimuthIntervals(Operator):
             # is relatively fast.
 
             throw_times = None
+            throw_leftright_times = None
+            throw_rightleft_times = None
             stable_times = None
+            stable_leftright_times = None
+            stable_rightleft_times = None
 
             # Sample rate
             stamps = obs.shared[self.times].data
@@ -199,6 +203,26 @@ class AzimuthIntervals(Operator):
                     throw_bad = throw_spans < mean_throw - 5 * std_throw
                     throw_times = [x for (x, y) in zip(throw_times, throw_bad) if not y]
 
+                # Split scans into left and right-going intervals
+                stable_leftright_times = []
+                stable_rightleft_times = []
+                for start, stop in stable_times:
+                    # Check the velocity at the middle of the scan
+                    i = np.argwhere(np.abs(stamps - 0.5 * (start + stop)))[0]
+                    if wscan_vel[i] > 0:
+                        stable_leftright_times.append((start, stop))
+                    elif wscan_vel[i] < 0:
+                        stable_rightleft_times.append((start, stop))
+                throw_leftright_times = []
+                throw_rightleft_times = []
+                for start, stop in throw_times:
+                    # Check the velocity at the middle of the throw
+                    i = np.argwhere(np.abs(stamps - 0.5 * (start + stop)))[0]
+                    if wscan_vel[i] > 0:
+                        throw_leftright_times.append((start, stop))
+                    elif wscan_vel[i] < 0:
+                        throw_rightleft_times.append((start, stop))
+
                 if self.debug_root is not None:
                     set_matplotlib_backend()
 
@@ -252,10 +276,22 @@ class AzimuthIntervals(Operator):
             obs.intervals.create_col(
                 self.throw_interval, throw_times, stamps, fromrank=0
             )
+            obs.intervals.create_col(
+                self.throw_leftright_interval, throw_leftright_times, stamps, fromrank=0
+            )
+            obs.intervals.create_col(
+                self.throw_rightleft_interval, throw_rightleft_times, stamps, fromrank=0
+            )
 
             # Stable scanning intervals
             obs.intervals.create_col(
                 self.scanning_interval, stable_times, stamps, fromrank=0
+            )
+            obs.intervals.create_col(
+                self.scan_leftright_interval, stable_leftright_times, stamps, fromrank=0
+            )
+            obs.intervals.create_col(
+                self.scan_rightleft_interval, stable_rightleft_times, stamps, fromrank=0
             )
 
             # Turnarounds are the inverse of stable scanning
