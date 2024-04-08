@@ -58,6 +58,7 @@ install(FILES
     load_hdf5.py
     noise_estimation.py
     noise_estimation_utils.py
+    weather_model.py
     yield_cut.py
     azimuth_intervals.py
     DESTINATION ${PYTHON_SITE}/toast/ops
