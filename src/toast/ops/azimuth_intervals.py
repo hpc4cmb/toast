@@ -15,7 +15,7 @@ from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Int, Unicode, trait_docs
+from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger, rate_from_times
 from ..vis import set_matplotlib_backend
 from .flag_intervals import FlagIntervals
@@ -43,6 +43,12 @@ class AzimuthIntervals(Operator):
     azimuth = Unicode(defaults.azimuth, help="Observation shared key for Azimuth")
 
     cut_short = Bool(True, help="If True, remove very short scanning intervals")
+
+    short_limit = Quantity(
+        0.25 * u.dimensionless_unscaled,
+        help="Minimum length of a scan.  Either the minimum length in time or a "
+        "fraction of median scan length",
+    )
 
     scanning_interval = Unicode(
         defaults.scanning_interval, help="Interval name for scanning"
@@ -186,11 +192,13 @@ class AzimuthIntervals(Operator):
                 if self.cut_short:
                     stable_spans = np.array([(x[1] - x[0]) for x in stable_times])
                     throw_spans = np.array([(x[1] - x[0]) for x in throw_times])
-                    mean_stable = np.mean(stable_spans)
-                    std_stable = np.std(stable_spans)
-                    mean_throw = np.mean(throw_spans)
-                    std_throw = np.std(throw_spans)
-                    stable_bad = stable_spans < mean_stable - 5 * std_stable
+                    try:
+                        # First try short limit as time
+                        stable_bad = stable_spans < self.short_limit.to_value(u.s)
+                    except:
+                        # Try short limit as fraction
+                        median_stable = np.median(stable_spans)
+                        stable_bad = stable_spans < self.short_limit * median_stable
                     begin_stable = np.array(
                         [x for (x, y) in zip(begin_stable, stable_bad) if not y]
                     )
@@ -200,7 +208,13 @@ class AzimuthIntervals(Operator):
                     stable_times = [
                         x for (x, y) in zip(stable_times, stable_bad) if not y
                     ]
-                    throw_bad = throw_spans < mean_throw - 5 * std_throw
+                    try:
+                        # First try short limit as time
+                        throw_bad = throw_spans < self.short_limit.to_value(u.s)
+                    except:
+                        # Try short limit as fraction
+                        median_throw = np.median(throw_spans)
+                        throw_bad = throw_spans < self.short_limit * median_throw
                     throw_times = [x for (x, y) in zip(throw_times, throw_bad) if not y]
 
                 # Split scans into left and right-going intervals
