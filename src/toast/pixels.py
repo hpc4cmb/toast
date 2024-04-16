@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -187,17 +187,17 @@ class PixelDistribution(AcceleratorObject):
         """
         if len(gl) == 0:
             return (np.zeros_like(gl), np.zeros_like(gl))
+        log = Logger.get()
         if np.max(gl) >= self._n_pix:
-            log = Logger.get()
             msg = "Global pixel indices exceed the maximum for the pixelization"
             log.error(msg)
             raise RuntimeError(msg)
-        return libtoast_global_to_local(gl, self._n_pix_submap, self._glob2loc)
-
-        # global_sm = np.floor_divide(gl, self._n_pix_submap, dtype=np.int64)
-        # submap_pixel = np.mod(gl, self._n_pix_submap, dtype=np.int64)
-        # local_sm = np.array([self._glob2loc[x] for x in global_sm], dtype=np.int64)
-        # return (local_sm, submap_pixel)
+        if self._glob2loc is None:
+            msg = "PixelDistribution: no local submaps defined"
+            log.error(msg)
+            raise RuntimeError(msg)
+        else:
+            return libtoast_global_to_local(gl, self._n_pix_submap, self._glob2loc)
 
     @function_timer
     def global_pixel_to_local(self, gl):
