@@ -7,6 +7,7 @@ import copy
 import numpy as np
 import traitlets
 from astropy import units as u
+from scipy.signal import medfilt
 
 from .. import qarray as qa
 from ..intervals import IntervalList
@@ -47,6 +48,11 @@ class SimpleDeglitch(Operator):
         help="Bit mask value for detector sample flagging",
     )
 
+    reset_det_flags = Bool(
+        True,
+        help="Replace existing detector flags",
+    )
+
     shared_flags = Unicode(
         defaults.shared_flags,
         allow_none=True,
@@ -74,14 +80,20 @@ class SimpleDeglitch(Operator):
         help="Number of additional samples to flag around a glitch",
     )
 
-    rms_limit = Float(
-        0.99,
-        help="Relative improvement in RMS required to flag a glitch",
+    glitch_limit = Float(
+        4.0,
+        help="Glitch detection threshold in units of RMS",
     )
 
     nsample_min = Int(
         100,
         help="Minimum number of good samples in an interval.",
+    )
+
+    medfilt_kernel_size = Int(
+        101,
+        help="Median filter kernel width.  Either 0 (full interval) "
+        "or a positive odd number",
     )
 
     @traitlets.validate("det_mask")
@@ -103,6 +115,15 @@ class SimpleDeglitch(Operator):
         check = proposal["value"]
         if check < 0:
             raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("medfilt_kernel_size")
+    def _check_medfilt_kernel_size(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("medfilt_kernel_size cannot be negative")
+        if check > 0 and check % 2 == 0:
+            raise traitlets.TraitError("medfilt_kernel_size cannot be even")
         return check
 
     def __init__(self, **kwargs):
@@ -129,15 +150,28 @@ class SimpleDeglitch(Operator):
             shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
             for name in local_dets:
                 sig = ob.detdata[self.det_data][name]
-                det_flags = ob.detdata[self.det_flags][name] & self.det_flag_mask
-                bad = np.logical_or(shared_flags != 0, det_flags != 0)
+                det_flags = ob.detdata[self.det_flags][name]
+                if self.reset_det_flags:
+                    det_flags[:] = 0
+                bad = np.logical_or(
+                    shared_flags != 0,
+                    (det_flags & self.det_flag_mask) != 0,
+                )
                 for iview, view in enumerate(views):
                     nsample = view.last - view.first + 1
                     ind = slice(view.first, view.last + 1)
                     sig_view = sig[ind].copy()
+                    w = self.medfilt_kernel_size
+                    if w > 0 and nsample > 2 * w:
+                        # Remove the running median
+                        sig_view[w:-w] -= medfilt(sig_view, kernel_size=w)[w:-w]
+                        # Special treatment for the ends
+                        sig_view[:w] -= np.median(sig_view[:w])
+                        sig_view[-w:] -= np.median(sig_view[-w:])
                     sig_view[bad[ind]] = np.nan
                     sig_view -= np.nanmedian(sig_view)
                     rms_ref = np.nanstd(sig_view)
+                    nglitch = 0
                     while True:
                         if np.isnan(rms_ref) or \
                            np.sum(np.isfinite(sig_view)) < self.nsample_min:
@@ -151,21 +185,13 @@ class SimpleDeglitch(Operator):
                         istop = min(nsample, i + self.glitch_radius + 1)
                         sig_view_test[istart : istop] = np.nan
                         rms_test = np.nanstd(sig_view_test)
-                        if rms_test > self.rms_limit * rms_ref:
-                            # Not enough improvement
+                        if np.abs(sig_view[i]) < self.glitch_limit * rms_test:
+                            # Not significant enough
                             break
+                        nglitch += 1
                         sig_view = sig_view_test
                         rms_ref = rms_test
                     bad_view = np.isnan(sig_view)
-                    # DEBUG begin
-                    # if np.sum(bad_view) < bad_view.size:
-                    #     import pdb
-                    #     pdb.set_trace()
-                    # if name == "pa6_1117":
-                    #     import pdb
-                    #     import matplotlib.pyplot as plt
-                    #     pdb.set_trace()
-                    # DEBUG end
                     det_flags[ind][bad_view] |= self.glitch_mask
 
         return
