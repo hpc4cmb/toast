@@ -7,7 +7,7 @@ import copy
 import numpy as np
 import traitlets
 from astropy import units as u
-from scipy.signal import medfilt
+from scipy.signal import fftconvolve
 
 from .. import qarray as qa
 from ..intervals import IntervalList
@@ -22,8 +22,8 @@ from .operator import Operator
 
 
 @trait_docs
-class SimpleDeglitch(Operator):
-    """An operator that flags extreme detector samples.
+class SimpleJumpCorrect(Operator):
+    """An operator that identifies and corrects jumps in the data
     """
 
     # Class traits
@@ -49,7 +49,7 @@ class SimpleDeglitch(Operator):
     )
 
     reset_det_flags = Bool(
-        True,
+        False,
         help="Replace existing detector flags",
     )
 
@@ -67,38 +67,38 @@ class SimpleDeglitch(Operator):
     view = Unicode(
         None,
         allow_none=True,
-        help="Find glitches in this view",
+        help="Find jumps in this view",
     )
 
-    glitch_mask = Int(
+    jump_mask = Int(
         defaults.det_mask_invalid,
         help="Bit mask value to apply at glitch positions",
     )
 
-    glitch_radius = Int(
+    jump_radius = Int(
         5,
-        help="Number of additional samples to flag around a glitch",
+        help="Number of additional samples to flag around a jump",
     )
 
-    glitch_limit = Float(
+    jump_limit = Float(
         5.0,
-        help="Glitch detection threshold in units of RMS",
+        help="Jump detection threshold in units of RMS",
+    )
+
+    filterlen = Int(
+        100,
+        help="Matched filter length",
     )
 
     nsample_min = Int(
         100,
-        help="Minimum number of good samples in an interval.",
+        help="Minimum number of good samples in an interval",
     )
 
     medfilt_kernel_size = Int(
         101,
         help="Median filter kernel width.  Either 0 (full interval) "
         "or a positive odd number",
-    )
-
-    fill_gaps = Bool(
-        True,
-        help="Fill gaps with a trend line and white noise",
     )
 
     @traitlets.validate("det_mask")
@@ -139,9 +139,109 @@ class SimpleDeglitch(Operator):
         self.weights_out = []
         self.rates = []
 
+    def _get_stepfilter(self, m):
+        """
+        Return the time domain matched filter kernel of length m.
+        """
+        h = np.zeros(m)
+        h[:m // 2] = 1
+        h[m // 2:] = -1
+        # This turns the interpretation of the peak amplitude directly
+        # into the step amplitude
+        h /= m // 2
+        return h
+
+    def _find_peaks(self, toi, flag, flag_out, lim=3.0, tol=1e4, sigma_in=None):
+        """
+        Find the peaks and their amplitudes in the match-filtered TOI.
+        Inputs:
+        lim -- threshold for jump detection in units of filtered TOI RMS.
+        tol -- radius of a region to mask from further peak finding upon
+            detecting a peak.
+        sigma_in -- an estimate of filtered TOI RMS that overrides the
+             sample variance otherwise used.
+
+        """
+        peaks = []
+        mytoi = np.ma.masked_array(toi)
+        # Do not accept jumps at the ends due to boundary effects
+        lbound = tol
+        rbound = tol
+        mytoi[:lbound] = np.ma.masked
+        mytoi[-rbound:] = np.ma.masked
+        if sigma_in is None:
+            sigma = self._get_sigma(mytoi, flag_out, tol)
+        else:
+            sigma = sigma_in
+
+        if np.isnan(sigma) or sigma == 0:
+            npeak = 0
+        else:
+            npeak = np.ma.sum(np.abs(mytoi) > sigma * lim)
+
+        # Only one jump per iteration
+        if npeak > 0:
+            imax = np.argmax(np.abs(mytoi))
+            amplitude = mytoi[imax]
+            significance = np.abs(amplitude) / sigma
+
+            # Mask the peak for taking mean and finding additional peaks
+            istart = max(0, imax - tol)
+            istop = min(len(mytoi), imax + tol)
+            # mask out the vicinity not to have false detections near the peak
+            mytoi[istart:istop] = np.ma.masked
+            flag_out[istart:istop] = True
+            if sigma_in is None:
+                sigma = self._get_sigma(mytoi, flag_out, tol)
+
+            # Excessive flagging is a sign of false detection
+            if significance > 5 or (float(np.sum(flag[istart:istop]))
+                                    / (istop - istart) < .5):
+                peaks.append((imax, significance, amplitude))
+
+            npeak = np.sum(np.abs(mytoi) > sigma * lim)
+        return peaks
+
+    def _get_sigma(self, toi, flag, tol):
+
+        full_flag = np.logical_or(flag, toi == 0)
+
+        sigmas = []
+        nn = len(toi)
+        for start in range(tol, nn - tol, 2 * tol):
+            stop = start + 2 * tol
+            if stop > nn - tol:
+                break
+            ind = slice(start, stop)
+            x = toi[ind][full_flag[ind] == 0]
+            if len(x) != 0:
+                rms = np.sqrt(np.mean(x.data ** 2))
+                sigmas.append(rms)
+
+        if len(sigmas) != 0:
+            sigma = np.median(sigmas)
+        else:
+            sigma = 0.
+        return sigma
+
+    def _remove_jumps(self, signal, flag, peaks, tol):
+        """
+        Removes the jumps described by peaks from x.
+        Adds a buffer of flags with radius of tol.
+
+        """
+        corrected_signal = signal.copy()
+        flag_out = flag.copy()
+        for peak, _, amplitude in peaks:
+            corrected_signal[peak:] -= amplitude
+            flag_out[peak - int(tol):peak + int(tol)] = True
+        return corrected_signal, flag_out
+
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        stepfilter = self._get_stepfilter(self.filterlen)
 
         for ob in data.obs:
             if ob.comm_row_size != 1:
@@ -166,54 +266,29 @@ class SimpleDeglitch(Operator):
                     nsample = view.last - view.first + 1
                     ind = slice(view.first, view.last + 1)
                     sig_view = sig[ind].copy()
-                    w = self.medfilt_kernel_size
-                    if w > 0 and nsample > 2 * w:
-                        # Remove the running median
-                        sig_view[w:-w] -= medfilt(sig_view, kernel_size=w)[w:-w]
-                        # Special treatment for the ends
-                        sig_view[:w] -= np.median(sig_view[:w])
-                        sig_view[-w:] -= np.median(sig_view[-w:])
-                    trend = sig[ind] - sig_view
-                    sig_view[bad[ind]] = np.nan
-                    offset = np.nanmedian(sig_view)
-                    sig_view -= offset
-                    trend += offset
-                    rms = np.nanstd(sig_view)
-                    nglitch = 0
-                    while True:
-                        if np.isnan(rms) or \
-                           np.sum(np.isfinite(sig_view)) < self.nsample_min:
-                            # flag the entire view.  Not enough statistics
-                            sig_view[:] = np.nan
-                            break
-                        # See if the brightest remaining sample still stands out
-                        i = np.nanargmax(np.abs(sig_view))
-                        sig_view_test = sig_view.copy()
-                        istart = max(0, i - self.glitch_radius)
-                        istop = min(nsample, i + self.glitch_radius + 1)
-                        sig_view_test[istart : istop] = np.nan
-                        rms_test = np.nanstd(sig_view_test)
-                        if np.abs(sig_view[i]) < self.glitch_limit * rms_test:
-                            # Not significant enough
-                            break
-                        nglitch += 1
-                        sig_view = sig_view_test
-                        rms = rms_test
-                    if nglitch == 0:
+                    bad_view = bad[ind]
+                    bad_view_out = bad_view.copy()
+                    sig_filtered = fftconvolve(
+                        sig_view, stepfilter, mode="same"
+                    )
+                    peaks = self._find_peaks(
+                        sig_filtered,
+                        bad_view,
+                        bad_view_out,
+                        lim=self.jump_limit,
+                        tol=self.filterlen // 2,
+                    )
+                    
+                    njump = len(peaks)
+                    if njump == 0:
                         continue
-                    bad_view = np.isnan(sig_view)
-                    det_flags[ind][bad_view] |= self.glitch_mask
-                    if self.fill_gaps:
-                        nbad = np.sum(bad_view)
-                        corrected_signal = sig[ind].copy()
-                        corrected_signal[bad_view] = trend[bad_view]
-                        corrected_signal[bad_view] += np.random.randn(nbad) * rms
-                        # DEBUG begin
-                        # import pdb
-                        # import matplotlib.pyplot as plt
-                        # pdb.set_trace()
-                        # DEBUG end
-                        sig[ind] = corrected_signal
+                    if njump > 10:
+                        raise RuntimeError(f"Found {njump} jumps!")
+
+                    corrected_signal, flag_out = self._remove_jumps(
+                        sig_view, bad_view, peaks, self.jump_radius)
+                    sig[ind] = corrected_signal
+                    det_flags[ind][flag_out] |= self.jump_mask
 
         return
 

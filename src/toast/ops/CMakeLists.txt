@@ -11,6 +11,7 @@ install(FILES
     arithmetic.py
     memory_counter.py
     simple_deglitch.py
+    simple_jumpcorrect.py
     sim_hwp.py
     sim_tod_noise.py
     sim_tod_dipole.py

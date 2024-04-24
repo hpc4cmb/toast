@@ -53,6 +53,7 @@ from .scan_healpix import ScanHealpixMap, ScanHealpixMask
 from .scan_map import ScanMap, ScanMask, ScanScale
 from .scan_wcs import ScanWCSMap, ScanWCSMask
 from .simple_deglitch import SimpleDeglitch
+from .simple_jumpcorrect import SimpleJumpCorrect
 from .sim_cosmic_rays import InjectCosmicRays
 from .sim_crosstalk import CrossTalk, MitigateCrossTalk
 from .sim_gaindrifts import GainDrifter
