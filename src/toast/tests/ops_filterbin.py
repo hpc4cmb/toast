@@ -13,6 +13,8 @@ import scipy.sparse
 from astropy import units as u
 from astropy.table import Column
 
+from toast import ObsMat
+
 from .. import ops as ops
 from ..mpi import MPI, Comm
 from ..noise import Noise
@@ -170,7 +172,7 @@ class FilterBinTest(MPITestCase):
         fig = plt.figure(figsize=[18, 12])
         cmap = "coolwarm"
 
-        obs_matrix = scipy.sparse.load_npz(obsmat_file)
+        obs_matrix = ObsMat(obsmat_file)
 
         input_map = hp.read_map(input_map_file, None, nest=nest)
 
@@ -178,7 +180,7 @@ class FilterBinTest(MPITestCase):
         if filtered is None:
             filtered = hp.read_map(fname_filtered, None, nest=nest)
 
-        test_map = obs_matrix.dot(input_map.ravel()).reshape([3, -1])
+        test_map = obs_matrix.apply(input_map)
 
         good = filtered[0] != 0
 
@@ -513,11 +515,11 @@ class FilterBinTest(MPITestCase):
 
             rootname = os.path.join(self.outdir, f"cached_run_1_obs_matrix")
             fname_matrix = ops.combine_observation_matrix(rootname)
-            obs_matrix1 = scipy.sparse.load_npz(fname_matrix)
+            obs_matrix1 = ObsMat(fname_matrix)
 
             rootname = os.path.join(self.outdir, f"cached_run_2_obs_matrix")
             fname_matrix = ops.combine_observation_matrix(rootname)
-            obs_matrix2 = scipy.sparse.load_npz(fname_matrix)
+            obs_matrix2 = ObsMat(fname_matrix)
 
             # Comparing the matrices fails with MPI for some reason
             # assert np.allclose(obs_matrix1.data, obs_matrix2.data)
@@ -530,9 +532,9 @@ class FilterBinTest(MPITestCase):
             fname_filtered = os.path.join(self.outdir, "cached_run_2_filtered_map.fits")
             filtered2 = hp.read_map(fname_filtered, None, nest=nest)
 
-            test_map1 = obs_matrix1.dot(input_map.ravel()).reshape([3, -1])
+            test_map1 = obs_matrix1.apply(input_map)
 
-            test_map2 = obs_matrix2.dot(input_map.ravel()).reshape([3, -1])
+            test_map2 = obs_matrix2.apply(input_map)
 
             nrow, ncol = 3, 3
             args = {"rot": rot, "reso": reso, "cmap": cmap, "nest": nest}
@@ -713,7 +715,7 @@ class FilterBinTest(MPITestCase):
                 "split_run", input_map_file, fname_matrix, "split_run", pixels.nest
             )
 
-            obs_matrix1 = scipy.sparse.load_npz(fname_matrix)
+            obs_matrix1 = ObsMat(fname_matrix)
             obs_matrix1.sort_indices()
 
             # Assemble the noise-weighted, per-observation matrix
@@ -747,14 +749,14 @@ class FilterBinTest(MPITestCase):
                 filtered=hp.read_map(split_file, None, nest=pixels.nest),
             )
 
-            obs_matrix2 = scipy.sparse.load_npz(fname_matrix)
+            obs_matrix2 = ObsMat(fname_matrix)
             obs_matrix2.sort_indices()
 
             input_map = hp.read_map(input_map_file, None, nest=pixels.nest)
 
             # Compare the results from application of the observation matrix
-            test_map1 = obs_matrix1.dot(input_map.ravel())
-            test_map2 = obs_matrix2.dot(input_map.ravel())
+            test_map1 = obs_matrix1.apply(input_map).ravel()
+            test_map2 = obs_matrix2.apply(input_map).ravel()
             disagree = np.logical_not(
                 np.isclose(test_map1, test_map2, rtol=1e-3, atol=1e-5)
             )

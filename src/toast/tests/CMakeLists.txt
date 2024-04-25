@@ -72,6 +72,7 @@ install(FILES
     ops_noise_estim.py
     ops_yield_cut.py
     ops_elevation_noise.py
+    ops_signal_diff_noise.py
     accelerator.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

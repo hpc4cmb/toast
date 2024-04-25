@@ -279,7 +279,9 @@ class HWPFilter(Operator):
             else:
                 # This observation has no HWP
                 if data.comm.group_rank == 0:
-                    msg = f"{log_prefix} HWPSS Filter:  skipping observation {obs.name},"
+                    msg = (
+                        f"{log_prefix} HWPSS Filter:  skipping observation {obs.name},"
+                    )
                     msg += f" which has no HWP"
                     log.debug(msg)
                 continue

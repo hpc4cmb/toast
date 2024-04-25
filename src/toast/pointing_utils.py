@@ -90,6 +90,17 @@ def scan_range_lonlat(
     if fdata is not None:
         rank_good = fdata[rank::ntask] == 0
 
+    # Check that the top of the focalplane is below the zenith
+    theta_bore, _, _ = qa.to_iso_angles(quats)
+    el_bore = np.pi / 2 - theta_bore[rank_good]
+    elmax_bore = np.amax(el_bore)
+    if elmax_bore + fp_radius > np.pi / 2:
+        msg = f"The scan range includes the zenith."
+        msg += f" Max boresight elevation is {np.degrees(elmax_bore)} deg"
+        msg += f" and focalplane radius is {np.degrees(fp_radius)} deg."
+        msg += " Scan range facility cannot handle this case."
+        raise RuntimeError(msg)
+
     for idet, detquat in enumerate(detquats):
         theta, phi, _ = qa.to_iso_angles(qa.mult(quats, detquat))
         if center_lonlat is None:

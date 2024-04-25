@@ -202,6 +202,8 @@ class IoCompressionTest(MPITestCase):
             pixel_per_process=pixel_per_process,
             single_group=single_group,
             flagged_pixels=False,
+            sample_rate=10.0 * u.Hz,
+            hwp_rpm=1.0,
         )
 
         # Simple detector pointing
@@ -224,12 +226,6 @@ class IoCompressionTest(MPITestCase):
         # Simulate noise and accumulate to signal
         sim_noise = ops.SimNoise(noise_model=el_model.out_model)
         sim_noise.apply(data)
-
-        # Simulate atmosphere
-        sim_atm = ops.SimAtmosphere(
-            detector_pointing=detpointing_azel,
-        )
-        sim_atm.apply(data)
 
         # Delete temporary object.
         for ob in data.obs:
@@ -301,7 +297,7 @@ class IoCompressionTest(MPITestCase):
         for ob in data.obs:
             key = defaults.det_data
             rms_in = np.std(ob.detdata[key].data)
-            precision = 3
+            precision = 5
             quanta = rms_in / 10**precision
             comp_data_precision = compress_detdata(
                 ob.detdata[key], {"type": "flac", "precision": precision}
@@ -325,7 +321,10 @@ class IoCompressionTest(MPITestCase):
             # print(f"RMS (quanta) = {rms_quanta} abs, {rms_quanta / rms_in} rel")
 
             check = np.allclose(
-                new_detdata_precision[:], new_detdata_quanta[:], rtol=10 ** (-precision)
+                new_detdata_precision[:],
+                new_detdata_quanta[:],
+                rtol=10 ** (-(precision - 1)),
+                atol=1.0e-5,
             )
             if not check:
                 print(f"RMS (in) = {rms_in}")

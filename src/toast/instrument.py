@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2019-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -267,6 +267,7 @@ class SpaceSite(Site):
         vel_z = np.zeros(n_sparse, np.float64)
         for i, t in enumerate(sparse_times):
             atime = astime.Time(t, format="unix")
+            # Get the satellite position and velocity in the equatorial frame (ICRS)
             p, v = coord.get_body_barycentric_posvel("earth", atime)
             # FIXME:  apply translation from earth center to L2.
             pm = p.xyz.to_value(u.kilometer)
@@ -894,7 +895,7 @@ class Session(object):
     Args:
         name (str):  The name of the session.
         uid (int):  The Unique ID of the session.  If not specified, it will be
-            constructed from a hash of the name.
+            constructed from a hash of the name and the optional start/stop times.
         start (datetime):  The overall start of the session.
         end (datetime):  The overall end of the session.
 
@@ -902,15 +903,22 @@ class Session(object):
 
     def __init__(self, name, uid=None, start=None, end=None):
         self.name = name
-        self.uid = uid
-        if self.uid is None:
-            self.uid = name_UID(name)
+        for t in start, end:
+            if t is not None and not isinstance(t, datetime.datetime):
+                raise RuntimeError("Session start/end must be a datetime or None")
+        if uid is not None:
+            self.uid = uid
+        else:
+            # Append start and end times to the session name before
+            # evaluating the hash.  This reduces the risk of clashing UIDs.
+            session_name = name
+            if start is not None:
+                session_name += start.ctime()
+            if end is not None:
+                session_name += end.ctime()
+            self.uid = name_UID(session_name)
         self.start = start
-        if start is not None and not isinstance(start, datetime.datetime):
-            raise RuntimeError("Session start must be a datetime or None")
         self.end = end
-        if end is not None and not isinstance(end, datetime.datetime):
-            raise RuntimeError("Session end must be a datetime or None")
 
     def __repr__(self):
         value = "<Session '{}': uid = {}, start = {}, end = {}".format(

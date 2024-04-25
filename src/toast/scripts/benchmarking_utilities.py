@@ -20,14 +20,14 @@ import numpy as np
 from astropy import units as u
 from astropy.table import QTable
 from pkg_resources import resource_filename
+
+import toast
+import toast.ops
 from toast.instrument import Focalplane
 from toast.instrument_sim import fake_hexagon_focalplane
 from toast.job import get_node_mem, job_size
 from toast.timing import Timer, function_timer
 from toast.utils import Environment, Logger
-
-import toast
-import toast.ops
 
 
 def python_startup_time(rank):

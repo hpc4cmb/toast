@@ -152,15 +152,21 @@ class Pipeline(Operator):
             all_local_dets = data.all_local_detectors(
                 selection=detectors, flagmask=det_mask
             )
+            if len(all_local_dets) == 0:
+                all_local_dets = [None]
             # Run operators one detector at a time
             for det in all_local_dets:
                 msg = f"{pstr} {self} SINGLE detector {det}"
                 log.verbose(msg)
+                if det is None:
+                    dets = []
+                else:
+                    dets = [det]
                 for op in self.operators:
                     self._exec_operator(
                         op,
                         data,
-                        detectors=[det],
+                        detectors=dets,
                         pipe_accel=pipe_accel,
                     )
         else:

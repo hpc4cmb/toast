@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -14,7 +14,8 @@ from .crosslinking import CrossLinking
 from .delete import Delete
 from .demodulation import Demodulate, StokesWeightsDemod
 from .elevation_noise import ElevationNoise
-from .filterbin import FilterBin, coadd_observation_matrix, combine_observation_matrix
+from .signal_diff_noise_model import SignalDiffNoiseModel
+from .filterbin import FilterBin, combine_observation_matrix
 from .flag_intervals import FlagIntervals
 from .flag_sso import FlagSSO
 from .gainscrambler import GainScrambler
@@ -36,6 +37,7 @@ from .memory_counter import MemoryCounter
 from .noise_estimation import NoiseEstim
 from .noise_model import DefaultNoiseModel, FitNoiseModel, FlagNoiseFit
 from .noise_weight import NoiseWeight
+from .obsmat import ObsMat, coadd_observation_matrix
 from .operator import Operator
 from .pipeline import Pipeline
 from .pixels_healpix import PixelsHealpix

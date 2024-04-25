@@ -128,15 +128,17 @@ def stokes_weights_IQU_interval(
     quats_indexed = quats[quat_index, :, :]
     weights_indexed = weights[weight_index, :, :]
 
+    # convert IAU to an integer for easier handling
+    IAU_sign = -1 if IAU else 1
+
     # Are we using a half wave plate?
     if hwp.size == 0:
         # No half wave plate
         n_samp = weights.shape()[1]
         hwp = jnp.zeros(shape=(n_samp,), dtype=float)
         gamma = jnp.zeros_like(gamma)
-
-    # convert IAU to an integer for easier handling
-    IAU_sign = -1 if IAU else 1
+        # In this case the U stokes coefficient is negated
+        IAU_sign *= -1
 
     # does the computation
     new_weights_indexed = stokes_weights_IQU_inner(

@@ -18,6 +18,7 @@ from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Int, Unicode, trait_docs
 from ..utils import Environment, Logger, rate_from_times
 from ..vis import set_matplotlib_backend
+from .flag_intervals import FlagIntervals
 from .operator import Operator
 
 
@@ -40,6 +41,8 @@ class AzimuthIntervals(Operator):
     times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     azimuth = Unicode(defaults.azimuth, help="Observation shared key for Azimuth")
+
+    cut_short = Bool(True, help="If True, remove very short scanning intervals")
 
     scanning_interval = Unicode(
         defaults.scanning_interval, help="Interval name for scanning"
@@ -173,6 +176,29 @@ class AzimuthIntervals(Operator):
                     for x in zip(begin_stable, end_stable)
                 ]
 
+                # In some situations there are very short stable scans detected at the
+                # beginning and end of observations.  Here we cut any short throw and
+                # stable periods.
+                if self.cut_short:
+                    stable_spans = np.array([(x[1] - x[0]) for x in stable_times])
+                    throw_spans = np.array([(x[1] - x[0]) for x in throw_times])
+                    mean_stable = np.mean(stable_spans)
+                    std_stable = np.std(stable_spans)
+                    mean_throw = np.mean(throw_spans)
+                    std_throw = np.std(throw_spans)
+                    stable_bad = stable_spans < mean_stable - 5 * std_stable
+                    begin_stable = np.array(
+                        [x for (x, y) in zip(begin_stable, stable_bad) if not y]
+                    )
+                    end_stable = np.array(
+                        [x for (x, y) in zip(end_stable, stable_bad) if not y]
+                    )
+                    stable_times = [
+                        x for (x, y) in zip(stable_times, stable_bad) if not y
+                    ]
+                    throw_bad = throw_spans < mean_throw - 5 * std_throw
+                    throw_times = [x for (x, y) in zip(throw_times, throw_bad) if not y]
+
                 if self.debug_root is not None:
                     set_matplotlib_backend()
 
@@ -236,6 +262,16 @@ class AzimuthIntervals(Operator):
             obs.intervals[self.turnaround_interval] = ~obs.intervals[
                 self.scanning_interval
             ]
+
+        # Additionally flag turnarounds as unstable pointing
+        flag_intervals = FlagIntervals(
+            shared_flags=self.shared_flags,
+            shared_flag_bytes=1,
+            view_mask=[
+                (self.turnaround_interval, defaults.shared_mask_unstable_scanrate),
+            ],
+        )
+        flag_intervals.apply(data, detectors=None)
 
     def _finalize(self, data, **kwargs):
         return

@@ -23,6 +23,7 @@ install(FILES
     flag_intervals.py
     common_mode_noise.py
     noise_model.py
+    signal_diff_noise_model.py
     gainscrambler.py
     pointing.py
     scan_healpix.py
@@ -52,6 +53,7 @@ install(FILES
     demodulation.py
     pixels_wcs.py
     filterbin.py
+    obsmat.py
     save_hdf5.py
     load_hdf5.py
     noise_estimation.py

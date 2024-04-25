@@ -93,6 +93,7 @@ from .intervals import IntervalList, interval_dtype
 from .job import job_group_size
 from .mpi import Comm, get_world
 from .observation import Observation
+from .ops import ObsMat
 from .pixels import PixelData, PixelDistribution
 from .timing import GlobalTimers, Timer
 from .traits import create_from_config

@@ -296,7 +296,7 @@ conf["install_requires"] = [
     "matplotlib",
     "psutil",
     "h5py",
-    "pshmem>=0.2.10",
+    "pshmem>=1.1.0",
     "ruamel.yaml",
     "astropy",
     "healpy",
@@ -339,6 +339,8 @@ conf["entry_points"] = {
         "toast_obsmatrix_combine = toast.scripts.toast_obsmatrix_combine:main",
         "toast_obsmatrix_coadd = toast.scripts.toast_obsmatrix_coadd:main",
         "toast_config_verify = toast.scripts.toast_config_verify:main",
+        "toast_plot_wcs = toast.scripts.toast_plot_wcs:main",
+        "toast_plot_healpix = toast.scripts.toast_plot_healpix:main",
     ]
 }
 conf["cmdclass"] = {"build_ext": CMakeBuild}

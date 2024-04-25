@@ -26,6 +26,7 @@ an interactive python session.
 """
 
 import argparse
+import datetime
 import os
 import sys
 import traceback
@@ -65,6 +66,20 @@ def parse_config(operators, templates, comm):
         help="The output directory",
     )
 
+    parser.add_argument(
+        "--sample_rate",
+        required=False,
+        type=float,
+        help="Override focalplane sampling rate [Hz]",
+    )
+
+    parser.add_argument(
+        "--thinfp",
+        required=False,
+        type=int,
+        help="Only sample the provided focalplane pixels",
+    )
+
     # Build a config dictionary starting from the operator defaults, overriding with any
     # config files specified with the '--config' commandline option, followed by any
     # individually specified parameter overrides.
@@ -91,13 +106,33 @@ def load_instrument_and_schedule(args, comm):
     # Load a generic focalplane file.  NOTE:  again, this is just using the
     # built-in Focalplane class.  In a workflow for a specific experiment we would
     # have a custom class.
-    focalplane = toast.instrument.Focalplane()
+    log = toast.utils.Logger.get()
+    timer = toast.timing.Timer()
+    timer.start()
+
+    if args.sample_rate is not None:
+        sample_rate = args.sample_rate * u.Hz
+    else:
+        sample_rate = None
+    focalplane = toast.instrument.Focalplane(
+        sample_rate=sample_rate,
+        thinfp=args.thinfp,
+    )
+
     with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
         focalplane.load_hdf5(f.handle, comm=comm)
+    log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
+    log.info_rank(f"Focalplane: {str(focalplane)}", comm=comm)
+    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"After loading focalplane:  {mem}", comm)
 
     # Load the schedule file
     schedule = toast.schedule.SatelliteSchedule()
     schedule.read(args.schedule, comm=comm)
+    log.info_rank("Loaded schedule in", comm=comm, timer=timer)
+    log.info_rank(f"Schedule: {str(schedule)}", comm=comm)
+    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"After loading focalplane:  {mem}", comm)
 
     # Create a telescope for the simulation.  Again, for a specific experiment we
     # would use custom classes for the site.
@@ -211,11 +246,17 @@ def simulate_data(job, toast_comm, telescope, schedule):
     ops.sim_noise.apply(data)
     log.info_rank("Simulated detector noise in", comm=world_comm, timer=timer)
 
+    mem = toast.utils.memreport(msg="(whole node)", comm=world_comm, silent=True)
+    log.info_rank(f"After simulating data:  {mem}", world_comm)
+
     # Optionally write out the data
     if ops.save_hdf5.volume is None:
         ops.save_hdf5.volume = os.path.join(args.out_dir, "data")
     ops.save_hdf5.apply(data)
     log.info_rank("Saved HDF5 data in", comm=world_comm, timer=timer)
+
+    mem = toast.utils.memreport(msg="(whole node)", comm=world_comm, silent=True)
+    log.info_rank(f"After saving data:  {mem}", world_comm)
 
     return data
 
@@ -269,9 +310,21 @@ def main():
     log = toast.utils.Logger.get()
     gt = toast.timing.GlobalTimers.get()
     gt.start("toast_satellite_sim (total)")
+    timer0 = toast.timing.Timer()
+    timer0.start()
 
     # Get optional MPI parameters
     comm, procs, rank = toast.get_world()
+
+    if "OMP_NUM_THREADS" in os.environ:
+        nthread = os.environ["OMP_NUM_THREADS"]
+    else:
+        nthread = "unknown number of"
+    log.info_rank(
+        f"Executing workflow with {procs} MPI tasks, each with "
+        f"{nthread} OpenMP threads at {datetime.datetime.now()}",
+        comm,
+    )
 
     # The operators we want to configure from the command line or a parameter file.
     # We will use other operators, but these are the ones that the user can configure.
@@ -334,6 +387,8 @@ def main():
     if toast_comm.world_rank == 0:
         out = os.path.join(args.out_dir, "timing")
         toast.timing.dump(alltimers, out)
+
+    log.info_rank("Workflow completed in", comm=comm, timer=timer0)
 
 
 if __name__ == "__main__":
