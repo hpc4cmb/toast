@@ -179,7 +179,7 @@ class NoiseEstim(Operator):
         None, allow_none=True, help="When set, PSDs are measured over averaged TODs"
     )
 
-    remove_common_mode = Bool(True, help="Remove common mode signal before estimation")
+    remove_common_mode = Bool(False, help="Remove common mode signal before estimation")
 
     @traitlets.validate("detector_pointing")
     def _check_detector_pointing(self, proposal):
@@ -235,7 +235,15 @@ class NoiseEstim(Operator):
         log = Logger.get()
         timer = Timer()
         timer.start()
-        if obs.comm_col is not None and obs.comm_col.size > 1:
+        if (
+            (
+                len(self.pairs) > 0 or 
+                (not self.nocross)
+            ) and (
+                obs.comm_col is not None and 
+                obs.comm_col.size > 1
+            )
+        ):
             self.redistribute = True
             # Redistribute the data so each process has all detectors
             # for some sample range

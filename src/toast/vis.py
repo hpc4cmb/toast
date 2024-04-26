@@ -459,12 +459,11 @@ def plot_healpix_maps(
         )
         mlon = np.mean(lon)
         mlat = np.mean(lat)
-        mlon_deg = 180 * mlon / np.pi
-        mlat_deg = 180 * mlat / np.pi
-        gnomres = (np.amax(lat) - np.amin(lat)) / xsize
-        gnomres *= 180 * 60 / np.pi
+        gnomres = 1.1 * (np.amax(lat) - np.amin(lat)) / xsize
+        gnomres *= 60
         if gnomview:
-            gnomrot = (mlon_deg, mlat_deg, 0.0)
+            gnomrot = (mlon, mlat, 0.0)
+        print(f"gnomres = {gnomres} arcmin, gnomrot = {gnomrot}", flush=True)
         plot_single(
             hitdata,
             0,
