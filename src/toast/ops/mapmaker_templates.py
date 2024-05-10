@@ -693,9 +693,16 @@ class SolveAmplitudes(Operator):
             pixels=solve_pixels.pixels,
             view=self._solve_view,
         )
-        scan_pipe = Pipeline(
-            detector_sets=["SINGLE"], operators=[solve_pixels, self._scanner]
-        )
+        if self.binning.full_pointing:
+            # We are caching the pointing anyway- run with all detectors
+            scan_pipe = Pipeline(
+                detector_sets=["ALL"], operators=[solve_pixels, self._scanner]
+            )
+        else:
+            # Pipeline over detectors
+            scan_pipe = Pipeline(
+                detector_sets=["SINGLE"], operators=[solve_pixels, self._scanner]
+            )
 
         return solve_pixels, solve_weights, scan_pipe
 
@@ -767,7 +774,7 @@ class SolveAmplitudes(Operator):
         return
 
     @function_timer
-    def _prepare_flagging(self, solve_pixels):
+    def _prepare_flagging(self, scan_pipe):
         """Flagging.  We create a new set of data flags for the solver that includes:
         - one bit for a bitwise OR of all detector / shared flags
         - one bit for any pixel mask, projected to TOD
@@ -1102,7 +1109,7 @@ class SolveAmplitudes(Operator):
 
         self._timer.start()
 
-        self._prepare_flagging(solve_pixels)
+        self._prepare_flagging(scan_pipe)
 
         self._get_pixel_covariance(solve_pixels, solve_weights)
         self._write_del(self.solver_hits_name)
