@@ -97,7 +97,7 @@ def set_default_values(values=None):
         #
         # Noise
         #
-        "noise_model" : "noise_model",
+        "noise_model": "noise_model",
     }
 
     # composite masks for convenience

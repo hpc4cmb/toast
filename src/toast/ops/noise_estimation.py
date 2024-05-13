@@ -235,14 +235,8 @@ class NoiseEstim(Operator):
         log = Logger.get()
         timer = Timer()
         timer.start()
-        if (
-            (
-                len(self.pairs) > 0 or 
-                (not self.nocross)
-            ) and (
-                obs.comm_col is not None and 
-                obs.comm_col.size > 1
-            )
+        if (len(self.pairs) > 0 or (not self.nocross)) and (
+            obs.comm_col is not None and obs.comm_col.size > 1
         ):
             self.redistribute = True
             # Redistribute the data so each process has all detectors

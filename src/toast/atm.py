@@ -558,7 +558,7 @@ class AtmSim(object):
                 f"({ix2 - ix_start} {self._xstep} m layers) m out of "
                 f"{self._nx * self._xstep} m indices {ind_start} -- {ind_stop} "
                 f"({ind_stop - ind_start}) out of {self._nelem}"
-        )
+            )
 
         return (ind_start, ind_stop)
 

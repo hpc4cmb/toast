@@ -8,9 +8,9 @@ import warnings
 from time import time
 
 import numpy as np
+import scipy.optimize
 import traitlets
 from astropy import units as u
-import scipy.optimize
 
 from ... import qarray as qa
 from ..._libtoast import subtract_mean, sum_detectors
@@ -806,10 +806,11 @@ class CommonModeFilter(Operator):
     def _plot_coeff(self, ob, coeffs, comm, value):
         # Make a plot of the coupling coefficients
         import matplotlib.pyplot as plt
+
         ndet = len(coeffs)
         lon = np.zeros(ndet)
         lat = np.zeros(ndet)
-        yrot = qa.rotation([0, 1, 0], np.pi/2)
+        yrot = qa.rotation([0, 1, 0], np.pi / 2)
         for idet in range(ndet):
             name = ob.local_detectors[idet]
             quat = ob.telescope.focalplane[name]["quat"]
@@ -839,8 +840,16 @@ class CommonModeFilter(Operator):
             fig = plt.figure(figsize=[12, 8])
             ax = fig.add_subplot(1, 1, 1)
             ax.set_title(f"obs = {ob.name}, key = {value}")
-            amp = .15  # Need a smarter amplitude...
-            p = ax.scatter(lon, lat, c=coeffs, vmin=1-amp, vmax=1+amp, edgecolors="k", cmap="bwr")
+            amp = 0.15  # Need a smarter amplitude...
+            p = ax.scatter(
+                lon,
+                lat,
+                c=coeffs,
+                vmin=1 - amp,
+                vmax=1 + amp,
+                edgecolors="k",
+                cmap="bwr",
+            )
             fig.colorbar(p)
             fig.savefig(f"coeffs_{ob.name}_{value}.png")
             plt.close()

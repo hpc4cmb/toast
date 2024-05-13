@@ -168,7 +168,7 @@ class AzimuthIntervals(Operator):
                 stable = (np.absolute(scan_accel) < 0.1 * accel_range) * np.ones(
                     len(scan_accel), dtype=np.int8
                 )
-                stable *= (np.absolute(wscan_vel) > 0.1 * vel_range)
+                stable *= np.absolute(wscan_vel) > 0.1 * vel_range
 
                 begin_stable = np.where(stable[1:] - stable[:-1] == 1)[0]
                 end_stable = np.where(stable[:-1] - stable[1:] == 1)[0]
@@ -215,8 +215,9 @@ class AzimuthIntervals(Operator):
                 end_throw = list()
                 for start_turn, end_turn in zip(end_stable[:-1], begin_stable[1:]):
                     vel_switch = np.where(
-                        wscan_vel[start_turn:end_turn-1] * 
-                        wscan_vel[start_turn+1:end_turn] < 0
+                        wscan_vel[start_turn : end_turn - 1]
+                        * wscan_vel[start_turn + 1 : end_turn]
+                        < 0
                     )[0]
                     if len(vel_switch) > 1:
                         msg = "Multiple turnarounds between end of stable scan at"

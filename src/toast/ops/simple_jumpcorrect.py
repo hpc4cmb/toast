@@ -23,8 +23,7 @@ from .operator import Operator
 
 @trait_docs
 class SimpleJumpCorrect(Operator):
-    """An operator that identifies and corrects jumps in the data
-    """
+    """An operator that identifies and corrects jumps in the data"""
 
     # Class traits
 
@@ -144,8 +143,8 @@ class SimpleJumpCorrect(Operator):
         Return the time domain matched filter kernel of length m.
         """
         h = np.zeros(m)
-        h[:m // 2] = 1
-        h[m // 2:] = -1
+        h[: m // 2] = 1
+        h[m // 2 :] = -1
         # This turns the interpretation of the peak amplitude directly
         # into the step amplitude
         h /= m // 2
@@ -195,8 +194,9 @@ class SimpleJumpCorrect(Operator):
                 sigma = self._get_sigma(mytoi, flag_out, tol)
 
             # Excessive flagging is a sign of false detection
-            if significance > 5 or (float(np.sum(flag[istart:istop]))
-                                    / (istop - istart) < .5):
+            if significance > 5 or (
+                float(np.sum(flag[istart:istop])) / (istop - istart) < 0.5
+            ):
                 peaks.append((imax, significance, amplitude))
 
             npeak = np.sum(np.abs(mytoi) > sigma * lim)
@@ -215,13 +215,13 @@ class SimpleJumpCorrect(Operator):
             ind = slice(start, stop)
             x = toi[ind][full_flag[ind] == 0]
             if len(x) != 0:
-                rms = np.sqrt(np.mean(x.data ** 2))
+                rms = np.sqrt(np.mean(x.data**2))
                 sigmas.append(rms)
 
         if len(sigmas) != 0:
             sigma = np.median(sigmas)
         else:
-            sigma = 0.
+            sigma = 0.0
         return sigma
 
     def _remove_jumps(self, signal, flag, peaks, tol):
@@ -234,7 +234,7 @@ class SimpleJumpCorrect(Operator):
         flag_out = flag.copy()
         for peak, _, amplitude in peaks:
             corrected_signal[peak:] -= amplitude
-            flag_out[peak - int(tol):peak + int(tol)] = True
+            flag_out[peak - int(tol) : peak + int(tol)] = True
         return corrected_signal, flag_out
 
     @function_timer
@@ -268,9 +268,7 @@ class SimpleJumpCorrect(Operator):
                     sig_view = sig[ind].copy()
                     bad_view = bad[ind]
                     bad_view_out = bad_view.copy()
-                    sig_filtered = fftconvolve(
-                        sig_view, stepfilter, mode="same"
-                    )
+                    sig_filtered = fftconvolve(sig_view, stepfilter, mode="same")
                     peaks = self._find_peaks(
                         sig_filtered,
                         bad_view,
@@ -278,7 +276,7 @@ class SimpleJumpCorrect(Operator):
                         lim=self.jump_limit,
                         tol=self.filterlen // 2,
                     )
-                    
+
                     njump = len(peaks)
                     if njump == 0:
                         continue
@@ -286,7 +284,8 @@ class SimpleJumpCorrect(Operator):
                         raise RuntimeError(f"Found {njump} jumps!")
 
                     corrected_signal, flag_out = self._remove_jumps(
-                        sig_view, bad_view, peaks, self.jump_radius)
+                        sig_view, bad_view, peaks, self.jump_radius
+                    )
                     sig[ind] = corrected_signal
                     det_flags[ind][flag_out] |= self.jump_mask
 

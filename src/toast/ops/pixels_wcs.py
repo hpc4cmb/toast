@@ -4,18 +4,18 @@
 
 import warnings
 
+import astropy.io.fits as af
 import numpy as np
 import traitlets
 from astropy import units as u
 from astropy.wcs import WCS
-import astropy.io.fits as af
 
 from .. import qarray as qa
 from ..instrument_coords import quat_to_xieta
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelDistribution
-from ..pointing_utils import scan_range_lonlat, center_offset_lonlat
+from ..pointing_utils import center_offset_lonlat, scan_range_lonlat
 from ..timing import function_timer
 from ..traits import Bool, Instance, Int, Tuple, Unicode, trait_docs
 from ..utils import Environment, Logger

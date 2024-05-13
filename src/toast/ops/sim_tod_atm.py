@@ -204,7 +204,7 @@ class SimAtmosphere(Operator):
         1e-3,
         help="Correlation limit is used to measure the correlation length of the "
         "simulation.  Elements further than correlation length apart have their "
-        "covariance set to zero."
+        "covariance set to zero.",
     )
 
     @traitlets.validate("det_mask")

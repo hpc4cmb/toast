@@ -9,8 +9,8 @@ import numpy as np
 import numpy.testing as nt
 
 from .. import ops as ops
-from ._helpers import create_ground_data
 from ..weather import SimWeather, Weather
+from ._helpers import create_ground_data
 from .mpi import MPITestCase
 
 
