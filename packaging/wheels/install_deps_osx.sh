@@ -66,7 +66,6 @@ else
 fi
 
 # Install any pre-built dependencies with homebrew
-brew install cmake
 if [ "x${use_gcc}" = "xyes" ]; then
     brew install gcc@${gcc_version}
 fi
@@ -75,7 +74,7 @@ fi
 pip install --upgrade pip
 
 # Install a couple of base packages that are always required
-pip install -v wheel
+pip install -v cmake wheel
 
 # In order to maximize ABI compatibility with numpy, build with the newest numpy
 # version containing the oldest ABI version compatible with the python we are using.
@@ -99,11 +98,11 @@ CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdi
 # Install openblas from the multilib package- the same one numpy uses.
 
 if [ "${arch}" = "macosx_arm64" ]; then
-    openblas_pkg="openblas-v0.3.23-246-g3d31191b-macosx_11_0_arm64-gf_5272328.tar.gz"
+    openblas_pkg="openblas-v0.3.27-macosx_11_0_arm64-gf_5272328.tar.gz"
 else
-    openblas_pkg="openblas-v0.3.23-246-g3d31191b-macosx_10_9_x86_64-gf_c469a42.tar.gz"
+    openblas_pkg="openblas-v0.3.27-macosx_10_9_x86_64-gf_c469a42.tar.gz"
 fi
-openblas_url="https://anaconda.org/multibuild-wheels-staging/openblas-libs/v0.3.23-246-g3d31191b/download/${openblas_pkg}"
+openblas_url="https://anaconda.org/multibuild-wheels-staging/openblas-libs/v0.3.27/download/${openblas_pkg}"
 
 if [ ! -e ${openblas_pkg} ]; then
     echo "Fetching OpenBLAS..."
