@@ -124,6 +124,22 @@ def main():
         help="Maximum Y viewport fraction (0.0 - 1.0)",
     )
 
+    parser.add_argument(
+        "--cmap",
+        required=False,
+        type=str,
+        default="viridis",
+        help="The colormap name (e.g. 'inferno')",
+    )
+
+    parser.add_argument(
+        "--azimuth",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Data is Azimuth / Elevation, so invert the X-axis",
+    )
+
     args = parser.parse_args()
 
     range_I = None
@@ -148,6 +164,8 @@ def main():
         xmax=args.Xmax,
         ymin=args.Ymin,
         ymax=args.Ymax,
+        is_azimuth=args.azimuth,
+        cmap=args.cmap,
     )
 
 

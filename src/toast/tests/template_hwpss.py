@@ -453,6 +453,7 @@ class TemplateHwpssTest(MPITestCase):
             resolution=(sky_res, sky_res),
             detector_pointing=detpointing,
             pixels="temp_pix",
+            dimensions=(),
             use_astropy=True,
             auto_bounds=True,
         )
@@ -782,6 +783,7 @@ class TemplateHwpssTest(MPITestCase):
             detector_pointing=detpointing_radec,
             projection=proj,
             resolution=(res, res),
+            dimensions=(),
             auto_bounds=True,
             use_astropy=True,
         )

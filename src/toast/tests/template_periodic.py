@@ -295,6 +295,7 @@ class TemplatePeriodicTest(MPITestCase):
         pixels = ops.PixelsWCS(
             projection=sky_proj,
             resolution=(sky_res, sky_res),
+            dimensions=(),
             detector_pointing=detpointing,
             pixels="temp_pix",
             use_astropy=True,
@@ -618,6 +619,7 @@ class TemplatePeriodicTest(MPITestCase):
             detector_pointing=detpointing_radec,
             projection=proj,
             resolution=(res, res),
+            dimensions=(),
             auto_bounds=True,
             use_astropy=True,
         )

@@ -71,15 +71,14 @@ class PixelDistribution(AcceleratorObject):
         self._local_submaps = local_submaps
         self._comm = comm
 
-        self._glob2loc = None
         self._n_local = 0
+        self._glob2loc = AlignedI64.zeros(self._n_submap)
+        self._glob2loc[:] = -1
 
         if self._local_submaps is not None and len(self._local_submaps) > 0:
             if np.max(self._local_submaps) > self._n_submap - 1:
                 raise RuntimeError("local submap indices out of range")
             self._n_local = len(self._local_submaps)
-            self._glob2loc = AlignedI64.zeros(self._n_submap)
-            self._glob2loc[:] = -1
             for ilocal_submap, iglobal_submap in enumerate(self._local_submaps):
                 self._glob2loc[iglobal_submap] = ilocal_submap
 
@@ -192,12 +191,7 @@ class PixelDistribution(AcceleratorObject):
             msg = "Global pixel indices exceed the maximum for the pixelization"
             log.error(msg)
             raise RuntimeError(msg)
-        if self._glob2loc is None:
-            msg = "PixelDistribution: no local submaps defined"
-            log.error(msg)
-            raise RuntimeError(msg)
-        else:
-            return libtoast_global_to_local(gl, self._n_pix_submap, self._glob2loc)
+        return libtoast_global_to_local(gl, self._n_pix_submap, self._glob2loc)
 
     @function_timer
     def global_pixel_to_local(self, gl):
