@@ -191,12 +191,7 @@ class PixelDistribution(AcceleratorObject):
             msg = "Global pixel indices exceed the maximum for the pixelization"
             log.error(msg)
             raise RuntimeError(msg)
-        if self._glob2loc is None:
-            msg = "PixelDistribution: no local submaps defined"
-            log.error(msg)
-            raise RuntimeError(msg)
-        else:
-            return libtoast_global_to_local(gl, self._n_pix_submap, self._glob2loc)
+        libtoast_global_to_local(gl, self._n_pix_submap, self._glob2loc)
 
     @function_timer
     def global_pixel_to_local(self, gl):
