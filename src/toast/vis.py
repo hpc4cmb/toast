@@ -125,6 +125,7 @@ def plot_wcs_maps(
     xmax=None,
     ymin=None,
     ymax=None,
+    is_azimuth=False,
     cmap="viridis",
 ):
     """Plot WCS projected output maps.
@@ -143,6 +144,7 @@ def plot_wcs_maps(
         xmax (float):  Fraction (0.0-1.0) of the maximum X view.
         ymin (float):  Fraction (0.0-1.0) of the minimum Y view.
         ymin (float):  Fraction (0.0-1.0) of the maximum Y view.
+        is_azimuth (bool):  If True, swap direction of longitude axis.
         cmap (str): The color map name to use.
 
     """
@@ -169,6 +171,8 @@ def plot_wcs_maps(
             vmax=vmax,
             interpolation="nearest",
         )
+        if is_azimuth:
+            ax.invert_xaxis()
         ax.grid(color="white", ls="solid")
         ax.set_xlabel(f"{wcs.wcs.ctype[0]}")
         ax.set_ylabel(f"{wcs.wcs.ctype[1]}")

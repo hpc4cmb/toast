@@ -256,11 +256,9 @@ class PixelsWCS(Operator):
         wcs = WCS(naxis=2)
 
         if coord == "AZEL":
-            # FIXME:  The WCS standard does not define a keyword for
-            # horizontal coordinates.  How should we deal with this?
-            # Also AZ is reversed from normal conventions- should we
-            # negate CDELT?
-            coordstr = ("RA--", "DEC-")
+            # For local Azimuth and Elevation coordinate frame, we
+            # use the generic longitude and latitude string.
+            coordstr = ("TLON", "TLAT")
         elif coord == "EQU":
             coordstr = ("RA--", "DEC-")
         elif coord == "GAL":

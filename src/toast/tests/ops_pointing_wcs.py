@@ -779,7 +779,7 @@ class PointingWCSTest(MPITestCase):
                 hitfile = os.path.join(self.outdir, f"drone_{proj}_hits.fits")
                 mapfile = os.path.join(self.outdir, f"drone_{proj}_map.fits")
                 binmapfile = os.path.join(self.outdir, f"drone_{proj}_binmap.fits")
-                plot_wcs_maps(hitfile=hitfile, mapfile=mapfile)
-                plot_wcs_maps(hitfile=hitfile, mapfile=binmapfile)
+                plot_wcs_maps(hitfile=hitfile, mapfile=mapfile, is_azimuth=True)
+                plot_wcs_maps(hitfile=hitfile, mapfile=binmapfile, is_azimuth=True)
 
             close_data(data)
