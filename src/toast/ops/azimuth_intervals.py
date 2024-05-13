@@ -15,7 +15,7 @@ from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Int, Unicode, trait_docs
+from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger, rate_from_times
 from ..vis import set_matplotlib_backend
 from .flag_intervals import FlagIntervals
@@ -43,6 +43,12 @@ class AzimuthIntervals(Operator):
     azimuth = Unicode(defaults.azimuth, help="Observation shared key for Azimuth")
 
     cut_short = Bool(True, help="If True, remove very short scanning intervals")
+
+    short_limit = Quantity(
+        0.25 * u.dimensionless_unscaled,
+        help="Minimum length of a scan.  Either the minimum length in time or a "
+        "fraction of median scan length",
+    )
 
     scanning_interval = Unicode(
         defaults.scanning_interval, help="Interval name for scanning"
@@ -123,7 +129,11 @@ class AzimuthIntervals(Operator):
             # is relatively fast.
 
             throw_times = None
+            throw_leftright_times = None
+            throw_rightleft_times = None
             stable_times = None
+            stable_leftright_times = None
+            stable_rightleft_times = None
 
             # Sample rate
             stamps = obs.shared[self.times].data
@@ -139,13 +149,6 @@ class AzimuthIntervals(Operator):
                 # Smooth with moving window
                 wscan_vel = uniform_filter1d(scan_vel, size=window, mode="nearest")
 
-                # When the velocity changes sign, we have a turnaround
-                vel_switch = np.where(wscan_vel[:-1] * wscan_vel[1:] < 0)[0] + 1
-                throw_times = [
-                    (stamps[x[0]], stamps[x[1]])
-                    for x in zip(vel_switch[:-1], vel_switch[1:])
-                ]
-
                 # The peak to peak range of the scan velocity
                 vel_range = np.amax(wscan_vel) - np.amin(wscan_vel)
 
@@ -156,13 +159,17 @@ class AzimuthIntervals(Operator):
                     mode="nearest",
                 )
 
+                # Peak to peak acceleration range
                 accel_range = np.amax(scan_accel) - np.amin(scan_accel)
 
                 # When the acceleration is zero to some tolerance, we are
-                # scanning.
+                # scanning.  However, we also need to only consider times where
+                # the velocity is non-zero.
                 stable = (np.absolute(scan_accel) < 0.1 * accel_range) * np.ones(
                     len(scan_accel), dtype=np.int8
                 )
+                stable *= (np.absolute(wscan_vel) > 0.1 * vel_range)
+
                 begin_stable = np.where(stable[1:] - stable[:-1] == 1)[0]
                 end_stable = np.where(stable[:-1] - stable[1:] == 1)[0]
                 if begin_stable[0] > end_stable[0]:
@@ -181,12 +188,13 @@ class AzimuthIntervals(Operator):
                 # stable periods.
                 if self.cut_short:
                     stable_spans = np.array([(x[1] - x[0]) for x in stable_times])
-                    throw_spans = np.array([(x[1] - x[0]) for x in throw_times])
-                    mean_stable = np.mean(stable_spans)
-                    std_stable = np.std(stable_spans)
-                    mean_throw = np.mean(throw_spans)
-                    std_throw = np.std(throw_spans)
-                    stable_bad = stable_spans < mean_stable - 5 * std_stable
+                    try:
+                        # First try short limit as time
+                        stable_bad = stable_spans < self.short_limit.to_value(u.s)
+                    except:
+                        # Try short limit as fraction
+                        median_stable = np.median(stable_spans)
+                        stable_bad = stable_spans < self.short_limit * median_stable
                     begin_stable = np.array(
                         [x for (x, y) in zip(begin_stable, stable_bad) if not y]
                     )
@@ -196,8 +204,54 @@ class AzimuthIntervals(Operator):
                     stable_times = [
                         x for (x, y) in zip(stable_times, stable_bad) if not y
                     ]
-                    throw_bad = throw_spans < mean_throw - 5 * std_throw
-                    throw_times = [x for (x, y) in zip(throw_times, throw_bad) if not y]
+
+                # The "throw" intervals extend from one turnaround to the next.
+                # We start the first throw at the beginning of the first stable scan
+                # and then find the sample between stable scans where the turnaround
+                # happens.  This reduces false detections of turnarounds before or
+                # after the stable scanning within the observation.
+
+                begin_throw = [begin_stable[0]]
+                end_throw = list()
+                for start_turn, end_turn in zip(end_stable[:-1], begin_stable[1:]):
+                    vel_switch = np.where(
+                        wscan_vel[start_turn:end_turn-1] * 
+                        wscan_vel[start_turn+1:end_turn] < 0
+                    )[0]
+                    if len(vel_switch) > 1:
+                        msg = "Multiple turnarounds between end of stable scan at"
+                        msg = f" sample {start_turn} and next start at {end_turn}"
+                        raise RuntimeError(msg)
+                    end_throw.append(start_turn + vel_switch[0])
+                    begin_throw.append(end_throw[-1] + 1)
+                end_throw.append(end_stable[-1])
+                begin_throw = np.array(begin_throw)
+                end_throw = np.array(end_throw)
+
+                throw_times = [
+                    (stamps[x[0]], stamps[x[1] - 1])
+                    for x in zip(begin_throw, end_throw)
+                ]
+
+                # Split scans into left and right-going intervals
+                stable_leftright_times = []
+                stable_rightleft_times = []
+                throw_leftright_times = []
+                throw_rightleft_times = []
+
+                for iscan, (first, last) in enumerate(zip(begin_stable, end_stable)):
+                    # Check the velocity at the middle of the scan
+                    mid = first + (last - first) // 2
+                    if wscan_vel[mid] > 0:
+                        stable_leftright_times.append(stable_times[iscan])
+                        throw_leftright_times.append(throw_times[iscan])
+                    elif wscan_vel[mid] < 0:
+                        stable_rightleft_times.append(stable_times[iscan])
+                        throw_rightleft_times.append(throw_times[iscan])
+                    else:
+                        msg = "Velocity is zero in the middle of scan"
+                        msg += f" samples {first} ... {last}"
+                        raise RuntimeError(msg)
 
                 if self.debug_root is not None:
                     set_matplotlib_backend()
@@ -206,9 +260,9 @@ class AzimuthIntervals(Operator):
 
                     # Dump some plots
                     out_file = f"{self.debug_root}_{obs.comm_row_rank}.pdf"
-                    if len(vel_switch) >= 5:
+                    if len(end_throw) >= 5:
                         # Plot a few scans
-                        n_plot = vel_switch[4]
+                        n_plot = end_throw[4]
                     else:
                         # Plot it all
                         n_plot = obs.n_local_samples
@@ -216,6 +270,8 @@ class AzimuthIntervals(Operator):
                     swplot = vel_switch[vel_switch <= n_plot]
                     bstable = begin_stable[begin_stable <= n_plot]
                     estable = end_stable[end_stable <= n_plot]
+                    bthrow = begin_throw[begin_throw <= n_plot]
+                    ethrow = end_throw[end_throw <= n_plot]
 
                     fig = plt.figure(dpi=100, figsize=(8, 16))
 
@@ -225,11 +281,17 @@ class AzimuthIntervals(Operator):
                         obs.shared[self.azimuth].data[:n_plot],
                         "-",
                     )
+                    ax.set_xlabel("Samples")
+                    ax.set_ylabel("Azimuth")
 
                     ax = fig.add_subplot(4, 1, 2)
                     ax.plot(np.arange(n_plot), stable[:n_plot], "-")
                     ax.vlines(bstable, ymin=-1, ymax=2, color="green")
                     ax.vlines(estable, ymin=-1, ymax=2, color="red")
+                    ax.vlines(bthrow, ymin=-2, ymax=1, color="cyan")
+                    ax.vlines(ethrow, ymin=-2, ymax=1, color="purple")
+                    ax.set_xlabel("Samples")
+                    ax.set_ylabel("Stable Scan / Throw")
 
                     ax = fig.add_subplot(4, 1, 3)
                     ax.plot(np.arange(n_plot), scan_vel[:n_plot], "-")
@@ -239,9 +301,13 @@ class AzimuthIntervals(Operator):
                         ymin=np.amin(scan_vel),
                         ymax=np.amax(scan_vel),
                     )
+                    ax.set_xlabel("Samples")
+                    ax.set_ylabel("Scan Velocity")
 
                     ax = fig.add_subplot(4, 1, 4)
                     ax.plot(np.arange(n_plot), scan_accel[:n_plot], "-")
+                    ax.set_xlabel("Samples")
+                    ax.set_ylabel("Scan Acceleration")
 
                     plt.savefig(out_file)
                     plt.close()
@@ -252,10 +318,22 @@ class AzimuthIntervals(Operator):
             obs.intervals.create_col(
                 self.throw_interval, throw_times, stamps, fromrank=0
             )
+            obs.intervals.create_col(
+                self.throw_leftright_interval, throw_leftright_times, stamps, fromrank=0
+            )
+            obs.intervals.create_col(
+                self.throw_rightleft_interval, throw_rightleft_times, stamps, fromrank=0
+            )
 
             # Stable scanning intervals
             obs.intervals.create_col(
                 self.scanning_interval, stable_times, stamps, fromrank=0
+            )
+            obs.intervals.create_col(
+                self.scan_leftright_interval, stable_leftright_times, stamps, fromrank=0
+            )
+            obs.intervals.create_col(
+                self.scan_rightleft_interval, stable_rightleft_times, stamps, fromrank=0
             )
 
             # Turnarounds are the inverse of stable scanning

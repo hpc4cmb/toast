@@ -10,6 +10,8 @@ install(FILES
     reset.py
     arithmetic.py
     memory_counter.py
+    simple_deglitch.py
+    simple_jumpcorrect.py
     sim_hwp.py
     sim_tod_noise.py
     sim_tod_dipole.py
@@ -58,6 +60,7 @@ install(FILES
     load_hdf5.py
     noise_estimation.py
     noise_estimation_utils.py
+    weather_model.py
     yield_cut.py
     azimuth_intervals.py
     DESTINATION ${PYTHON_SITE}/toast/ops

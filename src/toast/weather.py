@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -13,6 +13,7 @@ from pkg_resources import resource_filename
 
 from . import rng as rng
 from .timing import function_timer
+from .utils import Logger, name_UID
 
 
 class Weather(object):
@@ -376,8 +377,12 @@ class SimWeather(Weather):
             self._month = int((self._doy - 1) // 30.5)
         if realization is not None:
             self._realization = realization
+        else:
+            self._realization = 0
         if site_uid is not None:
             self._site_uid = site_uid
+        else:
+            self._site_uid = name_UID(self._name)
         self._draw_values()
 
     @property

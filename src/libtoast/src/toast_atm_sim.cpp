@@ -694,9 +694,9 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
     timer.start();
 
     if (atm_verbose()) {
-        o.str("");
-        o << rank << " : Analyzing sparse covariance ... ";
-        logger.verbose(o.str().c_str());
+      o.str("");
+      o << rank << " : Analyzing sparse covariance ... ";
+      logger.verbose(o.str().c_str());
     }
 
     cholmod_factor * factorization;
@@ -710,16 +710,22 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
             throw std::runtime_error("cholmod_analyze failed.");
         }
 
-        if (atm_verbose()) {
-            o.str("");
-            o << rank << " : Factorizing sparse covariance ... ";
-            logger.verbose(o.str().c_str());
-        }
+	if (atm_verbose()) {
+	  o.str("");
+	  o << rank << " : Factorizing sparse covariance, "
+	    << "nzmax = " << cov->nzmax
+	    << ", (" << cov->nzmax * 8 / pow(2, 20) << "MB)";
+	  logger.verbose(o.str().c_str());
+	}
 
         cholmod_factorize(cov, factorization, chol.chcommon);
 
         if (chol.chcommon->status != CHOLMOD_OK) {
+	    o.str("");
+	    o << rank << " : Factorize covariance failed, itry=" << itry;
             cholmod_free_factor(&factorization, chol.chcommon);
+	    logger.debug(o.str().c_str());
+
             if (itry < ntry - 1) {
                 // Extract band diagonal of the matrix and try
                 // factorizing again
@@ -774,11 +780,11 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
     timer.stop();
 
     if (atm_verbose()) {
-        o.str("");
-        o << rank
-          << " : Cholesky decomposition done in " << timer.seconds()
-          << " s. N = " << nelem << std::endl;
-        logger.verbose(o.str().c_str());
+      o.str("");
+      o << rank
+	<< " : Cholesky decomposition done in " << timer.seconds()
+	<< " s. N = " << nelem << std::endl;
+      logger.verbose(o.str().c_str());
     }
 
     // Report memory usage (only counting the non-zero elements, no
@@ -791,10 +797,10 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
         / pow(2.0, 20.0);
 
     if (atm_verbose()) {
-        o.str("");
-        o << rank << " : Allocated " << tot_mem
-          << " MB for the sparse factorization.";
-        logger.verbose(o.str().c_str());
+      o.str("");
+      o << rank << " : Allocated " << tot_mem
+	<< " MB for the sparse factorization.";
+      logger.verbose(o.str().c_str());
     }
 
     cholmod_sparse * sqrt_cov = cholmod_factor_to_sparse(factorization, chol.chcommon);
@@ -815,11 +821,11 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
     double max_mem = (nelem * nelem * sizeof(double)) / pow(2.0, 20.0);
 
     if (atm_verbose()) {
-        o.str("");
-        o << rank << " : Allocated " << tot_mem
-          << " MB for the sparse sqrt covariance matrix. "
-          << "Compression: " << tot_mem / max_mem;
-        logger.verbose(o.str().c_str());
+      o.str("");
+      o << rank << " : Allocated " << tot_mem
+	<< " MB for the sparse sqrt covariance matrix. "
+	<< "Compression: " << tot_mem / max_mem;
+      logger.verbose(o.str().c_str());
     }
 
     return sqrt_cov;
@@ -990,6 +996,7 @@ void toast::atm_sim_compute_slice(
     );
 
     gt.stop("atm_sim_sqrt_sparse_covariance");
+
 
     cholmod_free_sparse(&cov, chol.chcommon);
 
