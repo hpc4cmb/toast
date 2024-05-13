@@ -237,7 +237,7 @@ class SimpleDeglitch(Operator):
 
     def _provides(self):
         prov = {
-            "meta": [self.noise_model],
+            "meta": list(),
             "shared": list(),
             "detdata": list(),
             "intervals": list(),
