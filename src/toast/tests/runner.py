@@ -31,7 +31,6 @@ from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_demodulate as test_ops_demodulate
 from . import ops_elevation_noise as test_ops_elevation_noise
-from . import ops_signal_diff_noise as test_ops_signal_diff_noise
 from . import ops_filterbin as test_ops_filterbin
 from . import ops_flag_sso as test_ops_flag_sso
 from . import ops_gainscrambler as test_ops_gainscrambler
@@ -52,6 +51,7 @@ from . import ops_polyfilter as test_ops_polyfilter
 from . import ops_scan_healpix as test_ops_scan_healpix
 from . import ops_scan_map as test_ops_scan_map
 from . import ops_scan_wcs as test_ops_scan_wcs
+from . import ops_signal_diff_noise as test_ops_signal_diff_noise
 from . import ops_sim_cosmic_rays as test_ops_sim_cosmic_rays
 from . import ops_sim_crosstalk as test_ops_sim_crosstalk
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts

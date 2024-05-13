@@ -14,7 +14,6 @@ from .crosslinking import CrossLinking
 from .delete import Delete
 from .demodulation import Demodulate, StokesWeightsDemod
 from .elevation_noise import ElevationNoise
-from .signal_diff_noise_model import SignalDiffNoiseModel
 from .filterbin import FilterBin, combine_observation_matrix
 from .flag_intervals import FlagIntervals
 from .flag_sso import FlagSSO
@@ -52,8 +51,7 @@ from .save_spt3g import SaveSpt3g
 from .scan_healpix import ScanHealpixMap, ScanHealpixMask
 from .scan_map import ScanMap, ScanMask, ScanScale
 from .scan_wcs import ScanWCSMap, ScanWCSMask
-from .simple_deglitch import SimpleDeglitch
-from .simple_jumpcorrect import SimpleJumpCorrect
+from .signal_diff_noise_model import SignalDiffNoiseModel
 from .sim_cosmic_rays import InjectCosmicRays
 from .sim_crosstalk import CrossTalk, MitigateCrossTalk
 from .sim_gaindrifts import GainDrifter
@@ -63,6 +61,8 @@ from .sim_satellite import SimSatellite
 from .sim_tod_atm import SimAtmosphere
 from .sim_tod_dipole import SimDipole
 from .sim_tod_noise import SimNoise
+from .simple_deglitch import SimpleDeglitch
+from .simple_jumpcorrect import SimpleJumpCorrect
 from .sss import SimScanSynchronousSignal
 from .statistics import Statistics
 from .stokes_weights import StokesWeights

@@ -23,8 +23,7 @@ from .operator import Operator
 
 @trait_docs
 class SimpleDeglitch(Operator):
-    """An operator that flags extreme detector samples.
-    """
+    """An operator that flags extreme detector samples."""
 
     # Class traits
 
@@ -181,8 +180,10 @@ class SimpleDeglitch(Operator):
                     rms = np.nanstd(sig_view)
                     nglitch = 0
                     while True:
-                        if np.isnan(rms) or \
-                           np.sum(np.isfinite(sig_view)) < self.nsample_min:
+                        if (
+                            np.isnan(rms)
+                            or np.sum(np.isfinite(sig_view)) < self.nsample_min
+                        ):
                             # flag the entire view.  Not enough statistics
                             sig_view[:] = np.nan
                             break
@@ -191,7 +192,7 @@ class SimpleDeglitch(Operator):
                         sig_view_test = sig_view.copy()
                         istart = max(0, i - self.glitch_radius)
                         istop = min(nsample, i + self.glitch_radius + 1)
-                        sig_view_test[istart : istop] = np.nan
+                        sig_view_test[istart:istop] = np.nan
                         rms_test = np.nanstd(sig_view_test)
                         if np.abs(sig_view[i]) < self.glitch_limit * rms_test:
                             # Not significant enough

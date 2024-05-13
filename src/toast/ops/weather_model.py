@@ -74,6 +74,7 @@ class WeatherModel(Operator):
                 tmin = comm.allreduce(tmin, MPI.MIN)
                 tmax = comm.allreduce(tmax, MPI.MAX)
             from datetime import datetime, timezone
+
             mid_time = datetime.fromtimestamp((tmin + tmax) / 2, timezone.utc)
             try:
                 weather = SimWeather(
@@ -100,8 +101,8 @@ class WeatherModel(Operator):
         return
 
     def _requires(self):
-        req = {"shared" : [self.times]}
-        return 
+        req = {"shared": [self.times]}
+        return
 
     def _provides(self):
         prov = {"meta": []}
