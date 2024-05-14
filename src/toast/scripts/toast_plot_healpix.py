@@ -101,6 +101,21 @@ def main():
         action="store_true",
         help="Plot with gnomview instead of mollview",
     )
+    parser.add_argument(
+        "--gnomres",
+        required=False,
+        type=float,
+        default=None,
+        help="Gnomview resolution in arcminutes",
+    )
+
+    parser.add_argument(
+        "--cmap",
+        required=False,
+        type=str,
+        default="viridis",
+        help="The colormap name (e.g. 'inferno')",
+    )
 
     args = parser.parse_args()
 
@@ -123,6 +138,8 @@ def main():
         max_hits=args.max_hits,
         truth=args.truth_file,
         gnomview=args.gnomview,
+        gnomres=args.gnomres,
+        cmap=args.cmap,
     )
 
 
