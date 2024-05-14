@@ -40,6 +40,7 @@ tar xzf ${flac_pkg} \
     -DBUILD_UTILS=OFF \
     -DBUILD_TESTING=OFF \
     -DBUILD_EXAMPLES=OFF \
+    -DBUILD_SHARED_LIBS=ON \
     -DINSTALL_MANPAGES=OFF \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     .. \

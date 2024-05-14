@@ -69,7 +69,11 @@ else
 fi
 
 # Install any pre-built dependencies with homebrew
+
 brew install cmake
+# Force uninstall flac tools, to avoid conflicts with our
+# custom compiled version.
+brew uninstall -f flac libogg
 if [ "x${use_gcc}" = "xyes" ]; then
     brew install gcc@${gcc_version}
 fi
