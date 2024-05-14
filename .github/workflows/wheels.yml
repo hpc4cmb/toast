@@ -129,5 +129,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels_${{ matrix.python }}-${{ matrix.platform_id }}
           path: ./wheelhouse/toast*.whl
