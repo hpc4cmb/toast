@@ -73,7 +73,7 @@ fi
 brew install cmake
 # Force uninstall flac tools, to avoid conflicts with our
 # custom compiled version.
-brew uninstall -f flac libogg
+brew uninstall -f --ignore-dependencies flac libogg libsndfile libvorbis opusfile sox
 if [ "x${use_gcc}" = "xyes" ]; then
     brew install gcc@${gcc_version}
 fi
