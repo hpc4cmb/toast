@@ -50,6 +50,9 @@ if [ "x${use_gcc}" = "xyes" ]; then
     export FCLIBS="-lgfortran"
     export OMPFLAGS="-fopenmp"
 else
+    # Set the deployment target based on how python was built
+    export MACOSX_DEPLOYMENT_TARGET=$(python3 -c "import sysconfig as s; print(s.get_config_vars()['MACOSX_DEPLOYMENT_TARGET'])")
+    echo "Using MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}"
     export CC=clang
     export CXX=clang++
     export FC=
