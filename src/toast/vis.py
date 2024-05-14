@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
 import warnings
 
 import astropy.io.fits as af
@@ -409,6 +410,8 @@ def plot_healpix_maps(
     max_hits=None,
     truth=None,
     gnomview=False,
+    gnomres=None,
+    cmap="viridis",
 ):
     """Plot Healpix projected output maps.
 
@@ -424,6 +427,9 @@ def plot_healpix_maps(
         truth (str):  Path to the input truth map in the case of simulations.
         gnomview (bool):  If True, use a gnomview projection centered on the
             mean of hit pixel locations.
+        gnomres (float):  The resolution in arcminutes to pass to gnomview.
+            If None, it will be estimated from the data.
+        cmap (str): The color map name to use.
 
     """
     set_matplotlib_backend()
@@ -434,6 +440,7 @@ def plot_healpix_maps(
     figdpi = 100
 
     def plot_single(data, vmin, vmax, out, gnomrot=None, reso=4.0, xsize=1000):
+        file_base = os.path.splitext(os.path.basename(out))[0]
         if gnomrot is not None:
             hp.gnomview(
                 map=data,
@@ -441,12 +448,21 @@ def plot_healpix_maps(
                 xsize=xsize,
                 reso=reso,
                 nest=True,
-                cmap="jet",
+                cmap=cmap,
                 min=vmin,
                 max=vmax,
+                title=file_base,
             )
         else:
-            hp.mollview(data, xsize=xsize, nest=True, cmap="jet", min=vmin, max=vmax)
+            hp.mollview(
+                data,
+                xsize=xsize,
+                nest=True,
+                cmap=cmap,
+                min=vmin,
+                max=vmax,
+                title=file_base,
+            )
         plt.savefig(out, format="pdf")
         plt.close()
 
@@ -467,7 +483,6 @@ def plot_healpix_maps(
 
     hitdata = None
     gnomrot = None
-    gnomres = None
     xsize = 1600
     goodhits = slice(None)
     if hitfile is not None:
@@ -486,10 +501,12 @@ def plot_healpix_maps(
         )
         mlon = np.mean(lon)
         mlat = np.mean(lat)
-        gnomres = 1.1 * (np.amax(lat) - np.amin(lat)) / xsize
-        gnomres *= 60
+        if gnomres is None:
+            gnomres = 1.1 * (np.amax(lat) - np.amin(lat)) / xsize
+            gnomres *= 60
         if gnomview:
             gnomrot = (mlon, mlat, 0.0)
+            print(f"Using gnomview reso={gnomres}, gnomrot={gnomrot}")
         plot_single(
             hitdata,
             0,

@@ -50,6 +50,9 @@ if [ "x${use_gcc}" = "xyes" ]; then
     export FCLIBS="-lgfortran"
     export OMPFLAGS="-fopenmp"
 else
+    # Set the deployment target based on how python was built
+    export MACOSX_DEPLOYMENT_TARGET=$(python3 -c "import sysconfig as s; print(s.get_config_vars()['MACOSX_DEPLOYMENT_TARGET'])")
+    echo "Using MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET}"
     export CC=clang
     export CXX=clang++
     export FC=
@@ -66,7 +69,11 @@ else
 fi
 
 # Install any pre-built dependencies with homebrew
+
 brew install cmake
+# Force uninstall flac tools, to avoid conflicts with our
+# custom compiled version.
+brew uninstall -f --ignore-dependencies flac libogg libsndfile libvorbis opusfile sox
 if [ "x${use_gcc}" = "xyes" ]; then
     brew install gcc@${gcc_version}
 fi
@@ -99,11 +106,11 @@ CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdi
 # Install openblas from the multilib package- the same one numpy uses.
 
 if [ "${arch}" = "macosx_arm64" ]; then
-    openblas_pkg="openblas-v0.3.23-246-g3d31191b-macosx_11_0_arm64-gf_5272328.tar.gz"
+    openblas_pkg="openblas-v0.3.27-macosx_11_0_arm64-gf_5272328.tar.gz"
 else
-    openblas_pkg="openblas-v0.3.23-246-g3d31191b-macosx_10_9_x86_64-gf_c469a42.tar.gz"
+    openblas_pkg="openblas-v0.3.27-macosx_10_9_x86_64-gf_c469a42.tar.gz"
 fi
-openblas_url="https://anaconda.org/multibuild-wheels-staging/openblas-libs/v0.3.23-246-g3d31191b/download/${openblas_pkg}"
+openblas_url="https://anaconda.org/multibuild-wheels-staging/openblas-libs/v0.3.27/download/${openblas_pkg}"
 
 if [ ! -e ${openblas_pkg} ]; then
     echo "Fetching OpenBLAS..."

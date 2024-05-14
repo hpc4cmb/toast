@@ -12,7 +12,7 @@
 # - MAKEJ
 # - CLEANUP (yes/no)
 
-openblas_version=0.3.23
+openblas_version=0.3.27
 openblas_dir=OpenBLAS-${openblas_version}
 openblas_pkg=${openblas_dir}.tar.gz
 
