@@ -21,8 +21,9 @@ def stokes_weights_IQU_numpy(
     cal,
     IAU,
     use_accel,
+    **kwargs,
 ):
-    if hwp is not None and len(hwp) == 0:
+    if hwp is not None and len(hwp) != len(quats):
         hwp = None
 
     if IAU:
@@ -77,7 +78,7 @@ def stokes_weights_IQU_numpy(
 
 
 @kernel(impl=ImplementationType.NUMPY, name="stokes_weights_I")
-def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accel):
+def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accel, **kwargs):
     for idet in range(len(weight_index)):
         widx = weight_index[idet]
         for vw in intervals:

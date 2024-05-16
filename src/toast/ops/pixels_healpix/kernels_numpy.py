@@ -22,7 +22,9 @@ def pixels_healpix_numpy(
     n_pix_submap,
     nside,
     nest,
+    compute_submaps,
     use_accel=False,
+    **kwargs,
 ):
     zaxis = np.array([0, 0, 1], dtype=np.float64)
     for idet in range(len(quat_index)):
@@ -44,6 +46,7 @@ def pixels_healpix_numpy(
             else:
                 good = (shared_flags[samples] & shared_flag_mask) == 0
             bad = np.logical_not(good)
-            sub_maps = pixels[pidx][samples][good] // n_pix_submap
-            hit_submaps[sub_maps] = 1
+            if compute_submaps:
+                sub_maps = pixels[pidx][samples][good] // n_pix_submap
+                hit_submaps[sub_maps] = 1
             pixels[pidx][samples][bad] = -1

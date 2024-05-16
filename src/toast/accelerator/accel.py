@@ -15,6 +15,7 @@ from .._libtoast import accel_present as omp_accel_present
 from .._libtoast import accel_reset as omp_accel_reset
 from .._libtoast import accel_update_device as omp_accel_update_device
 from .._libtoast import accel_update_host as omp_accel_update_host
+from ..opencl import have_opencl, OpenCL
 from ..timing import function_timer
 
 enable_vals = ["1", "yes", "true"]
@@ -50,9 +51,22 @@ if ("TOAST_GPU_JAX" in os.environ) and (os.environ["TOAST_GPU_JAX"] in enable_va
         log.error(msg)
         raise RuntimeError(msg)
 
-if use_accel_omp and use_accel_jax:
+use_accel_opencl = False
+if ("TOAST_OPENCL" in os.environ) and (os.environ["TOAST_OPENCL"] in enable_vals):
+    if not have_opencl:
+        log = Logger.get()
+        msg = "TOAST_OPENCL enabled at runtime, but pyopencl is not "
+        msg += "importable."
+        log.error(msg)
+        raise RuntimeError(msg)
+    use_accel_opencl = True
+    ocl = OpenCL()
+    import pyopencl as cl
+
+if (use_accel_omp + use_accel_jax + use_accel_opencl) > 1:
     log = Logger.get()
-    msg = "OpenMP target offload and JAX cannot both be enabled at runtime."
+    msg = "Only one of OpenMP target offload, JAX, and OpenCL "
+    msg += "can be enabled at runtime."
     log.error(msg)
     raise RuntimeError(msg)
 
@@ -68,7 +82,7 @@ if ("TOAST_GPU_HYBRID_PIPELINES" in os.environ) and (
 
 def accel_enabled():
     """Returns True if any accelerator support is enabled."""
-    return use_accel_jax or use_accel_omp
+    return use_accel_jax or use_accel_omp or use_accel_opencl
 
 
 def accel_get_device():
@@ -77,6 +91,9 @@ def accel_get_device():
         return omp_accel_get_device()
     elif use_accel_jax:
         return jax_accel_get_device()
+    elif use_accel_opencl:
+        ocl = OpenCL()
+        return ocl.default_gpu_index()
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, returning device -1")
@@ -108,6 +125,9 @@ def accel_assign_device(node_procs, node_rank, mem_gb, disabled):
     omp_accel_assign_device(node_procs, node_rank, mem_gb, disabled)
     if use_accel_jax:
         jax_accel_assign_device(node_procs, node_rank, disabled)
+    elif use_accel_opencl:
+        ocl = OpenCL()
+        ocl.assign_default_devices(node_procs, node_rank, disabled)
 
 
 def accel_data_present(data, name="None"):
@@ -136,10 +156,20 @@ def accel_data_present(data, name="None"):
             or isinstance(data, jax.numpy.ndarray)
             or isinstance(data, INTERVALS_JAX)
         )
+    elif use_accel_opencl:
+        ocl = OpenCL()
+        return ocl.mem_present(data, name=name)
     else:
         log.warning("Accelerator support not enabled, data not present")
         return False
 
+def accel_wait(events):
+    """For some frameworks (OpenCL), wait for events.
+    """
+    if use_accel_opencl:
+        for ev in events:
+            if ev is not None:
+                ev.wait()
 
 @function_timer
 def accel_data_create(data, name="None", zero_out=False):
@@ -168,6 +198,12 @@ def accel_data_create(data, name="None", zero_out=False):
             return MutableJaxArray(cpu_data=data, gpu_data=jax.numpy.zeros_like(data))
         else:
             return MutableJaxArray(data)
+    elif use_accel_opencl:
+        ocl = OpenCL()
+        _ = ocl.mem_create(data, name=name)
+        if zero_out:
+            ocl.mem_reset(data, name=name)
+        return data
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot create")
@@ -199,6 +235,9 @@ def accel_data_reset(data, name="None"):
         else:
             # the data is not on GPU anymore, possibly because it was moved to host
             data = MutableJaxArray(data, gpu_data=jax.numpy.zeros_like(data))
+    elif use_accel_opencl:
+        ocl = OpenCL()
+        ocl.mem_reset(data, name=name)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot reset")
@@ -218,7 +257,8 @@ def accel_data_update_device(data, name="None"):
         name (str):  The optional name for tracking the array.
 
     Returns:
-        (object):  Either the original input (for OpenMP) or a new jax array.
+        (object):  Either the original input (OpenMP), a new jax array,
+            or a pyopencl Array.
 
     """
     if use_accel_omp:
@@ -226,6 +266,10 @@ def accel_data_update_device(data, name="None"):
         return data
     elif use_accel_jax:
         return MutableJaxArray(data)
+    elif use_accel_opencl:
+        ocl = OpenCL()
+        dev_data = ocl.mem_update_device(data, name=name)
+        return dev_data
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating device")
@@ -246,7 +290,8 @@ def accel_data_update_host(data, name="None"):
         name (str):  The optional name for tracking the array.
 
     Returns:
-        (object):  Either the updated input (for OpenMP) or a numpy array.
+        (object):  Either the updated input (OpenMP), a numpy array (JAX),
+            or a pyopencl event.
 
     """
     if use_accel_omp:
@@ -254,6 +299,11 @@ def accel_data_update_host(data, name="None"):
         return data
     elif use_accel_jax:
         return data.to_host()
+    elif use_accel_opencl:
+        ocl = OpenCL()
+        evs = list()
+        evs.append(ocl.mem_update_host(data, name=name, async_=True))
+        return evs
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, not updating host")
@@ -283,6 +333,9 @@ def accel_data_delete(data, name="None"):
         # if needed, make sure that data is on host
         if accel_data_present(data):
             data = data.host_data
+    elif use_accel_opencl:
+        ocl = OpenCL()
+        ocl.mem_remove(data, name=name)
     else:
         log = Logger.get()
         log.warning("Accelerator support not enabled, cannot delete device data")
@@ -301,6 +354,9 @@ def accel_data_table():
         omp_accel_dump()
     elif use_accel_jax:
         log.debug("Using Jax, skipping dump of OpenMP target device table")
+    elif use_accel_opencl:
+        ocl = OpenCL()
+        ocl.mem_dump()
     else:
         log.warning("Accelerator support not enabled, cannot print device table")
 
@@ -314,15 +370,33 @@ class AcceleratorObject(object):
     add boilerplate and checks in a single place in the code.  The internal
     methods should be overloaded by descendent classes.
 
+    This base class internally tracks whether the accelerator or host copy
+    of the object is "in use".  This affects calls to update the device or host
+    copy.  By default, objects are assumed to be in use either on the host or
+    on the accelerator (in case they are being modified on one or the other).
+
+    Some objects might be used in a read-only way on both the host and device
+    after they are instantiated.  Derived objects like this should set the
+    "constant" constructor argument to True.  For constant objects, update
+    host / device methods are a no-op.  The same is true for accel_delete.
+    When a constant object is deleted / garbage collected, the derived class
+    _accel_delete() method is call to actually do the deletion.
+
     Args:
-        None
+        constant (bool):  If True, the host and device copies of the object
+            can be safely used simultaneously.
 
     """
 
-    def __init__(self):
+    def __init__(self, constant=False):
         # Data always starts off on host
         self._accel_used = False
         self._accel_name = "(blank)"
+        self._constant = constant
+
+    def __del__(self):
+        if self.accel_exists():
+            self._accel_delete()
 
     def _accel_exists(self):
         return False
@@ -395,10 +469,12 @@ class AcceleratorObject(object):
         """Copy the data to the accelerator.
 
         Returns:
-            None
+            (events):  backend-specific events or None
+
         """
+        ret = None
         if not accel_enabled():
-            return
+            return ret
         if (not self.accel_exists()) and (not use_accel_jax):
             # There is no data on device
             # NOTE: this does no apply to JAX as JAX will allocate on the fly
@@ -412,8 +488,20 @@ class AcceleratorObject(object):
             msg = f"Active data is already on device, cannot update"
             log.error(msg)
             raise RuntimeError(msg)
-        self._accel_update_device()
+        if use_accel_opencl:
+            if not self._constant:
+                evs = self._accel_update_device()
+                if isinstance(evs, list):
+                    ret = evs
+                else:
+                    ret = [evs]
+            else:
+                ret = list()
+        else:
+            if not self._constant:
+                _ = self._accel_update_device()
         self.accel_used(True)
+        return ret
 
     def _accel_update_host(self):
         msg = f"The _accel_update_host function was not defined for this class."
@@ -423,10 +511,12 @@ class AcceleratorObject(object):
         """Copy the data to the host from the accelerator.
 
         Returns:
-            None
+            (events):  backend-specific events or None
+
         """
+        ret = None
         if not accel_enabled():
-            return
+            return ret
         if not self.accel_exists():
             log = Logger.get()
             msg = f"Data does not exist on device, cannot update host"
@@ -438,8 +528,20 @@ class AcceleratorObject(object):
             msg = f"Active data is already on host, cannot update"
             log.error(msg)
             raise RuntimeError(msg)
-        self._accel_update_host()
+        if use_accel_opencl:
+            if not self._constant:
+                evs = self._accel_update_host()
+                if isinstance(evs, list):
+                    ret = evs
+                else:
+                    ret = [evs]
+            else:
+                ret = list()
+        else:
+            if not self._constant:
+                _ = self._accel_update_host()
         self.accel_used(False)
+        return ret
 
     def _accel_delete(self):
         msg = f"The _accel_delete function was not defined for this class."
@@ -460,7 +562,8 @@ class AcceleratorObject(object):
             msg = f"Data does not exist on device, cannot delete"
             log.error(msg)
             raise RuntimeError(msg)
-        self._accel_delete()
+        if not self._constant:
+            self._accel_delete()
         self._accel_used = False
 
     def _accel_reset(self):

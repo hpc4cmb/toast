@@ -25,6 +25,7 @@ def build_noise_weighted_numpy(
     shared_flags,
     shared_flag_mask,
     use_accel,
+    **kwargs,
 ):
     """
     Args:
@@ -94,7 +95,9 @@ def build_noise_weighted_numpy(
 
 
 @kernel(impl=ImplementationType.NUMPY, name="cov_accum_diag_hits")
-def cov_accum_diag_hits_numpy(nsub, nsubpix, nnz, submap, subpix, hits, use_accel):
+def cov_accum_diag_hits_numpy(
+    nsub, nsubpix, nnz, submap, subpix, hits, use_accel, **kwargs
+):
     """
     Accumulate hit map.
     This uses a pointing matrix to accumulate the local pieces of the hit map.
@@ -123,7 +126,7 @@ def cov_accum_diag_hits_numpy(nsub, nsubpix, nnz, submap, subpix, hits, use_acce
 
 @kernel(impl=ImplementationType.NUMPY, name="cov_accum_diag_invnpp")
 def cov_accum_diag_invnpp_numpy(
-    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp, use_accel
+    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp, use_accel, **kwargs
 ):
     """
     Accumulate block diagonal noise covariance.

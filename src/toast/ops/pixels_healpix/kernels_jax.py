@@ -14,7 +14,7 @@ from ...utils import Logger
 
 
 def pixels_healpix_inner(
-    quats, use_flags, flag, flag_mask, hit_submaps, n_pix_submap, hpix, nest
+    quats, use_flags, flag, flag_mask, hit_submaps, n_pix_submap, hpix, nest, compute_submaps,
 ):
     """
     Compute the healpix pixel indices for the detectors.
@@ -41,17 +41,28 @@ def pixels_healpix_inner(
         pixel = healpix.zphi2ring(hpix, phi, region, z, rtz)
 
     # compute sub map
-    sub_map = pixel // n_pix_submap
+    if compute_submaps:
+        sub_map = pixel // n_pix_submap
 
     # applies the flags
     if use_flags:
         is_flagged = (flag & flag_mask) != 0
         pixel = jnp.where(is_flagged, -1, pixel)
-        hit_submap = jnp.where(is_flagged, hit_submaps[sub_map], 1)
+        if compute_submaps:
+            hit_submap = jnp.where(is_flagged, hit_submaps[sub_map], 1)
+        else:
+            hit_submap = 0
     else:
-        hit_submap = 1
+        if compute_submaps:
+            hit_submap = 1
+        else:
+            hit_submap = 0
 
     return pixel, sub_map, hit_submap
+
+
+# FIXME:  Do we need two different imaps here for the case of 
+# with / without hit submap calculation?
 
 
 # maps over samples and detectors
@@ -66,6 +77,7 @@ pixels_healpix_inner = imap(
         "n_pix_submap": int,
         "hpix": healpix.HPIX_JAX,
         "nest": bool,
+        "compute_submaps": bool,
         "interval_starts": ["n_intervals"],
         "interval_ends": ["n_intervals"],
         "intervals_max_length": int,
@@ -90,6 +102,7 @@ def pixels_healpix_interval(
     n_pix_submap,
     nside,
     nest,
+    compute_submaps,
     interval_starts,
     interval_ends,
     intervals_max_length,
@@ -122,12 +135,6 @@ def pixels_healpix_interval(
     # create hpix object
     hpix = healpix.HPIX_JAX(nside)
 
-    # extract indexes
-    quats_indexed = quats[quat_index, :, :]
-    pixels_indexed = pixels[pixel_index, :]
-    dummy_sub_map = jnp.zeros_like(pixels_indexed)
-    dummy_hit_submaps = hit_submaps[dummy_sub_map]
-
     # should we use flags?
     use_flags = flag_mask != 0
     n_samp = pixels.shape[1]
@@ -135,8 +142,18 @@ def pixels_healpix_interval(
         flags = jnp.empty(shape=(n_samp,))
         use_flags = False
 
+    # extract indexes
+    quats_indexed = quats[quat_index, :, :]
+    pixels_indexed = pixels[pixel_index, :]
+    dummy_sub_map = jnp.zeros_like(pixels_indexed)
+    if hit_submaps is None:
+        dummy_hit_submaps = None
+        outputs = (pixels_indexed, dummy_sub_map)
+    else:
+        dummy_hit_submaps = hit_submaps[dummy_sub_map]
+        outputs = (pixels_indexed, dummy_sub_map, dummy_hit_submaps)
+
     # does the computation
-    outputs = (pixels_indexed, dummy_sub_map, dummy_hit_submaps)
     new_pixels_indexed, sub_map, new_hit_submaps = pixels_healpix_inner(
         quats_indexed,
         use_flags,
@@ -146,6 +163,7 @@ def pixels_healpix_interval(
         n_pix_submap,
         hpix,
         nest,
+        compute_submaps,
         interval_starts,
         interval_ends,
         intervals_max_length,
@@ -154,7 +172,8 @@ def pixels_healpix_interval(
 
     # updates results and returns
     pixels = pixels.at[pixel_index, :].set(new_pixels_indexed)
-    hit_submaps = hit_submaps.at[sub_map].set(new_hit_submaps)
+    if hit_submaps is not None:
+        hit_submaps = hit_submaps.at[sub_map].set(new_hit_submaps)
     return pixels, hit_submaps
 
 
@@ -166,6 +185,7 @@ pixels_healpix_interval = jax.jit(
         "n_pix_submap",
         "nside",
         "nest",
+        "compute_submaps",
         "intervals_max_length",
     ],
     donate_argnums=[5, 6],
@@ -185,7 +205,9 @@ def pixels_healpix_jax(
     n_pix_submap,
     nside,
     nest,
+    compute_submaps,
     use_accel,
+    **kwargs,
 ):
     """
     Compute the healpix pixel indices for the detectors.
@@ -230,6 +252,7 @@ def pixels_healpix_jax(
         n_pix_submap,
         nside,
         nest,
+        compute_submaps,
         intervals.first,
         intervals.last,
         intervals_max_length,

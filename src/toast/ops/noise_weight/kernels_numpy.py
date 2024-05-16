@@ -14,6 +14,7 @@ def noise_weight_numpy(
     intervals,
     detector_weights,
     use_accel,
+    **kwargs,
 ):
     # Iterates over detectors and intervals
     n_det = det_data_index.size

@@ -97,7 +97,9 @@ noise_weight_interval = jax.jit(
 
 
 @kernel(impl=ImplementationType.JAX, name="noise_weight")
-def noise_weight_jax(det_data, det_data_index, intervals, detector_weights, use_accel):
+def noise_weight_jax(
+    det_data, det_data_index, intervals, detector_weights, use_accel, **kwargs
+):
     """
     multiplies det_data by the weighs in detector_weights
 

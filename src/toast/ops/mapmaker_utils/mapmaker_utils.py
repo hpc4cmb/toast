@@ -6,7 +6,7 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from ...accelerator import ImplementationType
+from ...accelerator import ImplementationType, accel_wait
 from ...covariance import covariance_invert
 from ...mpi import MPI
 from ...observation import default_values as defaults
@@ -201,6 +201,7 @@ class BuildHitMap(Operator):
                         hits.raw,
                         impl=implementation,
                         use_accel=use_accel,
+                        **kwargs,
                     )
         return
 
@@ -510,6 +511,7 @@ class BuildInverseCovariance(Operator):
                         invcov.raw,
                         impl=implementation,
                         use_accel=use_accel,
+                        **kwargs,
                     )
         return
 
@@ -757,7 +759,8 @@ class BuildNoiseWeighted(Operator):
                     f"Operator {self.name} zmap:  copy host to device",
                     comm=data.comm.comm_group,
                 )
-                zmap.accel_update_device()
+                events = zmap.accel_update_device()
+                accel_wait(events)
             else:
                 log.verbose_rank(
                     f"Operator {self.name} zmap:  already in use on device",
@@ -770,7 +773,8 @@ class BuildNoiseWeighted(Operator):
                     f"Operator {self.name} zmap:  update host from device",
                     comm=data.comm.comm_group,
                 )
-                zmap.accel_update_host()
+                events = zmap.accel_update_host()
+                accel_wait(events)
 
         # # DEBUGGING
         # restore_dev = False
@@ -842,6 +846,8 @@ class BuildNoiseWeighted(Operator):
             else:
                 shared_flag_data = np.zeros(1, dtype=np.uint8)
 
+            print(f"BLD {ob.name} {self.pixels}={ob.detdata[self.pixels].data}, {self.weights}={ob.detdata[self.weights].data}, {self.det_data}={ob.detdata[self.det_data].data}, {self.view}={ob.intervals[self.view].data}")
+
             build_noise_weighted(
                 zmap.distribution.global_submap_to_local,
                 zmap.data,
@@ -860,6 +866,8 @@ class BuildNoiseWeighted(Operator):
                 self.shared_flag_mask,
                 impl=implementation,
                 use_accel=use_accel,
+                obs_name=ob.name,
+                **kwargs,
             )
 
         # # DEBUGGING
@@ -893,7 +901,8 @@ class BuildNoiseWeighted(Operator):
                     comm=data.comm.comm_group,
                 )
                 restore_device = True
-                data[self.zmap].accel_update_host()
+                events = data[self.zmap].accel_update_host()
+                accel_wait(events)
             if self.sync_type == "alltoallv":
                 data[self.zmap].sync_alltoallv()
             else:
@@ -921,7 +930,8 @@ class BuildNoiseWeighted(Operator):
                     f"Operator {self.name} finalize calling zmap update device",
                     comm=data.comm.comm_group,
                 )
-                data[self.zmap].accel_update_device()
+                events = data[self.zmap].accel_update_device()
+                accel_wait(events)
         return
 
     def _requires(self):
@@ -952,6 +962,7 @@ class BuildNoiseWeighted(Operator):
             ImplementationType.COMPILED,
             ImplementationType.NUMPY,
             ImplementationType.JAX,
+            ImplementationType.OPENCL,
         ]
 
     def _supports_accel(self):
@@ -1151,7 +1162,7 @@ class CovarianceAndHits(Operator):
                 pixel_pointing=self.pixel_pointing,
                 save_pointing=self.save_pointing,
             )
-            pix_dist.apply(data)
+            pix_dist.apply(data, **kwargs)
 
         # Check if map domain products exist and are consistent.  The hits
         # and inverse covariance accumulation operators support multiple
@@ -1225,7 +1236,7 @@ class CovarianceAndHits(Operator):
             build_invcov,
         ]
 
-        pipe_out = accum.apply(data, detectors=detectors)
+        pipe_out = accum.apply(data, detectors=detectors, **kwargs)
 
         # Optionally, store the inverse covariance
         if self.inverse_covariance is not None:

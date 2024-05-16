@@ -780,6 +780,8 @@ class Offset(Template):
                 ob.intervals[self._bounds_view].data,
                 impl=implementation,
                 use_accel=use_accel,
+                obs_name=ob.name,
+                **kwargs,
             )
 
             # # DEBUGGING
@@ -855,6 +857,8 @@ class Offset(Template):
                 ob.intervals[self._bounds_view].data,
                 impl=implementation,
                 use_accel=use_accel,
+                obs_name=ob.name,
+                **kwargs,
             )
 
             # restore_dev = False
@@ -1011,6 +1015,8 @@ class Offset(Template):
                 amplitudes_out.local,
                 impl=implementation,
                 use_accel=use_accel,
+                obs_name="None",
+                **kwargs,
             )
         return
 
@@ -1020,6 +1026,7 @@ class Offset(Template):
             ImplementationType.COMPILED,
             ImplementationType.NUMPY,
             ImplementationType.JAX,
+            ImplementationType.OPENCL,
         ]
 
     def _supports_accel(self):

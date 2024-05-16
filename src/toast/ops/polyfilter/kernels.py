@@ -21,6 +21,7 @@ def filter_polynomial(
     starts,
     stops,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel to fit and subtract a polynomial from one or more signals.
 
@@ -53,6 +54,7 @@ def filter_poly2D(
     masks,
     coeff,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel for solving 2D polynomial coefficients at each sample.
 
@@ -78,10 +80,10 @@ def filter_poly2D(
 
 
 @kernel(impl=ImplementationType.COMPILED, name="filter_polynomial")
-def filter_polynomial_compiled(*args, use_accel=False):
+def filter_polynomial_compiled(*args, use_accel=False, **kwargs):
     return libtoast_filter_polynomial(*args, use_accel)
 
 
 @kernel(impl=ImplementationType.COMPILED, name="filter_poly2D")
-def filter_poly2D_compiled(*args, use_accel=False):
+def filter_poly2D_compiled(*args, use_accel=False, **kwargs):
     return libtoast_filter_poly2D(*args, use_accel)

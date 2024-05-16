@@ -7,16 +7,50 @@ import numpy as np
 
 from ... import qarray as qa
 from ..._libtoast import pixels_healpix as libtoast_pixels_healpix
-from ...accelerator import ImplementationType, kernel, use_accel_jax
+from ...accelerator import ImplementationType, kernel, use_accel_jax, use_accel_opencl
 from .kernels_numpy import pixels_healpix_numpy
 
 if use_accel_jax:
     from .kernels_jax import pixels_healpix_jax
 
+if use_accel_opencl:
+    from .kernels_opencl import pixels_healpix_opencl
+
 
 @kernel(impl=ImplementationType.COMPILED, name="pixels_healpix")
-def pixels_healpix_compiled(*args, use_accel=False):
-    return libtoast_pixels_healpix(*args, use_accel)
+def pixels_healpix_compiled(
+    quat_index,
+    quats,
+    shared_flags,
+    shared_flag_mask,
+    pixel_index,
+    pixels,
+    intervals,
+    hit_submaps,
+    n_pix_submap,
+    nside,
+    nest,
+    compute_submaps,
+    use_accel=False,
+    **kwargs,
+):
+    if hit_submaps is None:
+        hit_submaps = np.zeros(1, dtype=np.uint8)
+    return libtoast_pixels_healpix(
+        quat_index,
+        quats,
+        shared_flags,
+        shared_flag_mask,
+        pixel_index,
+        pixels,
+        intervals,
+        hit_submaps,
+        n_pix_submap,
+        nside,
+        nest,
+        compute_submaps,
+        use_accel,
+    )
 
 
 @kernel(impl=ImplementationType.DEFAULT)
@@ -32,7 +66,9 @@ def pixels_healpix(
     n_pix_submap,
     nside,
     nest,
+    compute_submaps,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel for computing healpix pixelization.
 
@@ -46,17 +82,20 @@ def pixels_healpix(
             detector.
         pixels (array):  The array of detector pixels for each sample.
         intervals (array):  The array of sample intervals.
-        hit_submaps (array):  Array of bytes to set to 1 if the submap is hit
+        hit_submaps (device array):  Array of bytes to set to 1 if the submap is hit
             and zero if not hit.
         n_pix_submap (int):  The number of pixels in a submap.
         nside (int):  The Healpix NSIDE of the pixelization.
         nest (bool):  If true, use NESTED ordering, else use RING.
+        compute_submaps (bool):  If True, compute the hit submaps.
         use_accel (bool):  Whether to use the accelerator for this call (if supported).
 
     Returns:
         None
 
     """
+    if hit_submaps is None:
+        hit_submaps = np.zeros(1, dtype=np.uint8)
     return libtoast_pixels_healpix(
         quat_index,
         quats,
@@ -69,5 +108,6 @@ def pixels_healpix(
         n_pix_submap,
         nside,
         nest,
+        compute_submaps,
         use_accel,
     )
