@@ -175,6 +175,8 @@ class ScanMap(Operator):
                 False,
                 impl=implementation,
                 use_accel=use_accel,
+                obs_name=ob.name,
+                **kwargs,
             )
 
         return
@@ -205,6 +207,7 @@ class ScanMap(Operator):
             ImplementationType.COMPILED,
             ImplementationType.NUMPY,
             ImplementationType.JAX,
+            ImplementationType.OPENCL,
         ]
 
     def _supports_accel(self):
@@ -487,6 +490,7 @@ class ScanScale(Operator):
                 True,
                 impl=implementation,
                 use_accel=use_accel,
+                **kwargs,
             )
 
         return
@@ -509,6 +513,15 @@ class ScanScale(Operator):
     def _provides(self):
         prov = {"meta": list(), "shared": list(), "detdata": [self.det_data]}
         return prov
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.JAX,
+            ImplementationType.OPENCL,
+        ]
 
     def _supports_accel(self):
         return True

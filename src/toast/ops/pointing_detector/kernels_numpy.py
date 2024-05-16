@@ -18,6 +18,7 @@ def pointing_detector_numpy(
     shared_flags,
     shared_flag_mask,
     use_accel=False,
+    **kwargs,
 ):
     for idet in range(len(quat_index)):
         qidx = quat_index[idet]

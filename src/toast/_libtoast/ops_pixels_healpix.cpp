@@ -598,7 +598,8 @@ void pixels_healpix_nest_inner(
     int64_t n_samp,
     int64_t idet,
     uint8_t mask,
-    bool use_flags
+    bool use_flags,
+    bool compute_submaps
 ) {
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
@@ -618,8 +619,10 @@ void pixels_healpix_nest_inner(
     if (use_flags && ((flags[isamp] & mask) != 0)) {
         pixels[poff] = -1;
     } else {
-        sub_map = (int64_t)(pixels[poff] / n_pix_submap);
-        hsub[sub_map] = 1;
+        if (compute_submaps) {
+            sub_map = (int64_t)(pixels[poff] / n_pix_submap);
+            hsub[sub_map] = 1;
+        }
     }
 
     return;
@@ -639,7 +642,9 @@ void pixels_healpix_ring_inner(
     int64_t n_samp,
     int64_t idet,
     uint8_t mask,
-    bool use_flags) {
+    bool use_flags,
+    bool compute_submaps
+) {
     const double zaxis[3] = {0.0, 0.0, 1.0};
     int32_t p_indx = pixel_index[idet];
     int32_t q_indx = quat_index[idet];
@@ -658,8 +663,10 @@ void pixels_healpix_ring_inner(
     if (use_flags && ((flags[isamp] & mask) != 0)) {
         pixels[poff] = -1;
     } else {
-        sub_map = (int64_t)(pixels[poff] / n_pix_submap);
-        hsub[sub_map] = 1;
+        if (compute_submaps) {
+            sub_map = (int64_t)(pixels[poff] / n_pix_submap);
+            hsub[sub_map] = 1;
+        }
     }
 
     return;
@@ -1163,6 +1170,7 @@ void init_ops_pixels_healpix(py::module & m) {
             int64_t n_pix_submap,
             int64_t nside,
             bool nest,
+            bool compute_submaps,
             bool use_accel
         ) {
             auto & omgr = OmpManager::get();
@@ -1195,10 +1203,14 @@ void init_ops_pixels_healpix(py::module & m) {
             );
             int64_t n_view = temp_shape[0];
 
+            // Optionally compute the hit submaps
             uint8_t * raw_hsub = extract_buffer <uint8_t> (
                 hit_submaps, "hit_submaps", 1, temp_shape, {-1}
             );
             int64_t n_submap = temp_shape[0];
+            if (! compute_submaps) {
+                raw_hsub = omgr.null_ptr <uint8_t> ();
+            }
 
             // Optionally use flags
             bool use_flags = true;
@@ -1225,6 +1237,7 @@ void init_ops_pixels_healpix(py::module & m) {
                 int64_t * dev_pixels = omgr.device_ptr(raw_pixels);
                 Interval * dev_intervals = omgr.device_ptr(raw_intervals);
                 uint8_t * dev_flags = omgr.device_ptr(raw_flags);
+                uint8_t * dev_hsub = omgr.device_ptr(raw_hsub);
 
                 // Make sure the lookup table exists on device
                 size_t utab_bytes = 0x100 * sizeof(int64_t);
@@ -1258,9 +1271,9 @@ void init_ops_pixels_healpix(py::module & m) {
                 n_det,                           \
                 n_samp,                          \
                 shared_flag_mask,                \
+                compute_submaps,                 \
                 use_flags                        \
-                )                                \
-                map(tofrom : raw_hsub[0 : n_submap])
+                )
                 {
                     if (nest) {
                         # pragma omp target teams distribute parallel for collapse(3) \
@@ -1269,6 +1282,7 @@ void init_ops_pixels_healpix(py::module & m) {
                         dev_pixels,                                                   \
                         dev_quats,                                                    \
                         dev_flags,                                                    \
+                        dev_hsub,                                                     \
                         dev_intervals,                                                \
                         dev_utab                                                      \
                         )
@@ -1293,14 +1307,15 @@ void init_ops_pixels_healpix(py::module & m) {
                                         raw_pixel_index,
                                         dev_quats,
                                         dev_flags,
-                                        raw_hsub,
+                                        dev_hsub,
                                         dev_pixels,
                                         n_pix_submap,
                                         adjusted_isamp,
                                         n_samp,
                                         idet,
                                         shared_flag_mask,
-                                        use_flags
+                                        use_flags,
+                                        compute_submaps
                                     );
                                 }
                             }
@@ -1312,6 +1327,7 @@ void init_ops_pixels_healpix(py::module & m) {
                         dev_pixels,                                                   \
                         dev_quats,                                                    \
                         dev_flags,                                                    \
+                        dev_hsub,                                                     \
                         dev_intervals,                                                \
                         dev_utab                                                      \
                         )
@@ -1335,14 +1351,15 @@ void init_ops_pixels_healpix(py::module & m) {
                                         raw_pixel_index,
                                         dev_quats,
                                         dev_flags,
-                                        raw_hsub,
+                                        dev_hsub,
                                         dev_pixels,
                                         n_pix_submap,
                                         adjusted_isamp,
                                         n_samp,
                                         idet,
                                         shared_flag_mask,
-                                        use_flags
+                                        use_flags,
+                                        compute_submaps
                                     );
                                 }
                             }
@@ -1376,7 +1393,8 @@ void init_ops_pixels_healpix(py::module & m) {
                                     n_samp,
                                     idet,
                                     shared_flag_mask,
-                                    use_flags
+                                    use_flags,
+                                    compute_submaps
                                 );
                             }
                         }
@@ -1404,7 +1422,8 @@ void init_ops_pixels_healpix(py::module & m) {
                                     n_samp,
                                     idet,
                                     shared_flag_mask,
-                                    use_flags
+                                    use_flags,
+                                    compute_submaps
                                 );
                             }
                         }

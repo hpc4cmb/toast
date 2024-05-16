@@ -9,7 +9,7 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops as ops
-from ..accelerator import accel_enabled
+from ..accelerator import accel_enabled, accel_wait
 from ..mpi import MPI
 from ..noise import Noise
 from ..observation import default_values as defaults
@@ -293,13 +293,17 @@ class MapmakerUtilsTest(MPITestCase):
             data.accel_create(pixels.requires())
             data.accel_create(weights.requires())
             data.accel_create(build_zmap.requires())
-            data.accel_update_device(pixels.requires())
-            data.accel_update_device(weights.requires())
-            data.accel_update_device(build_zmap.requires())
+            events = list()
+            events.extend(data.accel_update_device(pixels.requires()))
+            events.extend(data.accel_update_device(weights.requires()))
+            events.extend(data.accel_update_device(build_zmap.requires()))
+            accel_wait(events)
             # runs on device
             build_zmap.apply(data, use_accel=use_accel)
             # insures everything is back from device
-            data.accel_update_host(build_zmap.provides())
+            events = list()
+            events.extend(data.accel_update_host(build_zmap.provides()))
+            accel_wait(events)
             data.accel_delete(pixels.requires())
             data.accel_delete(weights.requires())
             data.accel_delete(build_zmap.requires())

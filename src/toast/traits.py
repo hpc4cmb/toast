@@ -29,7 +29,12 @@ from traitlets import (
     signature_has_traits,
 )
 
-from .accelerator import ImplementationType, use_accel_jax, use_accel_omp
+from .accelerator import (
+    ImplementationType,
+    use_accel_jax,
+    use_accel_omp,
+    use_accel_opencl,
+)
 from .trait_utils import fix_quotes, string_to_trait, trait_to_string
 from .utils import Logger, import_from_name, object_fullname
 
@@ -267,7 +272,7 @@ class TraitConfig(HasTraits):
     kernel_implementation = UseEnum(
         ImplementationType,
         default_value=ImplementationType.DEFAULT,
-        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX).",
+        help="Which kernel implementation to use (DEFAULT, COMPILED, NUMPY, JAX, OPENCL).",
     )
 
     def __init__(self, **kwargs):
@@ -322,7 +327,13 @@ class TraitConfig(HasTraits):
         if use_accel is None:
             return ImplementationType.DEFAULT, False
         elif use_accel:
-            if use_accel_jax:
+            if use_accel_opencl:
+                if ImplementationType.OPENCL not in impls:
+                    msg = f"OPENCL accelerator use is enabled, "
+                    msg += f"but not supported by {self.name}"
+                    raise RuntimeError(msg)
+                return ImplementationType.OPENCL, True
+            elif use_accel_jax:
                 if ImplementationType.JAX not in impls:
                     msg = f"JAX accelerator use is enabled, "
                     msg += f"but not supported by {self.name}"

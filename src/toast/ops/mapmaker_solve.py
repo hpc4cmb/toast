@@ -127,6 +127,9 @@ class SolverRHS(Operator):
         self.binning.det_data_units = self.det_data_units
         self.binning.apply(data, detectors=detectors)
 
+        good_pix = data[self.binning.binned].data != 0
+        print(f"RHS binned = {data[self.binning.binned].data[good_pix]}")
+
         log.debug_rank("MapMaker   RHS binned map finished in", comm=comm, timer=timer)
 
         # Build a pipeline for the projection and template matrix application.
@@ -219,6 +222,10 @@ class SolverRHS(Operator):
         log.debug_rank(
             "MapMaker   RHS begin cleanup temporary detector data", comm=comm
         )
+
+        for tkey in data[self.template_matrix.amplitudes].keys():
+            good_amps = data[self.template_matrix.amplitudes][tkey].local != 0
+            print(f"RHS {tkey}: {data[self.template_matrix.amplitudes][tkey].local[good_amps]}")
 
         # Clean up our temp buffer
         delete_temp = Delete(detdata=[det_temp])
@@ -370,9 +377,36 @@ class SolverLHS(Operator):
         timer.start()
         log.debug_rank("MapMaker   LHS begin project amplitudes and binning", comm=comm)
 
+        # for tkey in data[self.template_matrix.amplitudes].keys():
+        #     good_amps = data[self.template_matrix.amplitudes][tkey].local != 0
+        #     print(f"LHS IN {tkey}: {data[self.template_matrix.amplitudes][tkey].local[good_amps]}")
+
         self.template_matrix.transpose = False
         self.template_matrix.det_data = self.det_temp
         self.template_matrix.det_data_units = self.det_data_units
+
+        # Pre-create the temporary LHS detector data if it does not exist
+        for ob in data.obs:
+            if self.binning.full_pointing:
+                if detectors is None:
+                    dets = ob.local_detectors
+                else:
+                    dets = detectors
+                exists = ob.detdata.ensure(
+                    self.template_matrix.det_data,
+                    detectors=dets,
+                    create_units=self.template_matrix.det_data_units,
+                )
+            else:
+                if detectors is None:
+                    first_det = ob.local_detectors[0]
+                else:
+                    first_det = detectors[0]
+                exists = ob.detdata.ensure(
+                    self.template_matrix.det_data,
+                    detectors=[first_det],
+                    create_units=self.template_matrix.det_data_units,
+                )
 
         self.binning.det_data = self.det_temp
         self.binning.det_data_units = self.det_data_units
@@ -496,6 +530,10 @@ class SolverLHS(Operator):
         # Run the projection pipeline.
 
         proj_pipe.apply(data, detectors=detectors)
+
+        # for tkey in data[self.out].keys():
+        #     good_amps = data[self.out][tkey].local != 0
+        #     print(f"LHS OUT {tkey}: {data[self.out][tkey].local[good_amps]}")
 
         log.debug_rank(
             "MapMaker   LHS map scan and amplitude accumulate finished in",

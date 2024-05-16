@@ -8,7 +8,9 @@ from ...accelerator import ImplementationType, kernel
 
 
 @kernel(impl=ImplementationType.NUMPY, name="filter_polynomial")
-def filter_polynomial_numpy(order, flags, signals_list, starts, stops, use_accel=False):
+def filter_polynomial_numpy(
+    order, flags, signals_list, starts, stops, use_accel=False, **kwargs
+):
     # validate order
     if order < 0:
         return
@@ -84,7 +86,9 @@ def filter_polynomial_numpy(order, flags, signals_list, starts, stops, use_accel
 
 
 @kernel(impl=ImplementationType.NUMPY, name="filter_poly2D")
-def filter_poly2D_numpy(det_groups, templates, signals, masks, coeff, use_accel=False):
+def filter_poly2D_numpy(
+    det_groups, templates, signals, masks, coeff, use_accel=False, **kwargs
+):
     ngroup = coeff.shape[1]
     nsample = signals.shape[0]
     for isample in range(nsample):

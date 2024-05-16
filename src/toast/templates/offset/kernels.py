@@ -11,7 +11,7 @@ from ..._libtoast import (
 from ..._libtoast import (
     template_offset_project_signal as libtoast_offset_project_signal,
 )
-from ...accelerator import ImplementationType, kernel, use_accel_jax
+from ...accelerator import ImplementationType, kernel, use_accel_jax, use_accel_opencl
 from .kernels_numpy import (
     offset_add_to_signal_numpy,
     offset_apply_diag_precond_numpy,
@@ -23,6 +23,13 @@ if use_accel_jax:
         offset_add_to_signal_jax,
         offset_apply_diag_precond_jax,
         offset_project_signal_jax,
+    )
+
+if use_accel_opencl:
+    from .kernels_opencl import (
+        offset_add_to_signal_opencl,
+        offset_apply_diag_precond_opencl,
+        offset_project_signal_opencl,
     )
 
 
@@ -37,6 +44,7 @@ def offset_add_to_signal(
     det_data,
     intervals,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel to accumulate offset amplitudes to timestream data.
 
@@ -84,6 +92,7 @@ def offset_project_signal(
     amplitude_flags,
     intervals,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel to accumulate timestream data into offset amplitudes.
 
@@ -132,6 +141,7 @@ def offset_apply_diag_precond(
     amplitude_flags,
     amplitudes_out,
     use_accel=False,
+    **kwargs,
 ):
     """
     Args:

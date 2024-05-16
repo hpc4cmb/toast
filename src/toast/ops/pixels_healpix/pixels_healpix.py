@@ -5,7 +5,15 @@
 import numpy as np
 import traitlets
 
-from ...accelerator import ImplementationType
+from ...accelerator import (
+    ImplementationType,
+    accel_data_create,
+    accel_data_delete,
+    accel_data_update_device,
+    accel_data_update_host,
+    accel_data_present,
+    accel_wait,
+)
 from ...observation import default_values as defaults
 from ...pixels import PixelDistribution
 from ...timing import function_timer
@@ -134,7 +142,7 @@ class PixelsHealpix(Operator):
         self._n_pix = 12 * nside**2
         self._n_pix_submap = 12 * nside_submap**2
         self._n_submap = (nside // nside_submap) ** 2
-        self._local_submaps = None
+        self._local_submaps = np.zeros(self._n_submap, dtype=np.uint8)
 
     @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
@@ -147,8 +155,16 @@ class PixelsHealpix(Operator):
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
 
-        if self._local_submaps is None and self.create_dist is not None:
-            self._local_submaps = np.zeros(self._n_submap, dtype=np.uint8)
+        if self.create_dist is not None:
+            # We are computing the pixel distribution
+            if use_accel:
+                if not accel_data_present(self._local_submaps, name="hit_submaps"):
+                    # First call, create the data on the device
+                    accel_data_create(
+                        self._local_submaps,
+                        name="hit_submaps",
+                        zero_out=True,
+                    )
 
         # Expand detector pointing
         quats_name = self.detector_pointing.quats
@@ -159,7 +175,9 @@ class PixelsHealpix(Operator):
             view = self.detector_pointing.view
 
         # Expand detector pointing
-        self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
+        self.detector_pointing.apply(
+            data, detectors=detectors, use_accel=use_accel, **kwargs
+        )
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -205,10 +223,6 @@ class PixelsHealpix(Operator):
                     accel=use_accel,
                 )
 
-            hit_submaps = self._local_submaps
-            if hit_submaps is None:
-                hit_submaps = np.zeros(self._n_submap, dtype=np.uint8)
-
             quat_indx = ob.detdata[quats_name].indices(dets)
             pix_indx = ob.detdata[self.pixels].indices(dets)
 
@@ -223,7 +237,8 @@ class PixelsHealpix(Operator):
                     if ob.detdata[self.pixels].accel_in_use():
                         # The data is on the accelerator- copy back to host for
                         # this calculation.  This could eventually be a kernel.
-                        ob.detdata[self.pixels].accel_update_host()
+                        events = ob.detdata[self.pixels].accel_update_host()
+                        accel_wait(events)
                         restore_dev = True
                     for det in ob.select_local_detectors(
                         detectors, flagmask=self.detector_pointing.det_mask
@@ -235,7 +250,8 @@ class PixelsHealpix(Operator):
                                 // self._n_pix_submap
                             ] = 1
                     if restore_dev:
-                        ob.detdata[self.pixels].accel_update_device()
+                        events = ob.detdata[self.pixels].accel_update_device()
+                        accel_wait(events)
 
                 if data.comm.group_rank == 0:
                     msg = (
@@ -260,22 +276,23 @@ class PixelsHealpix(Operator):
                 pix_indx,
                 ob.detdata[self.pixels].data,
                 ob.intervals[self.view].data,
-                hit_submaps,
+                self._local_submaps,
                 self._n_pix_submap,
                 self.nside,
                 self.nest,
+                (self.create_dist is not None),
                 impl=implementation,
                 use_accel=use_accel,
+                obs_name=ob.name,
+                **kwargs,
             )
-
-            if self._local_submaps is not None:
-                self._local_submaps[:] |= hit_submaps
-
-        return
 
     def _finalize(self, data, use_accel=None, **kwargs):
         if self.create_dist is not None:
-            submaps = None
+            _, use_accel = self.select_kernels(use_accel=use_accel)
+            if use_accel:
+                # The locally hit submaps is on the device, copy back
+                accel_data_update_host(self._local_submaps, name="hit_submaps")
             if self.single_precision:
                 submaps = np.arange(self._n_submap, dtype=np.int32)[
                     self._local_submaps == 1
@@ -315,6 +332,7 @@ class PixelsHealpix(Operator):
             ImplementationType.COMPILED,
             ImplementationType.NUMPY,
             ImplementationType.JAX,
+            ImplementationType.OPENCL,
         ]
 
     def _supports_accel(self):

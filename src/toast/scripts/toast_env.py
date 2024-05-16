@@ -12,7 +12,9 @@ import sys
 import traceback
 
 import toast
+from toast.accelerator import use_accel_opencl
 from toast.mpi import Comm, get_world
+from toast.opencl import OpenCL
 from toast.utils import Environment, Logger, numba_threading_layer
 
 
@@ -31,6 +33,9 @@ def main():
             msg = f"{n_acc} accelerator device(s), using up to "
             msg += f"{proc_per_acc} processes per device"
             log.info(msg)
+            if use_accel_opencl:
+                ocl = OpenCL()
+                ocl.info()
     if mpiworld is None:
         log.info("Running with one process")
     else:

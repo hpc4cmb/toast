@@ -128,6 +128,8 @@ class NoiseWeight(Operator):
                 detector_weights,
                 impl=implementation,
                 use_accel=use_accel,
+                obs_name=ob.name,
+                **kwargs,
             )
 
             # Update the units of the output
@@ -157,6 +159,7 @@ class NoiseWeight(Operator):
             ImplementationType.COMPILED,
             ImplementationType.NUMPY,
             ImplementationType.JAX,
+            ImplementationType.OPENCL,
         ]
 
     def _supports_accel(self):

@@ -11,6 +11,7 @@ from astropy import units as u
 from astropy.wcs import WCS
 
 from .. import qarray as qa
+from ..accelerator import accel_wait
 from ..instrument_coords import quat_to_xieta
 from ..mpi import MPI
 from ..observation import default_values as defaults
@@ -510,7 +511,8 @@ class PixelsWCS(Operator):
                     if ob.detdata[self.pixels].accel_in_use():
                         # The data is on the accelerator- copy back to host for
                         # this calculation.  This could eventually be a kernel.
-                        ob.detdata[self.pixels].accel_update_host()
+                        events = ob.detdata[self.pixels].accel_update_host()
+                        accel_wait(events)
                         restore_dev = True
                     for det in dets:
                         for vslice in view_slices:
@@ -520,7 +522,8 @@ class PixelsWCS(Operator):
                                 // self._n_pix_submap
                             ] = 1
                     if restore_dev:
-                        ob.detdata[self.pixels].accel_update_device()
+                        events = ob.detdata[self.pixels].accel_update_device()
+                        accel_wait(events)
 
                 if data.comm.group_rank == 0:
                     msg = (

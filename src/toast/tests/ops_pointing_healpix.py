@@ -70,6 +70,7 @@ class PointingHealpixTest(MPITestCase):
             n_pix_submap,
             nside,
             True,
+            True,
             False,
         )
         stokes_weights_IQU(
@@ -156,9 +157,6 @@ class PointingHealpixTest(MPITestCase):
                     flush=True,
                 )
                 failed = True
-            else:
-                print("Pointing weights agree: {} == {}".format(w1, w2), flush=True)
-                pass
         self.assertFalse(failed)
         return
 

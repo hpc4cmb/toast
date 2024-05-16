@@ -67,6 +67,7 @@ class PixelsHealpixTest(MPITestCase):
             npix_submap,
             nside,
             nest,
+            True,
             use_accel,
         )
         bad = pixels[0] >= npix

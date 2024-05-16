@@ -4,7 +4,22 @@
 
 import traitlets
 
-from ..accelerator import ImplementationType, accel_enabled, use_hybrid_pipelines
+from ..accelerator import (
+    ImplementationType,
+    accel_enabled,
+    accel_wait,
+    use_hybrid_pipelines,
+    use_accel_jax,
+    use_accel_omp,
+    use_accel_opencl,
+)
+
+if use_accel_opencl:
+    import pyopencl as cl
+    from ..opencl import (
+        OpenCL, add_kernel_deps, get_kernel_deps, replace_kernel_deps, clear_kernel_deps,
+    )
+
 from ..data import Data
 from ..timing import function_timer
 from ..traits import Bool, Int, List, trait_docs
@@ -138,6 +153,10 @@ class Pipeline(Operator):
         if det_mask is None:
             det_mask = 0
 
+        # Allow different accelerator implementations to accept and return
+        # state information.
+        kernel_state = dict()
+
         if len(self.detector_sets) == 1 and self.detector_sets[0] == "ALL":
             # Run the operators with all detectors at once
             for op in self.operators:
@@ -146,6 +165,8 @@ class Pipeline(Operator):
                     data,
                     detectors=None,
                     pipe_accel=pipe_accel,
+                    state=kernel_state,
+                    **kwargs,
                 )
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
             # Get superset of detectors across all observations
@@ -168,6 +189,8 @@ class Pipeline(Operator):
                         data,
                         detectors=dets,
                         pipe_accel=pipe_accel,
+                        state=kernel_state,
+                        **kwargs,
                     )
         else:
             # We have explicit detector sets
@@ -190,7 +213,24 @@ class Pipeline(Operator):
                         data,
                         detectors=selected_set,
                         pipe_accel=pipe_accel,
+                        state=kernel_state,
+                        **kwargs,
                     )
+
+        # Post-processing depending on accelerator technique in use.  Here we
+        # have access to the kernel state dictionary that has been updated
+        # along the way by our chain of operators.
+        if use_accel_opencl:
+            # Wait for all kernels to complete
+            for obname, events in kernel_state.items():
+                for ev in events:
+                    # print(f"DBG: wait for ev {ev}", flush=True)
+                    ev.wait()
+        elif use_accel_jax:
+            pass
+        elif use_accel_omp:
+            pass
+        del kernel_state
 
         # notify user of device->host data movements introduced by CPU operators
         if (self._unstaged_data is not None) and (not self._unstaged_data.is_empty()):
@@ -204,7 +244,9 @@ class Pipeline(Operator):
             )
 
     @function_timer
-    def _exec_operator(self, op, data, detectors, pipe_accel):
+    def _exec_operator(
+        self, op, data, detectors, pipe_accel=False, state=None, **kwargs
+    ):
         """Runs an operator, dealing with data movement to/from device if needed."""
         # For this operator, we run on the accelerator if the pipeline has some
         # operators enabled and if this operator supports it.
@@ -217,7 +259,14 @@ class Pipeline(Operator):
             msg += " with ALL dets"
         log.verbose(msg)
 
-        # Ensures data is where it should be for this operator
+        print(f"PIPE  {op.name} begin state = {state}", flush=True)
+
+        # Get the queue for this process on the default device
+        if use_accel_opencl:
+            ocl = OpenCL()
+            queue = ocl.queue()
+
+        # Ensure data is where it should be for this operator
         if self._staged_data is not None:
             requires = SetDict(op.requires())
             if run_accel:
@@ -230,7 +279,19 @@ class Pipeline(Operator):
                 msg += f"Staging objects {requires}"
                 log.verbose(msg)
                 data.accel_create(requires)
-                data.accel_update_device(requires)
+
+                stage_events = data.accel_update_device(requires)
+                print(f"PIPE stage data events = {stage_events}")
+                if use_accel_opencl:
+                    # Create a marker event that depends on the per-observation
+                    # data transfer.
+                    for obs_name, obs_ev in stage_events.items():
+                        add_kernel_deps(
+                            state,
+                            obs_name,
+                            cl.enqueue_marker(queue, obs_ev),
+                        )
+
                 # Update our record of data on device
                 self._unstaged_data -= requires
                 self._staged_data |= requires
@@ -248,7 +309,23 @@ class Pipeline(Operator):
                 msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
                 msg += f"Un-staging objects {requires}"
                 log.verbose(msg)
-                data.accel_update_host(requires)
+
+                unstage_events = data.accel_update_host(requires)
+                print(f"PIPE unstage data events = {unstage_events}")
+                if use_accel_opencl:
+                    # Create a marker event that depends on the per-observation
+                    # data transfer.
+                    for obs_name, obs_ev in unstage_events.items():
+                        add_kernel_deps(
+                            state,
+                            obs_name,
+                            cl.enqueue_marker(queue, obs_ev),
+                        )
+                    # We have to wait for all the data to get back to the host
+                    # before running our operator on the host.
+                    for obs_name, obs_evs in state.items():
+                        accel_wait(obs_evs)
+
                 # Update our record of data on the device
                 self._staged_data -= requires
                 self._unstaged_data |= requires  # union
@@ -258,8 +335,9 @@ class Pipeline(Operator):
                 msg = f"Proc ({data.comm.world_rank}, {data.comm.group_rank}) {self} "
                 msg += f"AFTER staged = {self._staged_data}, unstaged = {self._unstaged_data}"
                 log.verbose(msg)
-        # runs operator
-        op.exec(data, detectors=detectors, use_accel=run_accel)
+
+        print(f"PIPE  {op.name} state = {state}", flush=True)
+        op.exec(data, detectors=detectors, use_accel=run_accel, state=state, **kwargs)
 
     @function_timer
     def _finalize(self, data, use_accel=None, **kwargs):
@@ -292,7 +370,9 @@ class Pipeline(Operator):
             provides = SetDict(self.provides())
             provides &= self._staged_data  # intersection
             log.verbose(f"{pstr} {self} copying out accel data outputs: {provides}")
-            data.accel_update_host(provides)
+            unstage_events = data.accel_update_host(provides)
+            for obs_name, obs_ev in unstage_events.items():
+                accel_wait(obs_ev)
             # deleting all data on device
             log.verbose(f"{pstr} {self} deleting accel data: {self._staged_data}")
             data.accel_delete(self._staged_data)
@@ -303,10 +383,10 @@ class Pipeline(Operator):
 
     def _pipe_accel(self, use_accel):
         if (use_accel is None) and accel_enabled():
-            # Only allows hybrid pipelines if the environement variable and pipeline agree to it
-            # (they both default to True)
+            # Only allows hybrid pipelines if the environement variable and pipeline
+            # support it (they both default to True)
             use_hybrid = self.use_hybrid and use_hybrid_pipelines
-            # can we run this pipelines on accelerator
+            # can we run this pipeline on accelerator
             supports_accel = (
                 self._supports_accel_partial() if use_hybrid else self._supports_accel()
             )
@@ -358,6 +438,7 @@ class Pipeline(Operator):
             ImplementationType.COMPILED,
             ImplementationType.NUMPY,
             ImplementationType.JAX,
+            ImplementationType.OPENCL,
         }
         for op in self.operators:
             implementations.intersection_update(op.implementations())

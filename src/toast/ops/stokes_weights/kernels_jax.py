@@ -180,6 +180,7 @@ def stokes_weights_IQU_jax(
     cal,
     IAU,
     use_accel,
+    **kwargs,
 ):
     """
     Compute the Stokes weights for the "IQU" mode.
@@ -311,7 +312,7 @@ stokes_weights_I_interval = jax.jit(
 
 
 @kernel(impl=ImplementationType.JAX, name="stokes_weights_I")
-def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel):
+def stokes_weights_I_jax(weight_index, weights, intervals, cal, use_accel, **kwargs):
     """
     Compute the Stokes weights for the "I" mode.
 

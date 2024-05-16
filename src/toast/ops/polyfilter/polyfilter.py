@@ -337,6 +337,7 @@ class PolyFilter2D(Operator):
                     coeff,
                     impl=implementation,
                     use_accel=use_accel,
+                    **kwargs,
                 )
                 gt.stop("Poly2D:  Solve templates")
 
@@ -584,6 +585,7 @@ class PolyFilter(Operator):
                         local_stops,
                         impl=implementation,
                         use_accel=use_accel,
+                        **kwargs,
                     )
                     if not in_place:
                         for fdet, x in zip(filter_dets, signals):
@@ -601,6 +603,7 @@ class PolyFilter(Operator):
                     local_stops,
                     impl=implementation,
                     use_accel=use_accel,
+                    **kwargs,
                 )
                 if not in_place:
                     for fdet, x in zip(filter_dets, signals):

@@ -221,6 +221,7 @@ def scan_map_jax(
     should_subtract=False,
     should_scale=False,
     use_accel=False,
+    **kwargs,
 ):
     """
     Kernel for scanning a map into timestreams.

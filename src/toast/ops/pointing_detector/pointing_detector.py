@@ -7,7 +7,7 @@ import numpy as np
 import traitlets
 
 from ... import qarray as qa
-from ...accelerator import ImplementationType
+from ...accelerator import ImplementationType, accel_wait
 from ...observation import default_values as defaults
 from ...timing import function_timer
 from ...traits import Bool, Int, Quantity, Unicode, UseEnum, trait_docs
@@ -182,12 +182,15 @@ class PointingDetectorSimple(Operator):
                     if not ob.shared.accel_exists(bore_name):
                         # Does not even exist yet on the device
                         ob.shared.accel_create(bore_name)
-                    ob.shared.accel_update_device(bore_name)
+                    events = ob.shared.accel_update_device(bore_name)
+                    accel_wait(events)
             else:
                 if ob.shared.accel_in_use(bore_name):
                     # Back to host
-                    ob.shared.accel_update_host(bore_name)
+                    events = ob.shared.accel_update_host(bore_name)
+                    accel_wait(events)
 
+        kret = dict()
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
@@ -284,9 +287,11 @@ class PointingDetectorSimple(Operator):
                 self.shared_flag_mask,
                 impl=implementation,
                 use_accel=use_accel,
+                obs_name=ob.name,
+                **kwargs,
             )
 
-        return
+        return kret
 
     def _finalize(self, data, **kwargs):
         return
@@ -318,6 +323,7 @@ class PointingDetectorSimple(Operator):
             ImplementationType.COMPILED,
             ImplementationType.NUMPY,
             ImplementationType.JAX,
+            ImplementationType.OPENCL,
         ]
 
     def _supports_accel(self):
