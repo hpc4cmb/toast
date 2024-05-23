@@ -398,8 +398,6 @@ class MapMaker(Operator):
             pix_dist = BuildPixelDistribution(
                 pixel_dist=map_binning.pixel_dist,
                 pixel_pointing=map_binning.pixel_pointing,
-                shared_flags=map_binning.shared_flags,
-                shared_flag_mask=map_binning.shared_flag_mask,
                 save_pointing=map_binning.full_pointing,
             )
             pix_dist.apply(self._data)
