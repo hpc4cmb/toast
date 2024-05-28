@@ -675,6 +675,91 @@ class HorizontalPatch(Patch):
         return in_view, msg
 
 
+class SiderealPatch(HorizontalPatch):
+
+    def __init__(
+            self,
+            name,
+            weight,
+            azmin,
+            azmax,
+            el,
+            siderealtime_start,
+            siderealtime_stop,
+            scantime,
+    ):
+        self.name = name
+        self.weight = weight
+        if azmin <= np.pi and azmax <= np.pi:
+            self.rising = True
+        elif azmin >= np.pi and azmax >= np.pi:
+            self.rising = False
+        else:
+            # This patch is being observed across the meridian
+            self.rising = None
+        self.az_min = azmin % (2 * np.pi)
+        self.az_max = azmax % (2 * np.pi)
+        self.el = el
+        # sidereal time is same as target RA.  Use radians
+        self.siderealtime_start = siderealtime_start
+        self.siderealtime_stop = siderealtime_stop
+        # scan time is in minutes
+        self.scantime = scantime
+
+        self.el_min0 = el
+        self.el_min = el
+        self.el_max0 = el
+        self.el_step = 0
+        self.alternate = False
+        self._area = 0
+        self.el_max = self.el_max0
+        self.el_lim = self.el_min0
+        self.time = 0
+        self.hits = 0
+        return
+
+    def visible(
+        self,
+        el_min,
+        observer,
+        sun,
+        moon,
+        sun_avoidance_angle,
+        moon_avoidance_angle,
+        check_sso,
+    ):
+        in_view = True
+        msg = ""
+        if check_sso:
+            for sso, angle, name in [
+                (sun, sun_avoidance_angle, "Sun"),
+                (moon, moon_avoidance_angle, "Moon"),
+            ]:
+                if self.in_patch(sso, angle=angle, observer=observer):
+                    in_view = False
+                    msg += f"{name} too close;"
+        stime = observer.sidereal_time()
+        outside = False
+        if self.siderealtime_start < self.siderealtime_stop:
+            # Range does not include zero meridian
+            if stime < self.siderealtime_start or stime > self.siderealtime_stop:
+                outside = True
+        else:
+            # Range includes zero meridian
+            if stime < self.siderealtime_start and stime > self.siderealtime_stop:
+                outside = True
+        if outside:
+            in_view = False
+            msg += f"Incorrect sidereal time "
+            msg += f"{stime:.3f} not in "
+            msg += f"[{self.siderealtime_start:.3f}, {self.siderealtime_stop:.3f}];"
+        if in_view:
+            msg = "in view"
+            self.current_el_min = self.el_min
+            self.current_el_max = self.el_max
+        return in_view, msg
+
+
 def patch_is_rising(patch):
     try:
         # Horizontal patch definition
@@ -2919,7 +3004,7 @@ def parse_patch_cooler(args, parts, last_cycle_end):
 
 @function_timer
 def parse_patch_horizontal(args, parts):
-    """Parse an explicit patch definition line"""
+    """Parse a horizontal patch definition line"""
     log = Logger.get()
     corners = []
     log.info("Horizontal format")
@@ -2930,6 +3015,26 @@ def parse_patch_horizontal(args, parts):
     el = float(parts[5]) * degree
     scantime = float(parts[6])  # minutes
     patch = HorizontalPatch(name, weight, azmin, azmax, el, scantime)
+    return patch
+
+
+@function_timer
+def parse_patch_sidereal(args, parts):
+    """Parse a sidereal patch definition line"""
+    log = Logger.get()
+    corners = []
+    log.info("Sidereal format")
+    name = parts[0]
+    weight = float(parts[2])
+    azmin = float(parts[3]) * degree
+    azmax = float(parts[4]) * degree
+    el = float(parts[5]) * degree
+    siderealtime_start =(float(parts[6]) % 180) * degree
+    siderealtime_stop = (float(parts[7]) % 180) * degree
+    scantime = float(parts[8])
+    patch = SiderealPatch(
+        name, weight, azmin, azmax, el, siderealtime_start, siderealtime_stop, scantime
+    )
     return patch
 
 
@@ -3120,6 +3225,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         log.info(f'Adding patch "{name}"')
         if parts[1].upper() == "HORIZONTAL":
             patch = parse_patch_horizontal(args, parts)
+        elif parts[1].upper() == "SIDEREAL":
+            patch = parse_patch_sidereal(args, parts)
         elif parts[1].upper() == "SSO":
             patch = parse_patch_sso(args, parts)
         elif parts[1].upper() == "COOLER":
