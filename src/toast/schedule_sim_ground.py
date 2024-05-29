@@ -2460,7 +2460,11 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
 
 def parse_args(opts=None):
     parser = argparse.ArgumentParser(
-        description="Generate ground observation schedule.", fromfile_prefix_chars="@"
+        description="""Generate ground observation schedule.""",
+        fromfile_prefix_chars="@",
+        # Disable automatic line wrapping. See
+        # https://stackoverflow.com/questions/29613487/multiple-lines-in-python-argparse-help-display
+        formatter_class=argparse.RawTextHelpFormatter,
     )
 
     parser.add_argument(
@@ -2496,8 +2500,8 @@ def parse_args(opts=None):
         required=False,
         default=0,
         type=float,
-        help="Random fractional margin [0..1] added to the "
-        "scans to smooth out edge effects",
+        help="""Random fractional margin [0..1] added to the
+scans to smooth out edge effects""",
     )
     parser.add_argument(
         "--ra-period",
@@ -2546,32 +2550,32 @@ def parse_args(opts=None):
         required=False,
         default=0,
         type=float,
-        help="Assign a penalty to changes in elevation larger than this limit [degrees].  "
-        "See --elevation-change-penalty and --elevation-change-time-s",
+        help="""Assign a penalty to changes in elevation larger than this limit [degrees].
+See --elevation-change-penalty and --elevation-change-time-s""",
     )
     parser.add_argument(
         "--elevation-change-penalty",
         required=False,
         default=1,
         type=float,
-        help="Multiplicative elevation change penalty triggered by "
-        "--elevation-change-limit-deg",
+        help="""Multiplicative elevation change penalty triggered by
+--elevation-change-limit-deg""",
     )
     parser.add_argument(
         "--elevation-change-time-s",
         required=False,
         default=0,
         type=float,
-        help="Time it takes for the telescope to stabilize after a change in observing "
-        "elevation [seconds].  Triggered by --elevation-change-limit-deg",
+        help="""Time it takes for the telescope to stabilize after a change in observing
+elevation [seconds].  Triggered by --elevation-change-limit-deg""",
     )
     parser.add_argument(
         "--verbose-schedule",
         required=False,
         default=False,
         action="store_true",
-        help="Write a 24-field verbose schedule "
-        "instead of the concise 11-field schedule",
+        help="""Write a 24-field verbose schedule
+instead of the concise 11-field schedule""",
     )
     parser.add_argument(
         "--field-separator",
@@ -2611,9 +2615,17 @@ def parse_args(opts=None):
         "--patch",
         required=True,
         action="append",
-        help="Patch definition: "
-        "name,weight,lon1,lat1,lon2,lat2 ... "
-        "OR name,weight,lon,lat,width",
+        help="""Supported patch definition formats (all coordinates and radii in [deg]):
+    --patch name,weight,lon,lat,radius (center and radius)
+    --patch name,weight,lon_min,lat_max,lon_max,lat_min (rectangle)
+    --patch name,weight,lon1,lat1,lon2,lat2,...,lonN,latN (polygon, N>=3)
+    --patch name,SSO,weight,radius (Solar System Object)
+    --patch name,COOLER,weight,power,hold_time_min_h,hold_time_max_h,
+            cycle_time_h,az,el (Cooler cycle)
+    --patch name,HORIZONTAL,weight,azmin,azmax,el,scantime_min
+    --patch name,SIDEREAL,weight,azmin,azmax,el,RA_start,RA_stop,scantime_min
+Weight is interpreted like a UNIX priority. Lower number translates to more
+frequent observations""",
     )
     parser.add_argument(
         "--patch-coord",
@@ -2730,10 +2742,10 @@ def parse_args(opts=None):
         "--block-out",
         required=False,
         action="append",
-        help="Range of UTC calendar days to omit from scheduling in format "
-        "START_MONTH/START_DAY-END_MONTH/END_DAY or "
-        "START_YEAR/START_MONTH/START_DAY-END_YEAR/END_MONTH/END_DAY "
-        "where YEAR, MONTH and DAY are integers. END days are inclusive",
+        help="""Range of UTC calendar days to omit from scheduling in format
+START_MONTH/START_DAY-END_MONTH/END_DAY or
+START_YEAR/START_MONTH/START_DAY-END_YEAR/END_MONTH/END_DAY
+where YEAR, MONTH and DAY are integers. END days are inclusive""",
     )
     parser.add_argument(
         "--operational-days",
