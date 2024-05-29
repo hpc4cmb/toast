@@ -8,6 +8,7 @@ import warnings
 from time import time
 
 import numpy as np
+import scipy.optimize
 import traitlets
 from astropy import units as u
 
@@ -705,6 +706,16 @@ class CommonModeFilter(Operator):
         "optimal data locality.",
     )
 
+    regress = Bool(
+        False,
+        help="If True, regress the common mode rather than subtract",
+    )
+
+    plot = Bool(
+        False,
+        help="If True, plot regression coefficients",
+    )
+
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
@@ -789,6 +800,59 @@ class CommonModeFilter(Operator):
                 comm=temp_ob.comm.comm_group,
                 timer=timer,
             )
+        return
+
+    @function_timer
+    def _plot_coeff(self, ob, coeffs, comm, value):
+        # Make a plot of the coupling coefficients
+        import matplotlib.pyplot as plt
+
+        ndet = len(coeffs)
+        lon = np.zeros(ndet)
+        lat = np.zeros(ndet)
+        yrot = qa.rotation([0, 1, 0], np.pi / 2)
+        for idet in range(ndet):
+            name = ob.local_detectors[idet]
+            quat = ob.telescope.focalplane[name]["quat"]
+            theta, phi, psi = qa.to_iso_angles(qa.mult(yrot, quat))
+            lon[idet] = np.degrees(phi)
+            lat[idet] = np.degrees(theta - np.pi / 2)
+            top = (psi % np.pi) < (np.pi / 2)
+            offset = 0.002  # Need a smarter offset...
+            if top:
+                lon[idet] += offset
+                lat[idet] += offset
+            else:
+                lon[idet] -= offset
+                lat[idet] -= offset
+        if comm is not None:
+            all_lon = comm.Gather(lon)
+            all_lat = comm.Gather(lat)
+            all_coeffs = comm.Gather(coeffs)
+        else:
+            all_lon = [lon]
+            all_lat = [lat]
+            all_coeffs = [coeffs]
+        if comm is None or comm.rank == 0:
+            lon = np.hstack(all_lon)
+            lat = np.hstack(all_lat)
+            coeffs = np.hstack(all_coeffs)
+            fig = plt.figure(figsize=[12, 8])
+            ax = fig.add_subplot(1, 1, 1)
+            ax.set_title(f"obs = {ob.name}, key = {value}")
+            amp = 0.15  # Need a smarter amplitude...
+            p = ax.scatter(
+                lon,
+                lat,
+                c=coeffs,
+                vmin=1 - amp,
+                vmax=1 + amp,
+                edgecolors="k",
+                cmap="bwr",
+            )
+            fig.colorbar(p)
+            fig.savefig(f"coeffs_{ob.name}_{value}.png")
+            plt.close()
         return
 
     @function_timer
@@ -879,12 +943,34 @@ class CommonModeFilter(Operator):
                     comm.Allreduce(MPI.IN_PLACE, template, op=MPI.SUM)
                     comm.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
 
-                subtract_mean(
-                    data_indices,
-                    temp_ob.detdata[self.det_data].data,
-                    template,
-                    hits,
-                )
+                if self.regress:
+                    good = hits != 0
+                    ngood = np.sum(good)
+                    mean_template = template.copy()
+                    mean_template[good] /= hits[good]
+                    ndet, nsample = temp_ob.detdata[self.det_data].data.shape
+                    coeffs = np.zeros(ndet)
+                    templates = np.vstack([np.ones(ngood), mean_template[good]])
+                    invcov = np.dot(templates, templates.T)
+                    cov = np.linalg.inv(invcov)
+                    for idet, iflag in zip(det_indices, flag_indices):
+                        sig = temp_ob.detdata[self.det_data].data[idet]
+                        sig_copy = sig[good].copy()
+                        flg = det_flags[idet][good]
+                        sig_copy[flg & self.det_flag_mask != 0] = 0
+                        proj = np.dot(templates, sig_copy)
+                        coeff = np.dot(cov, proj)
+                        coeffs[idet] = coeff[1]
+                        sig -= coeff[0] + coeff[1] * mean_template
+                    if self.plot:
+                        self._plot_coeff(temp_ob, coeffs, comm, value)
+                else:
+                    subtract_mean(
+                        data_indices,
+                        temp_ob.detdata[self.det_data].data,
+                        template,
+                        hits,
+                    )
 
             log.debug_rank(
                 f"{data.comm.group:4} : Commonfiltered observation in",

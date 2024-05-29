@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -71,15 +71,14 @@ class PixelDistribution(AcceleratorObject):
         self._local_submaps = local_submaps
         self._comm = comm
 
-        self._glob2loc = None
         self._n_local = 0
+        self._glob2loc = AlignedI64.zeros(self._n_submap)
+        self._glob2loc[:] = -1
 
         if self._local_submaps is not None and len(self._local_submaps) > 0:
             if np.max(self._local_submaps) > self._n_submap - 1:
                 raise RuntimeError("local submap indices out of range")
             self._n_local = len(self._local_submaps)
-            self._glob2loc = AlignedI64.zeros(self._n_submap)
-            self._glob2loc[:] = -1
             for ilocal_submap, iglobal_submap in enumerate(self._local_submaps):
                 self._glob2loc[iglobal_submap] = ilocal_submap
 
@@ -187,17 +186,12 @@ class PixelDistribution(AcceleratorObject):
         """
         if len(gl) == 0:
             return (np.zeros_like(gl), np.zeros_like(gl))
+        log = Logger.get()
         if np.max(gl) >= self._n_pix:
-            log = Logger.get()
             msg = "Global pixel indices exceed the maximum for the pixelization"
             log.error(msg)
             raise RuntimeError(msg)
         return libtoast_global_to_local(gl, self._n_pix_submap, self._glob2loc)
-
-        # global_sm = np.floor_divide(gl, self._n_pix_submap, dtype=np.int64)
-        # submap_pixel = np.mod(gl, self._n_pix_submap, dtype=np.int64)
-        # local_sm = np.array([self._glob2loc[x] for x in global_sm], dtype=np.int64)
-        # return (local_sm, submap_pixel)
 
     @function_timer
     def global_pixel_to_local(self, gl):

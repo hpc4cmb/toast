@@ -385,7 +385,7 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
                         f"{nbad} observations assigned to this process"
                     )
                     raise RuntimeError(msg)
-        if toast_comm is not None:
+        if toast_comm.comm_group_rank is not None:
             nbad = toast_comm.comm_group_rank.allreduce(nbad)
             ngood = toast_comm.comm_group_rank.allreduce(ngood)
         log.info_rank(

@@ -103,7 +103,7 @@ class BinMap(Operator):
     )
 
     noise_model = Unicode(
-        "noise_model", help="Observation key containing the noise model"
+        defaults.noise_model, help="Observation key containing the noise model"
     )
 
     sync_type = Unicode(

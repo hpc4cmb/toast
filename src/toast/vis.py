@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
 import warnings
 
 import astropy.io.fits as af
@@ -125,6 +126,8 @@ def plot_wcs_maps(
     xmax=None,
     ymin=None,
     ymax=None,
+    is_azimuth=False,
+    cmap="viridis",
 ):
     """Plot WCS projected output maps.
 
@@ -142,22 +145,38 @@ def plot_wcs_maps(
         xmax (float):  Fraction (0.0-1.0) of the maximum X view.
         ymin (float):  Fraction (0.0-1.0) of the minimum Y view.
         ymin (float):  Fraction (0.0-1.0) of the maximum Y view.
+        is_azimuth (bool):  If True, swap direction of longitude axis.
+        cmap (str): The color map name to use.
 
     """
+    import matplotlib as mpl
     import matplotlib.pyplot as plt
 
-    figsize = (12, 12)
     figdpi = 100
 
+    current_cmap = mpl.cm.get_cmap(cmap)
+    current_cmap.set_bad(color="gray")
+
     def plot_single(wcs, hdata, hindx, vmin, vmax, out):
+        xwcs = wcs.pixel_shape[0]
+        ywcs = wcs.pixel_shape[1]
+        fig_x = xwcs / figdpi
+        fig_y = ywcs / figdpi
+        figsize = (fig_x, fig_y)
         fig = plt.figure(figsize=figsize, dpi=figdpi)
         ax = fig.add_subplot(projection=wcs, slices=("x", "y", hindx))
         im = ax.imshow(
-            np.transpose(hdata.data[hindx, :, :]), cmap="jet", vmin=vmin, vmax=vmax
+            hdata[hindx, :, :],
+            cmap=current_cmap,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest",
         )
+        if is_azimuth:
+            ax.invert_xaxis()
         ax.grid(color="white", ls="solid")
-        ax.set_xlabel("Longitude")
-        ax.set_ylabel("Latitude")
+        ax.set_xlabel(f"{wcs.wcs.ctype[0]}")
+        ax.set_ylabel(f"{wcs.wcs.ctype[1]}")
         if xmin is not None and xmax is not None:
             ax.set_xlim(xmin, xmax)
         if ymin is not None and ymax is not None:
@@ -181,25 +200,30 @@ def plot_wcs_maps(
         ext = max(np.absolute(minval), np.absolute(maxval))
         return -ext, ext
 
-    def sub_mono(hitdata, mdata):
-        if hitdata is None:
+    def flag_unhit(hitmask, mdata):
+        if hitmask is None:
             return
-        goodpix = np.logical_and((hitdata > 0), (mdata != 0))
-        mono = np.mean(mdata[goodpix])
-        print(f"Monopole = {mono}")
-        mdata[goodpix] -= mono
-        mdata[np.logical_not(goodpix)] = 0
+        for mindx in range(mdata.shape[0]):
+            mdata[mindx, hitmask] = np.nan
 
-    hitdata = None
+    def sub_mono(hitmask, mdata):
+        if hitmask is None:
+            goodpix = mdata != 0
+        else:
+            goodpix = np.logical_and(hitmask, (mdata != 0))
+        mono = np.mean(mdata[goodpix])
+        mdata[goodpix] -= mono
+
+    hitmask = None
     if hitfile is not None:
         hdulist = af.open(hitfile)
         hdu = hdulist[0]
-        hitdata = np.array(hdu.data[0, :, :])
+        hitmask = np.array(hdu.data[0, :, :] == 0)
         wcs = WCS(hdu.header)
-        maxhits = np.amax(hdu.data[0, :, :])
+        maxhits = 0.5 * np.amax(hdu.data[0, :, :])
         if max_hits is not None:
             maxhits = max_hits
-        plot_single(wcs, hdu, 0, 0, maxhits, f"{hitfile}.pdf")
+        plot_single(wcs, hdu.data, 0, 0, maxhits, f"{hitfile}.pdf")
         del hdu
         hdulist.close()
 
@@ -207,44 +231,48 @@ def plot_wcs_maps(
         hdulist = af.open(mapfile)
         hdu = hdulist[0]
         wcs = WCS(hdu.header)
+        mapdata = np.array(hdu.data)
+        del hdu
 
         if truth is not None:
             thdulist = af.open(truth)
             thdu = thdulist[0]
 
-        sub_mono(hitdata, hdu.data[0, :, :])
-        mmin, mmax = sym_range(hdu.data[0, :, :])
+        flag_unhit(hitmask, mapdata)
+
+        sub_mono(hitmask, mapdata[0])
+        mmin, mmax = sym_range(mapdata[0, :, :])
         if range_I is not None:
             mmin, mmax = range_I
-        plot_single(wcs, hdu, 0, mmin, mmax, f"{mapfile}_I.pdf")
+        plot_single(wcs, mapdata, 0, mmin, mmax, f"{mapfile}_I.pdf")
         if truth is not None:
             tmin, tmax = sym_range(thdu.data[0, :, :])
-            hdu.data[0, :, :] -= thdu.data[0, :, :]
-            plot_single(wcs, hdu, 0, tmin, tmax, f"{mapfile}_resid_I.pdf")
+            mapdata[0, :, :] -= thdu.data[0, :, :]
+            plot_single(wcs, mapdata, 0, tmin, tmax, f"{mapfile}_resid_I.pdf")
 
-        if hdu.data.shape[0] > 1:
-            mmin, mmax = sym_range(hdu.data[1, :, :])
+        if mapdata.shape[0] > 1:
+            mmin, mmax = sym_range(mapdata[1, :, :])
             if range_Q is not None:
                 mmin, mmax = range_Q
-            plot_single(wcs, hdu, 1, mmin, mmax, f"{mapfile}_Q.pdf")
+            plot_single(wcs, mapdata, 1, mmin, mmax, f"{mapfile}_Q.pdf")
             if truth is not None:
                 tmin, tmax = sym_range(thdu.data[1, :, :])
-                hdu.data[1, :, :] -= thdu.data[1, :, :]
-                plot_single(wcs, hdu, 1, tmin, tmax, f"{mapfile}_resid_Q.pdf")
+                mapdata[1, :, :] -= thdu.data[1, :, :]
+                plot_single(wcs, mapdata, 1, tmin, tmax, f"{mapfile}_resid_Q.pdf")
 
-            mmin, mmax = sym_range(hdu.data[2, :, :])
+            mmin, mmax = sym_range(mapdata[2, :, :])
             if range_U is not None:
                 mmin, mmax = range_U
-            plot_single(wcs, hdu, 2, mmin, mmax, f"{mapfile}_U.pdf")
+            plot_single(wcs, mapdata, 2, mmin, mmax, f"{mapfile}_U.pdf")
             if truth is not None:
                 tmin, tmax = sym_range(thdu.data[2, :, :])
-                hdu.data[2, :, :] -= thdu.data[2, :, :]
-                plot_single(wcs, hdu, 2, tmin, tmax, f"{mapfile}_resid_U.pdf")
+                mapdata[2, :, :] -= thdu.data[2, :, :]
+                plot_single(wcs, mapdata, 2, tmin, tmax, f"{mapfile}_resid_U.pdf")
 
         if truth is not None:
             del thdu
             thdulist.close()
-        del hdu
+
         hdulist.close()
 
 
@@ -382,6 +410,8 @@ def plot_healpix_maps(
     max_hits=None,
     truth=None,
     gnomview=False,
+    gnomres=None,
+    cmap="viridis",
 ):
     """Plot Healpix projected output maps.
 
@@ -397,6 +427,9 @@ def plot_healpix_maps(
         truth (str):  Path to the input truth map in the case of simulations.
         gnomview (bool):  If True, use a gnomview projection centered on the
             mean of hit pixel locations.
+        gnomres (float):  The resolution in arcminutes to pass to gnomview.
+            If None, it will be estimated from the data.
+        cmap (str): The color map name to use.
 
     """
     set_matplotlib_backend()
@@ -407,6 +440,7 @@ def plot_healpix_maps(
     figdpi = 100
 
     def plot_single(data, vmin, vmax, out, gnomrot=None, reso=4.0, xsize=1000):
+        file_base = os.path.splitext(os.path.basename(out))[0]
         if gnomrot is not None:
             hp.gnomview(
                 map=data,
@@ -414,12 +448,21 @@ def plot_healpix_maps(
                 xsize=xsize,
                 reso=reso,
                 nest=True,
-                cmap="jet",
+                cmap=cmap,
                 min=vmin,
                 max=vmax,
+                title=file_base,
             )
         else:
-            hp.mollview(data, xsize=xsize, nest=True, cmap="jet", min=vmin, max=vmax)
+            hp.mollview(
+                data,
+                xsize=xsize,
+                nest=True,
+                cmap=cmap,
+                min=vmin,
+                max=vmax,
+                title=file_base,
+            )
         plt.savefig(out, format="pdf")
         plt.close()
 
@@ -440,7 +483,6 @@ def plot_healpix_maps(
 
     hitdata = None
     gnomrot = None
-    gnomres = None
     xsize = 1600
     goodhits = slice(None)
     if hitfile is not None:
@@ -459,11 +501,12 @@ def plot_healpix_maps(
         )
         mlon = np.mean(lon)
         mlat = np.mean(lat)
-        gnomres = 1.1 * (np.amax(lat) - np.amin(lat)) / xsize
-        gnomres *= 60
+        if gnomres is None:
+            gnomres = 1.1 * (np.amax(lat) - np.amin(lat)) / xsize
+            gnomres *= 60
         if gnomview:
             gnomrot = (mlon, mlat, 0.0)
-        print(f"gnomres = {gnomres} arcmin, gnomrot = {gnomrot}", flush=True)
+            print(f"Using gnomview reso={gnomres}, gnomrot={gnomrot}")
         plot_single(
             hitdata,
             0,

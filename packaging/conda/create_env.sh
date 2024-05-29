@@ -5,7 +5,11 @@
 
 # Activate the base environment
 basedir=$(dirname $(dirname "${CONDA_EXE}"))
-source ${basedir}/etc/profile.d/conda.sh
+if [[ -e ${basedir}/etc/profile.d/conda.sh ]]; then
+    source ${basedir}/etc/profile.d/conda.sh
+else
+    source /etc/profile.d/conda.sh
+fi
 conda deactivate
 conda activate base
 

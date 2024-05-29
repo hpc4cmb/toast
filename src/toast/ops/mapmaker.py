@@ -398,8 +398,7 @@ class MapMaker(Operator):
             pix_dist = BuildPixelDistribution(
                 pixel_dist=map_binning.pixel_dist,
                 pixel_pointing=map_binning.pixel_pointing,
-                shared_flags=map_binning.shared_flags,
-                shared_flag_mask=map_binning.shared_flag_mask,
+                save_pointing=map_binning.full_pointing,
             )
             pix_dist.apply(self._data)
             self._log.info_rank(
@@ -559,7 +558,7 @@ class MapMaker(Operator):
             map_binning.det_data = self.det_data
         else:
             map_binning.det_data = out_cleaned
-        if self.write_noiseweighted_map:
+        if self.write_noiseweighted_map or self.keep_final_products:
             map_binning.noiseweighted = self.noiseweighted_map_name
         map_binning.binned = self.map_name
 

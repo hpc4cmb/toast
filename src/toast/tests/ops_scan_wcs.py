@@ -41,6 +41,7 @@ class ScanWCSTest(MPITestCase):
         pixels = ops.PixelsWCS(
             projection="CAR",
             resolution=(0.05 * u.degree, 0.05 * u.degree),
+            dimensions=(),
             auto_bounds=True,
             detector_pointing=detpointing_radec,
             create_dist="pixel_dist",
@@ -105,6 +106,7 @@ class ScanWCSTest(MPITestCase):
         pixels = ops.PixelsWCS(
             projection="CAR",
             resolution=(0.05 * u.degree, 0.05 * u.degree),
+            dimensions=(),
             auto_bounds=True,
             detector_pointing=detpointing_radec,
             create_dist="pixel_dist",

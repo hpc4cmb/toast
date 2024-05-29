@@ -198,14 +198,24 @@ class GroundFilter(Operator):
         legendre(x, legendre_trend, 1, self.trend_order + 1)
 
         try:
-            azmin = obs["scan_min_az"].to_value(u.radian)
-            azmax = obs["scan_max_az"].to_value(u.radian)
             if self.azimuth is not None:
                 az = obs.shared[self.azimuth]
             else:
                 quats = obs.shared[self.boresight_azel]
                 theta, phi, _ = qa.to_iso_angles(quats)
                 az = 2 * np.pi - phi
+            if "scan_min_az" in obs:
+                azmin = obs["scan_min_az"].to_value(u.radian)
+                azmax = obs["scan_max_az"].to_value(u.radian)
+            else:
+                azmin = np.amin(az)
+                azmax = np.amax(az)
+                comm = obs.comm.comm_group
+                if comm is not None:
+                    azmin = comm.allreduce(azmin, op=MPI.MIN)
+                    azmax = comm.allreduce(azmax, op=MPI.MAX)
+                obs["scan_min_az"] = azmin * u.radian
+                obs["scan_max_az"] = azmax * u.radian
         except Exception as e:
             msg = (
                 f"Failed to get boresight azimuth from TOD.  "

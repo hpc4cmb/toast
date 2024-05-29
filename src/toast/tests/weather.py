@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -8,7 +8,9 @@ import astropy.units as u
 import numpy as np
 import numpy.testing as nt
 
+from .. import ops as ops
 from ..weather import SimWeather, Weather
+from ._helpers import create_ground_data
 from .mpi import MPITestCase
 
 
@@ -52,3 +54,9 @@ class WeatherTest(MPITestCase):
 
         sim_pole = SimWeather(time=date, name="south_pole", site_uid=2)
         self.get_props(sim_pole)
+
+    def test_append(self):
+        # Append weather model to a simulation
+        data = create_ground_data(self.comm)
+        weather = ops.WeatherModel(weather="atacama")
+        weather.apply(data)

@@ -712,14 +712,20 @@ cholmod_sparse * toast::atm_sim_sqrt_sparse_covariance(
 
         if (atm_verbose()) {
             o.str("");
-            o << rank << " : Factorizing sparse covariance ... ";
+            o << rank << " : Factorizing sparse covariance, "
+              << "nzmax = " << cov->nzmax
+              << ", (" << cov->nzmax * 8 / pow(2, 20) << "MB)";
             logger.verbose(o.str().c_str());
         }
 
         cholmod_factorize(cov, factorization, chol.chcommon);
 
         if (chol.chcommon->status != CHOLMOD_OK) {
+            o.str("");
+            o << rank << " : Factorize covariance failed, itry=" << itry;
             cholmod_free_factor(&factorization, chol.chcommon);
+            logger.debug(o.str().c_str());
+
             if (itry < ntry - 1) {
                 // Extract band diagonal of the matrix and try
                 // factorizing again
@@ -990,6 +996,7 @@ void toast::atm_sim_compute_slice(
     );
 
     gt.stop("atm_sim_sqrt_sparse_covariance");
+
 
     cholmod_free_sparse(&cov, chol.chcommon);
 

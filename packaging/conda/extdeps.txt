@@ -2,5 +2,5 @@ libopenblas=*=*openmp*
 libblas=*=*openblas
 fftw
 libaatm
-suitesparse
+suitesparse<7.3
 libflac

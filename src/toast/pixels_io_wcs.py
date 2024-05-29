@@ -40,8 +40,8 @@ def submap_to_image(dist, submap, sdata, image):
     """
     imshape = image.shape
     n_value = imshape[0]
-    n_cols = imshape[1]
-    n_rows = imshape[2]
+    n_rows = imshape[1]
+    n_cols = imshape[2]
 
     # Global pixel range of this submap
     s_offset = submap * dist.n_pix_submap
@@ -64,7 +64,7 @@ def submap_to_image(dist, submap, sdata, image):
             if pix_offset + n_copy > s_end:
                 n_copy = s_end - pix_offset
             sbuf_offset = pix_offset + row_offset - s_offset
-            image[ival, col, row_offset : row_offset + n_copy] = sdata[
+            image[ival, row_offset : row_offset + n_copy, col] = sdata[
                 sbuf_offset : sbuf_offset + n_copy, ival
             ]
 
@@ -88,8 +88,8 @@ def image_to_submap(dist, image, submap, sdata, scale=1.0):
     """
     imshape = image.shape
     n_value = imshape[0]
-    n_cols = imshape[1]
-    n_rows = imshape[2]
+    n_rows = imshape[1]
+    n_cols = imshape[2]
 
     # Global pixel range of this submap
     s_offset = submap * dist.n_pix_submap
@@ -113,7 +113,7 @@ def image_to_submap(dist, image, submap, sdata, scale=1.0):
                 n_copy = s_end - pix_offset
             sbuf_offset = pix_offset + row_offset - s_offset
             sdata[sbuf_offset : sbuf_offset + n_copy, ival] = (
-                scale * image[ival, col, row_offset : row_offset + n_copy]
+                scale * image[ival, row_offset : row_offset + n_copy, col]
             )
 
 
@@ -153,10 +153,12 @@ def collect_wcs_submaps(pix, comm_bytes=10000000):
         allowners = np.zeros_like(owners)
         dist.comm.Allreduce(owners, allowners, op=MPI.MIN)
 
-    # Create an image array for the output
+    # Create an image array for the output.  The FITS image data is column
+    # major, and so our numpy array has the order of axes swapped.
     image = None
+    image_shape = (pix.n_value, dist.wcs_shape[1], dist.wcs_shape[0])
     if rank == 0:
-        image = np.zeros((pix.n_value,) + dist.wcs_shape, dtype=pix.dtype)
+        image = np.zeros(image_shape, dtype=pix.dtype)
 
     n_val_submap = dist.n_pix_submap * pix.n_value
 
