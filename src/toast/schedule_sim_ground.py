@@ -675,6 +675,91 @@ class HorizontalPatch(Patch):
         return in_view, msg
 
 
+class SiderealPatch(HorizontalPatch):
+
+    def __init__(
+            self,
+            name,
+            weight,
+            azmin,
+            azmax,
+            el,
+            siderealtime_start,
+            siderealtime_stop,
+            scantime,
+    ):
+        self.name = name
+        self.weight = weight
+        if azmin <= np.pi and azmax <= np.pi:
+            self.rising = True
+        elif azmin >= np.pi and azmax >= np.pi:
+            self.rising = False
+        else:
+            # This patch is being observed across the meridian
+            self.rising = None
+        self.az_min = azmin % (2 * np.pi)
+        self.az_max = azmax % (2 * np.pi)
+        self.el = el
+        # sidereal time is same as target RA.  Use radians
+        self.siderealtime_start = siderealtime_start
+        self.siderealtime_stop = siderealtime_stop
+        # scan time is in minutes
+        self.scantime = scantime
+
+        self.el_min0 = el
+        self.el_min = el
+        self.el_max0 = el
+        self.el_step = 0
+        self.alternate = False
+        self._area = 0
+        self.el_max = self.el_max0
+        self.el_lim = self.el_min0
+        self.time = 0
+        self.hits = 0
+        return
+
+    def visible(
+        self,
+        el_min,
+        observer,
+        sun,
+        moon,
+        sun_avoidance_angle,
+        moon_avoidance_angle,
+        check_sso,
+    ):
+        in_view = True
+        msg = ""
+        if check_sso:
+            for sso, angle, name in [
+                (sun, sun_avoidance_angle, "Sun"),
+                (moon, moon_avoidance_angle, "Moon"),
+            ]:
+                if self.in_patch(sso, angle=angle, observer=observer):
+                    in_view = False
+                    msg += f"{name} too close;"
+        stime = observer.sidereal_time()
+        outside = False
+        if self.siderealtime_start < self.siderealtime_stop:
+            # Range does not include zero meridian
+            if stime < self.siderealtime_start or stime > self.siderealtime_stop:
+                outside = True
+        else:
+            # Range includes zero meridian
+            if stime < self.siderealtime_start and stime > self.siderealtime_stop:
+                outside = True
+        if outside:
+            in_view = False
+            msg += f"Incorrect sidereal time "
+            msg += f"{stime:.3f} not in "
+            msg += f"[{self.siderealtime_start:.3f}, {self.siderealtime_stop:.3f}];"
+        if in_view:
+            msg = "in view"
+            self.current_el_min = self.el_min
+            self.current_el_max = self.el_max
+        return in_view, msg
+
+
 def patch_is_rising(patch):
     try:
         # Horizontal patch definition
@@ -2375,7 +2460,11 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
 
 def parse_args(opts=None):
     parser = argparse.ArgumentParser(
-        description="Generate ground observation schedule.", fromfile_prefix_chars="@"
+        description="""Generate ground observation schedule.""",
+        fromfile_prefix_chars="@",
+        # Disable automatic line wrapping. See
+        # https://stackoverflow.com/questions/29613487/multiple-lines-in-python-argparse-help-display
+        formatter_class=argparse.RawTextHelpFormatter,
     )
 
     parser.add_argument(
@@ -2411,8 +2500,8 @@ def parse_args(opts=None):
         required=False,
         default=0,
         type=float,
-        help="Random fractional margin [0..1] added to the "
-        "scans to smooth out edge effects",
+        help="""Random fractional margin [0..1] added to the
+scans to smooth out edge effects""",
     )
     parser.add_argument(
         "--ra-period",
@@ -2461,32 +2550,32 @@ def parse_args(opts=None):
         required=False,
         default=0,
         type=float,
-        help="Assign a penalty to changes in elevation larger than this limit [degrees].  "
-        "See --elevation-change-penalty and --elevation-change-time-s",
+        help="""Assign a penalty to changes in elevation larger than this limit [degrees].
+See --elevation-change-penalty and --elevation-change-time-s""",
     )
     parser.add_argument(
         "--elevation-change-penalty",
         required=False,
         default=1,
         type=float,
-        help="Multiplicative elevation change penalty triggered by "
-        "--elevation-change-limit-deg",
+        help="""Multiplicative elevation change penalty triggered by
+--elevation-change-limit-deg""",
     )
     parser.add_argument(
         "--elevation-change-time-s",
         required=False,
         default=0,
         type=float,
-        help="Time it takes for the telescope to stabilize after a change in observing "
-        "elevation [seconds].  Triggered by --elevation-change-limit-deg",
+        help="""Time it takes for the telescope to stabilize after a change in observing
+elevation [seconds].  Triggered by --elevation-change-limit-deg""",
     )
     parser.add_argument(
         "--verbose-schedule",
         required=False,
         default=False,
         action="store_true",
-        help="Write a 24-field verbose schedule "
-        "instead of the concise 11-field schedule",
+        help="""Write a 24-field verbose schedule
+instead of the concise 11-field schedule""",
     )
     parser.add_argument(
         "--field-separator",
@@ -2526,9 +2615,17 @@ def parse_args(opts=None):
         "--patch",
         required=True,
         action="append",
-        help="Patch definition: "
-        "name,weight,lon1,lat1,lon2,lat2 ... "
-        "OR name,weight,lon,lat,width",
+        help="""Supported patch definition formats (all coordinates and radii in [deg]):
+    --patch name,weight,lon,lat,radius (center and radius)
+    --patch name,weight,lon_min,lat_max,lon_max,lat_min (rectangle)
+    --patch name,weight,lon1,lat1,lon2,lat2,...,lonN,latN (polygon, N>=3)
+    --patch name,SSO,weight,radius (Solar System Object)
+    --patch name,COOLER,weight,power,hold_time_min_h,hold_time_max_h,
+            cycle_time_h,az,el (Cooler cycle)
+    --patch name,HORIZONTAL,weight,azmin,azmax,el,scantime_min
+    --patch name,SIDEREAL,weight,azmin,azmax,el,RA_start,RA_stop,scantime_min
+Weight is interpreted like a UNIX priority. Lower number translates to more
+frequent observations""",
     )
     parser.add_argument(
         "--patch-coord",
@@ -2645,10 +2742,10 @@ def parse_args(opts=None):
         "--block-out",
         required=False,
         action="append",
-        help="Range of UTC calendar days to omit from scheduling in format "
-        "START_MONTH/START_DAY-END_MONTH/END_DAY or "
-        "START_YEAR/START_MONTH/START_DAY-END_YEAR/END_MONTH/END_DAY "
-        "where YEAR, MONTH and DAY are integers. END days are inclusive",
+        help="""Range of UTC calendar days to omit from scheduling in format
+START_MONTH/START_DAY-END_MONTH/END_DAY or
+START_YEAR/START_MONTH/START_DAY-END_YEAR/END_MONTH/END_DAY
+where YEAR, MONTH and DAY are integers. END days are inclusive""",
     )
     parser.add_argument(
         "--operational-days",
@@ -2919,7 +3016,7 @@ def parse_patch_cooler(args, parts, last_cycle_end):
 
 @function_timer
 def parse_patch_horizontal(args, parts):
-    """Parse an explicit patch definition line"""
+    """Parse a horizontal patch definition line"""
     log = Logger.get()
     corners = []
     log.info("Horizontal format")
@@ -2930,6 +3027,26 @@ def parse_patch_horizontal(args, parts):
     el = float(parts[5]) * degree
     scantime = float(parts[6])  # minutes
     patch = HorizontalPatch(name, weight, azmin, azmax, el, scantime)
+    return patch
+
+
+@function_timer
+def parse_patch_sidereal(args, parts):
+    """Parse a sidereal patch definition line"""
+    log = Logger.get()
+    corners = []
+    log.info("Sidereal format")
+    name = parts[0]
+    weight = float(parts[2])
+    azmin = float(parts[3]) * degree
+    azmax = float(parts[4]) * degree
+    el = float(parts[5]) * degree
+    siderealtime_start =(float(parts[6]) % 180) * degree
+    siderealtime_stop = (float(parts[7]) % 180) * degree
+    scantime = float(parts[8])
+    patch = SiderealPatch(
+        name, weight, azmin, azmax, el, siderealtime_start, siderealtime_stop, scantime
+    )
     return patch
 
 
@@ -3120,6 +3237,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         log.info(f'Adding patch "{name}"')
         if parts[1].upper() == "HORIZONTAL":
             patch = parse_patch_horizontal(args, parts)
+        elif parts[1].upper() == "SIDEREAL":
+            patch = parse_patch_sidereal(args, parts)
         elif parts[1].upper() == "SSO":
             patch = parse_patch_sso(args, parts)
         elif parts[1].upper() == "COOLER":
