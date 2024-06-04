@@ -400,7 +400,7 @@ class MapMaker(Operator):
                 pixel_pointing=map_binning.pixel_pointing,
                 save_pointing=map_binning.full_pointing,
             )
-            pix_dist.apply(self._data)
+            pix_dist.apply(self._data, use_accel=self._use_accel)
             self._log.info_rank(
                 f"{self._log_prefix}  finished build of pixel distribution in",
                 comm=self._comm,
@@ -633,6 +633,25 @@ class MapMaker(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
+
+        # First confirm that there is at least one valid detector
+
+        if self.map_binning is not None and self.map_binning.enabled:
+            map_binning = self.map_binning
+        else:
+            # Use the same binning used in the solver.
+            map_binning = self.binning
+        all_local_dets = data.all_local_detectors(
+            selection=detectors, flagmask=map_binning.det_mask
+        )
+        ndet_local = len(all_local_dets)
+        ndet = data.comm.comm_world.allreduce(ndet_local, op=MPI.SUM)
+        if ndet == 0:
+            # No valid detectors, no mapmaking
+            return
+
+        # Destripe data and make maps
+
         self._setup(data, detectors, use_accel)
 
         self._memreport.prefix = "Start of mapmaking"

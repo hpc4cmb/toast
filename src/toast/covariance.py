@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -98,6 +98,10 @@ def covariance_invert(npp, threshold, rcond=None, use_alltoallv=False):
         None
 
     """
+    if npp.n_value <= 0:
+        msg = f"NNZ = {npp.n_value}. It is an error to invert a pixel matrix with "
+        msg += f"non-positive dimensions."
+        raise RuntimeError(msg)
     mapnnz = int(((np.sqrt(8 * npp.n_value) - 1) / 2) + 0.5)
     nppdata = npp.raw
     if rcond is not None:
