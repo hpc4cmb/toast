@@ -644,8 +644,9 @@ class MapMaker(Operator):
         all_local_dets = data.all_local_detectors(
             selection=detectors, flagmask=map_binning.det_mask
         )
-        ndet_local = len(all_local_dets)
-        ndet = data.comm.comm_world.allreduce(ndet_local, op=MPI.SUM)
+        ndet = len(all_local_dets)
+        if data.comm.comm_world is not None:
+            ndet = data.comm.comm_world.allreduce(ndet, op=MPI.SUM)
         if ndet == 0:
             # No valid detectors, no mapmaking
             return
