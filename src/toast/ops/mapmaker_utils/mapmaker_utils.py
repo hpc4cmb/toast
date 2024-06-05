@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -423,6 +423,10 @@ class BuildInverseCovariance(Operator):
                     )
             if data.comm.comm_world is not None:
                 weight_nnz = data.comm.comm_world.allreduce(weight_nnz, op=MPI.MAX)
+            if weight_nnz == 0:
+                msg = f"No valid detectors. Could not infer the pointing matrix "
+                msg += f"dimensions from the data."
+                raise RuntimeError(msg)
             cov_nnz = int(weight_nnz * (weight_nnz + 1) // 2)
             data[self.inverse_covariance] = PixelData(
                 dist, np.float64, n_value=cov_nnz, units=invcov_units
