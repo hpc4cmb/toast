@@ -103,6 +103,7 @@ def set_default_values(values=None):
     # composite masks for convenience
     defaults["shared_mask_nonscience"] = (
         defaults["shared_mask_invalid"]
+        | defaults["shared_mask_processing"]
         | defaults["shared_mask_unstable_scanrate"]
         | defaults["shared_mask_irregular"]
     )
