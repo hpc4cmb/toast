@@ -281,15 +281,8 @@ class ObserveAtmosphere(Operator):
                     az = 2 * np.pi - phi
                     el = np.pi / 2 - theta
 
-                    az = np.unwrap(az)
-                    while np.amin(az) < 0:
-                        az += 2 * np.pi
-                    while np.amax(az) > 2 * np.pi:
-                        az -= 2 * np.pi
-                    azmin_det = np.amin(az)
-                    azmax_det = np.amax(az)
-                    elmin_det = np.amin(el)
-                    elmax_det = np.amax(el)
+                    azmin_det, azmax_det = self._std_range(az)
+                    elmin_det, elmax_det = self._std_range(el)
 
                     tmin_det = times[good][0]
                     tmax_det = times[good][-1]
@@ -308,9 +301,6 @@ class ObserveAtmosphere(Operator):
                         # Az is discontinuous if we scan across az=0.  To interpolate,
                         # we must unwrap it first ...
                         az_interp = np.interp(t_interp, times[good], np.unwrap(az))
-                        # ... however, the checks later assume 0 < az < 2pi
-                        az_interp[az_interp < 0] += 2 * np.pi
-                        az_interp[az_interp > 2 * np.pi] -= 2 * np.pi
                         el_interp = np.interp(t_interp, times[good], el)
 
                     # Integrate detector signal across all slabs at different altitudes
@@ -328,15 +318,8 @@ class ObserveAtmosphere(Operator):
                                 f"{cur_sim.tmax:.1f}]"
                             )
                             raise RuntimeError(msg)
-                        if (
-                            not (
-                                cur_sim.azmin <= azmin_det
-                                and azmax_det <= cur_sim.azmax
-                            )
-                            and not (
-                                cur_sim.azmin <= azmin_det - 2 * np.pi
-                                and azmax_det - 2 * np.pi <= cur_sim.azmax
-                            )
+                        if not (
+                            cur_sim.azmin <= azmin_det and azmax_det <= cur_sim.azmax
                         ) or not (
                             cur_sim.elmin <= elmin_det and elmin_det <= cur_sim.elmax
                         ):
@@ -514,6 +497,20 @@ class ObserveAtmosphere(Operator):
                     f"{log_prefix}: Observe atmosphere FAILED on {frac:.2f}% of samples"
                 )
         gt.stop("ObserveAtmosphere:  total")
+
+    @staticmethod
+    def _std_range(x):
+        """Compute a 'standard' range for an array of angles
+        ie. [lo, hi] with 0 <= lo < 2pi and 0 <= hi - lo
+        """
+        y = np.unwrap(x)
+        lo, hi = y.min(), y.max()
+        # lo = b + 2pi * a
+        # with 2pi > b >= 0
+        a, b = np.divmod(lo, 2 * np.pi)
+        lo = b
+        hi -= 2 * np.pi * a
+        return (lo, hi)
 
     @function_timer
     def _detector_absorption_and_loading(self, obs, absorption_key, loading_key, dets):
