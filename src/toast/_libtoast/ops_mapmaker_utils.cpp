@@ -290,39 +290,77 @@ void init_ops_mapmaker_utils(py::module & m) {
 
                 #endif // ifdef HAVE_OPENMP_TARGET
             } else {
-                for (int64_t idet = 0; idet < n_det; idet++) {
-                    for (int64_t iview = 0; iview < n_view; iview++) {
-                        #pragma omp parallel default(shared)
-                        {
-                            #pragma omp for schedule(static)
+                #pragma omp parallel
+                {
+                    int num_threads = 1;
+                    int my_thread = 0;
+                    #ifdef _OPENMP
+                    num_threads = omp_get_num_threads();
+                    my_thread = omp_get_thread_num();
+                    #endif
+
+                    int64_t n_thread_pix = (int64_t)(n_pix_submap / num_threads);
+                    int64_t my_first_subpix = my_thread * n_thread_pix;
+                    int64_t my_last_subpix = (my_thread + 1) * n_thread_pix;
+                    if (my_thread == num_threads - 1) {
+                        my_last_subpix = n_pix_submap;
+                    }
+                    for (int64_t idet = 0; idet < n_det; idet++) {
+                        for (int64_t iview = 0; iview < n_view; iview++) {
                             for (
                                 int64_t isamp = raw_intervals[iview].first;
                                 isamp <= raw_intervals[iview].last;
                                 isamp++
                             ) {
-                                build_noise_weighted_inner(
-                                    raw_pixel_index,
-                                    raw_weight_index,
-                                    raw_flag_index,
-                                    raw_data_index,
-                                    raw_global2local,
-                                    raw_det_data,
-                                    raw_det_flags,
-                                    raw_shared_flags,
-                                    raw_pixels,
-                                    raw_weights,
-                                    raw_det_scale,
-                                    raw_zmap,
-                                    isamp,
-                                    n_samp,
-                                    idet,
-                                    nnz,
-                                    det_flag_mask,
-                                    shared_flag_mask,
-                                    n_pix_submap,
-                                    use_shared_flags,
-                                    use_det_flags
-                                );
+                                int32_t w_indx = raw_weight_index[idet];
+                                int32_t p_indx = raw_pixel_index[idet];
+                                int32_t f_indx = raw_flag_index[idet];
+                                int32_t d_indx = raw_data_index[idet];
+
+                                int64_t off_p = p_indx * n_samp + isamp;
+                                int64_t off_w = w_indx * n_samp + isamp;
+                                int64_t off_d = d_indx * n_samp + isamp;
+                                int64_t off_f = f_indx * n_samp + isamp;
+
+                                uint8_t det_check = 0;
+                                if (use_det_flags) {
+                                    det_check = raw_det_flags[off_f] & det_flag_mask;
+                                }
+                                if (det_check != 0) {
+                                    continue;
+                                }
+
+                                uint8_t shared_check = 0;
+                                if (use_shared_flags) {
+                                    shared_check = raw_shared_flags[isamp] & shared_flag_mask;
+                                }
+                                if (shared_check != 0) {
+                                    continue;
+                                }
+
+                                if (raw_pixels[off_p] < 0) {
+                                    continue;
+                                }
+
+                                int64_t global_submap = (int64_t)(raw_pixels[off_p] / n_pix_submap);
+
+                                int64_t local_submap = raw_global2local[global_submap];
+
+                                int64_t isubpix = raw_pixels[off_p] - global_submap * n_pix_submap;
+
+                                if (isubpix < my_first_subpix || isubpix >= my_last_subpix) {
+                                    continue;
+                                }
+
+                                int64_t zoff = nnz * (local_submap * n_pix_submap + isubpix);
+
+                                int64_t off_wt = nnz * off_w;
+
+                                double scaled_data = raw_det_data[off_d] * raw_det_scale[idet];
+
+                                for (int64_t iweight = 0; iweight < nnz; iweight++) {
+                                    raw_zmap[zoff + iweight] += scaled_data * raw_weights[off_wt + iweight];
+                                }
                             }
                         }
                     }
