@@ -159,7 +159,7 @@ def scan_range_lonlat(
     lon = list()
     lat = list()
     for idet, detquat in enumerate(detquats):
-        dquats = qa.mult(bore_quats, detquat)
+        dquats = qa.mult(bore_quats[rank_slice, :], detquat)
         det_lon, det_lat = center_offset_lonlat(
             dquats,
             center_offset=center_lonlat,
