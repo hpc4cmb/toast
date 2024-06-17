@@ -62,11 +62,11 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
         if "TUNIT1" in h[1].header:
             if h[1].header["TUNIT1"] == "":
                 funits = u.dimensionless_unscaled
-            elif h[1].header["TUNIT1"] == "K":
+            elif h[1].header["TUNIT1"] in ["K", "K_CMB"]:
                 funits = u.K
-            elif h[1].header["TUNIT1"] == "mK":
+            elif h[1].header["TUNIT1"] in ["mK", "mK_CMB"]:
                 funits = u.mK
-            elif h[1].header["TUNIT1"] == "uK":
+            elif h[1].header["TUNIT1"] in ["uK", "uK_CMB"]:
                 funits = u.uK
             else:
                 funits = u.Unit(h[1].header["TUNIT1"])
