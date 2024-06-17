@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -83,7 +83,8 @@ class Demodulate(Operator):
 
     det_data = Unicode(
         defaults.det_data,
-        help="Observation detdata key apply filtering to",
+        help="Observation detdata key apply filtering to.  Use ';' if multiple "
+        "signal flavors should be demodulated.",
     )
 
     det_mask = Int(
@@ -284,12 +285,13 @@ class Demodulate(Operator):
 
             self._demodulate_shared_data(obs, demod_obs)
 
-            exists_data = demod_obs.detdata.ensure(
-                self.det_data,
-                detectors=demod_dets,
-                dtype=np.float64,
-                create_units=obs.detdata[self.det_data].units,
-            )
+            for det_data in self.det_data.split(";"):
+                exists_data = demod_obs.detdata.ensure(
+                    det_data,
+                    detectors=demod_dets,
+                    dtype=np.float64,
+                    create_units=obs.detdata[det_data].units,
+                )
             exists_flags = demod_obs.detdata.ensure(
                 self.det_flags, detectors=demod_dets, dtype=np.uint8
             )
@@ -308,7 +310,8 @@ class Demodulate(Operator):
             if self.purge:
                 if self.shared_flags is not None:
                     del obs.shared[self.shared_flags]
-                del obs.detdata[self.det_data]
+                for det_data in self.det_data.split(";"):
+                    del obs.detdata[det_data]
                 if self.det_flags is not None:
                     del obs.detdata[self.det_flags]
                 if self.noise_model is not None:
@@ -512,7 +515,6 @@ class Demodulate(Operator):
         """demodulate signal TOD"""
 
         for det in dets:
-            signal = obs.detdata[self.det_data][det]
             # Get weights
             obs_data = data.select(obs_uid=obs.uid)
             self.stokes_weights.apply(obs_data, dets=[det])
@@ -523,35 +525,37 @@ class Demodulate(Operator):
             iweights, qweights, uweights = weights.T
             etainv = 1 / np.sqrt(qweights**2 + uweights**2)
 
-            det_data = demod_obs.detdata[self.det_data]
-            det_data[f"demod0_{det}"] = lowpass(signal)
-            det_data[f"demod4r_{det}"] = lowpass(signal * 2 * qweights * etainv)
-            det_data[f"demod4i_{det}"] = lowpass(signal * 2 * uweights * etainv)
+            for flavor in self.det_data.split(";"):
+                signal = obs.detdata[flavor][det]
+                det_data = demod_obs.detdata[flavor]
+                det_data[f"demod0_{det}"] = lowpass(signal)
+                det_data[f"demod4r_{det}"] = lowpass(signal * 2 * qweights * etainv)
+                det_data[f"demod4i_{det}"] = lowpass(signal * 2 * uweights * etainv)
 
-            if self.do_2f:
-                # Start by evaluating the 2f demodulation factors from the
-                # pointing matrix.  We use the half-angle formulas and some
-                # extra logic to identify the right branch
-                #
-                # |cos(psi/2)| and |sin(psi/2)|:
-                signal_demod2r = np.sqrt(0.5 * (1 + qweights * etainv))
-                signal_demod2i = np.sqrt(0.5 * (1 - qweights * etainv))
-                # inverse the sign for every second mode
-                for sig in signal_demod2r, signal_demod2i:
-                    dsig = np.diff(sig)
-                    dsig[sig[1:] > 0.5] = 0
-                    starts = np.where(dsig[:-1] * dsig[1:] < 0)[0]
-                    for start, stop in zip(starts[::2], starts[1::2]):
-                        sig[start + 1 : stop + 2] *= -1
-                    # handle some corner cases
-                    dsig = np.diff(sig)
-                    dstep = np.median(np.abs(dsig[sig[1:] < 0.5]))
-                    bad = np.abs(dsig) > 2 * dstep
-                    bad = np.hstack([bad, False])
-                    sig[bad] *= -1
-                # Demodulate and lowpass for 2f
-                det_data[f"demod2r_{det}"] = lowpass(signal * signal_demod2r)
-                det_data[f"demod2i_{det}"] = lowpass(signal * signal_demod2i)
+                if self.do_2f:
+                    # Start by evaluating the 2f demodulation factors from the
+                    # pointing matrix.  We use the half-angle formulas and some
+                    # extra logic to identify the right branch
+                    #
+                    # |cos(psi/2)| and |sin(psi/2)|:
+                    signal_demod2r = np.sqrt(0.5 * (1 + qweights * etainv))
+                    signal_demod2i = np.sqrt(0.5 * (1 - qweights * etainv))
+                    # inverse the sign for every second mode
+                    for sig in signal_demod2r, signal_demod2i:
+                        dsig = np.diff(sig)
+                        dsig[sig[1:] > 0.5] = 0
+                        starts = np.where(dsig[:-1] * dsig[1:] < 0)[0]
+                        for start, stop in zip(starts[::2], starts[1::2]):
+                            sig[start + 1 : stop + 2] *= -1
+                        # handle some corner cases
+                        dsig = np.diff(sig)
+                        dstep = np.median(np.abs(dsig[sig[1:] < 0.5]))
+                        bad = np.abs(dsig) > 2 * dstep
+                        bad = np.hstack([bad, False])
+                        sig[bad] *= -1
+                    # Demodulate and lowpass for 2f
+                    det_data[f"demod2r_{det}"] = lowpass(signal * signal_demod2r)
+                    det_data[f"demod2i_{det}"] = lowpass(signal * signal_demod2i)
 
         return
 
