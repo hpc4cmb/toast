@@ -398,7 +398,9 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, use_float32=False, in_place
                 hdata_bytes.attrs["units"] = local_data.units.to_string()
                 # Write common properties of many compression schemes
                 hdata_bytes.attrs["dtype"] = str(comp_props["dtype"])
-                hdata_bytes.attrs["det_shape"] = str(comp_props["det_shape"])
+                hdata_bytes.attrs["det_shape"] = str(
+                    tuple([int(x) for x in comp_props["det_shape"]])
+                )
                 hdata_bytes.attrs["comp_type"] = comp_props["type"]
                 if "level" in comp_props:
                     hdata_bytes.attrs["comp_level"] = comp_props["level"]
@@ -720,20 +722,26 @@ def save_hdf5(
         inst_group.attrs["site_class"] = object_fullname(site.__class__)
         inst_group.attrs["site_uid"] = site.uid
         if isinstance(site, GroundSite):
-            inst_group.attrs["site_lat_deg"] = site.earthloc.lat.to_value(u.degree)
-            inst_group.attrs["site_lon_deg"] = site.earthloc.lon.to_value(u.degree)
-            inst_group.attrs["site_alt_m"] = site.earthloc.height.to_value(u.meter)
+            inst_group.attrs["site_lat_deg"] = float(
+                site.earthloc.lat.to_value(u.degree)
+            )
+            inst_group.attrs["site_lon_deg"] = float(
+                site.earthloc.lon.to_value(u.degree)
+            )
+            inst_group.attrs["site_alt_m"] = float(
+                site.earthloc.height.to_value(u.meter)
+            )
             if site.weather is not None:
                 if hasattr(site.weather, "name"):
                     # This is a simulated weather object, dump it.
                     inst_group.attrs["site_weather_name"] = str(site.weather.name)
-                    inst_group.attrs["site_weather_realization"] = (
+                    inst_group.attrs["site_weather_realization"] = int(
                         site.weather.realization
                     )
                     if site.weather.max_pwv is None:
                         inst_group.attrs["site_weather_max_pwv"] = "NONE"
                     else:
-                        inst_group.attrs["site_weather_max_pwv"] = (
+                        inst_group.attrs["site_weather_max_pwv"] = float(
                             site.weather.max_pwv.to_value(u.mm)
                         )
                     inst_group.attrs["site_weather_time"] = (
