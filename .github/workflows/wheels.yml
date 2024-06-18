@@ -1,17 +1,17 @@
 
 name:  Test Binary Wheels
 
-on: workflow_dispatch
+#on: workflow_dispatch
 # FIXME:  Remove these lines once this workflow merged
 # to main branch.
-# on:
-#   push:
-#     branches:
-#       - master
-#   pull_request:
-#     branches:
-#       - master
-#       - toast3
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+      - toast3
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
