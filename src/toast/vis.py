@@ -154,7 +154,7 @@ def plot_wcs_maps(
 
     figdpi = 100
 
-    current_cmap = mpl.cm.get_cmap(cmap)
+    current_cmap = mpl.colormaps[cmap]
     current_cmap.set_bad(color="gray")
 
     def plot_single(wcs, hdata, hindx, vmin, vmax, out):
