@@ -1251,7 +1251,7 @@ def get_constant_elevation(
                     (
                         patch.name,
                         "el < el_min ({:.2f} < {:.2f}) rising = {}, partial = {}".format(
-                            el / degree, patch.el_min / degree, rising, partial_scan
+                            np.degrees(el), np.degrees(patch.el_min), rising, partial_scan
                         ),
                     )
                 )
@@ -1265,7 +1265,7 @@ def get_constant_elevation(
                     (
                         patch.name,
                         "el > el_max ({:.2f} > {:.2f}) rising = {}, partial = {}".format(
-                            el / degree, patch.el_max / degree, rising, partial_scan
+                            np.degrees(el), np.degrees(patch.el_max), rising, partial_scan
                         ),
                     )
                 )
@@ -1275,7 +1275,7 @@ def get_constant_elevation(
     else:
         log.debug(
             "{} : ELEVATION = {}, rising = {}, partial = {}".format(
-                patch.name, el / degree, rising, partial_scan
+                patch.name, np.degrees(el), rising, partial_scan
             )
         )
     return el
@@ -1294,7 +1294,7 @@ def get_constant_elevation_pole(
         not_visible.append(
             (
                 patch.name,
-                "el < el_min ({:.2f} < {:.2f})".format(el / degree, el_min / degree),
+                "el < el_min ({:.2f} < {:.2f})".format(np.degrees(el), np.degrees(el_min)),
             )
         )
         el = None
@@ -1302,7 +1302,7 @@ def get_constant_elevation_pole(
         not_visible.append(
             (
                 patch.name,
-                "el > el_max ({:.2f} > {:.2f})".format(el / degree, el_max / degree),
+                "el > el_max ({:.2f} > {:.2f})".format(np.degrees(el), np.degrees(el_max)),
             )
         )
         el = None
@@ -1543,7 +1543,7 @@ def scan_patch_pole(
     azs, els = patch.corner_coordinates(observer)
     # Check if el is above the target.  If so, there is nothing to do.
     if np.amax(els) + fp_radius < el:
-        not_visible.append((patch.name, "Patch below {:.2f}".format(el / degree)))
+        not_visible.append((patch.name, "Patch below {:.2f}".format(np.degrees(el))))
         log.debug(f"NOT VISIBLE: {not_visible[-1]}")
     else:
         if args.pole_raster_scan:
@@ -1559,7 +1559,7 @@ def scan_patch_pole(
                     success = True
                 else:
                     not_visible.append(
-                        (patch.name, "No overlap at {:.2f}".format(el / degree))
+                        (patch.name, "No overlap at {:.2f}".format(np.degrees(el)))
                     )
                     log.debug(f"NOT VISIBLE: {not_visible[-1]}")
                 break
@@ -1571,7 +1571,7 @@ def scan_patch_pole(
             sun.compute(observer)
             if sun.alt > sun_el_max:
                 not_visible.append(
-                    (patch.name, "Sun too high {:.2f}".format(sun.alt / degree))
+                    (patch.name, "Sun too high {:.2f}".format(np.degrees(sun.alt)))
                 )
                 log.debug(f"NOT VISIBLE: {not_visible[-1]}")
                 break
@@ -1867,8 +1867,8 @@ def add_scan(
             observer.date = to_DJD(t2)
             sun.compute(observer)
             moon.compute(observer)
-            sun_az2, sun_el2 = sun.az / degree, sun.alt / degree
-            moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
+            sun_az2, sun_el2 = np.degrees(sun.az), np.degrees(sun.alt)
+            moon_az2, moon_el2 = np.degrees(moon.az), np.degrees(moon.alt)
             moon_phase2 = moon.phase
             # optionally offset scan
             if args.boresight_offset_az_deg != 0 or args.boresight_offset_el_deg != 0:
@@ -2000,15 +2000,15 @@ def add_cooler_cycle(
     observer.date = to_DJD(t1)
     sun.compute(observer)
     moon.compute(observer)
-    sun_az1, sun_el1 = sun.az / degree, sun.alt / degree
-    moon_az1, moon_el1 = moon.az / degree, moon.alt / degree
+    sun_az1, sun_el1 = np.degrees(sun.az), np.degrees(sun.alt)
+    moon_az1, moon_el1 = np.degrees(moon.az), np.degrees(moon.alt)
     moon_phase1 = moon.phase
 
     observer.date = to_DJD(t2)
     sun.compute(observer)
     moon.compute(observer)
-    sun_az2, sun_el2 = sun.az / degree, sun.alt / degree
-    moon_az2, moon_el2 = moon.az / degree, moon.alt / degree
+    sun_az2, sun_el2 = np.degrees(sun.az), np.degrees(sun.alt)
+    moon_az2, moon_el2 = np.degrees(moon.az), np.degrees(moon.alt)
     moon_phase2 = moon.phase
 
     # Create an entry in the schedule
@@ -2369,7 +2369,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         if sun.alt > sun_el_max:
             log.debug(
                 "Sun elevation is {:.2f} > {:.2f}. Moving on.".format(
-                    sun.alt / degree, sun_el_max / degree
+                    np.degrees(sun.alt), np.degrees(sun_el_max)
                 )
             )
             t = advance_time(t, args.time_step_s)
@@ -3158,8 +3158,7 @@ def add_side(corner1, corner2, corners_temp, coordconv):
     Add one side of a rectangle with enough interpolation points.
     """
     step = np.radians(1)
-    lon1 = corner1.ra
-    lon2 = corner2.ra
+    lon1, lon2 = np.unwrap([corner1.ra, corner2.ra])
     lat1 = corner1.dec
     lat2 = corner2.dec
     if lon1 == lon2:
@@ -3279,7 +3278,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         patches.append(patch)
 
         if patches[-1].el_max0 is not None:
-            el_max = patches[-1].el_max0 / degree
+            el_max = np.degrees(patches[-1].el_max0)
             log.debug(f"Highest possible observing elevation: {el_max:.2f} deg.")
         if patches[-1]._area is not None:
             log.debug(f"Sky fraction = {patch._area:.4f}")
@@ -3307,7 +3306,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         moon_avoidance_color = "gray"
         alpha = 0.5
         avoidance_alpha = 0.01
-        sun_step = int(86400 * 1)
+        sun_step = int(86400 * .25)
         moon_step = int(86400 * 0.1)
         for iplot, coord in enumerate("CEG"):
             scoord = {"C": "Equatorial", "E": "Ecliptic", "G": "Galactic"}[coord]
@@ -3323,8 +3322,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                     coord="G" + coord,
                     cbar=True,
                     unit="$\mu$K",
-                    min=args.polmin,
-                    max=args.polmax,
+                    min=args.pol_min,
+                    max=args.pol_max,
                     norm="log",
                     cmap=cmap,
                     title=title,
@@ -3380,8 +3379,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                         for ang in np.linspace(0, 2 * np.pi, 36):
                             dtheta = np.cos(ang) * r
                             dphi = np.sin(ang) * r / np.cos(theta + dtheta)
-                            clon.append((phi + dphi) / degree)
-                            clat.append((theta + dtheta) / degree)
+                            clon.append(np.degrees(phi + dphi))
+                            clat.append(np.degrees(theta + dtheta))
                         hp.projplot(
                             clon,
                             clat,
@@ -3407,8 +3406,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
 
             # Plot patches
             for patch in patches:
-                lon = [corner._ra / degree for corner in patch.corners]
-                lat = [corner._dec / degree for corner in patch.corners]
+                lon = [np.degrees(corner._ra) for corner in patch.corners]
+                lat = [np.degrees(corner._dec) for corner in patch.corners]
                 if len(lon) == 0:
                     # Special patch without sky coordinates
                     continue
