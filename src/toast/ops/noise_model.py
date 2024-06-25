@@ -680,74 +680,84 @@ class FlagNoiseFit(Operator):
                         msg = f"Observation {obs.name}, noise model {self.noise_model} "
                         msg += "has no f_knee estimate.  Use FitNoiseModel before flagging."
 
-            # Gather data across the process column
-
             local_net = np.array(local_net, dtype=np.float64)
             local_fknee = np.array(local_fknee, dtype=np.float64)
-            net_mean = None
-            net_std = None
-            fknee_mean = None
-            fknee_std = None
-            # If the noise model came from fitting, then detectors with a bad
-            # fit are already flagged in addition to NET being set to zero.
-            # This check is just an additional safeguard.
-            good_fit = local_net > 0.0
-            if obs.comm_col is None:
-                all_net = np.array(local_net[good_fit])
-                net_mean = np.mean(all_net)
-                net_std = np.std(all_net)
-                if self.sigma_fknee is not None:
-                    all_fknee = np.array(local_fknee[good_fit])
-                    fknee_mean = np.mean(all_fknee)
-                    fknee_std = np.std(all_fknee)
-            else:
-                all_net = obs.comm_col.gather(local_net[good_fit], root=0)
+            local_names = dets
+
+            # Send all values to one process for the trivial calculation
+            all_net = None
+            all_fknee = None
+            all_names = None
+            if obs.comm_row_rank == 0:
+                # First process column.  Gather results to rank zero.
+                proc_vals = obs.comm_col.gather(local_net, root=0)
                 if obs.comm_col_rank == 0:
-                    all_net = np.array([val for plist in all_net for val in plist])
-                    net_mean = np.mean(all_net)
-                    net_std = np.std(all_net)
-                net_mean = obs.comm_col.bcast(net_mean, root=0)
-                net_std = obs.comm_col.bcast(net_std, root=0)
-                if self.sigma_fknee is not None:
-                    all_fknee = obs.comm_col.gather(local_fknee[good_fit], root=0)
-                    if obs.comm_col_rank == 0:
-                        all_fknee = np.array(
-                            [val for plist in all_fknee for val in plist]
-                        )
-                        fknee_mean = np.mean(all_fknee)
-                        fknee_std = np.std(all_fknee)
-                    fknee_mean = obs.comm_col.bcast(fknee_mean, root=0)
-                    fknee_std = obs.comm_col.bcast(fknee_std, root=0)
+                    all_net = np.array([val for plist in proc_vals for val in plist])
+                proc_vals = obs.comm_col.gather(local_fknee, root=0)
+                if obs.comm_col_rank == 0:
+                    all_fknee = np.array([val for plist in proc_vals for val in plist])
+                proc_vals = obs.comm_col.gather(local_names, root=0)
+                if obs.comm_col_rank == 0:
+                    all_names = [val for plist in proc_vals for val in plist]
 
-            # Flag outlier detectors
+            # Iteratively cut
+            all_flags = None
+            if obs.comm.group_rank == 0:
+                all_good = all_net > 0.0
+                n_good_fit = np.count_nonzero(all_good)
+                msg = f"obs {obs.name}: {n_good_fit} / {len(all_good)} "
+                msg += "detectors have valid noise model"
+                log.debug(msg)
+                n_cut = 1
+                flag_pass = 0
+                while n_cut > 0:
+                    n_cut = 0
+                    net_mean = np.mean(all_net[all_good])
+                    net_std = np.std(all_net[all_good])
+                    for idet, (name, net) in enumerate(zip(all_names, all_net)):
+                        if not all_good[idet]:
+                            # Already cut
+                            continue
+                        if np.absolute(net - net_mean) > net_std * self.sigma_NET:
+                            msg = f"obs {obs.name}, det {name} has NET "
+                            msg += f"{net} that is > {self.sigma_NET} "
+                            msg += f"x {net_std} from {net_mean}"
+                            log.debug(msg)
+                            all_good[idet] = False
+                            n_cut += 1
+                    if self.sigma_fknee is not None:
+                        fknee_mean = np.mean(all_fknee[all_good])
+                        fknee_std = np.std(all_fknee[all_good])
+                        for idet, (name, fknee) in enumerate(zip(all_names, all_fknee)):
+                            if not all_good[idet]:
+                                # Already cut
+                                continue
+                            if np.absolute(fknee - fknee_mean) > fknee_std * self.sigma_fknee:
+                                msg = f"obs {obs.name}, det {name} has f_knee "
+                                msg += f"{fknee} that is > {self.sigma_fknee} "
+                                msg += f"x {fknee_std} from {fknee_mean}"
+                                log.debug(msg)
+                                all_good[idet] = False
+                                n_cut += 1
+                    msg = f"pass {flag_pass}, {n_cut} detectors flagged"
+                    log.debug(msg)
+                all_flags = {
+                    x: self.outlier_flag_mask for i, x in enumerate(all_names) if all_good[i]
+                }
+                msg = f"obs {obs.name}: flagged {len(all_flags)} / {len(all_names)}"
+                msg += " outlier detectors"
+                log.info(msg)
+            if obs.comm.comm_group is not None:
+                all_flags = obs.comm.comm_group.bcast(all_flags, root=0)
 
-            new_flags = dict()
-            for idet, det in enumerate(dets):
-                cur_flag = obs.local_detector_flags[det]
-                if not good_fit[idet]:
-                    msg = f"obs {obs.name}, det {det} has NET=0 (bad model fit)"
-                    log.debug(msg)
-                    obs.detdata[self.det_flags][det, :] |= self.outlier_flag_mask
-                    new_flags[det] = cur_flag | self.outlier_flag_mask
-                    continue
-                if np.absolute(local_net[idet] - net_mean) > net_std * self.sigma_NET:
-                    msg = f"obs {obs.name}, det {det} has NET {local_net[idet]} "
-                    msg += f" that is > {self.sigma_NET} x {net_std} from {net_mean}"
-                    log.debug(msg)
-                    obs.detdata[self.det_flags][det, :] |= self.outlier_flag_mask
-                    new_flags[det] = cur_flag | self.outlier_flag_mask
-                if self.sigma_fknee is not None:
-                    if (
-                        np.absolute(local_fknee[idet] - fknee_mean)
-                        > fknee_std * self.sigma_fknee
-                    ):
-                        msg = f"obs {obs.name}, det {det} has fknee "
-                        msg += f"{local_fknee[idet]} that is > {self.sigma_fknee} "
-                        msg += f"x {fknee_std} from {fknee_mean}"
-                        log.debug(msg)
-                        obs.detdata[self.det_flags][det, :] |= self.outlier_flag_mask
-                        new_flags[det] = cur_flag | self.outlier_flag_mask
-            obs.update_local_detector_flags(new_flags)
+            # Every process flags its local detectors
+            det_check = set(dets)
+            local_flags = dict(obs.local_detector_flags)
+            for det, val in all_flags.items():
+                if det in det_check:
+                    local_flags[det] |= val
+                    obs.detdata[self.det_flags][det, :] |= val
+            obs.update_local_detector_flags(local_flags)
 
     def _finalize(self, data, **kwargs):
         return

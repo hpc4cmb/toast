@@ -229,8 +229,12 @@ class Offset(Template):
 
         # Here we track the variance of the offsets based on the detector noise weights
         # and the number of unflagged / good samples per offset.
-        self._offsetvar_raw = AlignedF64.zeros(self._n_local)
-        self._offsetvar = self._offsetvar_raw.array()
+        if self._n_local == 0:
+            self._offsetvar_raw = None
+            self._offsetvar = None
+        else:
+            self._offsetvar_raw = AlignedF64.zeros(self._n_local)
+            self._offsetvar = self._offsetvar_raw.array()
 
         offset = 0
         for det in self._all_dets:
