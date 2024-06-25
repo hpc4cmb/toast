@@ -167,8 +167,6 @@ class SimScanSynchronousSignal(Operator):
                     sss_map = hp.read_map(self.path, [0, 1, 2], dtype=dtype)
                 else:
                     sss_map = [hp.read_map(self.path, dtype=dtype)]
-                npix = len(sss_map[0])
-                nmap = len(sss_map)
             else:
                 npix = 12 * self.nside**2
                 sss_map = rng.random(
@@ -194,6 +192,7 @@ class SimScanSynchronousSignal(Operator):
                 else:
                     sss_map = [sss_map]
             sss_map = np.vstack(sss_map)
+            nmap, npix = sss_map.shape
         else:
             npix = None
             nmap = None
