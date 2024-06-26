@@ -732,7 +732,10 @@ class FlagNoiseFit(Operator):
                             if not all_good[idet]:
                                 # Already cut
                                 continue
-                            if np.absolute(fknee - fknee_mean) > fknee_std * self.sigma_fknee:
+                            if (
+                                np.absolute(fknee - fknee_mean) >
+                                fknee_std * self.sigma_fknee
+                            ):
                                 msg = f"obs {obs.name}, det {name} has f_knee "
                                 msg += f"{fknee} that is > {self.sigma_fknee} "
                                 msg += f"x {fknee_std} from {fknee_mean}"
@@ -741,8 +744,10 @@ class FlagNoiseFit(Operator):
                                 n_cut += 1
                     msg = f"pass {flag_pass}, {n_cut} detectors flagged"
                     log.debug(msg)
+                    flag_pass += 1
                 all_flags = {
-                    x: self.outlier_flag_mask for i, x in enumerate(all_names) if all_good[i]
+                    x: self.outlier_flag_mask for i, x in enumerate(all_names)
+                    if not all_good[i]
                 }
                 msg = f"obs {obs.name}: flagged {len(all_flags)} / {len(all_names)}"
                 msg += " outlier detectors"
