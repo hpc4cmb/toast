@@ -14,8 +14,8 @@ from toast.vis import plot_healpix_maps
 
 def main():
     parser = argparse.ArgumentParser(
-        description="This program plots output maps in WCS projections.",
-        usage="toast_plot_wcs <options>",
+        description="This program plots output healpix maps.",
+        usage="toast_plot_healpix <options>",
     )
 
     parser.add_argument(

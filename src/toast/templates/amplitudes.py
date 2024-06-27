@@ -156,16 +156,24 @@ class Amplitudes(AcceleratorObject):
                     raise RuntimeError(msg)
                 self._global_first = self._local_indices[0]
                 self._global_last = self._local_indices[-1]
-        self._raw = self._storage_class.zeros(self._n_local)
-        self.local = self._raw.array()
+        if self._n_local == 0:
+            self._raw = None
+            self.local = None
+        else:
+            self._raw = self._storage_class.zeros(self._n_local)
+            self.local = self._raw.array()
 
         # Support flagging of template amplitudes.  This can be used to flag some
         # amplitudes if too many timestream samples contributing to the amplitude value
         # are bad.  We will be passing these flags to compiled code, and there
         # is no way easy way to do this using numpy bool and C++ bool.  So we waste
         # a bit of memory and use a whole byte per amplitude.
-        self._raw_flags = AlignedU8.zeros(self._n_local)
-        self.local_flags = self._raw_flags.array()
+        if self._n_local == 0:
+            self._raw_flags = None
+            self.local_flags = None
+        else:
+            self._raw_flags = AlignedU8.zeros(self._n_local)
+            self.local_flags = self._raw_flags.array()
 
     def clear(self):
         """Delete the underlying memory.
@@ -214,31 +222,47 @@ class Amplitudes(AcceleratorObject):
     # have been zeroed out.
 
     def __iadd__(self, other):
+        if self.local is None:
+            return self
         if isinstance(other, Amplitudes):
-            self.local[:] += other.local
+            if other.local is not None:
+                self.local[:] += other.local
         else:
-            self.local[:] += other
+            if other is not None:
+                self.local[:] += other
         return self
 
     def __isub__(self, other):
+        if self.local is None:
+            return self
         if isinstance(other, Amplitudes):
-            self.local[:] -= other.local
+            if other.local is not None:
+                self.local[:] -= other.local
         else:
-            self.local[:] -= other
+            if other is not None:
+                self.local[:] -= other
         return self
 
     def __imul__(self, other):
+        if self.local is None:
+            return self
         if isinstance(other, Amplitudes):
-            self.local[:] *= other.local
+            if other.local is not None:
+                self.local[:] *= other.local
         else:
-            self.local[:] *= other
+            if other is not None:
+                self.local[:] *= other
         return self
 
     def __itruediv__(self, other):
+        if self.local is None:
+            return self
         if isinstance(other, Amplitudes):
-            self.local[:] /= other.local
+            if other.local is not None:
+                self.local[:] /= other.local
         else:
-            self.local[:] /= other
+            if other is not None:
+                self.local[:] /= other
         return self
 
     def __add__(self, other):
@@ -263,12 +287,16 @@ class Amplitudes(AcceleratorObject):
 
     def reset(self):
         """Set all amplitude values to zero."""
+        if self.local is None:
+            return
         self.local[:] = 0
         if self.accel_exists():
             self._accel_reset_local()
 
     def reset_flags(self):
         """Set all flag values to zero."""
+        if self.local_flags is None:
+            return
         self.local_flags[:] = 0
         if self.accel_exists():
             self._accel_reset_local_flags()
@@ -293,8 +321,10 @@ class Amplitudes(AcceleratorObject):
             # not used inside the solver loop.
             self.accel_update_host()
             restore = True
-        ret.local[:] = self.local
-        ret.local_flags[:] = self.local_flags
+        if self.local is not None:
+            ret.local[:] = self.local
+        if self.local_flags is not None:
+            ret.local_flags[:] = self.local_flags
         if restore:
             self.accel_update_device()
             ret.accel_update_device()
@@ -318,7 +348,10 @@ class Amplitudes(AcceleratorObject):
     @property
     def n_local_flagged(self):
         """The number of local amplitudes that are flagged."""
-        return np.count_nonzero(self.local_flags)
+        if self.local_flags is None:
+            return 0
+        else:
+            return np.count_nonzero(self.local_flags)
 
     @property
     def local_indices(self):
@@ -391,7 +424,7 @@ class Amplitudes(AcceleratorObject):
             else:
                 # Need to compute our overlap with the global amplitude range.
                 send_buffer[:] = 0
-                if (self._global_last >= comm_offset) and (
+                if (self._global_last >= comm_offset) and self.local is not None and (
                     self._global_first < comm_offset + n_comm
                 ):
                     # We have some overlap
@@ -478,7 +511,7 @@ class Amplitudes(AcceleratorObject):
                 # Shortcut if we have all global amplitudes locally
                 self.local[comm_offset : comm_offset + n_comm] = recv_buffer[:n_comm]
             else:
-                if (self._global_last >= comm_offset) and (
+                if (self._global_last >= comm_offset) and self.local is not None and (
                     self._global_first < comm_offset + n_comm
                 ):
                     self.local[local_selected] = recv_buffer[buffer_selected]
@@ -526,11 +559,13 @@ class Amplitudes(AcceleratorObject):
         if (self._local_ranges is None) and (self._local_indices is None):
             # Every process has a unique set of amplitudes.  Reduce the local
             # dot products.
-
-            local_result = np.dot(
-                np.where(self.local_flags == 0, self.local, 0),
-                np.where(other.local_flags == 0, other.local, 0),
-            )
+            if self.local is None:
+                local_result = 0
+            else:
+                local_result = np.dot(
+                    np.where(self.local_flags == 0, self.local, 0),
+                    np.where(other.local_flags == 0, other.local, 0),
+                )
             result = self._mpicomm.allreduce(local_result, op=MPI.SUM)
             return result
 
@@ -563,7 +598,7 @@ class Amplitudes(AcceleratorObject):
                 n_comm = n_total - comm_offset
             local[:] = self._mpicomm.size
 
-            if (self._global_last >= comm_offset) and (
+            if (self._global_last >= comm_offset) and self.local is not None and (
                 self._global_first < comm_offset + n_comm
             ):
                 # We have some overlap
@@ -644,7 +679,7 @@ class Amplitudes(AcceleratorObject):
 
             self._mpicomm.Allreduce(local, assigned, op=MPI.MIN)
 
-            if (self._global_last >= comm_offset) and (
+            if (self._global_last >= comm_offset) and self.local is not None and (
                 self._global_first < comm_offset + n_comm
             ):
                 # Compute local dot product of just our assigned, unflagged elements
@@ -681,6 +716,8 @@ class Amplitudes(AcceleratorObject):
         return result
 
     def _accel_exists(self):
+        if self.local is None:
+            return False
         if use_accel_omp:
             return accel_data_present(
                 self._raw, name=self._accel_name
@@ -693,6 +730,8 @@ class Amplitudes(AcceleratorObject):
             return False
 
     def _accel_create(self, zero_out=False):
+        if self.local is None:
+            return
         if use_accel_omp:
             _ = accel_data_create(self._raw, name=self._accel_name, zero_out=zero_out)
             _ = accel_data_create(
@@ -703,6 +742,8 @@ class Amplitudes(AcceleratorObject):
             self.local_flags = accel_data_create(self.local_flags, zero_out=zero_out)
 
     def _accel_update_device(self):
+        if self.local is None:
+            return
         if use_accel_omp:
             _ = accel_data_update_device(self._raw, name=self._accel_name)
             _ = accel_data_update_device(self._raw_flags, name=self._accel_name)
@@ -711,6 +752,8 @@ class Amplitudes(AcceleratorObject):
             self.local_flags = accel_data_update_device(self.local_flags)
 
     def _accel_update_host(self):
+        if self.local is None:
+            return
         if use_accel_omp:
             _ = accel_data_update_host(self._raw, name=self._accel_name)
             _ = accel_data_update_host(self._raw_flags, name=self._accel_name)
@@ -719,6 +762,8 @@ class Amplitudes(AcceleratorObject):
             self.local_flags = accel_data_update_host(self.local_flags)
 
     def _accel_delete(self):
+        if self.local is None:
+            return
         if use_accel_omp:
             _ = accel_data_delete(self._raw, name=self._accel_name)
             _ = accel_data_delete(self._raw_flags, name=self._accel_name)
@@ -727,6 +772,8 @@ class Amplitudes(AcceleratorObject):
             self.local_flags = accel_data_delete(self.local_flags)
 
     def _accel_reset_local(self):
+        if self.local is None:
+            return
         # if not self.accel_in_use():
         #     return
         if use_accel_omp:
@@ -735,6 +782,8 @@ class Amplitudes(AcceleratorObject):
             accel_data_reset(self.local)
 
     def _accel_reset_local_flags(self):
+        if self.local is None:
+            return
         # if not self.accel_in_use():
         #     return
         if use_accel_omp:

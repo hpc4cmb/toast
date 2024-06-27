@@ -217,10 +217,16 @@ class Periodic(Template):
         # bin and the flagging of bins.
 
         # Boolean flags
-        self._amp_flags = np.zeros(self._n_local, dtype=bool)
+        if self._n_local == 0:
+            self._amp_flags = None
+        else:
+            self._amp_flags = np.zeros(self._n_local, dtype=bool)
 
         # Hits
-        self._amp_hits = np.zeros(self._n_local, dtype=np.int32)
+        if self._n_local == 0:
+            self._amp_hits = None
+        else:
+            self._amp_hits = np.zeros(self._n_local, dtype=np.int32)
 
         self._obs_bin_hits = list()
         for det in self._all_dets:
@@ -271,7 +277,8 @@ class Periodic(Template):
 
     def _zeros(self):
         z = Amplitudes(self.data.comm, self._n_global, self._n_local)
-        z.local_flags[:] = np.where(self._amp_flags, 1, 0)
+        if self._amp_flags is not None:
+            z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
     def _view_flags_and_index(

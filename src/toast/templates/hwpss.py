@@ -144,7 +144,10 @@ class Hwpss(Template):
             )
 
         # Boolean flags
-        self._amp_flags = np.zeros(self._n_local, dtype=bool)
+        if self._n_local == 0:
+            self._amp_flags = None
+        else:
+            self._amp_flags = np.zeros(self._n_local, dtype=bool)
 
         for det in self._all_dets:
             amp_offset = self._det_offset[det]
@@ -163,7 +166,8 @@ class Hwpss(Template):
 
     def _zeros(self):
         z = Amplitudes(self.data.comm, self._n_global, self._n_local)
-        z.local_flags[:] = np.where(self._amp_flags, 1, 0)
+        if self._amp_flags is not None:
+            z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
     @classmethod

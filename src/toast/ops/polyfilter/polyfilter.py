@@ -524,9 +524,6 @@ class PolyFilter(Operator):
         for obs in data.obs:
             # Get the detectors we are using for this observation
             dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             if self.view is not None:
                 if self.view not in obs.intervals:
@@ -620,6 +617,8 @@ class PolyFilter(Operator):
                         not_filtered[start : stop + 1] = False
                     shared_flags[not_filtered] |= self.poly_flag_mask
                 obs.shared[self.shared_flags].set(shared_flags, fromrank=0)
+            if obs.comm.comm_group is not None:
+                obs.comm.comm_group.barrier()
 
         return
 
@@ -953,7 +952,7 @@ class CommonModeFilter(Operator):
                     templates = np.vstack([np.ones(ngood), mean_template[good]])
                     invcov = np.dot(templates, templates.T)
                     cov = np.linalg.inv(invcov)
-                    for idet, iflag in zip(det_indices, flag_indices):
+                    for idet, iflag in zip(data_indices, flag_indices):
                         sig = temp_ob.detdata[self.det_data].data[idet]
                         sig_copy = sig[good].copy()
                         flg = det_flags[idet][good]

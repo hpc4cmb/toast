@@ -195,8 +195,12 @@ class Fourier2D(Template):
         # Allocate norms.  This data is the same size as a set of amplitudes,
         # so we allocate it in C memory.
 
-        self._norms_raw = AlignedF64.zeros(self._n_local)
-        self._norms = self._norms_raw.array()
+        if self._n_local == 0:
+            self._norms_raw = None
+            self._norms = None
+        else:
+            self._norms_raw = AlignedF64.zeros(self._n_local)
+            self._norms = self._norms_raw.array()
 
         def evaluate_template(theta, phi, radius):
             """Helper function to get the template values for a detector."""
