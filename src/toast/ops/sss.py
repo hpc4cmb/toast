@@ -1,4 +1,4 @@
-# Copyright (c) 2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -17,7 +17,7 @@ from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 from .pipeline import Pipeline
@@ -50,23 +50,25 @@ class SimScanSynchronousSignal(Operator):
         help="Operator that translates boresight Az/El pointing into detector frame",
     )
 
-    nside = Int(128, help="ground map healpix resolution")
+    pol = Bool(False, help="Ground map is polarized")
 
-    fwhm = Quantity(10 * u.arcmin, help="ground map smoothing scale")
+    nside = Int(128, help="Ground map healpix resolution")
 
-    lmax = Int(256, help="ground map expansion order")
+    fwhm = Quantity(10 * u.arcmin, help="Ground map smoothing scale")
+
+    lmax = Int(256, help="Ground map expansion order")
 
     scale = Quantity(1 * u.mK, help="RMS of the ground signal fluctuations at el=45deg")
 
     power = Float(
         -1,
-        help="exponential for suppressing ground pickup at higher observing elevation",
+        help="Exponential for suppressing ground pickup at higher observing elevation",
     )
 
     path = Unicode(
         None,
         allow_none=True,
-        help="path to a horizontal Healpix map to sample for the SSS *instead* "
+        help="Path to a horizontal Healpix map to sample for the SSS *instead* "
         "of synthesizing Gaussian maps",
     )
 
@@ -161,8 +163,10 @@ class SimScanSynchronousSignal(Operator):
             # Only the root process loads or simulates the map
             temperature = weather.surface_temperature
             if self.path:
-                sss_map = hp.read_map(self.path, verbose=False, dtype=dtype)
-                npix = len(sss_map)
+                if self.pol:
+                    sss_map = hp.read_map(self.path, [0, 1, 2], dtype=dtype)
+                else:
+                    sss_map = [hp.read_map(self.path, dtype=dtype)]
             else:
                 npix = 12 * self.nside**2
                 sss_map = rng.random(
@@ -181,13 +185,24 @@ class SimScanSynchronousSignal(Operator):
                 )
                 scale = self.scale * (np.abs(lat) / 90 + 0.5) ** self.power
                 sss_map *= scale.to_value(self.units)
+                if self.pol:
+                    # Mock up a 10% Q-polarized ground signal using the
+                    # simulated intensity
+                    sss_map = [sss_map, sss_map * 0.1, sss_map * 0]
+                else:
+                    sss_map = [sss_map]
+            sss_map = np.vstack(sss_map)
+            nmap, npix = sss_map.shape
         else:
             npix = None
+            nmap = None
             sss_map = None
 
         if comm is not None:
             npix = comm.bcast(npix)
-        obs.shared.create_group(self.sss_map, shape=(npix,), dtype=dtype)
+            nmap = comm.bcast(nmap)
+        self.nside = hp.npix2nside(npix)
+        obs.shared.create_group(self.sss_map, shape=(nmap, npix), dtype=dtype)
         obs.shared[self.sss_map].set(sss_map, fromrank=0)
         obs["sss_realization"] = self.realization
 
@@ -199,9 +214,11 @@ class SimScanSynchronousSignal(Operator):
         Use healpy bilinear interpolation to observe the ground signal map
         """
 
-        sss_map = obs.shared[self.sss_map].data
+        sss_maps = obs.shared[self.sss_map].data
 
         for det in dets:
+            signal = obs.detdata[self.det_data][det]
+
             try:
                 # Use cached detector quaternions
                 quats = obs.detdata[self.detector_pointing.quats][det]
@@ -212,11 +229,17 @@ class SimScanSynchronousSignal(Operator):
                 quats = obs.detdata[self.detector_pointing.quats][det]
 
             # Convert Az/El quaternion of the detector into angles
-            theta, phi, _ = qa.to_iso_angles(quats)
+            theta, phi, psi = qa.to_iso_angles(quats)
+            stokes_weights = [np.ones(signal.size)]
+            if self.pol:
+                stokes_weights.append(np.cos(2 * psi))
+                stokes_weights.append(np.sin(2 * psi))
 
-            signal = obs.detdata[self.det_data][det]
-
-            signal += hp.get_interp_val(sss_map, theta, phi)
+            # hp.get_interp_val(sss_map, theta, phi)
+            pixels, weights = hp.get_interp_weights(self.nside, theta, phi)
+            for p, w in zip(pixels, weights):
+                for sss_map, wstokes in zip(sss_maps, stokes_weights):
+                    signal += sss_map[p] * w * wstokes
 
         return
 
