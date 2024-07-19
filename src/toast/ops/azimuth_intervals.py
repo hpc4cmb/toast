@@ -44,9 +44,17 @@ class AzimuthIntervals(Operator):
 
     cut_short = Bool(True, help="If True, remove very short scanning intervals")
 
+    cut_long = Bool(True, help="If True, remove very long scanning intervals")
+
     short_limit = Quantity(
         0.25 * u.dimensionless_unscaled,
         help="Minimum length of a scan.  Either the minimum length in time or a "
+        "fraction of median scan length",
+    )
+
+    long_limit = Quantity(
+        1.25 * u.dimensionless_unscaled,
+        help="Maximum length of a scan.  Either the maximum length in time or a "
         "fraction of median scan length",
     )
 
@@ -172,6 +180,15 @@ class AzimuthIntervals(Operator):
 
                 begin_stable = np.where(stable[1:] - stable[:-1] == 1)[0]
                 end_stable = np.where(stable[:-1] - stable[1:] == 1)[0]
+
+                if len(begin_stable) == 0 or len(end_stable) == 0:
+                    msg = f"Observation {obs.name} has no stable scanning"
+                    msg += f" periods.  You should cut this observation or"
+                    msg += f" change the filter window.  Flagging all samples"
+                    msg += f" as unstable pointing."
+                    log.warning(msg)
+                    continue
+
                 if begin_stable[0] > end_stable[0]:
                     # We start in the middle of a scan
                     begin_stable = np.concatenate(([0], begin_stable))
@@ -204,6 +221,24 @@ class AzimuthIntervals(Operator):
                     stable_times = [
                         x for (x, y) in zip(stable_times, stable_bad) if not y
                     ]
+                if self.cut_long:
+                    stable_spans = np.array([(x[1] - x[0]) for x in stable_times])
+                    try:
+                        # First try long limit as time
+                        stable_bad = stable_spans > self.long_limit.to_value(u.s)
+                    except:
+                        # Try long limit as fraction
+                        median_stable = np.median(stable_spans)
+                        stable_bad = stable_spans > self.long_limit * median_stable
+                    begin_stable = np.array(
+                        [x for (x, y) in zip(begin_stable, stable_bad) if not y]
+                    )
+                    end_stable = np.array(
+                        [x for (x, y) in zip(end_stable, stable_bad) if not y]
+                    )
+                    stable_times = [
+                        x for (x, y) in zip(stable_times, stable_bad) if not y
+                    ]
 
                 # The "throw" intervals extend from one turnaround to the next.
                 # We start the first throw at the beginning of the first stable scan
@@ -220,9 +255,12 @@ class AzimuthIntervals(Operator):
                         < 0
                     )[0]
                     if len(vel_switch) > 1:
-                        msg = "Multiple turnarounds between end of stable scan at"
-                        msg = f" sample {start_turn} and next start at {end_turn}"
-                        raise RuntimeError(msg)
+                        msg = f"{obs.name}: Multiple turnarounds between end of "
+                        msg += "stable scan at"
+                        msg += f" sample {start_turn} and next start at {end_turn}."
+                        msg += " Cutting ."
+                        log.warning(msg)
+                        break
                     end_throw.append(start_turn + vel_switch[0])
                     begin_throw.append(end_throw[-1] + 1)
                 end_throw.append(end_stable[-1])

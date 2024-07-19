@@ -458,10 +458,11 @@ class SolverLHS(Operator):
 
         # Clear temp detector data
         for ob in data.obs:
-            ob.detdata[self.det_temp][:] = 0
-            ob.detdata[self.det_temp].update_units(self.det_data_units)
-            if ob.detdata[self.det_temp].accel_exists():
-                ob.detdata[self.det_temp].accel_reset()
+            if self.det_temp in ob.detdata:
+                ob.detdata[self.det_temp][:] = 0
+                ob.detdata[self.det_temp].update_units(self.det_data_units)
+                if ob.detdata[self.det_temp].accel_exists():
+                    ob.detdata[self.det_temp].accel_reset()
 
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.

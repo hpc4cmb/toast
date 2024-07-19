@@ -569,6 +569,9 @@ class Demodulate(Operator):
             demod_shared_flags, offset=(0,), fromrank=0
         )
 
+        input_det_flags = obs.local_detector_flags
+        output_det_flags = dict()
+
         for det in dets:
             flags = obs.detdata[self.det_flags][det]
             # Downsample flags
@@ -576,6 +579,8 @@ class Demodulate(Operator):
             for prefix in self.prefixes:
                 demod_det = f"{prefix}_{det}"
                 demod_obs.detdata[self.det_flags][demod_det] = demod_flags
+                output_det_flags[demod_det] = input_det_flags[det]
+        demod_obs.update_local_detector_flags(output_det_flags)
         return
 
     @function_timer

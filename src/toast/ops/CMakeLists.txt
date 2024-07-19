@@ -63,6 +63,7 @@ install(FILES
     weather_model.py
     yield_cut.py
     azimuth_intervals.py
+    calibrate.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
 

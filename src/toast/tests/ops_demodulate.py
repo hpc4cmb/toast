@@ -14,7 +14,13 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import close_data, create_ground_data, create_outdir
+from ._helpers import (
+    close_data,
+    create_ground_data,
+    create_outdir,
+    create_fake_constant_sky_tod,
+)
+
 from .mpi import MPITestCase
 
 
@@ -46,43 +52,13 @@ class DemodulateTest(MPITestCase):
             detector_pointing=detpointing,
         )
 
-        # Build the pixel distribution
-        build_dist = ops.BuildPixelDistribution(pixel_pointing=pixels)
-        build_dist.apply(data)
-
-        # Create a fake sky with only intensity and Q-polarization
-
-        map_key = "fake_map"
-        dist_key = build_dist.pixel_dist
-        dist = data[dist_key]
-        pix_data = PixelData(dist, np.float64, n_value=3, units=u.K)
-        off = 0
-        # map_values = [10, -1, 2]
-        map_values = [10, 2, 0]
-        for submap in range(dist.n_submap):
-            if submap in dist.local_submaps:
-                pix_data.data[off, :, 0] = map_values[0]
-                pix_data.data[off, :, 1] = map_values[1]
-                pix_data.data[off, :, 2] = map_values[2]
-                off += 1
-        data[map_key] = pix_data
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
-            det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key=map_key,
+        map_values = (10.0, 2.0, 0.0)
+        map_key = create_fake_constant_sky_tod(
+            data,
+            pixels,
+            weights,
+            map_vals=map_values,
         )
-        scan_pipe = ops.Pipeline(
-            detector_sets=["SINGLE"],
-            operators=[
-                pixels,
-                weights,
-                scanner,
-            ],
-        )
-        scan_pipe.apply(data)
 
         # Simulate noise
         # sim_noise = ops.SimNoise(noise_model=default_model.noise_model)
@@ -91,7 +67,6 @@ class DemodulateTest(MPITestCase):
         # Bin signal without demodulation
 
         binner = ops.BinMap(
-            pixel_dist=dist_key,
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model=default_model.noise_model,
