@@ -43,6 +43,7 @@ install(FILES
     totalconvolve.py
     groundfilter.py
     hwpfilter.py
+    hwpss_filter.py
     statistics.py
     sim_cosmic_rays.py
     time_constant.py
