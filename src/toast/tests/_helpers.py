@@ -793,9 +793,7 @@ def fake_hwpss_data(ang, scale):
     sincoeff = scale * np.array([0.7, 0.9, 0.1, 0.002, 0.0005])
     out = np.zeros_like(ang)
     for h in range(n_harmonic):
-        out[:] += coscoeff[h] * np.cos((h + 1) * ang) + sincoeff[h] * np.sin(
-            (h + 1) * ang
-        )
+        out[:] += coscoeff[h] * np.cos(h * ang) + sincoeff[h] * np.sin(h * ang)
     return out, coscoeff, sincoeff
 
 

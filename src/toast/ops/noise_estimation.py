@@ -1053,7 +1053,6 @@ class NoiseEstim(Operator):
                 extended_flags,
                 my_psds1,
                 my_cov1,
-                comm,
                 lagmax,
             )
 
