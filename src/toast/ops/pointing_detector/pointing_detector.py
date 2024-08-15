@@ -51,6 +51,10 @@ class PointingDetectorSimple(Operator):
         defaults.hwp_angle, allow_none=True, help="Observation shared key for HWP angle"
     )
 
+    hwp_angle_offset = Quantity(
+        0 * u.deg, help="HWP angle offset to apply when constructing deflection"
+    )
+
     hwp_deflection_radius = Quantity(
         None,
         allow_none=True,
@@ -238,17 +242,19 @@ class PointingDetectorSimple(Operator):
                 use_accel=use_accel,
             )
 
-        # Optionally apply HWP deflection
-        if self.hwp_deflection_radius is not None and \
-           self.hwp_deflection_radius.value != 0:
-            xaxis, yaxis, zaxis = np.eye(3)
-            deflection = qa.rotation(
-                xaxis, self.hwp_deflection_radius.to_value(u.radian)
-            )
-            hwp_angle = ob.shared[self.hwp_angle].data
-            hwp_quat = qa.rotation(zaxis, hwp_angle)
-            det_quats = ob.detdata[self.quats].data
-            det_quats[:] = qa.mult(det_quats, qa.mult(hwp_quat, deflection))
+            # Optionally apply HWP deflection
+            if self.hwp_deflection_radius is not None and \
+               self.hwp_deflection_radius.value != 0:
+                xaxis, yaxis, zaxis = np.eye(3)
+                deflection = qa.rotation(
+                    xaxis, self.hwp_deflection_radius.to_value(u.radian)
+                )
+                hwp_angle = ob.shared[self.hwp_angle].data
+                hwp_angle += self.hwp_angle_offset.to_value(u.rad)
+                hwp_quat = qa.rotation(zaxis, hwp_angle)
+                det_quats = ob.detdata[self.quats].data
+                for idet in range(len(dets)):
+                    det_quats[idet] = qa.mult(det_quats[idet], qa.mult(hwp_quat, deflection))
 
         return
 
