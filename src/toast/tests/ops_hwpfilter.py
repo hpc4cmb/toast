@@ -60,7 +60,7 @@ class HWPFilterTest(MPITestCase):
         ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
 
         # Make fake flags
-        # fake_flags(data)
+        fake_flags(data)
 
         # Filter
         hwpfilter = ops.HWPFilter(
