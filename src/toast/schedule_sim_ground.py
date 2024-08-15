@@ -1417,6 +1417,23 @@ def scan_patch(
             break
         tstop += tstep
 
+    # Finally, check that the required azimuths do not overlap the
+    # North-South avoidance sector
+    avoid = args.north_south_avoidance_deg
+    if success and avoid is not None and avoid != 0:
+        azmin = np.degrees(np.amin(azmins))
+        azmax = np.degrees(np.amin(azmaxs))
+        if azmin < 180:
+            if azmin < avoid / 2:
+                success = False
+            if azmax > 180 - avoid / 2:
+                success = False
+        if azmin > 180:
+            if azmin < 180 + avoid / 2:
+                success = False
+            if azmax > 360 - avoid / 2:
+                success = False
+
     return success, azmins, azmaxs, aztimes, tstop
 
 
@@ -2588,6 +2605,13 @@ instead of the concise 11-field schedule""",
         default=False,
         action="store_true",
         help="Use the same azimuth range for all sub scans",
+    )
+    parser.add_argument(
+        "--north-south-avoidance-deg",
+        required=False,
+        type=float,
+        help="Reject scans that require these sectors. "
+        "The value is the full width of the sector.",
     )
     parser.add_argument(
         "--equalize-area",
