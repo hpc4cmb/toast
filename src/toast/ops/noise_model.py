@@ -12,6 +12,7 @@ from scipy.optimize import Bounds, curve_fit, least_squares
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
+from ..mpi import flatten
 from ..timing import Timer, function_timer
 from ..traits import Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger
@@ -518,9 +519,6 @@ class FitNoiseModel(Operator):
         bad = np.logical_not(good)
         n_bad = np.count_nonzero(bad)
         if n_bad > 0:
-
-
-
             msg = "Some PSDs have negative values.  Consider changing "
             msg += "noise estimation parameters."
             log.warning(msg)
@@ -635,7 +633,7 @@ class FlagNoiseFit(Operator):
     sigma_rms = Float(
         None,
         allow_none=True,
-        help="In addition to flagging based on estimated model, also apply overall TOD cut"
+        help="In addition to flagging based on estimated model, also apply overall TOD cut",
     )
 
     sigma_NET = Float(5.0, help="Flag detectors with NET values outside this range")
@@ -717,16 +715,16 @@ class FlagNoiseFit(Operator):
                 else:
                     proc_vals = obs.comm_col.gather(local_net, root=0)
                     if obs.comm_col_rank == 0:
-                        all_net = np.array([val for plist in proc_vals for val in plist])
+                        all_net = np.array(flatten(proc_vals))
                     proc_vals = obs.comm_col.gather(local_fknee, root=0)
                     if obs.comm_col_rank == 0:
-                        all_fknee = np.array([val for plist in proc_vals for val in plist])
+                        all_fknee = np.array(flatten(proc_vals))
                     proc_vals = obs.comm_col.gather(local_rms, root=0)
                     if obs.comm_col_rank == 0:
-                        all_rms = np.array([val for plist in proc_vals for val in plist])
+                        all_rms = np.array(flatten(proc_vals))
                     proc_vals = obs.comm_col.gather(local_names, root=0)
                     if obs.comm_col_rank == 0:
-                        all_names = [val for plist in proc_vals for val in plist]
+                        all_names = flatten(proc_vals)
 
             # Iteratively cut
             all_flags = None
@@ -761,8 +759,8 @@ class FlagNoiseFit(Operator):
                                 # Already cut
                                 continue
                             if (
-                                np.absolute(fknee - fknee_mean) >
-                                fknee_std * self.sigma_fknee
+                                np.absolute(fknee - fknee_mean)
+                                > fknee_std * self.sigma_fknee
                             ):
                                 msg = f"obs {obs.name}, det {name} has f_knee "
                                 msg += f"{fknee} that is > {self.sigma_fknee} "
@@ -777,10 +775,7 @@ class FlagNoiseFit(Operator):
                             if not all_good[idet]:
                                 # Already cut
                                 continue
-                            if (
-                                np.absolute(rms - rms_mean) >
-                                rms_std * self.sigma_rms
-                            ):
+                            if np.absolute(rms - rms_mean) > rms_std * self.sigma_rms:
                                 msg = f"obs {obs.name}, det {name} has TOD RMS "
                                 msg += f"{rms} that is > {self.sigma_rms} "
                                 msg += f"x {rms_std} from {rms_mean}"
@@ -791,7 +786,8 @@ class FlagNoiseFit(Operator):
                     log.debug(msg)
                     flag_pass += 1
                 all_flags = {
-                    x: self.outlier_flag_mask for i, x in enumerate(all_names)
+                    x: self.outlier_flag_mask
+                    for i, x in enumerate(all_names)
                     if not all_good[i]
                 }
                 msg = f"obs {obs.name}: flagged {len(all_flags)} / {len(all_names)}"
