@@ -1,7 +1,8 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import astropy.units as u
 import numpy as np
 import traitlets
 
@@ -9,7 +10,7 @@ from ... import qarray as qa
 from ...accelerator import ImplementationType
 from ...observation import default_values as defaults
 from ...timing import function_timer
-from ...traits import Bool, Int, Unicode, UseEnum, trait_docs
+from ...traits import Bool, Int, Quantity, Unicode, UseEnum, trait_docs
 from ...utils import Logger
 from ..operator import Operator
 from .kernels import pointing_detector
@@ -44,6 +45,21 @@ class PointingDetectorSimple(Operator):
 
     boresight = Unicode(
         defaults.boresight_radec, help="Observation shared key for boresight"
+    )
+
+    hwp_angle = Unicode(
+        defaults.hwp_angle, allow_none=True, help="Observation shared key for HWP angle"
+    )
+
+    hwp_angle_offset = Quantity(
+        0 * u.deg, help="HWP angle offset to apply when constructing deflection"
+    )
+
+    hwp_deflection_radius = Quantity(
+        None,
+        allow_none=True,
+        help="If non-zero, nominal detector pointing will be deflected in a circular "
+        "pattern according to HWP phase.",
     )
 
     quats = Unicode(
@@ -225,6 +241,20 @@ class PointingDetectorSimple(Operator):
                 impl=implementation,
                 use_accel=use_accel,
             )
+
+            # Optionally apply HWP deflection
+            if self.hwp_deflection_radius is not None and \
+               self.hwp_deflection_radius.value != 0:
+                xaxis, yaxis, zaxis = np.eye(3)
+                deflection = qa.rotation(
+                    xaxis, self.hwp_deflection_radius.to_value(u.radian)
+                )
+                hwp_angle = ob.shared[self.hwp_angle].data
+                hwp_angle += self.hwp_angle_offset.to_value(u.rad)
+                hwp_quat = qa.rotation(zaxis, hwp_angle)
+                det_quats = ob.detdata[self.quats].data
+                for idet in range(len(dets)):
+                    det_quats[idet] = qa.mult(det_quats[idet], qa.mult(hwp_quat, deflection))
 
         return
 

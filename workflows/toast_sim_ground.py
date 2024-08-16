@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -24,6 +24,8 @@ options for a specific Operator, see the documentation or use the help() functio
 an interactive python session.
 
 """
+
+import toast
 
 import argparse
 import datetime
