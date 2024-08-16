@@ -151,9 +151,10 @@ class HWPFilterTest(MPITestCase):
                 # Check that the flagged samples were also cleaned and not,
                 # for example, set to zero. Use np.diff() to remove any
                 # residual trend
-                self.assertTrue(
-                    np.std(np.diff(output) - np.diff(original))
-                    < 0.1 * np.std(np.diff(output))
-                )
+                residual_std = np.std(np.diff(output) - np.diff(original))
+                output_std = np.std(np.diff(output))
+                if residual_std > 0.1 * output_std:
+                    print(f"residual ({residual_std}) > 0.1 * ({output_std})")
+                    self.assertTrue(False)
 
         close_data(data)

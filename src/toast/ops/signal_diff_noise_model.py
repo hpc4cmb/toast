@@ -121,7 +121,10 @@ class SignalDiffNoiseModel(Operator):
             focalplane = ob.telescope.focalplane
             fsample = focalplane.sample_rate
 
-            local_dets = ob.select_local_detectors(flagmask=defaults.det_mask_invalid)
+            shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
+            signal_units = ob.detdata[self.det_data].units
+
+            # Create the noise model for all detectors, even flagged ones.
             dets = []
             fmin = {}
             fknee = {}
@@ -129,9 +132,19 @@ class SignalDiffNoiseModel(Operator):
             NET = {}
             rates = {}
             indices = {}
-            shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
-            signal_units = ob.detdata[self.det_data].units
-            for name in local_dets:
+            for name in ob.local_detectors:
+                dets.append(name)
+                rates[name] = fsample
+                fmin[name] = self.fmin
+                fknee[name] = self.fknee
+                alpha[name] = self.alpha
+                NET[name] = 0.0 * signal_units / np.sqrt(fsample)
+                indices[name] = focalplane[name]["uid"]
+
+            # Set the NET for the good detectors
+            for name in ob.select_local_detectors(
+                flagmask=defaults.det_mask_invalid
+            ):
                 # Estimate white noise from consecutive sample differences.
                 # Neither of the samples can have flags raised.
                 sig = ob.detdata[self.det_data][name]
@@ -142,13 +155,7 @@ class SignalDiffNoiseModel(Operator):
                 sigma = np.std(sig_diff[good_diff]) / np.sqrt(2) * signal_units
                 net = sigma / np.sqrt(fsample)
                 # Store the estimate in a noise model
-                dets.append(name)
-                rates[name] = fsample
-                fmin[name] = self.fmin
-                fknee[name] = self.fknee
-                alpha[name] = self.alpha
                 NET[name] = net
-                indices[name] = focalplane[name]["uid"]
 
             ob[self.noise_model] = AnalyticNoise(
                 rate=rates,

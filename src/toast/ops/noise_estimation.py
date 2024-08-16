@@ -226,6 +226,13 @@ class NoiseEstim(Operator):
             raise traitlets.TraitError("Shared flag mask should be a positive integer")
         return check
 
+    @traitlets.validate("nbin_psd")
+    def _check_nbin_psd(self, proposal):
+        check = proposal["value"]
+        if check <= 1:
+            raise traitlets.TraitError("Number of PSD bins should be greater than one")
+        return check
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         return
@@ -376,11 +383,11 @@ class NoiseEstim(Operator):
             scan_mask.apply(data, detectors=detectors)
 
         for orig_obs in data.obs:
+            # Optionally redistribute data, but only if we are computing
+            # cross spectra.
             obs, global_intervals = self._redistribute(orig_obs)
 
-            # Get the set of all detectors we are considering for this obs.  Since
-            # we have already redistributed the data, every process has a time slice
-            # and the same set of local detectors.
+            # Get the set of all local detectors we are considering for this obs.
             local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             good_dets = set(local_dets)
 
@@ -507,27 +514,20 @@ class NoiseEstim(Operator):
                         self.lagmax,
                     )
 
-                if obs.comm.group_rank == 0:
-                    det_units = obs.detdata[self.det_data].units
-                    if det_units == u.dimensionless_unscaled:
-                        msg = f"Observation {obs.name}, detector data '{self.det_data}'"
-                        msg += f" has no units.  Assuming Kelvin."
-                        log.warning(msg)
-                        det_units = u.K
-                    psd_unit = det_units**2 * u.second
-                    noise_dets.append(det1)
-                    noise_freqs[det1] = nse_freqs[1:] * u.Hz
-                    noise_psds[det1] = nse_psd[1:] * psd_unit
-                    noise_indices[det1] = obs.telescope.focalplane[det1]["uid"]
+                det_units = obs.detdata[self.det_data].units
+                if det_units == u.dimensionless_unscaled:
+                    msg = f"Observation {obs.name}, detector data '{self.det_data}'"
+                    msg += f" has no units.  Assuming Kelvin."
+                    log.warning(msg)
+                    det_units = u.K
+                psd_unit = det_units**2 * u.second
+                noise_dets.append(det1)
+                noise_freqs[det1] = nse_freqs[1:] * u.Hz
+                noise_psds[det1] = nse_psd[1:] * psd_unit
+                noise_indices[det1] = obs.telescope.focalplane[det1]["uid"]
 
             if self.out_model is not None:
-                # Create a noise model.  Our observation is currently distributed
-                # so that every process has all detectors.
-                if data.comm.comm_group is not None:
-                    noise_dets = data.comm.comm_group.bcast(noise_dets, root=0)
-                    noise_freqs = data.comm.comm_group.bcast(noise_freqs, root=0)
-                    noise_psds = data.comm.comm_group.bcast(noise_psds, root=0)
-                    noise_indices = data.comm.comm_group.bcast(noise_indices, root=0)
+                # Create a noise model for our local detectors.
                 obs[self.out_model] = Noise(
                     detectors=noise_dets,
                     freqs=noise_freqs,
@@ -765,9 +765,11 @@ class NoiseEstim(Operator):
         flags,
         my_psds1,
         my_cov1,
-        comm,
         lagmax,
     ):
+        # Get the process grid row communicator, used to communicate overlaps
+        comm = obs.comm_row
+
         # Get another PSD for a down-sampled TOD to measure the
         # low frequency power
 
@@ -789,22 +791,27 @@ class NoiseEstim(Operator):
         naverage = lagmax
 
         # Extend the local arrays to remove boundary effects from filtering
-        comm = obs.comm_row
-        (
-            extended_times,
-            extended_flags,
-            extended_signal1,
-            extended_signal2,
-        ) = communicate_overlap(
-            timestamps_decim,
-            signal1_decim,
-            signal2_decim,
-            flags_decim,
-            lagmax,
-            naverage,
-            comm,
-            obs.comm.group,
-        )
+        if comm is None or comm.size == 1:
+            extended_times = timestamps_decim
+            extended_flags = flags_decim
+            extended_signal1 = signal1_decim
+            extended_signal2 = signal2_decim
+        else:
+            (
+                extended_times,
+                extended_flags,
+                extended_signal1,
+                extended_signal2,
+            ) = communicate_overlap(
+                timestamps_decim,
+                signal1_decim,
+                signal2_decim,
+                flags_decim,
+                lagmax,
+                naverage,
+                comm,
+                obs.comm.group,
+            )
         # High pass filter the signal to avoid aliasing
         extended_signal1 = highpass_flagged_signal(
             extended_signal1,
@@ -932,21 +939,36 @@ class NoiseEstim(Operator):
 
         log = Logger.get()
 
+        # Get the process grid row communicator, used to communicate overlaps
+        comm = obs.comm_row
+
         # We apply a prewhitening filter to the signal.  To accommodate the
         # quality flags, the filter is a moving average that only accounts
         # for the unflagged samples
         naverage = lagmax
 
         # Extend the local arrays to remove boundary effects from filtering
-        comm = obs.comm_row
-        (
-            extended_times,
-            extended_flags,
-            extended_signal1,
-            extended_signal2,
-        ) = communicate_overlap(
-            timestamps, signal1, signal2, flags, lagmax, naverage, comm, obs.comm.group
-        )
+        if comm is None or comm.size == 1:
+            extended_times = timestamps
+            extended_flags = flags
+            extended_signal1 = signal1
+            extended_signal2 = signal2
+        else:
+            (
+                extended_times,
+                extended_flags,
+                extended_signal1,
+                extended_signal2,
+            ) = communicate_overlap(
+                timestamps,
+                signal1,
+                signal2,
+                flags,
+                lagmax,
+                naverage,
+                comm,
+                obs.comm.group,
+            )
         # High pass filter the signal to avoid aliasing
         extended_signal1 = highpass_flagged_signal(
             extended_signal1,
@@ -1031,13 +1053,12 @@ class NoiseEstim(Operator):
                 extended_flags,
                 my_psds1,
                 my_cov1,
-                comm,
                 lagmax,
             )
 
         log.debug_rank(
-            "Compute Correlators and PSDs",
-            comm=obs.comm.comm_group,
+            f"Compute Correlators and PSDs for {det1} / {det2}",
+            comm=comm,
             rank=0,
             timer=timer,
         )
@@ -1052,8 +1073,8 @@ class NoiseEstim(Operator):
             my_binned_psds2, _, binfreq20 = self.bin_psds(my_psds2, fmin, fmax)
 
         log.debug_rank(
-            "Bin PSDs",
-            comm=obs.comm.comm_group,
+            f"Bin PSDs for {det1} / {det2}",
+            comm=comm,
             rank=0,
             timer=timer,
         )
@@ -1087,10 +1108,10 @@ class NoiseEstim(Operator):
 
         have_bins = binfreq0 is not None
         have_bins_all = None
-        if obs.comm_row is None:
+        if comm is None:
             have_bins_all = [have_bins]
         else:
-            have_bins_all = obs.comm_row.allgather(have_bins)
+            have_bins_all = comm.allgather(have_bins)
         root = 0
         if np.any(have_bins_all):
             while not have_bins_all[root]:
@@ -1099,10 +1120,10 @@ class NoiseEstim(Operator):
             msg = "None of the processes have valid PSDs"
             raise RuntimeError(msg)
         binfreq = None
-        if obs.comm_row is None:
+        if comm is None:
             binfreq = binfreq0
         else:
-            binfreq = obs.comm_row.bcast(binfreq0, root=root)
+            binfreq = comm.bcast(binfreq0, root=root)
         if binfreq0 is not None and np.any(binfreq != binfreq0):
             msg = (
                 f"{obs.comm.world_rank:4} : Binned PSD frequencies change. "
@@ -1122,29 +1143,29 @@ class NoiseEstim(Operator):
 
         all_times = None
         all_psds = None
-        if obs.comm_row is None:
+        if comm is None:
             all_times = [my_times]
             all_psds = [my_binned_psds]
         else:
-            all_times = obs.comm_row.gather(my_times, root=0)
-            all_psds = obs.comm_row.gather(my_binned_psds, root=0)
+            all_times = comm.gather(my_times, root=0)
+            all_psds = comm.gather(my_binned_psds, root=0)
         all_cov = None
         if self.save_cov:
-            if obs.comm_row is None:
+            if comm is None:
                 all_cov = [my_cov]
             else:
-                all_cov = obs.comm_row.gather(my_cov, root=0)
+                all_cov = comm.gather(my_cov, root=0)
 
         log.debug_rank(
-            "Collect PSDs",
-            comm=obs.comm.comm_group,
+            f"Collect PSDs for {det1} / {det2}",
+            comm=comm,
             rank=0,
             timer=timer,
         )
 
         final_freqs = None
         final_psd = None
-        if obs.comm.group_rank == 0:
+        if obs.comm_row_rank == 0:
             if len(all_times) != len(all_psds):
                 msg = (
                     f"ERROR: Process {obs.comm.world_rank} has len(all_times) = "
@@ -1200,7 +1221,7 @@ class NoiseEstim(Operator):
 
             final_freqs = binfreq
             final_psd = np.mean(np.array(good_psds), axis=0)
-            log.debug_rank("Write PSDs", timer=timer)
+            log.debug_rank(f"Write PSDs for {det1} / {det2}", timer=timer)
 
         return final_freqs, final_psd
 

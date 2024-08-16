@@ -650,7 +650,8 @@ class Offset(Template):
 
     def _zeros(self):
         z = Amplitudes(self.data.comm, self._n_global, self._n_local)
-        z.local_flags[:] = np.where(self._amp_flags, 1, 0)
+        if z.local_flags is not None:
+            z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
     def _step_length(self, stime, rate):

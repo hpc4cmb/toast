@@ -12,6 +12,7 @@ from astropy import units as u
 from astropy.wcs import WCS
 
 from . import qarray as qa
+from .pixels_io_healpix import read_healpix
 
 _matplotlib_backend = None
 
@@ -128,6 +129,7 @@ def plot_wcs_maps(
     ymax=None,
     is_azimuth=False,
     cmap="viridis",
+    format="pdf",
 ):
     """Plot WCS projected output maps.
 
@@ -147,6 +149,7 @@ def plot_wcs_maps(
         ymin (float):  Fraction (0.0-1.0) of the maximum Y view.
         is_azimuth (bool):  If True, swap direction of longitude axis.
         cmap (str): The color map name to use.
+        format (str): The output image format.
 
     """
     import matplotlib as mpl
@@ -182,7 +185,7 @@ def plot_wcs_maps(
         if ymin is not None and ymax is not None:
             ax.set_ylim(ymin, ymax)
         plt.colorbar(im, orientation="vertical")
-        plt.savefig(out, format="pdf")
+        plt.savefig(out, format=format)
         plt.close()
 
     def map_range(hdata):
@@ -212,6 +215,7 @@ def plot_wcs_maps(
         else:
             goodpix = np.logical_and(hitmask, (mdata != 0))
         mono = np.mean(mdata[goodpix])
+        print(f"Monopole = {mono}")
         mdata[goodpix] -= mono
 
     hitmask = None
@@ -223,7 +227,7 @@ def plot_wcs_maps(
         maxhits = 0.5 * np.amax(hdu.data[0, :, :])
         if max_hits is not None:
             maxhits = max_hits
-        plot_single(wcs, hdu.data, 0, 0, maxhits, f"{hitfile}.pdf")
+        plot_single(wcs, hdu.data, 0, 0, maxhits, f"{hitfile}.{format}")
         del hdu
         hdulist.close()
 
@@ -244,30 +248,30 @@ def plot_wcs_maps(
         mmin, mmax = sym_range(mapdata[0, :, :])
         if range_I is not None:
             mmin, mmax = range_I
-        plot_single(wcs, mapdata, 0, mmin, mmax, f"{mapfile}_I.pdf")
+        plot_single(wcs, mapdata, 0, mmin, mmax, f"{mapfile}_I.{format}")
         if truth is not None:
             tmin, tmax = sym_range(thdu.data[0, :, :])
             mapdata[0, :, :] -= thdu.data[0, :, :]
-            plot_single(wcs, mapdata, 0, tmin, tmax, f"{mapfile}_resid_I.pdf")
+            plot_single(wcs, mapdata, 0, tmin, tmax, f"{mapfile}_resid_I.{format}")
 
         if mapdata.shape[0] > 1:
             mmin, mmax = sym_range(mapdata[1, :, :])
             if range_Q is not None:
                 mmin, mmax = range_Q
-            plot_single(wcs, mapdata, 1, mmin, mmax, f"{mapfile}_Q.pdf")
+            plot_single(wcs, mapdata, 1, mmin, mmax, f"{mapfile}_Q.{format}")
             if truth is not None:
                 tmin, tmax = sym_range(thdu.data[1, :, :])
                 mapdata[1, :, :] -= thdu.data[1, :, :]
-                plot_single(wcs, mapdata, 1, tmin, tmax, f"{mapfile}_resid_Q.pdf")
+                plot_single(wcs, mapdata, 1, tmin, tmax, f"{mapfile}_resid_Q.{format}")
 
             mmin, mmax = sym_range(mapdata[2, :, :])
             if range_U is not None:
                 mmin, mmax = range_U
-            plot_single(wcs, mapdata, 2, mmin, mmax, f"{mapfile}_U.pdf")
+            plot_single(wcs, mapdata, 2, mmin, mmax, f"{mapfile}_U.{format}")
             if truth is not None:
                 tmin, tmax = sym_range(thdu.data[2, :, :])
                 mapdata[2, :, :] -= thdu.data[2, :, :]
-                plot_single(wcs, mapdata, 2, tmin, tmax, f"{mapfile}_resid_U.pdf")
+                plot_single(wcs, mapdata, 2, tmin, tmax, f"{mapfile}_resid_U.{format}")
 
         if truth is not None:
             del thdu
@@ -412,6 +416,7 @@ def plot_healpix_maps(
     gnomview=False,
     gnomres=None,
     cmap="viridis",
+    format="pdf",
 ):
     """Plot Healpix projected output maps.
 
@@ -430,6 +435,7 @@ def plot_healpix_maps(
         gnomres (float):  The resolution in arcminutes to pass to gnomview.
             If None, it will be estimated from the data.
         cmap (str): The color map name to use.
+        format (str): The output image format.
 
     """
     set_matplotlib_backend()
@@ -463,7 +469,7 @@ def plot_healpix_maps(
                 max=vmax,
                 title=file_base,
             )
-        plt.savefig(out, format="pdf")
+        plt.savefig(out, format=format)
         plt.close()
 
     def map_range(data):
@@ -486,7 +492,7 @@ def plot_healpix_maps(
     xsize = 1600
     goodhits = slice(None)
     if hitfile is not None:
-        hitdata = hp.read_map(hitfile, field=None, nest=True)
+        hitdata = read_healpix(hitfile, field=None, nest=True)
         maxhits = np.amax(hitdata)
         if max_hits is not None:
             maxhits = max_hits
@@ -511,7 +517,7 @@ def plot_healpix_maps(
             hitdata,
             0,
             maxhits,
-            f"{hitfile}.pdf",
+            f"{hitfile}.{format}",
             gnomrot=gnomrot,
             reso=gnomres,
             xsize=xsize,
@@ -521,7 +527,7 @@ def plot_healpix_maps(
     mapdata = None
     truthdata = None
     if mapfile is not None:
-        mapdata = hp.read_map(mapfile, field=None, nest=True)
+        mapdata = read_healpix(mapfile, field=None, nest=True)
         if truth is not None:
             truthdata = hp.read_map(truth, field=None, nest=True)
 
@@ -546,7 +552,7 @@ def plot_healpix_maps(
             imapdata,
             mmin,
             mmax,
-            f"{mapfile}_I.pdf",
+            f"{mapfile}_I.{format}",
             gnomrot=gnomrot,
             reso=gnomres,
             xsize=xsize,
@@ -558,7 +564,7 @@ def plot_healpix_maps(
                 truthdata[0],
                 tmin,
                 tmax,
-                f"{mapfile}_input_I.pdf",
+                f"{mapfile}_input_I.{format}",
                 gnomrot=gnomrot,
                 reso=gnomres,
                 xsize=xsize,
@@ -568,7 +574,7 @@ def plot_healpix_maps(
                 imapdata,
                 tmin,
                 tmax,
-                f"{mapfile}_resid_I.pdf",
+                f"{mapfile}_resid_I.{format}",
                 gnomrot=gnomrot,
                 reso=gnomres,
                 xsize=xsize,
@@ -586,7 +592,7 @@ def plot_healpix_maps(
                 qmapdata,
                 mmin,
                 mmax,
-                f"{mapfile}_Q.pdf",
+                f"{mapfile}_Q.{format}",
                 gnomrot=gnomrot,
                 reso=gnomres,
                 xsize=xsize,
@@ -598,7 +604,7 @@ def plot_healpix_maps(
                     truthdata[1],
                     tmin,
                     tmax,
-                    f"{mapfile}_input_Q.pdf",
+                    f"{mapfile}_input_Q.{format}",
                     gnomrot=gnomrot,
                     reso=gnomres,
                     xsize=xsize,
@@ -608,7 +614,7 @@ def plot_healpix_maps(
                     qmapdata,
                     tmin,
                     tmax,
-                    f"{mapfile}_resid_Q.pdf",
+                    f"{mapfile}_resid_Q.{format}",
                     gnomrot=gnomrot,
                     reso=gnomres,
                     xsize=xsize,
@@ -622,7 +628,7 @@ def plot_healpix_maps(
                 umapdata,
                 mmin,
                 mmax,
-                f"{mapfile}_U.pdf",
+                f"{mapfile}_U.{format}",
                 gnomrot=gnomrot,
                 reso=gnomres,
                 xsize=xsize,
@@ -634,7 +640,7 @@ def plot_healpix_maps(
                     truthdata[2],
                     tmin,
                     tmax,
-                    f"{mapfile}_input_U.pdf",
+                    f"{mapfile}_input_U.{format}",
                     gnomrot=gnomrot,
                     reso=gnomres,
                     xsize=xsize,
@@ -644,7 +650,7 @@ def plot_healpix_maps(
                     umapdata,
                     tmin,
                     tmax,
-                    f"{mapfile}_resid_U.pdf",
+                    f"{mapfile}_resid_U.{format}",
                     gnomrot=gnomrot,
                     reso=gnomres,
                     xsize=xsize,

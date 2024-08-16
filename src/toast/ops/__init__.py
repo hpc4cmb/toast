@@ -7,6 +7,7 @@
 from .arithmetic import Combine
 from .azimuth_intervals import AzimuthIntervals
 from .cadence_map import CadenceMap
+from .calibrate import CalibrateDetectors
 from .common_mode_noise import CommonModeNoise
 from .conviqt import SimConviqt, SimTEBConviqt, SimWeightedConviqt
 from .copy import Copy

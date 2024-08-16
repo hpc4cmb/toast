@@ -552,6 +552,54 @@ def create_fake_sky(data, dist_key, map_key, hpix_out=None):
         )
 
 
+def create_fake_constant_sky_tod(
+    data,
+    pixel_pointing,
+    stokes_weights,
+    map_vals=(1.0, 1.0, 1.0),
+    det_data=defaults.det_data,
+):
+    """Fake sky signal with constant I/Q/U"""
+    # Build the pixel distribution
+    build_dist = ops.BuildPixelDistribution(
+        pixel_dist="fake_map_dist",
+        pixel_pointing=pixel_pointing,
+    )
+    build_dist.apply(data)
+
+    # Create a fake sky
+    map_key = "fake_map"
+    dist_key = build_dist.pixel_dist
+    dist = data[dist_key]
+    pix_data = PixelData(dist, np.float64, n_value=3, units=u.K)
+    off = 0
+    for submap in range(dist.n_submap):
+        if submap in dist.local_submaps:
+            pix_data.data[off, :, 0] = map_vals[0]
+            pix_data.data[off, :, 1] = map_vals[1]
+            pix_data.data[off, :, 2] = map_vals[2]
+            off += 1
+    data[map_key] = pix_data
+
+    # Scan map into timestreams
+    scanner = ops.ScanMap(
+        det_data=defaults.det_data,
+        pixels=pixel_pointing.pixels,
+        weights=stokes_weights.weights,
+        map_key=map_key,
+    )
+    scan_pipe = ops.Pipeline(
+        detector_sets=["SINGLE"],
+        operators=[
+            pixel_pointing,
+            stokes_weights,
+            scanner,
+        ],
+    )
+    scan_pipe.apply(data)
+    return map_key
+
+
 def create_fake_mask(data, dist_key, mask_key):
     np.random.seed(987654321)
     dist = data[dist_key]

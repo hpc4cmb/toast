@@ -151,6 +151,7 @@ install(FILES
     schedule_sim_ground.py
     schedule_sim_satellite.py
     widgets.py
+    hwp_utils.py
     "RELEASE"
     DESTINATION ${PYTHON_SITE}/toast
 )

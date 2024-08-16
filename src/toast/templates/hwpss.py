@@ -11,6 +11,12 @@ import numpy as np
 from scipy.linalg import eigvalsh, lu_factor, lu_solve
 
 from ..data import Data
+from ..hwp_utils import (
+    hwpss_sincos_buffer,
+    hwpss_compute_coeff_covariance,
+    hwpss_compute_coeff,
+    hwpss_build_model,
+)
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
@@ -47,7 +53,7 @@ class Hwpss(Template):
     )
 
     hwp_flag_mask = Int(
-        defaults.det_mask_invalid,
+        defaults.shared_mask_invalid,
         help="Bit mask to use when considering valid HWP angle values.",
     )
 
@@ -109,22 +115,30 @@ class Hwpss(Template):
                     continue
                 if det not in self._obs_dets[iob]:
                     continue
-                if self.view is not None:
-                    self._obs_outview[iob] = ~ob.intervals[self.view]
-                times = np.array(ob.shared[self.times].data, copy=True)
-                time_offset = times[0]
-                times -= time_offset
-                self._obs_reltime[iob] = times.astype(np.float32)
-                if self.hwp_flags is None:
-                    flags = np.zeros(len(times), dtype=np.uint8)
-                else:
-                    flags = ob.shared[self.hwp_flags].data & self.hwp_flag_mask
-                self._obs_sincos[iob] = self.sincos_buffer(
-                    ob.shared[self.hwp_angle], flags, self.harmonics
-                )
-                self._obs_cov[iob] = self.compute_coeff_covariance(
-                    self._obs_reltime[iob], flags, self._obs_sincos[iob]
-                )
+                if iob not in self._obs_reltime:
+                    # First time we are considering this observation
+                    if self.view is not None:
+                        self._obs_outview[iob] = ~ob.intervals[self.view]
+                    times = np.array(ob.shared[self.times].data, copy=True)
+                    time_offset = times[0]
+                    times -= time_offset
+                    self._obs_reltime[iob] = times.astype(np.float32)
+                    if self.hwp_flags is None:
+                        flags = np.zeros(len(times), dtype=np.uint8)
+                    else:
+                        flags = ob.shared[self.hwp_flags].data & self.hwp_flag_mask
+                    self._obs_sincos[iob] = hwpss_sincos_buffer(
+                        ob.shared[self.hwp_angle],
+                        flags,
+                        self.harmonics,
+                        comm=ob.comm.comm_group,
+                    )
+                    self._obs_cov[iob] = hwpss_compute_coeff_covariance(
+                        self._obs_reltime[iob],
+                        flags,
+                        self._obs_sincos[iob],
+                        comm=ob.comm.comm_group,
+                    )
                 offset += self._n_coeff
 
         # Now we know the total number of local amplitudes.
@@ -166,145 +180,10 @@ class Hwpss(Template):
 
     def _zeros(self):
         z = Amplitudes(self.data.comm, self._n_global, self._n_local)
-        if self._amp_flags is not None:
+        if z.local_flags is not None:
             z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
-    @classmethod
-    def sincos_buffer(cls, angles, flags, n_harmonics):
-        ang = np.copy(angles)
-        ang[flags != 0] = 0.0
-        n_samp = len(ang)
-        sample_vals = 2 * n_harmonics
-        sincos = np.zeros((n_samp, sample_vals), dtype=np.float32)
-        for h in range(n_harmonics):
-            sincos[:, 2 * h] = np.sin((h + 1) * ang)
-            sincos[:, 2 * h + 1] = np.cos((h + 1) * ang)
-        return sincos
-
-    @classmethod
-    def compute_coeff_covariance(cls, times, flags, sincos):
-        n_samp = len(times)
-        n_harmonics = sincos.shape[1] // 2
-        cov = np.zeros((4 * n_harmonics, 4 * n_harmonics), dtype=np.float64)
-        good = flags == 0
-        # Compute upper triangle
-        for hr in range(0, n_harmonics):
-            for hc in range(hr, n_harmonics):
-                cov[4 * hr + 0, 4 * hc + 0] = np.dot(
-                    sincos[good, 2 * hr + 0], sincos[good, 2 * hc + 0]
-                )
-                cov[4 * hr + 0, 4 * hc + 1] = np.dot(
-                    sincos[good, 2 * hr + 0],
-                    np.multiply(times[good], sincos[good, 2 * hc + 0]),
-                )
-                cov[4 * hr + 0, 4 * hc + 2] = np.dot(
-                    sincos[good, 2 * hr + 0], sincos[good, 2 * hc + 1]
-                )
-                cov[4 * hr + 0, 4 * hc + 3] = np.dot(
-                    sincos[good, 2 * hr + 0],
-                    np.multiply(times[good], sincos[good, 2 * hc + 1]),
-                )
-
-                cov[4 * hr + 1, 4 * hc + 0] = np.dot(
-                    np.multiply(times[good], sincos[good, 2 * hr + 0]),
-                    sincos[good, 2 * hc + 0],
-                )
-                cov[4 * hr + 1, 4 * hc + 1] = np.dot(
-                    np.multiply(times[good], sincos[good, 2 * hr + 0]),
-                    np.multiply(times[good], sincos[good, 2 * hc + 0]),
-                )
-                cov[4 * hr + 1, 4 * hc + 2] = np.dot(
-                    np.multiply(times[good], sincos[good, 2 * hr + 0]),
-                    sincos[good, 2 * hc + 1],
-                )
-                cov[4 * hr + 1, 4 * hc + 3] = np.dot(
-                    np.multiply(times[good], sincos[good, 2 * hr + 0]),
-                    np.multiply(times[good], sincos[good, 2 * hc + 1]),
-                )
-
-                cov[4 * hr + 2, 4 * hc + 0] = np.dot(
-                    sincos[good, 2 * hr + 1], sincos[good, 2 * hc + 0]
-                )
-                cov[4 * hr + 2, 4 * hc + 1] = np.dot(
-                    sincos[good, 2 * hr + 1],
-                    np.multiply(times[good], sincos[good, 2 * hc + 0]),
-                )
-                cov[4 * hr + 2, 4 * hc + 2] = np.dot(
-                    sincos[good, 2 * hr + 1], sincos[good, 2 * hc + 1]
-                )
-                cov[4 * hr + 2, 4 * hc + 3] = np.dot(
-                    sincos[good, 2 * hr + 1],
-                    np.multiply(times[good], sincos[good, 2 * hc + 1]),
-                )
-
-                cov[4 * hr + 3, 4 * hc + 0] = np.dot(
-                    np.multiply(times[good], sincos[good, 2 * hr + 1]),
-                    sincos[good, 2 * hc + 0],
-                )
-                cov[4 * hr + 3, 4 * hc + 1] = np.dot(
-                    np.multiply(times[good], sincos[good, 2 * hr + 1]),
-                    np.multiply(times[good], sincos[good, 2 * hc + 0]),
-                )
-                cov[4 * hr + 3, 4 * hc + 2] = np.dot(
-                    np.multiply(times[good], sincos[good, 2 * hr + 1]),
-                    sincos[good, 2 * hc + 1],
-                )
-                cov[4 * hr + 3, 4 * hc + 3] = np.dot(
-                    np.multiply(times[good], sincos[good, 2 * hr + 1]),
-                    np.multiply(times[good], sincos[good, 2 * hc + 1]),
-                )
-
-        # Fill in lower triangle
-        for hr in range(0, 4 * n_harmonics):
-            for hc in range(0, hr):
-                cov[hr, hc] = cov[hc, hr]
-        # Check that condition number is reasonable
-        evals = eigvalsh(cov)
-        rcond = np.min(evals) / np.max(evals)
-        if rcond < 1.0e-8:
-            return None
-        # LU factorization for later solve
-        cov_lu, cov_piv = lu_factor(cov)
-        return cov_lu, cov_piv
-
-    @classmethod
-    def compute_coeff(cls, detdata, flags, times, sincos, cov_lu, cov_piv):
-        n_samp = len(times)
-        n_harmonics = sincos.shape[1] // 2
-        good = flags == 0
-        input = np.copy(detdata)
-        dc = np.mean(input[good])
-        input[good] -= dc
-        rhs = np.zeros(4 * n_harmonics, dtype=np.float64)
-        for h in range(n_harmonics):
-            rhs[4 * h + 0] = np.dot(input[good], sincos[good, 2 * h])
-            rhs[4 * h + 1] = np.dot(
-                input[good], np.multiply(sincos[good, 2 * h], times[good])
-            )
-            rhs[4 * h + 2] = np.dot(input[good], sincos[good, 2 * h + 1])
-            rhs[4 * h + 3] = np.dot(
-                input[good], np.multiply(sincos[good, 2 * h + 1], times[good])
-            )
-        coeff = lu_solve((cov_lu, cov_piv), rhs)
-        return coeff
-
-    @classmethod
-    def build_model(cls, times, flags, sincos, coeff):
-        n_samp = len(times)
-        n_harmonics = sincos.shape[1] // 2
-        good = flags == 0
-        model = np.zeros(n_samp, dtype=np.float64)
-        for h in range(n_harmonics):
-            model[good] += coeff[4 * h + 0] * sincos[good, 2 * h]
-            model[good] += coeff[4 * h + 1] * np.multiply(
-                sincos[good, 2 * h], times[good]
-            )
-            model[good] += coeff[4 * h + 2] * sincos[good, 2 * h + 1]
-            model[good] += coeff[4 * h + 3] * np.multiply(
-                sincos[good, 2 * h + 1], times[good]
-            )
-        return model
 
     def _add_to_signal(self, detector, amplitudes, **kwargs):
         if detector not in self._all_dets:
@@ -326,7 +205,7 @@ class Hwpss(Template):
                     vw_slc = slice(vw.first, vw.last + 1, 1)
                     flags[vw_slc] = 1
             coeff = amplitudes.local[amp_offset : amp_offset + self._n_coeff]
-            model = self.build_model(
+            model = hwpss_build_model(
                 self._obs_reltime[iob],
                 flags,
                 self._obs_sincos[iob],
@@ -362,7 +241,7 @@ class Hwpss(Template):
                 # Flagged
                 amplitudes.local[amp_offset : amp_offset + self._n_coeff] = 0
             else:
-                coeff = self.compute_coeff(
+                coeff = hwpss_compute_coeff(
                     ob.detdata[self.det_data][detector],
                     flags,
                     self._obs_reltime[iob],
@@ -536,12 +415,12 @@ def plot(amp_file, out_root=None):
             bad = htime < 0
             good = np.logical_not(bad)
             flags[bad] = 1
-            sincos = Hwpss.sincos_buffer(hang, flags, n_harmonic)
+            sincos = hwpss_sincos_buffer(hang, flags, n_harmonic)
 
             for idet, det in enumerate(det_list):
                 outfile = f"{out_root}_{obname}_{det}.pdf"
                 coeff = hamps[idet]
-                model = Hwpss.build_model(htime, flags, sincos, coeff)
+                model = hwpss_build_model(htime, flags, sincos, coeff)
 
                 fig = plt.figure(dpi=figdpi, figsize=(8, 12))
                 ax = fig.add_subplot(2, 1, 1)

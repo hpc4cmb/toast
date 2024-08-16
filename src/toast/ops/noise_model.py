@@ -12,6 +12,7 @@ from scipy.optimize import Bounds, curve_fit, least_squares
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
+from ..mpi import flatten
 from ..timing import Timer, function_timer
 from ..traits import Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger
@@ -525,20 +526,16 @@ class FitNoiseModel(Operator):
         input_data[bad] = 1.0e-6 * good_min
         input_log_data = np.log(input_data)
 
-        # print(f"FIT: input {input_freqs} {input_data} {input_log_data}")
-
         raw_fmin = self.f_min.to_value(u.Hz)
 
         if self.white_noise_max is None:
             net = self._estimate_net(input_freqs, input_data)
-            # print(f"FIT:  estimated NET = {net}")
         else:
             plateau_samples = np.logical_and(
                 (input_freqs > self.white_noise_min.to_value(u.Hz)),
                 (input_freqs < self.white_noise_max.to_value(u.Hz)),
             )
             net = np.sqrt(np.mean(input_data[plateau_samples]))
-            # print(f"FIT:  NET from plateau = {net}")
 
         midfreq = 0.5 * input_freqs[-1]
 
@@ -549,8 +546,6 @@ class FitNoiseModel(Operator):
         x_0 = guess
         if x_0 is None:
             x_0 = np.array([midfreq, 1.0])
-
-        # print(f"FIT:  starting guess = {x_0}")
 
         try:
             result = least_squares(
@@ -575,8 +570,6 @@ class FitNoiseModel(Operator):
             ret = self._get_err_ret(psd_unit)
             return ret
 
-        # print(f"FIT:  [{n_skip}:{n_raw}-{n_trim}] {result}")
-
         ret["fit_result"] = result
         ret["NET"] = net * np.sqrt(1.0 * psd_unit)
         ret["fmin"] = self.f_min
@@ -587,8 +580,6 @@ class FitNoiseModel(Operator):
             ret["fknee"] = 0.0 * u.Hz
             ret["alpha"] = 1.0
 
-        # print(f"FIT ret = {ret}")
-        # print(f"PSD fit NET={net}, bounds={bounds}, guess={x_0}, result={result}")
         return ret
 
     def _finalize(self, data, **kwargs):
@@ -625,8 +616,24 @@ class FlagNoiseFit(Operator):
         help="Bit mask value for per-detector flagging",
     )
 
+    det_data = Unicode(
+        defaults.det_data,
+        help="Observation detdata key for timestreams (only if RMS cut enabled)",
+    )
+
+    det_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for detector sample flagging (only if RMS cut used)",
+    )
+
     outlier_flag_mask = Int(
         defaults.det_mask_processing, help="Bit mask to raise flags with"
+    )
+
+    sigma_rms = Float(
+        None,
+        allow_none=True,
+        help="In addition to flagging based on estimated model, also apply overall TOD cut",
     )
 
     sigma_NET = Float(5.0, help="Flag detectors with NET values outside this range")
@@ -660,6 +667,7 @@ class FlagNoiseFit(Operator):
 
             local_net = list()
             local_fknee = list()
+            local_rms = list()
 
             # If we have an analytic noise model from a simulation or fit, then we can
             # access the properties directly.  If not, we will use the detector weight
@@ -679,26 +687,44 @@ class FlagNoiseFit(Operator):
                     except AttributeError:
                         msg = f"Observation {obs.name}, noise model {self.noise_model} "
                         msg += "has no f_knee estimate.  Use FitNoiseModel before flagging."
+                if self.sigma_rms is not None:
+                    good = (obs.detdata[self.det_flags][det] & self.det_flag_mask) == 0
+                    ddata = np.copy(obs.detdata[self.det_data][det, good])
+                    avg = np.mean(ddata)
+                    ddata -= avg
+                    local_rms.append(np.std(ddata))
+                    del ddata
 
             local_net = np.array(local_net, dtype=np.float64)
             local_fknee = np.array(local_fknee, dtype=np.float64)
+            local_rms = np.array(local_rms, dtype=np.float64)
             local_names = dets
 
             # Send all values to one process for the trivial calculation
             all_net = None
             all_fknee = None
+            all_rms = None
             all_names = None
             if obs.comm_row_rank == 0:
                 # First process column.  Gather results to rank zero.
-                proc_vals = obs.comm_col.gather(local_net, root=0)
-                if obs.comm_col_rank == 0:
-                    all_net = np.array([val for plist in proc_vals for val in plist])
-                proc_vals = obs.comm_col.gather(local_fknee, root=0)
-                if obs.comm_col_rank == 0:
-                    all_fknee = np.array([val for plist in proc_vals for val in plist])
-                proc_vals = obs.comm_col.gather(local_names, root=0)
-                if obs.comm_col_rank == 0:
-                    all_names = [val for plist in proc_vals for val in plist]
+                if obs.comm_col is None:
+                    all_net = local_net
+                    all_fknee = local_fknee
+                    all_names = local_names
+                    all_rms = local_rms
+                else:
+                    proc_vals = obs.comm_col.gather(local_net, root=0)
+                    if obs.comm_col_rank == 0:
+                        all_net = np.array(flatten(proc_vals))
+                    proc_vals = obs.comm_col.gather(local_fknee, root=0)
+                    if obs.comm_col_rank == 0:
+                        all_fknee = np.array(flatten(proc_vals))
+                    proc_vals = obs.comm_col.gather(local_rms, root=0)
+                    if obs.comm_col_rank == 0:
+                        all_rms = np.array(flatten(proc_vals))
+                    proc_vals = obs.comm_col.gather(local_names, root=0)
+                    if obs.comm_col_rank == 0:
+                        all_names = flatten(proc_vals)
 
             # Iteratively cut
             all_flags = None
@@ -733,8 +759,8 @@ class FlagNoiseFit(Operator):
                                 # Already cut
                                 continue
                             if (
-                                np.absolute(fknee - fknee_mean) >
-                                fknee_std * self.sigma_fknee
+                                np.absolute(fknee - fknee_mean)
+                                > fknee_std * self.sigma_fknee
                             ):
                                 msg = f"obs {obs.name}, det {name} has f_knee "
                                 msg += f"{fknee} that is > {self.sigma_fknee} "
@@ -742,11 +768,26 @@ class FlagNoiseFit(Operator):
                                 log.debug(msg)
                                 all_good[idet] = False
                                 n_cut += 1
+                    if self.sigma_rms is not None:
+                        rms_mean = np.mean(all_rms[all_good])
+                        rms_std = np.std(all_rms[all_good])
+                        for idet, (name, rms) in enumerate(zip(all_names, all_rms)):
+                            if not all_good[idet]:
+                                # Already cut
+                                continue
+                            if np.absolute(rms - rms_mean) > rms_std * self.sigma_rms:
+                                msg = f"obs {obs.name}, det {name} has TOD RMS "
+                                msg += f"{rms} that is > {self.sigma_rms} "
+                                msg += f"x {rms_std} from {rms_mean}"
+                                log.debug(msg)
+                                all_good[idet] = False
+                                n_cut += 1
                     msg = f"pass {flag_pass}, {n_cut} detectors flagged"
                     log.debug(msg)
                     flag_pass += 1
                 all_flags = {
-                    x: self.outlier_flag_mask for i, x in enumerate(all_names)
+                    x: self.outlier_flag_mask
+                    for i, x in enumerate(all_names)
                     if not all_good[i]
                 }
                 msg = f"obs {obs.name}: flagged {len(all_flags)} / {len(all_names)}"
