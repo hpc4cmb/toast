@@ -280,7 +280,14 @@ def plot_wcs_maps(
         hdulist.close()
 
 
-def plot_projected_quats(outfile, qbore=None, qdet=None, valid=slice(None), scale=1.0):
+def plot_projected_quats(
+    outfile,
+    qbore=None,
+    qdet=None,
+    valid=slice(None),
+    scale=1.0,
+    equal_aspect=False,
+):
     """Plot a list of quaternion arrays in longitude / latitude."""
 
     set_matplotlib_backend()
@@ -314,9 +321,27 @@ def plot_projected_quats(outfile, qbore=None, qdet=None, valid=slice(None), scal
     # Set the sizes of shapes based on the plot range
 
     span_lon = lon_max - lon_min
+    lon_max += 0.1 * span_lon
+    lon_min -= 0.1 * span_lon
     span_lat = lat_max - lat_min
-    span = min(span_lon, span_lat)
-    bmag = 0.05 * span * scale
+    lat_max += 0.1 * span_lat
+    lat_min -= 0.1 * span_lat
+    if equal_aspect:
+        if span_lon > span_lat:
+            diff = span_lon - span_lat
+            span_lat = span_lon
+            lat_max += diff / 2
+            lat_min -= diff / 2
+        else:
+            diff = span_lat - span_lon
+            span_lon = span_lat
+            lon_max += diff / 2
+            lon_min -= diff / 2
+        span = span_lon
+    else:
+        span = min(span_lon, span_lat)
+
+    bmag = 0.03 * span * scale
     dmag = 0.02 * span * scale
 
     if span_lat > span_lon:
@@ -338,6 +363,14 @@ def plot_projected_quats(outfile, qbore=None, qdet=None, valid=slice(None), scal
     # Compute the font size to use for detector labels
     fontpix = 0.1 * figdpi
     fontpt = int(0.75 * fontpix)
+
+    # Recall that so far we are working with angles looking "inward"
+    # from the celestial sphere.  Instead, we want to plot the locations
+    # and orientation angles looking "outward" as projected on the sky.
+    # This means that the longitude axis is inverted.  Also, in our formalism,
+    # the HWP and detector orientations are at zero when aligned with the
+    # boresight frame X-axis.  For ground-based experiments, the boresight
+    # frame X-axis is aligned with the direction of decreasing elevation.
 
     # Plot boresight if we have it
 
@@ -392,14 +425,16 @@ def plot_projected_quats(outfile, qbore=None, qdet=None, valid=slice(None), scal
                 bbox=dict(fc="w", ec="none", pad=1, alpha=0.0),
             )
 
-    # Invert x axis so that longitude reflects what we would see from
-    # inside the celestial sphere
-    plt.gca().invert_xaxis()
-
+    ax.set_xlim((lon_min, lon_max))
+    ax.set_ylim((lat_min, lat_max))
     ax.set_xlabel("Longitude Degrees", fontsize="medium")
     ax.set_ylabel("Latitude Degrees", fontsize="medium")
 
     fig.suptitle("Projected Pointing and Polarization on Sky")
+
+    # Invert x axis so that longitude reflects what we would see from
+    # inside the celestial sphere
+    plt.gca().invert_xaxis()
 
     plt.savefig(outfile)
     plt.close()
