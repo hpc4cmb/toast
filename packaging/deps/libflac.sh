@@ -21,6 +21,11 @@ fi
 
 echo "Building libFLAC..."
 
+shr="ON"
+if [ "${STATIC}" = "yes" ]; then
+    shr="OFF"
+fi
+
 rm -rf ${flac_dir}
 tar xzf ${flac_pkg} \
     && pushd ${flac_dir} >/dev/null 2>&1 \
@@ -40,7 +45,7 @@ tar xzf ${flac_pkg} \
     -DBUILD_UTILS=OFF \
     -DBUILD_TESTING=OFF \
     -DBUILD_EXAMPLES=OFF \
-    -DBUILD_SHARED_LIBS=ON \
+    -DBUILD_SHARED_LIBS=${shr} \
     -DINSTALL_MANPAGES=OFF \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     .. \
