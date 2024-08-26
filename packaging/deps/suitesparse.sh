@@ -17,7 +17,7 @@
 # - STATIC (yes/no)
 # - CLEANUP (yes/no)
 
-ssparse_version=7.1.0
+ssparse_version=7.8.1
 ssparse_dir=SuiteSparse-${ssparse_version}
 ssparse_pkg=${ssparse_dir}.tar.gz
 

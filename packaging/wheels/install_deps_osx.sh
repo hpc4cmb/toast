@@ -87,70 +87,41 @@ pip install -v wheel
 # In order to maximize ABI compatibility with numpy, build with the newest numpy
 # version containing the oldest ABI version compatible with the python we are using.
 pyver=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
-if [ ${pyver} == "3.8" ]; then
-    numpy_ver="1.20"
-fi
-if [ ${pyver} == "3.9" ]; then
-    numpy_ver="1.24"
-fi
-if [ ${pyver} == "3.10" ]; then
-    numpy_ver="1.24"
-fi
-if [ ${pyver} == "3.11" ]; then
-    numpy_ver="1.24"
-fi
+# if [ ${pyver} == "3.8" ]; then
+#     numpy_ver="1.20"
+# fi
+# if [ ${pyver} == "3.9" ]; then
+#     numpy_ver="1.24"
+# fi
+# if [ ${pyver} == "3.10" ]; then
+#     numpy_ver="1.24"
+# fi
+# if [ ${pyver} == "3.11" ]; then
+#     numpy_ver="1.24"
+# fi
+numpy_ver="2.0.1"
 
 # Install build requirements.
-CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy<${numpy_ver}" -r "${scriptdir}/build_requirements.txt"
+CC="${CC}" CFLAGS="${CFLAGS}" pip install -v "numpy==${numpy_ver}" -r "${scriptdir}/build_requirements.txt"
 
-# Install openblas from the multilib package- the same one numpy uses.
+# We use the scipy openblas wheel to get the openblas to use.
 
-if [ "${arch}" = "macosx_arm64" ]; then
-    openblas_pkg="openblas-v0.3.27-macosx_11_0_arm64-gf_5272328.tar.gz"
-else
-    openblas_pkg="openblas-v0.3.27-macosx_10_9_x86_64-gf_c469a42.tar.gz"
-fi
-openblas_url="https://anaconda.org/multibuild-wheels-staging/openblas-libs/v0.3.27/download/${openblas_pkg}"
-
-if [ ! -e ${openblas_pkg} ]; then
-    echo "Fetching OpenBLAS..."
-    curl -SL ${openblas_url} -o ${openblas_pkg}
+# First ensure that pkg-config is set to search somewhere
+if [ -z "${PKG_CONFIG_PATH}" ]; then
+    export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig"
 fi
 
-echo "Extracting OpenBLAS"
-tar -x -z -v -C "${PREFIX}" --strip-components 2 -f ${openblas_pkg}
+python3 -c "import scipy_openblas32; print(scipy_openblas32.get_pkg_config())" > ${PKG_CONFIG_PATH}/scipy-openblas.pc
 
-# Install the gfortran (and libgcc) that was used for openblas compilation
-
-if [ "${arch}" = "macosx_arm64" ]; then
-    gfortran_arch=arm64
-    known_hash="0d5c118e5966d0fb9e7ddb49321f63cac1397ce8"
-else
-    gfortran_arch=x86_64
-    known_hash="c469a420d2d003112749dcdcbe3c684eef42127e"
-fi
-gfortran_pkg="gfortran-darwin-${gfortran_arch}-native.tar.gz"
-gfortran_url="https://github.com/isuruf/gcc/releases/download/gcc-11.3.0-2/${gfortran_pkg}"
-
-curl -L -O ${gfortran_url}
-gfortran_hash=$(shasum ${gfortran_pkg} | awk '{print $1}')
-
-if [ "${gfortran_hash}" != "${known_hash}" ]; then
-    echo "gfortran sha256 mismatch: ${gfortran_hash} != ${known_hash}"
-    exit 1
-fi
-
-sudo mkdir -p /opt
-sudo mv ${gfortran_pkg} /opt/
-pushd /opt
-sudo tar -xvf ${gfortran_pkg}
-sudo rm ${gfortran_pkg}
-popd
-
-for f in libgfortran.dylib libgfortran.5.dylib libgcc_s.1.dylib libgcc_s.1.1.dylib libquadmath.dylib libquadmath.0.dylib; do
-    sudo ln -sf "/opt/gfortran-darwin-${gfortran_arch}-native/lib/$f" "/usr/local/lib/$f"
-done
-sudo ln -sf "/opt/gfortran-darwin-${gfortran_arch}-native/bin/gfortran" "/usr/local/bin/gfortran"
+# To help delocate find the libraries, we copy them into /usr/local
+python3 <<EOF
+import os, scipy_openblas32, shutil
+srcdir = os.path.dirname(scipy_openblas32.__file__)
+incdir = os.path.join(srcdir, "include")
+libdir = os.path.join(srcdir, "lib")
+shutil.copytree(libdir, "/usr/local/lib", dirs_exist_ok=True)
+shutil.copytree(incdir, "/usr/local/include", dirs_exist_ok=True)
+EOF
 
 # Build compiled dependencies
 
