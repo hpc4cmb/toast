@@ -263,7 +263,7 @@ class Demodulate(Operator):
                 sample_sets=demod_sample_sets,
             )
             for key, value in obs.items():
-                if key == "noise_model":
+                if key == self.noise_model:
                     # Will be generated later
                     continue
                 demod_obs[key] = value
