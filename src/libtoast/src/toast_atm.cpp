@@ -1,5 +1,5 @@
 
-// Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
@@ -60,7 +60,6 @@ toast::CholmodCommon::CholmodCommon() {
         chcommon->print = 1;          // Minimal verbosity
     }
     chcommon->itype = CHOLMOD_INT;    // All integer arrays are int
-    chcommon->dtype = CHOLMOD_DOUBLE; // All float arrays are double
     chcommon->final_ll = 1;           // The factorization is LL', not LDL'
 }
 
