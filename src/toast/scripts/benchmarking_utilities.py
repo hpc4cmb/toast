@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as u
 from astropy.table import QTable
-from pkg_resources import resource_filename
+from importlib import resources
 
 import toast
 import toast.ops
@@ -864,14 +864,15 @@ def get_benchmark_stats(jobtype, case):
     if benchmark_stats_data is None:
         # Load the data
         benchmark_stats_data = dict()
-        bench_dir = resource_filename("toast", os.path.join("_aux", "benchmarks"))
-        bench_file = os.path.join(bench_dir, "stats.json")
-        if not os.path.isfile(bench_file):
-            msg = f"benchmark stats file {bench_file} does not exist"
-            raise RuntimeError(msg)
-        with open(bench_file, "r") as f:
-            stats = json.load(f)
-            benchmark_stats_data.update(stats)
+
+        bench_file = resources.files("toast._aux.benchmarks").joinpath("stats.json")
+        with resources.as_file(bench_file) as path:
+            if not os.path.isfile(path):
+                msg = f"benchmark stats file {path} does not exist"
+                raise RuntimeError(msg)
+            with open(path, "r") as f:
+                stats = json.load(f)
+                benchmark_stats_data.update(stats)
 
     if jobtype in benchmark_stats_data:
         if case in benchmark_stats_data[jobtype]:
