@@ -48,20 +48,24 @@ jobs:
             arch: x86_64
             python: 310
             builder: macosx
+            deploy: 13.0
           - os: macos-13
             arch: x86_64
             python: 311
             builder: macosx
+            deploy: 13.0
 
           # MacOS arm64
           - os: macos-latest
             arch: arm64
             python: 310
             builder: macosx
+            deploy: 14.0
           - os: macos-latest
             arch: arm64
             python: 311
             builder: macosx
+            deploy: 14.0
     env:
       CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.builder }}_${{ matrix.arch }}
       CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.builder }}2014
@@ -77,6 +81,7 @@ jobs:
         TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include
         TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib
       CIBW_ENVIRONMENT_MACOS: >
+        MACOSX_DEPLOYMENT_TARGET=${{ matrix.deploy }}
         TOAST_BUILD_CMAKE_C_COMPILER=clang
         TOAST_BUILD_CMAKE_CXX_COMPILER=clang++
         TOAST_BUILD_CMAKE_C_FLAGS='-O3 -fPIC'
