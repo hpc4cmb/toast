@@ -18,6 +18,11 @@ fi
 
 export PREFIX="${prefix}"
 
+# If we are running on github CI, ensure that permissions
+# are set on /usr/local.  See:
+# https://github.com/actions/runner-images/issues/9272
+sudo chown -R runner:admin /usr/local/
+
 # Cross compile option needed for autoconf builds.
 cross=""
 if [ "${arch}" = "macosx_arm64" ]; then
@@ -131,8 +136,8 @@ export STATIC=no
 export SHLIBEXT="dylib"
 export CLEANUP=yes
 
-export BLAS_LIBRARIES="-L${PREFIX}/lib -lopenblas"
-export LAPACK_LIBRARIES="-L${PREFIX}/lib -lopenblas"
+export BLAS_LIBRARIES="/usr/local/lib/libscipy_openblas.dylib"
+export LAPACK_LIBRARIES="/usr/local/lib/libscipy_openblas.dylib"
 
 for pkg in fftw libflac suitesparse libaatm; do
     source "${depsdir}/${pkg}.sh"
