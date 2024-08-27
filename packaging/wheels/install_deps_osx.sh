@@ -126,7 +126,7 @@ export CLEANUP=yes
 
 export BLAS_LIBRARIES="/usr/local/lib/libscipy_openblas.dylib"
 export LAPACK_LIBRARIES="/usr/local/lib/libscipy_openblas.dylib"
-export BLA_OPTIONS="BLA_PREFER_PKGCONFIG=1 BLA_PKGCONFIG_BLAS=scipy-openblas"
+export BLA_OPTIONS="-DBLA_PREFER_PKGCONFIG=1 -DBLA_PKGCONFIG_BLAS=scipy-openblas"
 
 for pkg in fftw libflac suitesparse libaatm; do
     source "${depsdir}/${pkg}.sh"
