@@ -45,7 +45,7 @@ cmake_opts=" \
     -DCMAKE_INSTALL_PATH=\"${PREFIX}\" \
     -DCMAKE_BUILD_TYPE=Release ${shr} \
     -DBLAS_LIBRARIES=\"${BLAS_LIBRARIES}\" \
-    -DLAPACK_LIBRARIES=\"${LAPACK_LIBRARIES}\" \
+    -DLAPACK_LIBRARIES=\"${LAPACK_LIBRARIES}\" ${BLA_OPTIONS} \
     "
 
 rm -rf ${ssparse_dir}

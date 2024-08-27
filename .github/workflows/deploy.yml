@@ -93,7 +93,7 @@ jobs:
         TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include
         TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib
       CIBW_BEFORE_BUILD_LINUX: ./packaging/wheels/install_deps_linux.sh
-      CIBW_BEFORE_BUILD_MACOS: ./packaging/wheels/install_deps_osx.sh ${{ matrix.builder }}_${{ matrix.arch }}
+      CIBW_BEFORE_BUILD_MACOS: ./packaging/wheels/install_deps_osx.sh
       CIBW_BEFORE_TEST: export OMP_NUM_THREADS=1
       CIBW_TEST_COMMAND: source {project}/packaging/wheels/cibw_run_tests.sh
     steps:

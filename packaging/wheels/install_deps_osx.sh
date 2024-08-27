@@ -9,7 +9,6 @@
 
 set -e
 
-arch=$1
 prefix=$2
 
 if [ "x${prefix}" = "x" ]; then
@@ -23,12 +22,6 @@ export PREFIX="${prefix}"
 # https://github.com/actions/runner-images/issues/9272
 sudo chown -R runner:admin /usr/local/
 
-# Cross compile option needed for autoconf builds.
-cross=""
-if [ "${arch}" = "macosx_arm64" ]; then
-    cross="--host=arm64-apple-darwin20.6.0"
-fi
-
 # Location of this script
 pushd $(dirname $0) >/dev/null 2>&1
 scriptdir=$(pwd)
@@ -41,7 +34,7 @@ depsdir=$(dirname ${scriptdir})/deps
 # Are we using gcc?  Useful for OpenMP.
 # use_gcc=yes
 use_gcc=no
-gcc_version=12
+gcc_version=14
 
 # Build options.
 
@@ -66,11 +59,6 @@ else
     export FCFLAGS=""
     export FCLIBS=""
     export OMPFLAGS=""
-    if [ "${arch}" = "macosx_arm64" ]; then
-        # We are cross compiling
-        export CFLAGS="${CFLAGS} -arch arm64"
-        export CXXFLAGS="${CXXFLAGS} -arch arm64"
-    fi
 fi
 
 # Install any pre-built dependencies with homebrew
@@ -138,6 +126,7 @@ export CLEANUP=yes
 
 export BLAS_LIBRARIES="/usr/local/lib/libscipy_openblas.dylib"
 export LAPACK_LIBRARIES="/usr/local/lib/libscipy_openblas.dylib"
+export BLA_OPTIONS="BLA_PREFER_PKGCONFIG=1 BLA_PKGCONFIG_BLAS=scipy-openblas"
 
 for pkg in fftw libflac suitesparse libaatm; do
     source "${depsdir}/${pkg}.sh"

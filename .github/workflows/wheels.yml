@@ -95,7 +95,7 @@ jobs:
         TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include
         TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib
       CIBW_BEFORE_BUILD_LINUX: ./packaging/wheels/install_deps_linux.sh
-      CIBW_BEFORE_BUILD_MACOS: ./packaging/wheels/install_deps_osx.sh ${{ matrix.builder }}_${{ matrix.arch }}
+      CIBW_BEFORE_BUILD_MACOS: ./packaging/wheels/install_deps_osx.sh
       CIBW_BEFORE_TEST: export OMP_NUM_THREADS=2
       CIBW_TEST_COMMAND_LINUX: >
         tst=$(dirname $(python -c 'import toast; print(toast.__file__)')) &&
