@@ -28,6 +28,7 @@ install(FILES
     signal_diff_noise_model.py
     gainscrambler.py
     pointing.py
+    interpolate_healpix.py
     scan_healpix.py
     scan_wcs.py
     mapmaker_binning.py

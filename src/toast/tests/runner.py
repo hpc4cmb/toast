@@ -49,6 +49,7 @@ from . import ops_pointing_detector as test_ops_pointing_detector
 from . import ops_pointing_healpix as test_ops_pointing_healpix
 from . import ops_pointing_wcs as test_ops_pointing_wcs
 from . import ops_polyfilter as test_ops_polyfilter
+from . import ops_interpolate_healpix as test_ops_interpolate_healpix
 from . import ops_scan_healpix as test_ops_scan_healpix
 from . import ops_scan_map as test_ops_scan_map
 from . import ops_scan_wcs as test_ops_scan_wcs
@@ -199,6 +200,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_solve))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_map))
+        suite.addTest(loader.loadTestsFromModule(test_ops_interpolate_healpix))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_healpix))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_wcs))
         suite.addTest(loader.loadTestsFromModule(test_ops_madam))

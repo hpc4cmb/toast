@@ -42,6 +42,7 @@ install(FILES
     ops_pointing_wcs.py
     ops_memory_counter.py
     ops_scan_map.py
+    ops_interpolate_healpix.py
     ops_scan_healpix.py
     ops_scan_wcs.py
     ops_madam.py
