@@ -47,6 +47,7 @@ class InterpolateHealpixTest(MPITestCase):
         )
         weights.apply(data)
 
+        hpix_file = os.path.join(self.outdir, "fake.fits")
         if data.comm.comm_world is None or data.comm.comm_world.rank == 0:
             # Create a smooth sky
             lmax = 3 * pixels.nside
@@ -54,7 +55,6 @@ class InterpolateHealpixTest(MPITestCase):
             np.random.seed(98776)
             fake_sky = hp.synfast(cls, pixels.nside, fwhm=np.radians(30))
             # Write this to a file
-            hpix_file = os.path.join(self.outdir, "fake.fits")
             hp.write_map(hpix_file, fake_sky)
 
         # Scan the map from the file

@@ -174,17 +174,21 @@ class InterpolateHealpixMap(Operator):
         # timestreams.
 
         world_comm = data.comm.comm_world
-        world_rank = world_comm.rank
+        if world_comm is None:
+            world_rank = 0
+        else:
+            world_rank = world_comm.rank
 
         for file_name, map_name in zip(self.file_names, self.map_names):
             if map_name not in self.maps:
                 if world_rank == 0:
                     m = np.atleast_2d(read_healpix(file_name, None, dtype=np.float32))
-                    mshape = m.shape
+                    map_shape = m.shape
                 else:
                     m = None
-                    mshape = None
-                map_shape = world_comm.bcast(mshape)
+                    map_shape = None
+                if world_comm is not None:
+                    map_shape = world_comm.bcast(map_shape)
                 self.maps[map_name] = MPIShared(map_shape, np.float32, world_comm)
                 self.maps[map_name].set(m)
 
