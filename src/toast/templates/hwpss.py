@@ -134,10 +134,11 @@ class Hwpss(Template):
                         comm=ob.comm.comm_group,
                     )
                     self._obs_cov[iob] = hwpss_compute_coeff_covariance(
-                        self._obs_reltime[iob],
-                        flags,
                         self._obs_sincos[iob],
+                        flags,
                         comm=ob.comm.comm_group,
+                        times=self._obs_reltime[iob],
+                        time_drift=True,
                     )
                 offset += self._n_coeff
 
@@ -184,7 +185,6 @@ class Hwpss(Template):
             z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
-
     def _add_to_signal(self, detector, amplitudes, **kwargs):
         if detector not in self._all_dets:
             # This must have been cut by per-detector flags during initialization
@@ -206,10 +206,11 @@ class Hwpss(Template):
                     flags[vw_slc] = 1
             coeff = amplitudes.local[amp_offset : amp_offset + self._n_coeff]
             model = hwpss_build_model(
-                self._obs_reltime[iob],
-                flags,
                 self._obs_sincos[iob],
+                flags,
                 coeff,
+                times=self._obs_reltime[iob],
+                time_drift=True,
             )
             good = flags == 0
             # Accumulate to timestream
@@ -242,12 +243,13 @@ class Hwpss(Template):
                 amplitudes.local[amp_offset : amp_offset + self._n_coeff] = 0
             else:
                 coeff = hwpss_compute_coeff(
+                    self._obs_sincos[iob],
                     ob.detdata[self.det_data][detector],
                     flags,
-                    self._obs_reltime[iob],
-                    self._obs_sincos[iob],
                     self._obs_cov[iob][0],
                     self._obs_cov[iob][1],
+                    times=self._obs_reltime[iob],
+                    time_drift=True,
                 )
                 amplitudes.local[amp_offset : amp_offset + self._n_coeff] = coeff
             amp_offset += self._n_coeff
@@ -420,7 +422,9 @@ def plot(amp_file, out_root=None):
             for idet, det in enumerate(det_list):
                 outfile = f"{out_root}_{obname}_{det}.pdf"
                 coeff = hamps[idet]
-                model = hwpss_build_model(htime, flags, sincos, coeff)
+                model = hwpss_build_model(
+                    sincos, flags, coeff, times=htime, time_drift=True
+                )
 
                 fig = plt.figure(dpi=figdpi, figsize=(8, 12))
                 ax = fig.add_subplot(2, 1, 1)

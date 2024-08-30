@@ -59,7 +59,7 @@ install(FILES
     ops_polyfilter.py
     ops_groundfilter.py
     ops_hwpfilter.py
-    ops_hwpss_filter.py
+    ops_hwpss_model.py
     ops_sim_cosmic_rays.py
     ops_time_constant.py
     spt3g.py

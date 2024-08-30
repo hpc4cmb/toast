@@ -519,9 +519,6 @@ class FitNoiseModel(Operator):
         bad = np.logical_not(good)
         n_bad = np.count_nonzero(bad)
         if n_bad > 0:
-
-
-
             msg = "Some PSDs have negative values.  Consider changing "
             msg += "noise estimation parameters."
             log.warning(msg)
