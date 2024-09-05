@@ -715,16 +715,16 @@ class FlagNoiseFit(Operator):
                 else:
                     proc_vals = obs.comm_col.gather(local_net, root=0)
                     if obs.comm_col_rank == 0:
-                        all_net = np.array(flatten(proc_vals))
+                        all_net = np.array(list(flatten(proc_vals)))
                     proc_vals = obs.comm_col.gather(local_fknee, root=0)
                     if obs.comm_col_rank == 0:
-                        all_fknee = np.array(flatten(proc_vals))
+                        all_fknee = np.array(list(flatten(proc_vals)))
                     proc_vals = obs.comm_col.gather(local_rms, root=0)
                     if obs.comm_col_rank == 0:
-                        all_rms = np.array(flatten(proc_vals))
+                        all_rms = np.array(list(flatten(proc_vals)))
                     proc_vals = obs.comm_col.gather(local_names, root=0)
                     if obs.comm_col_rank == 0:
-                        all_names = flatten(proc_vals)
+                        all_names = list(flatten(proc_vals))
 
             # Iteratively cut
             all_flags = None
