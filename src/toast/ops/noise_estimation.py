@@ -229,7 +229,7 @@ class NoiseEstim(Operator):
     @traitlets.validate("nbin_psd")
     def _check_nbin_psd(self, proposal):
         check = proposal["value"]
-        if check <= 1:
+        if check is not None and check <= 1:
             raise traitlets.TraitError("Number of PSD bins should be greater than one")
         return check
 
