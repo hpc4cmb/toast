@@ -378,7 +378,12 @@ void init_map_cov(py::module & m) {
               if (nv != nb) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
-                  o << "Buffer sizes are not consistent.";
+                  o << "Buffer sizes are not consistent. "
+                    << "npix_matrix = " << nb
+                    << ", npix_map = " << nv
+                    << ", matrix_size = " << info_mat.size
+                    << ", block = " << block
+                    << ", nnz = " << nnz;
                   log.error(o.str().c_str());
                   throw std::runtime_error(o.str().c_str());
               }
