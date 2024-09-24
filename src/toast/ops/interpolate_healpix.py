@@ -158,9 +158,6 @@ class InterpolateHealpixMap(Operator):
             msg = f"Unknown Stokes weights mode '{self.stokes_weights.mode}'"
             raise RuntimeError(msg)
 
-        filenames = self.file.split(";")
-        detdata_keys = self.det_data.split(";")
-
         # Create our map(s) to scan named after our own operator name.  Generally the
         # files on disk are stored as float32, but even if not there is no real benefit
         # to having higher precision to simulated map signal that is projected into
