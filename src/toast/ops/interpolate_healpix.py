@@ -198,17 +198,18 @@ class InterpolateHealpixMap(Operator):
                     ob.detdata[key][:] = 0
 
             ob_data = data.select(obs_name=ob.name)
+            current_ob = ob_data.obs[0]
             for idet, det in enumerate(dets):
                 self.detector_pointing.apply(ob_data, detectors=[det])
                 self.stokes_weights.apply(ob_data, detectors=[det])
-                det_quat = ob_data.obs[0].detdata[self.detector_pointing.quats][det]
+                det_quat = current_ob.detdata[self.detector_pointing.quats][det]
                 # Convert pointing quaternion into angles
                 theta, phi, _ = qa.to_iso_angles(det_quat)
                 # Get pointing weights
-                weights = ob.detdata[self.stokes_weights.weights][det]
+                weights = current_ob.detdata[self.stokes_weights.weights][det]
 
                 # Interpolate the provided maps and accumulate the
-                # appropriate timestreams
+                # appropriate timestreams in the original observation
                 for map_name, map_value in self.maps.items():
                     if len(self.det_data_keys) == 1:
                         det_data_key = self.det_data_keys[0]
