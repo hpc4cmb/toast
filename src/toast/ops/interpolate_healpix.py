@@ -79,13 +79,6 @@ class InterpolateHealpixMap(Operator):
 
     save_map = Bool(False, help="If True, do not delete map during finalize")
 
-    # FIXME : do we need this?
-    save_pointing = Bool(
-        False,
-        help="If True, do not clear detector pointing matrices if we "
-        "generate the pixel distribution",
-    )
-
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
