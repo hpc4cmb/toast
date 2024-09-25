@@ -49,6 +49,7 @@ from .reset import Reset
 from .run_spt3g import RunSpt3g
 from .save_hdf5 import SaveHDF5
 from .save_spt3g import SaveSpt3g
+from .interpolate_healpix import InterpolateHealpixMap
 from .scan_healpix import ScanHealpixMap, ScanHealpixMask
 from .scan_map import ScanMap, ScanMask, ScanScale
 from .scan_wcs import ScanWCSMap, ScanWCSMask
