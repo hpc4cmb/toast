@@ -258,6 +258,7 @@ class Demodulate(Operator):
                 demod_times.size,
                 name=demod_name,
                 uid=name_UID(demod_name),
+                session=obs.session,
                 detector_sets=demod_detsets,
                 process_rows=demod_process_rows,
                 sample_sets=demod_sample_sets,
