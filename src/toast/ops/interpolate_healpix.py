@@ -60,11 +60,6 @@ class InterpolateHealpixMap(Operator):
 
     zero = Bool(False, help="If True, zero the data before accumulating / subtracting")
 
-    pixel_dist = Unicode(
-        "pixel_dist",
-        help="The Data key where the PixelDistribution object is located",
-    )
-
     detector_pointing = Instance(
         klass=Operator,
         allow_none=True,
