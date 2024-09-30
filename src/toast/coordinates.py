@@ -237,7 +237,7 @@ def azel_to_radec(site, times, azel, use_ephem=False, use_qpoint=False):
     # transform quaternion at sparse time stamps and then use SLERP to get the full
     # times.
     sparse_step = 120.0  # 2 minutes
-    sparse_nstep = int((times[-1] - times[0]) / sparse_step) + 1
+    sparse_nstep = int((times[-1] - times[0]) / sparse_step) + 2
     sparse_times = np.linspace(times[0], times[-1], num=sparse_nstep, endpoint=True)
     n_sparse = len(sparse_times)
 
