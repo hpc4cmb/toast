@@ -668,7 +668,7 @@ class MapMaker(Operator):
 
         out_cleaned = self._clean_signal(template_amplitudes)
 
-        if self.write_noiseweighted_map or self.write_map:
+        if self.write_noiseweighted_map or self.write_map or self.keep_final_products:
             self._bin_cleaned_signal(map_binning, out_cleaned)
 
         self._purge_cleaned_tod()  # Potentially frees memory for writing maps
