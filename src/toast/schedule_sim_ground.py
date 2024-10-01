@@ -3345,7 +3345,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                     polmap,
                     coord="G" + coord,
                     cbar=True,
-                    unit="$\mu$K",
+                    unit=r"$\mu$K",
                     min=args.pol_min,
                     max=args.pol_max,
                     norm="log",

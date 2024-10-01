@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2019-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -8,10 +8,12 @@ from datetime import datetime
 
 import dateutil
 import dateutil.parser
+import ephem
 import numpy as np
 from astropy import units as u
 from astropy.table import Column, QTable
 
+from .coordinates import to_DJD
 from .timing import Timer, function_timer
 from .utils import Environment, Logger
 
@@ -74,17 +76,22 @@ class GroundScan(Scan):
         self.rising = az_min.to_value(u.degree) % 360 < 180
         self.scan_indx = scan_indx
         self.subscan_indx = subscan_indx
+        self.ra_min = None
+        self.ra_max = None
+        self.ra_mean = None
+        self.dec_min = None
+        self.dec_max = None
+        self.dec_mean = None
 
     def __repr__(self):
-        val = "<GroundScan '{}' at {} with El = {}, Az {} -- {}>".format(
-            self.name,
-            self.start.isoformat(timespec="seconds"),
-            self.el,
-            self.az_min,
-            self.az_max,
-        )
+        start = self.start.isoformat(timespec="seconds")
+        val = f"<GroundScan '{self.name}' "
+        val += f"at {start} with El = {self.el}, Az {self.az_min} -- {self.az_max}, "
+        val += f"RA = {self.ra_min:.1f} < {self.ra_mean:.1f} < {self.ra_max:.1f}, "
+        val += f"Dec {self.dec_min:.1f} < {self.dec_mean:.1f} < {self.dec_max:.1f}>"
         return val
 
+    @function_timer
     def min_sso_dist(self, sso_az_begin, sso_el_begin, sso_az_end, sso_el_end):
         """Rough minimum angle between the boresight and a solar system object.
 
@@ -118,6 +125,49 @@ class GroundScan(Scan):
         dist2 = np.degrees(np.arccos(np.dot(sso_vec2, vec)))
         result = min(np.amin(dist1), np.amin(dist2))
         return result * u.degree
+
+    @function_timer
+    def get_extent(self, observer):
+        """Calculate the boresight scan range in Celestial coordinates
+        based on time, azimuth and elevation
+        """
+        # Time grid
+        t_step = 900.0  # 15 minutes in seconds
+        start = self.start.timestamp()
+        stop = self.stop.timestamp()
+        delta_t = stop - start
+        nstep_t = max(3, int(delta_t / t_step))
+        times = np.linspace(self.start.timestamp(), self.stop.timestamp(), nstep_t)
+        # Az grid
+        az_step = np.radians(10)  # 10 deg in radians
+        az_min = self.az_min.to_value(u.rad)
+        az_max = self.az_max.to_value(u.rad)
+        delta_az = az_max - az_min
+        nstep_az = max(3, int(delta_az / az_step))
+        azs = np.linspace(az_min, az_max, nstep_az)
+        # Elevation
+        el = self.el.to_value(u.rad)
+        # Evaluate
+        ras, decs = [], []
+        for t in times:
+            observer.date = to_DJD(t)
+            for az in azs:
+                ra, dec = np.degrees(observer.radec_of(az, el))
+                ras.append(ra)
+                decs.append(dec)
+        ras = np.unwrap(ras, period=360)
+        decs = np.array(decs)
+        if np.mean(ras) < 0:
+            ras += 360
+        elif np.mean(ras) > 360:
+            ras -= 360
+        self.ra_min = np.amin(ras) * u.deg
+        self.ra_max = np.amax(ras) * u.deg
+        self.ra_mean = np.mean(ras) * u.deg
+        self.dec_min = np.amin(decs) * u.deg
+        self.dec_max = np.amax(decs) * u.deg
+        self.dec_mean = np.mean(decs) * u.deg
+        return
 
 
 class SatelliteScan(Scan):
@@ -219,19 +269,24 @@ class GroundSchedule(object):
         return val
 
     @function_timer
-    def read(self, file, file_split=None, comm=None, sort=False, field_separator="|"):
+    def read(
+            self,
+            file_,
+            file_split=None,
+            comm=None,
+            field_separator="|",
+    ):
         """Load a ground observing schedule from a file.
 
         This loads scans from a file and appends them to the internal list of scans.
         The resulting combined scan list is optionally sorted.
 
         Args:
-            file (str):  The file to load.
+            file_ (str):  The file to load.
             file_split (tuple):  If not None, only use a subset of the schedule file.
                 The arguments are (isplit, nsplit) and only observations that satisfy
                 'scan index modulo nsplit == isplit' are included.
             comm (MPI.Comm):  Optional communicator to broadcast the schedule across.
-            sort (bool):  If True, sort the combined scan list by name.
             field_separator (str):  Field separator in the schedule file.  If the
                 separator is not found in the string, use white space instead
 
@@ -359,7 +414,7 @@ class GroundSchedule(object):
             )
 
         if comm is None or comm.rank == 0:
-            log.info("Loading schedule from {}".format(file))
+            log.info(f"Loading schedule from {file_}")
             isplit = None
             nsplit = None
             if file_split is not None:
@@ -370,7 +425,7 @@ class GroundSchedule(object):
             last_name = None
             total_time = 0
 
-            with open(file, "r") as f:
+            with open(file_, "r") as f:
                 for line in f:
                     if line.startswith("#"):
                         continue
@@ -429,11 +484,8 @@ class GroundSchedule(object):
             else:
                 total_time = f"{total_time / 60:.3} minutes"
             log.info(
-                f"Loaded {len(self.scans)} scans from {file} totaling {total_time}."
+                f"Loaded {len(self.scans)} scans from {file_} totaling {total_time}."
             )
-            if sort:
-                sortedscans = sorted(self.scans, key=lambda scn: scn.name)
-                self.scans = sortedscans
         if comm is not None:
             self.site_name = comm.bcast(self.site_name, root=0)
             self.telescope_name = comm.bcast(self.telescope_name, root=0)
@@ -443,7 +495,26 @@ class GroundSchedule(object):
             self.scans = comm.bcast(self.scans, root=0)
 
     @function_timer
-    def write(self, file):
+    def sort_by_name(self):
+        """Sort schedule by target name"""
+        self.scans = sorted(self.scans, key=lambda scn: scn.name)
+
+    def sort_by_RA(self):
+        """Sort schedule by boresight RA"""
+        observer = ephem.Observer()
+        observer.lon = str(self.site_lon.to_value(u.deg))
+        observer.lat = str(self.site_lat.to_value(u.deg))
+        observer.elevation = self.site_alt.to_value(u.m)
+        observer.epoch = "2000"
+        observer.temp = 0  # Celsius
+        observer.compute_pressure()
+        for scan in self.scans:
+            if scan.ra_mean is None:
+                scan.get_extent(observer)
+        self.scans = sorted(self.scans, key=lambda scn: scn.ra_mean)
+
+    @function_timer
+    def write(self, file_):
         # FIXME:  We should have more robust format here (e.g. ECSV) and then use
         # This class when building the schedule as well.
         raise NotImplementedError("New ground schedule format not yet implemented")

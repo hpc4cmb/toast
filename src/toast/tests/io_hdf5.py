@@ -220,7 +220,7 @@ class IoHdf5Test(MPITestCase):
         # Also check loading by regex, in this case only one frequency
         check_data = Data(data.comm)
         loader.volume = datadir
-        loader.pattern = ".*100\.0-GHz.*\.h5"
+        loader.pattern = r".*100\.0-GHz.*\.h5"
         loader.apply(check_data)
 
         for ob in check_data.obs:
