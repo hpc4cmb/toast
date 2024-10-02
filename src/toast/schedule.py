@@ -271,7 +271,7 @@ class GroundSchedule(object):
     @function_timer
     def read(
             self,
-            file_,
+            schedule_file,
             file_split=None,
             comm=None,
             field_separator="|",
@@ -282,7 +282,7 @@ class GroundSchedule(object):
         The resulting combined scan list is optionally sorted.
 
         Args:
-            file_ (str):  The file to load.
+            schedule_file (str):  The file to load.
             file_split (tuple):  If not None, only use a subset of the schedule file.
                 The arguments are (isplit, nsplit) and only observations that satisfy
                 'scan index modulo nsplit == isplit' are included.
@@ -414,7 +414,7 @@ class GroundSchedule(object):
             )
 
         if comm is None or comm.rank == 0:
-            log.info(f"Loading schedule from {file_}")
+            log.info(f"Loading schedule from {schedule_file}")
             isplit = None
             nsplit = None
             if file_split is not None:
@@ -425,7 +425,7 @@ class GroundSchedule(object):
             last_name = None
             total_time = 0
 
-            with open(file_, "r") as f:
+            with open(schedule_file, "r") as f:
                 for line in f:
                     if line.startswith("#"):
                         continue
@@ -484,7 +484,7 @@ class GroundSchedule(object):
             else:
                 total_time = f"{total_time / 60:.3} minutes"
             log.info(
-                f"Loaded {len(self.scans)} scans from {file_} totaling {total_time}."
+                f"Loaded {len(self.scans)} scans from {schedule_file} totaling {total_time}."
             )
         if comm is not None:
             self.site_name = comm.bcast(self.site_name, root=0)
@@ -514,7 +514,7 @@ class GroundSchedule(object):
         self.scans = sorted(self.scans, key=lambda scn: scn.ra_mean)
 
     @function_timer
-    def write(self, file_):
+    def write(self, schedule_file):
         # FIXME:  We should have more robust format here (e.g. ECSV) and then use
         # This class when building the schedule as well.
         raise NotImplementedError("New ground schedule format not yet implemented")
@@ -571,14 +571,14 @@ class SatelliteSchedule(object):
         return val
 
     @function_timer
-    def read(self, file, comm=None, sort=False):
+    def read(self, schedule_file, comm=None, sort=False):
         """Load a satellite observing schedule from a file.
 
         This loads scans from a file and appends them to the internal list of scans.
         The resulting combined scan list is optionally sorted.
 
         Args:
-            file (str):  The file to load.
+            schedule_file (str):  The file to load.
             comm (MPI.Comm):  Optional communicator to broadcast the schedule across.
             sort (bool):  If True, sort the combined scan list by name.
 
@@ -588,8 +588,8 @@ class SatelliteSchedule(object):
         """
         log = Logger.get()
         if comm is None or comm.rank == 0:
-            log.info("Loading schedule from {}".format(file))
-            data = QTable.read(file, format="ascii.ecsv")
+            log.info(f"Loading schedule from {schedule_file}")
+            data = QTable.read(schedule_file, format="ascii.ecsv")
             self.telescope_name = data.meta["telescope_name"]
             self.site_name = data.meta["site_name"]
             for row in data:
@@ -611,13 +611,13 @@ class SatelliteSchedule(object):
             self.scans = comm.bcast(self.scans, root=0)
 
     @function_timer
-    def write(self, file):
+    def write(self, schedule_file):
         """Write satellite schedule to a file.
 
         This writes the internal scan list to the specified file.
 
         Args:
-            file (str):  The file to write.
+            schedule_file (str):  The file to write.
 
         Returns:
             None
@@ -647,4 +647,4 @@ class SatelliteSchedule(object):
         out.meta["telescope_name"] = self.telescope_name
         out.meta["site_name"] = self.site_name
 
-        out.write(file, format="ascii.ecsv", overwrite=True)
+        out.write(schedule_file, format="ascii.ecsv", overwrite=True)
