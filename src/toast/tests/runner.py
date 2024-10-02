@@ -36,6 +36,7 @@ from . import ops_flag_sso as test_ops_flag_sso
 from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_groundfilter as test_ops_groundfilter
 from . import ops_hwpfilter as test_ops_hwpfilter
+from . import ops_loader as test_ops_loader
 from . import ops_madam as test_ops_madam
 from . import ops_mapmaker as test_ops_mapmaker
 from . import ops_mapmaker_binning as test_ops_mapmaker_binning
@@ -195,6 +196,7 @@ def test(name=None, verbosity=2):
 
         suite.addTest(loader.loadTestsFromModule(test_ops_flag_sso))
         suite.addTest(loader.loadTestsFromModule(test_ops_statistics))
+        suite.addTest(loader.loadTestsFromModule(test_ops_loader))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_utils))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_binning))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_solve))
