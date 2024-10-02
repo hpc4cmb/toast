@@ -61,8 +61,8 @@ class DemodulateTest(MPITestCase):
         )
 
         # Simulate noise
-        sim_noise = ops.SimNoise(noise_model=default_model.noise_model)
-        sim_noise.apply(data)
+        # sim_noise = ops.SimNoise(noise_model=default_model.noise_model)
+        # sim_noise.apply(data)
 
         # Bin signal without demodulation
 

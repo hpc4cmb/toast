@@ -73,8 +73,8 @@ class HWPModelTest(MPITestCase):
         )
 
         # Simulate noise from this model and save the result for comparison
-        # sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
-        # sim_noise.apply(data)
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
+        sim_noise.apply(data)
         ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
 
         # Create HWPSS

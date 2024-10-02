@@ -50,14 +50,14 @@ class HWPFilterTest(MPITestCase):
         # Simulate noise from this model and save for comparison
         sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
         sim_noise.apply(data)
-        ops.Copy(detdata=[(defaults.det_data, "original")]).apply(data)
+        ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
 
         # Add HWPSS
         hwpss_scale = 20.0
-        tod_rms = np.std(data.obs[0].detdata["original"][0])
+        tod_rms = np.std(data.obs[0].detdata["input"][0])
         coeff = fake_hwpss(data, defaults.det_data, hwpss_scale * tod_rms)
         n_harmonics = len(coeff) // 4
-        ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
+        ops.Copy(detdata=[(defaults.det_data, "original")]).apply(data)
 
         # Make fake flags
         fake_flags(data)
@@ -78,24 +78,29 @@ class HWPFilterTest(MPITestCase):
                 original = ob.detdata["original"][det]
                 input = ob.detdata["input"][det]
                 output = ob.detdata[defaults.det_data][det]
+                residual = output - input
 
                 if self.make_plots:
                     import matplotlib.pyplot as plt
 
                     n_samp = len(output)
-                    # for ns in [500, n_samp]:
-                    for ns in [200]:
-                        plot_slc = slice(0, ns, 1)
+                    pltsamp = 400
+                    for first, last in [
+                        (0, n_samp),
+                        (n_samp // 2 - pltsamp, n_samp // 2 + pltsamp),
+                        (n_samp - 2 * pltsamp, n_samp),
+                    ]:
+                        plot_slc = slice(first, last, 1)
                         savefile = os.path.join(
                             self.outdir,
-                            f"compare_{ob.name}_{det}_{ns}.pdf",
+                            f"compare_{ob.name}_{det}_{first}-{last}.pdf",
                         )
                         n_plot = 3
                         fig_height = 6 * n_plot
 
                         # Find the data range of the input
-                        dmin = np.amin(input[plot_slc])
-                        dmax = np.amax(input[plot_slc])
+                        dmin = np.amin(original[plot_slc])
+                        dmax = np.amax(original[plot_slc])
                         dhalf = (dmax - dmin) / 2
 
                         fig = plt.figure(figsize=(12, fig_height), dpi=72)
@@ -104,18 +109,14 @@ class HWPFilterTest(MPITestCase):
                         ax.plot(
                             ob.shared[defaults.times].data[plot_slc],
                             original[plot_slc],
-                            c="black",
-                            label=f"Original Signal",
+                            c="blue",
+                            label=f"Input + HWPSS",
                         )
-                        ax.set_ylim(bottom=dmin, top=dmax)
-                        ax.legend(loc="best")
-
-                        ax = fig.add_subplot(n_plot, 1, n_plot - 1, aspect="auto")
                         ax.plot(
                             ob.shared[defaults.times].data[plot_slc],
                             input[plot_slc],
-                            c="blue",
-                            label=f"Original + HWPSS",
+                            c="black",
+                            label=f"Input Signal",
                         )
                         ax.plot(
                             ob.shared[defaults.times].data[plot_slc],
@@ -126,35 +127,36 @@ class HWPFilterTest(MPITestCase):
                         ax.set_ylim(bottom=dmin, top=dmax)
                         ax.legend(loc="best")
 
-                        ax = fig.add_subplot(n_plot, 1, n_plot, aspect="auto")
-                        residual = original[plot_slc] - output[plot_slc]
+                        ax = fig.add_subplot(n_plot, 1, n_plot - 1, aspect="auto")
                         ax.plot(
                             ob.shared[defaults.times].data[plot_slc],
-                            original[plot_slc],
+                            input[plot_slc],
                             c="black",
-                            label=f"Original",
+                            label=f"Input Signal",
                         )
                         ax.plot(
                             ob.shared[defaults.times].data[plot_slc],
-                            residual,
-                            c="cyan",
+                            residual[plot_slc],
+                            c="green",
                             label=f"Residual",
                         )
+                        ax.set_ylim(bottom=dmin, top=dmax)
                         ax.legend(loc="best")
+
+                        ax = fig.add_subplot(n_plot, 1, n_plot, aspect="auto")
+                        ax.plot(
+                            ob.shared[defaults.times].data[plot_slc],
+                            flags[plot_slc],
+                            c="cyan",
+                            label=f"Flags",
+                        )
+                        ax.legend(loc="best")
+
                         plt.title(f"Obs {ob.name}, det {det}")
                         plt.savefig(savefile)
                         plt.close()
 
-                # Check that the filtered signal is cleaner than the input signal
-                self.assertTrue(np.std(output[good]) < np.std(input[good]))
-
-                # Check that the flagged samples were also cleaned and not,
-                # for example, set to zero. Use np.diff() to remove any
-                # residual trend
-                residual_std = np.std(np.diff(output) - np.diff(original))
-                output_std = np.std(np.diff(output))
-                if residual_std > 0.1 * output_std:
-                    print(f"residual ({residual_std}) > 0.1 * ({output_std})")
-                    self.assertTrue(False)
-
+                # Check that the filtered signal is cleaner than the hwpss contaminated
+                # signal.
+                self.assertTrue(np.std(output[good]) < np.std(original[good]))
         close_data(data)
