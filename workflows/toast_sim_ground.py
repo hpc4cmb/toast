@@ -75,6 +75,15 @@ def parse_config(operators, templates, comm):
     )
 
     parser.add_argument(
+        "--sort_schedule",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Sort the observing schedule by mean boresight RA.  "
+        "This can limit the area of sky each process group deals with.",
+    )
+
+    parser.add_argument(
         "--out_dir",
         required=False,
         type=str,
@@ -193,6 +202,8 @@ def load_instrument_and_schedule(args, comm):
     # Load the schedule file
     schedule = toast.schedule.GroundSchedule()
     schedule.read(args.schedule, comm=comm)
+    if args.sort_schedule:
+        schedule.sort_by_RA()
     log.info_rank("Loaded schedule in", comm=comm, timer=timer)
     mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
     log.info_rank(f"After loading schedule:  {mem}", comm)

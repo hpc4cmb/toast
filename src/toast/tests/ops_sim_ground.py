@@ -84,6 +84,9 @@ class SimGroundTest(MPITestCase):
         if self.comm is not None:
             schedule = self.comm.bcast(schedule, root=0)
 
+        # Sort the schedule to exercise that method
+        schedule.sort_by_RA()
+
         data = Data(self.toastcomm)
 
         sim_ground = ops.SimGround(

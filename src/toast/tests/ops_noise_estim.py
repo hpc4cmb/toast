@@ -60,7 +60,7 @@ def plot_noise_estim_compare(
     net = net.to_value(u.K / u.Hz**0.5)
     ax.axhline(
         net**2,
-        label=f"NET = {net:.3f} K" + " / $\sqrt{\mathrm{Hz}}$",
+        label=f"NET = {net:.3f} K" + r" / $\sqrt{\mathrm{Hz}}$",
         linestyle="--",
         color="blue",
     )
@@ -446,7 +446,7 @@ class NoiseEstimTest(MPITestCase):
             net = net.to_value(u.K / u.Hz**0.5)
             ax.axhline(
                 net**2,
-                label=f"NET = {net:.3f} K" + " / $\sqrt{\mathrm{Hz}}$",
+                label=f"NET = {net:.3f} K" + r" / $\sqrt{\mathrm{Hz}}$",
                 linestyle="--",
                 color="k",
             )
