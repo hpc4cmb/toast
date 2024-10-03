@@ -69,11 +69,13 @@ class TemplateHwpssTest(MPITestCase):
         dc_level = np.mean(hwpss)
         n_harmonics = len(ccos)
         # Estimate coefficients
-        sincos = hwpss_sincos_buffer(hwp_ang, flags, n_harmonics)
-        cov_lu, cov_piv = hwpss_compute_coeff_covariance(times, flags, sincos)
-        coeff = hwpss_compute_coeff(hwpss, flags, times, sincos, cov_lu, cov_piv)
+        sincos = hwpss_sincos_buffer(hwp_ang, flags, n_harmonics, comm=self.comm)
+        cov_lu, cov_piv = hwpss_compute_coeff_covariance(
+            sincos, flags, comm=self.comm, times=times
+        )
+        coeff = hwpss_compute_coeff(sincos, hwpss, flags, cov_lu, cov_piv, times=times)
         # Build model
-        model = hwpss_build_model(times, flags, sincos, coeff) + dc_level
+        model = hwpss_build_model(sincos, flags, coeff, times=times) + dc_level
         # Plot
         if self.comm is None or self.comm.rank == 0:
             import matplotlib.pyplot as plt

@@ -128,7 +128,7 @@ class Hwpss(Template):
                     else:
                         flags = ob.shared[self.hwp_flags].data & self.hwp_flag_mask
                     self._obs_sincos[iob] = hwpss_sincos_buffer(
-                        ob.shared[self.hwp_angle],
+                        ob.shared[self.hwp_angle].data,
                         flags,
                         self.harmonics,
                         comm=ob.comm.comm_group,
