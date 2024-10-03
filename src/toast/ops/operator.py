@@ -22,7 +22,7 @@ class Operator(TraitConfig):
         raise NotImplementedError("Fell through to Operator base class")
 
     @function_timer_stackskip
-    def exec(self, data, detectors=None, use_accel=None, **kwargs):
+    def exec(self, data, detectors=None, **kwargs):
         """Perform operations on a Data object.
 
         If a list of detectors is specified, only process these detectors.  Any extra
@@ -47,7 +47,6 @@ class Operator(TraitConfig):
             self._exec(
                 data,
                 detectors=detectors,
-                use_accel=use_accel,
                 **kwargs,
             )
         else:
@@ -59,7 +58,7 @@ class Operator(TraitConfig):
         raise NotImplementedError("Fell through to Operator base class")
 
     @function_timer_stackskip
-    def finalize(self, data, use_accel=None, **kwargs):
+    def finalize(self, data, **kwargs):
         """Perform any final operations / communication.
 
         A call to this function indicates that all calls to the 'exec()' method are
@@ -77,14 +76,14 @@ class Operator(TraitConfig):
         if self.enabled:
             msg = f"Calling finalize() for operator {self.name}"
             log.verbose(msg)
-            return self._finalize(data, use_accel=use_accel, **kwargs)
+            return self._finalize(data, **kwargs)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"
                 log.debug(msg)
 
     @function_timer_stackskip
-    def apply(self, data, detectors=None, use_accel=None, **kwargs):
+    def apply(self, data, detectors=None, **kwargs):
         """Run exec() and finalize().
 
         This is a convenience wrapper that calls exec() exactly once with an optional
@@ -104,8 +103,76 @@ class Operator(TraitConfig):
             (value):  None or an Operator-dependent result.
 
         """
-        self.exec(data, detectors, use_accel=use_accel, **kwargs)
-        return self.finalize(data, use_accel=use_accel, **kwargs)
+        self.exec(data, detectors=detectors, **kwargs)
+        return self.finalize(data, **kwargs)
+
+    @function_timer_stackskip
+    def load_exec(self, data, detectors=None, **kwargs):
+        """Perform operations on a Data object that is not yet in memory.
+
+        In some cases, the full detector data across multiple observations is too
+        large to fit in memory.  This method calls exec() one observation at a time
+        and looks for an attribute named "loader" in each observation.  If this
+        exists, it should be an instance of a Loader class that defines 2 methods
+        that can be called like this:
+
+            load(Observation)
+            unload(Observation)
+
+        These should populate and clear any DetectorData in the observation.  The
+        experiment-specific code which defines and instantiates the Loader class
+        should ensure that any metadata needed to create and read the detector data
+        is either contained in the Loader instance or in the Observation data or
+        metadata.
+
+        All kwargs are passed to the underlying call to exec().
+
+        Args:
+            data (toast.Data):  The distributed data.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        if self.enabled:
+            for iobs, obs in enumerate(data.obs):
+                unload = False
+                if hasattr(obs, "loader"):
+                    obs.loader.load(obs)
+                    unload = True
+                temp_data = data.select(obs_index=iobs)
+                self.exec(temp_data, detectors=detectors, **kwargs)
+                del temp_data
+                if unload:
+                    obs.loader.unload(obs)
+        else:
+            if data.comm.world_rank == 0:
+                msg = f"Operator {self.name} is disabled, skipping call to load_exec()"
+                log.debug(msg)
+
+    @function_timer_stackskip
+    def load_apply(self, data, detectors=None, **kwargs):
+        """Run load_exec() and finalize().
+
+        This is a convenience wrapper that calls load_exec() once and then immediately
+        calls finalize().  Note that operator finalize methods should not rely on the
+        existence of any detector data.
+
+        After calling this, any future calls to exec() or load_exec() may produce
+        unexpected results, since finalize() has already been called.
+
+        All kwargs are passed to load_exec() and finalize().
+
+        Args:
+            data (toast.Data):  The distributed data.
+
+        Returns:
+            (value):  None or an Operator-dependent result.
+
+        """
+        self.load_exec(data, detectors=detectors, **kwargs)
+        return self.finalize(data, **kwargs)
 
     def _requires(self):
         raise NotImplementedError("Fell through to Operator base class")
