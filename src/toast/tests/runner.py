@@ -79,6 +79,7 @@ from . import ops_sim_tod_totalconvolve as test_ops_sim_tod_totalconvolve
 from . import ops_sss as test_ops_sss
 from . import ops_statistics as test_ops_statistics
 from . import ops_stokes_weights as test_ops_stokes_weights
+from . import ops_derivatives_weights as test_ops_derivatives_weights
 from . import ops_time_constant as test_ops_time_constant
 from . import ops_yield_cut as test_ops_yield_cut
 from . import pixels_healpix as test_pixels_healpix
@@ -239,6 +240,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_crosslinking))
         suite.addTest(loader.loadTestsFromModule(test_ops_sss))
         suite.addTest(loader.loadTestsFromModule(test_ops_stokes_weights))
+        suite.addTest(loader.loadTestsFromModule(test_ops_derivatives_weights))
         suite.addTest(loader.loadTestsFromModule(test_ops_demodulate))
         suite.addTest(loader.loadTestsFromModule(test_ops_demod_common_mode))
         suite.addTest(loader.loadTestsFromModule(test_ops_perturbhwp))

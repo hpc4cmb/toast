@@ -74,6 +74,12 @@ class ScanHealpixMap(Operator):
         allow_none=True,
         help="This must be an instance of a Stokes weights operator",
     )
+    
+    derivatives_weights = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="This must be an instance of a derivatives weights operator",
+    )
 
     save_map = Bool(False, help="If True, do not delete map during finalize")
 
@@ -119,7 +125,22 @@ class ScanHealpixMap(Operator):
                     msg = f"stokes_weights operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
         return weights
-
+    
+    @traitlets.validate("derivatives_weights")
+    def _check_derivatives_weights(self, proposal):
+        weights = proposal["value"]
+        if weights is not None:
+            if not isinstance(weights, Operator):
+                raise traitlets.TraitError(
+                    "derivatives_weights should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in ["weights", "view"]:
+                if not weights.has_trait(trt):
+                    msg = f"derivatives_weights operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return weights
+    
     def __init__(self, **kwargs):
         self.map_names = []
         super().__init__(**kwargs)
@@ -155,10 +176,21 @@ class ScanHealpixMap(Operator):
         dist = data[self.pixel_dist]
         if not isinstance(dist, PixelDistribution):
             raise RuntimeError("The pixel_dist must be a PixelDistribution instance")
+            
+        
 
         # Use the pixel distribution and pointing configuration to allocate our
         # map data and read it in.
-        nnz = len(self.stokes_weights.mode)
+        nnz = None
+        if self.stokes_weights is None or self.stokes_weights.mode == "I":
+            nnz = 1
+        elif self.stokes_weights.mode in ("IQU", "dI"):
+            nnz = 3
+        elif self.stokes_weights.mode == "d2I":
+            nnz = 6
+        else:
+            msg = f"Unknown Stokes/Derivatives weights mode '{self.stokes_weights.mode}'"
+            raise RuntimeError(msg)
 
         filenames = self.file.split(";")
         detdata_keys = self.det_data.split(";")
@@ -191,7 +223,6 @@ class ScanHealpixMap(Operator):
                 )
 
         # Configure the low-level map scanning operator
-
         scanner = ScanMap(
             det_data=self.det_data_keys[0],
             det_data_units=self.det_data_units,
