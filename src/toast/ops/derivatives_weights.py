@@ -6,18 +6,16 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from ...accelerator import ImplementationType
-from ...observation import default_values as defaults
-from ...timing import function_timer
-from ...traits import Bool, Instance, Int, Unicode, trait_docs
-from ...utils import Environment, Logger
-from ...qarray import mult, to_iso_angles
-from ..operator import Operator
-from .kernels import stokes_weights_I, stokes_weights_IQU
-
+from ..accelerator import ImplementationType
+from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..utils import Environment, Logger
+from ..qarray import mult, to_iso_angles
+from .operator import Operator
 
 @trait_docs
-class IDerivativeWeights(Operator):
+class DerivativesWeights(Operator):
     """Operator which generates pointing weights for I and derivatives of I with
     respect to theta and phi, to order 1 (mode dI) or 2 (mode d2I).
 

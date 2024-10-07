@@ -30,6 +30,7 @@ install(FILES
     pointing.py
     scan_healpix.py
     scan_wcs.py
+    derivatives_weights.py
     mapmaker_binning.py
     mapmaker_solve.py
     mapmaker_templates.py
