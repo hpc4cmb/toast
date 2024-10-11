@@ -208,10 +208,9 @@ class SimpleJumpCorrect(Operator):
 
         sigmas = []
         nn = len(toi)
-        for start in range(tol, nn - tol, 2 * tol):
+        # Ignore tol samples at the edge
+        for start in range(tol, nn - 3*tol + 1, 2*tol):
             stop = start + 2 * tol
-            if stop > nn - tol:
-                break
             ind = slice(start, stop)
             x = toi[ind][full_flag[ind] == 0]
             if len(x) != 0:
