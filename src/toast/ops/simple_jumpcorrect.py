@@ -179,27 +179,30 @@ class SimpleJumpCorrect(Operator):
             npeak = np.ma.sum(np.abs(mytoi) > sigma * lim)
 
         # Only one jump per iteration
-        if npeak > 0:
+        while npeak > 0:
             imax = np.argmax(np.abs(mytoi))
             amplitude = mytoi[imax]
             significance = np.abs(amplitude) / sigma
 
-            # Mask the peak for taking mean and finding additional peaks
+            # mask out the vicinity not to have false detections near the peak
             istart = max(0, imax - tol)
             istop = min(len(mytoi), imax + tol)
-            # mask out the vicinity not to have false detections near the peak
             mytoi[istart:istop] = np.ma.masked
             flag_out[istart:istop] = True
-            if sigma_in is None:
-                sigma = self._get_sigma(mytoi, flag_out, tol)
-
             # Excessive flagging is a sign of false detection
             if significance > 5 or (
-                float(np.sum(flag[istart:istop])) / (istop - istart) < 0.5
+                float(np.sum(flag_out[istart:istop])) / (istop - istart) < 0.5
             ):
                 peaks.append((imax, significance, amplitude))
 
-            npeak = np.sum(np.abs(mytoi) > sigma * lim)
+            # Find additional peaks
+            if sigma_in is None:
+                sigma = self._get_sigma(mytoi, flag_out, tol)
+            if np.isnan(sigma) or sigma == 0:
+                npeak = 0
+            else:
+                npeak = np.ma.sum(np.abs(mytoi) > sigma * lim)
+
         return peaks
 
     def _get_sigma(self, toi, flag, tol):
