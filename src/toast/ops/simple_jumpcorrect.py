@@ -163,6 +163,7 @@ class SimpleJumpCorrect(Operator):
         """
         peaks = []
         mytoi = np.ma.masked_array(toi)
+        nsample = len(mytoi)
         # Do not accept jumps at the ends due to boundary effects
         lbound = tol
         rbound = tol
@@ -186,7 +187,7 @@ class SimpleJumpCorrect(Operator):
 
             # mask out the vicinity not to have false detections near the peak
             istart = max(0, imax - tol)
-            istop = min(len(mytoi), imax + tol)
+            istop = min(nsample, imax + tol)
             mytoi[istart:istop] = np.ma.masked
             flag_out[istart:istop] = True
             # Excessive flagging is a sign of false detection
