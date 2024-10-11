@@ -7,7 +7,7 @@ import copy
 import numpy as np
 import traitlets
 from astropy import units as u
-from scipy.signal import fftconvolve
+from scipy.signal import convolve
 
 from .. import qarray as qa
 from ..intervals import IntervalList
@@ -268,7 +268,7 @@ class SimpleJumpCorrect(Operator):
                     sig_view = sig[ind].copy()
                     bad_view = bad[ind]
                     bad_view_out = bad_view.copy()
-                    sig_filtered = fftconvolve(sig_view, stepfilter, mode="same")
+                    sig_filtered = convolve(sig_view, stepfilter, mode="same")
                     peaks = self._find_peaks(
                         sig_filtered,
                         bad_view,
