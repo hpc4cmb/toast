@@ -234,10 +234,13 @@ class SimpleJumpCorrect(Operator):
 
         """
         corrected_signal = signal.copy()
+        nsample = len(signal)
         flag_out = flag.copy()
         for peak, _, amplitude in peaks:
             corrected_signal[peak:] -= amplitude
-            flag_out[peak - int(tol) : peak + int(tol)] = True
+            pstart = max(0, peak - tol)
+            pstop = min(nsample, peak + tol)
+            flag_out[pstart : pstop] = True
         return corrected_signal, flag_out
 
     @function_timer
