@@ -514,6 +514,24 @@ class Observation(MutableMapping):
                 ss.append(self.dist.sample_sets[off + s])
             return ss
 
+    # Helper methods to check for the 2 most common cases, where data is
+    # distributed either fully by detector or fully by sample.  Note that if there
+    # is only one process then both conditions are true.
+
+    @property
+    def is_distributed_by_sample(self):
+        if self.dist.comm_row_size == self.dist.comm.group_size:
+            return True
+        else:
+            return False
+
+    @property
+    def is_distributed_by_detector(self):
+        if self.dist.comm_col_size == self.dist.comm.group_size:
+            return True
+        else:
+            return False
+
     # Mapping methods
 
     def __getitem__(self, key):

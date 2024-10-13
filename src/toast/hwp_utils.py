@@ -137,102 +137,109 @@ def hwpss_compute_coeff_covariance(
     my_cov = np.zeros((cov_ndim, cov_ndim), dtype=np.float64)
 
     good = my_flags == 0
-    n_good = np.count_nonzero(good)
+    my_n_good = np.count_nonzero(good)
+
     # Compute local upper triangle
-    for hr in range(0, n_harmonics):
-        for hc in range(hr, n_harmonics):
-            if time_drift:
-                my_cov[4 * hr + 0, 4 * hc + 0] = np.dot(
-                    my_sincos[good, 2 * hr + 0], my_sincos[good, 2 * hc + 0]
-                )
-                my_cov[4 * hr + 0, 4 * hc + 1] = np.dot(
-                    my_sincos[good, 2 * hr + 0],
-                    np.multiply(my_times[good], my_sincos[good, 2 * hc + 0]),
-                )
-                my_cov[4 * hr + 0, 4 * hc + 2] = np.dot(
-                    my_sincos[good, 2 * hr + 0], my_sincos[good, 2 * hc + 1]
-                )
-                my_cov[4 * hr + 0, 4 * hc + 3] = np.dot(
-                    my_sincos[good, 2 * hr + 0],
-                    np.multiply(my_times[good], my_sincos[good, 2 * hc + 1]),
-                )
+    if my_n_good > 0:
+        for hr in range(0, n_harmonics):
+            for hc in range(hr, n_harmonics):
+                if time_drift:
+                    my_cov[4 * hr + 0, 4 * hc + 0] = np.dot(
+                        my_sincos[good, 2 * hr + 0], my_sincos[good, 2 * hc + 0]
+                    )
+                    my_cov[4 * hr + 0, 4 * hc + 1] = np.dot(
+                        my_sincos[good, 2 * hr + 0],
+                        np.multiply(my_times[good], my_sincos[good, 2 * hc + 0]),
+                    )
+                    my_cov[4 * hr + 0, 4 * hc + 2] = np.dot(
+                        my_sincos[good, 2 * hr + 0], my_sincos[good, 2 * hc + 1]
+                    )
+                    my_cov[4 * hr + 0, 4 * hc + 3] = np.dot(
+                        my_sincos[good, 2 * hr + 0],
+                        np.multiply(my_times[good], my_sincos[good, 2 * hc + 1]),
+                    )
 
-                my_cov[4 * hr + 1, 4 * hc + 0] = np.dot(
-                    np.multiply(my_times[good], my_sincos[good, 2 * hr + 0]),
-                    my_sincos[good, 2 * hc + 0],
-                )
-                my_cov[4 * hr + 1, 4 * hc + 1] = np.dot(
-                    np.multiply(my_times[good], my_sincos[good, 2 * hr + 0]),
-                    np.multiply(my_times[good], my_sincos[good, 2 * hc + 0]),
-                )
-                my_cov[4 * hr + 1, 4 * hc + 2] = np.dot(
-                    np.multiply(my_times[good], my_sincos[good, 2 * hr + 0]),
-                    my_sincos[good, 2 * hc + 1],
-                )
-                my_cov[4 * hr + 1, 4 * hc + 3] = np.dot(
-                    np.multiply(my_times[good], my_sincos[good, 2 * hr + 0]),
-                    np.multiply(my_times[good], my_sincos[good, 2 * hc + 1]),
-                )
+                    my_cov[4 * hr + 1, 4 * hc + 0] = np.dot(
+                        np.multiply(my_times[good], my_sincos[good, 2 * hr + 0]),
+                        my_sincos[good, 2 * hc + 0],
+                    )
+                    my_cov[4 * hr + 1, 4 * hc + 1] = np.dot(
+                        np.multiply(my_times[good], my_sincos[good, 2 * hr + 0]),
+                        np.multiply(my_times[good], my_sincos[good, 2 * hc + 0]),
+                    )
+                    my_cov[4 * hr + 1, 4 * hc + 2] = np.dot(
+                        np.multiply(my_times[good], my_sincos[good, 2 * hr + 0]),
+                        my_sincos[good, 2 * hc + 1],
+                    )
+                    my_cov[4 * hr + 1, 4 * hc + 3] = np.dot(
+                        np.multiply(my_times[good], my_sincos[good, 2 * hr + 0]),
+                        np.multiply(my_times[good], my_sincos[good, 2 * hc + 1]),
+                    )
 
-                my_cov[4 * hr + 2, 4 * hc + 0] = np.dot(
-                    my_sincos[good, 2 * hr + 1], my_sincos[good, 2 * hc + 0]
-                )
-                my_cov[4 * hr + 2, 4 * hc + 1] = np.dot(
-                    my_sincos[good, 2 * hr + 1],
-                    np.multiply(my_times[good], my_sincos[good, 2 * hc + 0]),
-                )
-                my_cov[4 * hr + 2, 4 * hc + 2] = np.dot(
-                    my_sincos[good, 2 * hr + 1], my_sincos[good, 2 * hc + 1]
-                )
-                my_cov[4 * hr + 2, 4 * hc + 3] = np.dot(
-                    my_sincos[good, 2 * hr + 1],
-                    np.multiply(my_times[good], my_sincos[good, 2 * hc + 1]),
-                )
+                    my_cov[4 * hr + 2, 4 * hc + 0] = np.dot(
+                        my_sincos[good, 2 * hr + 1], my_sincos[good, 2 * hc + 0]
+                    )
+                    my_cov[4 * hr + 2, 4 * hc + 1] = np.dot(
+                        my_sincos[good, 2 * hr + 1],
+                        np.multiply(my_times[good], my_sincos[good, 2 * hc + 0]),
+                    )
+                    my_cov[4 * hr + 2, 4 * hc + 2] = np.dot(
+                        my_sincos[good, 2 * hr + 1], my_sincos[good, 2 * hc + 1]
+                    )
+                    my_cov[4 * hr + 2, 4 * hc + 3] = np.dot(
+                        my_sincos[good, 2 * hr + 1],
+                        np.multiply(my_times[good], my_sincos[good, 2 * hc + 1]),
+                    )
 
-                my_cov[4 * hr + 3, 4 * hc + 0] = np.dot(
-                    np.multiply(my_times[good], my_sincos[good, 2 * hr + 1]),
-                    my_sincos[good, 2 * hc + 0],
-                )
-                my_cov[4 * hr + 3, 4 * hc + 1] = np.dot(
-                    np.multiply(my_times[good], my_sincos[good, 2 * hr + 1]),
-                    np.multiply(my_times[good], my_sincos[good, 2 * hc + 0]),
-                )
-                my_cov[4 * hr + 3, 4 * hc + 2] = np.dot(
-                    np.multiply(my_times[good], my_sincos[good, 2 * hr + 1]),
-                    my_sincos[good, 2 * hc + 1],
-                )
-                my_cov[4 * hr + 3, 4 * hc + 3] = np.dot(
-                    np.multiply(my_times[good], my_sincos[good, 2 * hr + 1]),
-                    np.multiply(my_times[good], my_sincos[good, 2 * hc + 1]),
-                )
-            else:
-                my_cov[2 * hr + 0, 2 * hc + 0] = np.dot(
-                    my_sincos[good, 2 * hr + 0], my_sincos[good, 2 * hc + 0]
-                )
-                my_cov[2 * hr + 0, 2 * hc + 1] = np.dot(
-                    my_sincos[good, 2 * hr + 0], my_sincos[good, 2 * hc + 1]
-                )
-                my_cov[2 * hr + 1, 2 * hc + 0] = np.dot(
-                    my_sincos[good, 2 * hr + 1], my_sincos[good, 2 * hc + 0]
-                )
-                my_cov[2 * hr + 1, 2 * hc + 1] = np.dot(
-                    my_sincos[good, 2 * hr + 1], my_sincos[good, 2 * hc + 1]
-                )
+                    my_cov[4 * hr + 3, 4 * hc + 0] = np.dot(
+                        np.multiply(my_times[good], my_sincos[good, 2 * hr + 1]),
+                        my_sincos[good, 2 * hc + 0],
+                    )
+                    my_cov[4 * hr + 3, 4 * hc + 1] = np.dot(
+                        np.multiply(my_times[good], my_sincos[good, 2 * hr + 1]),
+                        np.multiply(my_times[good], my_sincos[good, 2 * hc + 0]),
+                    )
+                    my_cov[4 * hr + 3, 4 * hc + 2] = np.dot(
+                        np.multiply(my_times[good], my_sincos[good, 2 * hr + 1]),
+                        my_sincos[good, 2 * hc + 1],
+                    )
+                    my_cov[4 * hr + 3, 4 * hc + 3] = np.dot(
+                        np.multiply(my_times[good], my_sincos[good, 2 * hr + 1]),
+                        np.multiply(my_times[good], my_sincos[good, 2 * hc + 1]),
+                    )
+                else:
+                    my_cov[2 * hr + 0, 2 * hc + 0] = np.dot(
+                        my_sincos[good, 2 * hr + 0], my_sincos[good, 2 * hc + 0]
+                    )
+                    my_cov[2 * hr + 0, 2 * hc + 1] = np.dot(
+                        my_sincos[good, 2 * hr + 0], my_sincos[good, 2 * hc + 1]
+                    )
+                    my_cov[2 * hr + 1, 2 * hc + 0] = np.dot(
+                        my_sincos[good, 2 * hr + 1], my_sincos[good, 2 * hc + 0]
+                    )
+                    my_cov[2 * hr + 1, 2 * hc + 1] = np.dot(
+                        my_sincos[good, 2 * hr + 1], my_sincos[good, 2 * hc + 1]
+                    )
 
     # Accumulate across processes
     if comm is None:
         cov = my_cov
+        n_good = my_n_good
     else:
         cov = np.zeros((cov_ndim, cov_ndim), dtype=np.float64)
         comm.Allreduce(my_cov, cov, op=MPI.SUM)
+        n_good = comm.allreduce(my_n_good, op=MPI.SUM)
+
+    # Scale result based on the number of good samples
+    if n_good == 0:
+        # All samples flagged
+        return None
+    cov[:, :] *= n_samp / n_good
 
     # Fill in lower triangle
     for hr in range(0, cov_ndim):
         for hc in range(0, hr):
             cov[hr, hc] = cov[hc, hr]
-
-    # Scale result based on the number of good samples
-    cov[:, :] *= n_samp / n_good
 
     # Check that condition number is reasonable
     evals = eigvalsh(cov)
@@ -285,6 +292,9 @@ def hwpss_compute_coeff(
     input[:] -= dc
     input[bad] = 0
     rhs = np.zeros(cov_ndim, dtype=np.float64)
+    if n_good == 0:
+        # No good samples, just return zeros
+        return rhs
     for h in range(n_harmonics):
         if time_drift:
             rhs[4 * h + 0] = np.dot(input[good], sincos[good, 2 * h])
@@ -335,6 +345,9 @@ def hwpss_build_model(sincos, flags, coeff, times=None, time_drift=False):
         cov_ndim = 2 * n_harmonics
     good = flags == 0
     model = np.zeros(n_samp, dtype=np.float64)
+    if np.count_nonzero(good) == 0:
+        # No good samples
+        return model
     if len(coeff.shape) == 2:
         # Per-sample coefficients
         if coeff.shape[0] != n_samp:

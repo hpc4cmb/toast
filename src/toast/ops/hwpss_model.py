@@ -194,7 +194,7 @@ class HWPSynchronousModel(Operator):
             timer = Timer()
             timer.start()
 
-            if ob.comm_row_size != 1:
+            if not ob.is_distributed_by_detector:
                 msg = f"{ob.name} is not distributed by detector"
                 raise RuntimeError(msg)
 
@@ -210,6 +210,8 @@ class HWPSynchronousModel(Operator):
                         create_units=ob.detdata[self.det_data].units,
                     )
                     ob.detdata[self.relcal_continuous][:, :] = 1.0
+                msg = f"{ob.name} has no '{self.hwp_angle}' field, skipping"
+                log.warning_rank(msg, comm=data.comm.comm_group)
                 continue
 
             # Compute quantities we need for all detectors and which we
@@ -251,6 +253,7 @@ class HWPSynchronousModel(Operator):
             else:
                 n_coeff = 2 * self.harmonics
             coeff = np.zeros((n_dets, n_coeff, n_chunk), dtype=np.float64)
+            coeff_flags = np.zeros(n_chunk, dtype=np.uint8)
 
             for ichunk, chunk in enumerate(chunks):
                 self._fit_chunk(
@@ -264,26 +267,26 @@ class HWPSynchronousModel(Operator):
                     det_flags,
                     reltime,
                     coeff,
+                    coeff_flags,
                 )
 
             msg = f"HWPSS Model {ob.name}: fit model to all chunks in"
             log.debug_rank(msg, comm=data.comm.comm_group, timer=timer)
 
             if self.save_model is not None:
-                self._store_model(ob, local_dets, chunks, coeff)
+                self._store_model(ob, local_dets, chunks, coeff, coeff_flags)
 
             # Even if we are not saving a fixed relative calibration table, compute
             # the mean 2f magnitude in order to cut outlier detectors.  The
             # calibration factors are relative to the mean of the distribution
             # of good detectors values.
-            mag_table = self._average_magnitude(local_dets, coeff)
+            mag_table = self._average_magnitude(local_dets, coeff, coeff_flags)
             good_dets, cal_center = self._cut_outliers(ob, mag_table)
             relcal_table = dict()
             for det in good_dets:
                 relcal_table[det] = cal_center / mag_table[det]
             if self.relcal_fixed is not None:
                 ob[self.relcal_fixed] = relcal_table
-            # print(f"relcal table = {relcal_table}")
 
             # If we are generating relative calibration timestreams create that now.
             if self.relcal_continuous is not None:
@@ -316,9 +319,14 @@ class HWPSynchronousModel(Operator):
                     mag_table[det],
                     chunks,
                     coeff[idet],
+                    coeff_flags,
                 )
                 # Update flags
                 ob.detdata[self.det_flags][det] |= det_flags[det] * self.hwp_flag_mask
+                if model is None:
+                    # The model construction failed due to flagged samples.  Nothing to
+                    # subtract, since the detector has been flagged.
+                    continue
                 # Subtract model from good samples
                 if self.subtract_model:
                     good = det_flags[det] == 0
@@ -465,10 +473,21 @@ class HWPSynchronousModel(Operator):
         det_mag,
         chunks,
         ch_coeff,
+        coeff_flags,
         min_smooth=4,
     ):
+        log = Logger.get()
         nsamp = len(reltime)
         if len(chunks) == 1:
+            if coeff_flags[0] != 0:
+                msg = f"{obs.name}[{det_name}]: only one chunk, which is flagged"
+                log.warning(msg)
+                # Flag this detector
+                current = obs.local_detector_flags[det_name]
+                obs.update_local_detector_flags(
+                    {det_name: current | self.hwp_flag_mask}
+                )
+                return (None, None)
             det_coeff = ch_coeff[:, 0]
             model = hwpss_build_model(
                 sincos,
@@ -506,7 +525,20 @@ class HWPSynchronousModel(Operator):
         else:
             n_coeff = ch_coeff.shape[0]
             n_chunk = ch_coeff.shape[1]
-            good_chunk = [np.count_nonzero(ch_coeff[:, x]) > 0 for x in range(n_chunk)]
+            good_chunk = [
+                np.count_nonzero(ch_coeff[:, x]) > 0 and coeff_flags[x] == 0
+                for x in range(n_chunk)
+            ]
+            if np.count_nonzero(good_chunk) == 0:
+                msg = f"{obs.name}[{det_name}]: All {len(good_chunk)} chunks"
+                msg += f" are flagged."
+                log.warning(msg)
+                # Flag this detector
+                current = obs.local_detector_flags[det_name]
+                obs.update_local_detector_flags(
+                    {det_name: current | self.hwp_flag_mask}
+                )
+                return (None, None)
             ch_times = np.array(
                 [x["time"] for y, x in enumerate(chunks) if good_chunk[y]]
             )
@@ -613,7 +645,7 @@ class HWPSynchronousModel(Operator):
             )
         return model, det_mag
 
-    def _store_model(self, obs, dets, chunks, coeff):
+    def _store_model(self, obs, dets, chunks, coeff, coeff_flags):
         log = Logger.get()
         if self.save_model in obs:
             msg = "observation {obs.name} already has something at "
@@ -627,6 +659,7 @@ class HWPSynchronousModel(Operator):
                 "start": chk["start"],
                 "end": chk["end"],
                 "time": ob_start + chk["time"],
+                "flag": coeff_flags[ichk],
             }
             props["dets"] = dict()
             for idet, det in enumerate(dets):
@@ -668,10 +701,6 @@ class HWPSynchronousModel(Operator):
                     if np.absolute(all_mag[idet] - mn) > self.relcal_cut_sigma * std:
                         all_good[idet] = False
                         n_cut += 1
-                    # else:
-                    #     print(
-                    #         f"Keeping {det}: {np.absolute(all_mag[idet] - mn)} !> {self.relcal_cut_sigma * std}"
-                    #     )
             central_mag = np.mean(all_mag[all_good])
             all_flags = {
                 x: self.hwp_flag_mask for i, x in enumerate(all_dets) if not all_good[i]
@@ -691,7 +720,7 @@ class HWPSynchronousModel(Operator):
 
         return local_good, central_mag
 
-    def _average_magnitude(self, dets, coeff):
+    def _average_magnitude(self, dets, coeff, coeff_flags):
         mag = dict()
         if self.time_drift:
             # 4 values per harmonic, 2f is index 1
@@ -705,6 +734,12 @@ class HWPSynchronousModel(Operator):
         for idet, det in enumerate(dets):
             ch_mag = list()
             for ch in range(n_chunk):
+                if coeff_flags[ch] != 0:
+                    # All detectors in this chunk were flagged
+                    continue
+                if coeff[idet, re_comp, ch] == 0 and coeff[idet, im_comp, ch] == 0:
+                    # This detector data was flagged
+                    continue
                 ch_mag.append(
                     np.sqrt(
                         coeff[idet, re_comp, ch] ** 2 + coeff[idet, im_comp, ch] ** 2
@@ -714,7 +749,18 @@ class HWPSynchronousModel(Operator):
         return mag
 
     def _fit_chunk(
-        self, obs, dets, indx, start, end, sincos, sh_flags, det_flags, reltime, coeff
+        self,
+        obs,
+        dets,
+        indx,
+        start,
+        end,
+        sincos,
+        sh_flags,
+        det_flags,
+        reltime,
+        coeff,
+        coeff_flags,
     ):
         log = Logger.get()
         ch_timer = Timer()
@@ -739,8 +785,10 @@ class HWPSynchronousModel(Operator):
         if obs_cov is None:
             msg = f"HWPSS Model {obs.name}[{indx}] ({slc_samps} samples)"
             msg += " failed to compute coefficient"
-            msg += " covariance.  Change chunking or number of harmonics."
-            raise RuntimeError(msg)
+            msg += " covariance.  Flagging this chunk when building model."
+            log.verbose_rank(msg, comm=obs.comm.comm_group)
+            coeff_flags[indx] = 1
+            return
 
         msg = f"HWPSS Model {obs.name}[{indx}]: built coefficient covariance in"
         log.verbose_rank(msg, comm=obs.comm.comm_group, timer=ch_timer)
@@ -771,7 +819,6 @@ class HWPSynchronousModel(Operator):
                 cfstr = ""
                 for ic in cf:
                     cfstr += f"{ic} "
-                # print(f"Det Coeff {det}[{indx}] = {cfstr}")
             coeff[idet, :, indx] = cf
 
         msg = f"HWPSS Model {obs.name}[{indx}]: compute detector coefficients in"
@@ -870,12 +917,12 @@ class HWPSynchronousModel(Operator):
         return (shared_flags, det_flags)
 
     def _stopped_flags(self, obs):
-        hdata = obs.shared[self.hwp_angle].data
-        hdiff = np.diff(hdata)
-        hdiffmed = np.median(hdiff)
-        stopped = np.zeros(len(hdata), dtype=np.uint8)
-        stopped[:-1] = np.absolute(hdiff) < 1e-6 * hdiffmed
-        stopped[-1] = stopped[-2]
+        hdata = np.unwrap(obs.shared[self.hwp_angle].data, period=2 * np.pi)
+        hvel = np.gradient(hdata)
+        moving = np.absolute(hvel) > 1.0e-6
+        nominal = np.median(hvel[moving])
+        unstable = np.absolute(hvel - nominal) > 1.0e-3 * nominal
+        stopped = np.array(unstable, dtype=np.uint8)
         return stopped
 
     def _fill_gaps(self, obs, det, flags):
@@ -885,7 +932,6 @@ class HWPSynchronousModel(Operator):
         sig = obs.detdata[self.det_data][det]
         flag_indx = np.arange(len(flags), dtype=np.int64)[np.nonzero(flags)]
         flag_groups = np.split(flag_indx, np.where(np.diff(flag_indx) != 1)[0] + 1)
-        # print(f"{obs.name}:{det}: flag groups = {flag_groups}")
         for grp in flag_groups:
             if len(grp) == 0:
                 continue
@@ -901,7 +947,7 @@ class HWPSynchronousModel(Operator):
                 int_first = bad_first - 1
                 int_last = bad_last + 1
                 sig[bad_first : bad_last + 1] = np.interp(
-                    np.arange(bad_first, bad_last + 1, dtype=np.int32),
+                    np.arange(bad_first, bad_last + 1, 1, dtype=np.int32),
                     [int_first, int_last],
                     [sig[int_first], sig[int_last]],
                 )

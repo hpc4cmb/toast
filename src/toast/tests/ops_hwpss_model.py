@@ -43,8 +43,42 @@ class HWPModelTest(MPITestCase):
         self.debug_plots = False
 
     def create_test_data(self):
+        # Slightly slower than 1 Hz
+        hwp_rpm = 59.0
+        hwp_rate = 2 * np.pi * hwp_rpm / 60.0  # rad/s
+
+        sample_rate = 60 * u.Hz
+        ang_per_sample = hwp_rate / sample_rate.to_value(u.Hz)
+
         # Create a fake ground observations set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, sample_rate=sample_rate, hwp_rpm=hwp_rpm)
+
+        # Modify the HWP angle to be stopped initially and then accelerate to the
+        # target velocity.
+
+        n_ramp = 50
+        for ob in data.obs:
+            end_rampup = int(0.1 * ob.n_local_samples)
+            begin_rampup = end_rampup - n_ramp
+            hwp_data = ob.shared[defaults.hwp_angle].data
+            ang_end = hwp_data[end_rampup - 1]
+            half_ramp = n_ramp // 2
+            max_accel = ang_per_sample * 2 / n_ramp
+            ang_accel = np.concatenate(
+                [
+                    (max_accel / half_ramp) * np.arange(0, half_ramp, 1),
+                    (max_accel / half_ramp) * np.arange(half_ramp, 0, -1),
+                ],
+                axis=None,
+            )
+            ang_vel = np.cumsum(ang_accel)
+            ang_pos = np.cumsum(ang_vel)
+            off = ang_pos[-1] - ang_end
+            ramp = ang_pos - off
+
+            if ob.comm.group_rank == 0:
+                hwp_data[:end_rampup] = ramp[0]
+                hwp_data[begin_rampup:end_rampup] = ramp
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -104,6 +138,7 @@ class HWPModelTest(MPITestCase):
             (0, n_all_samp),
             (n_all_samp // 2 - pltsamp, n_all_samp // 2 + pltsamp),
             (n_all_samp - 2 * pltsamp, n_all_samp),
+            (int(0.1 * n_all_samp) - 50, int(0.1 * n_all_samp) + 50),
         ]:
             rangestr = f"{first}-{last}"
             axes[rangestr] = dict()
@@ -203,6 +238,12 @@ class HWPModelTest(MPITestCase):
                 # Plot flags
                 ax[3].plot(
                     obs.shared[defaults.times].data[plot_slc],
+                    obs.shared[defaults.hwp_angle].data[plot_slc],
+                    color="black",
+                    label=f"HWP Angle",
+                )
+                ax[3].plot(
+                    obs.shared[defaults.times].data[plot_slc],
                     flags[plot_slc],
                     color="cyan",
                     label=f"{det} Flags",
@@ -237,8 +278,9 @@ class HWPModelTest(MPITestCase):
                 ob.detdata[defaults.det_data][det] += dc
         ops.Copy(detdata=[(defaults.det_data, "original")]).apply(data)
 
-        # Make fake flags
-        fake_flags(data)
+        # Skip flags for this basic test, so we can clearly see the performance around
+        # the HWP acceleration at the start.
+        # fake_flags(data)
 
         # Filter
         ops.Copy(detdata=[(defaults.det_data, "alt_filtered")]).apply(data)

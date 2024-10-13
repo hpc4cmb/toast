@@ -143,7 +143,7 @@ class SimpleDeglitch(Operator):
         log = Logger.get()
 
         for ob in data.obs:
-            if ob.comm_row_size != 1:
+            if not ob.is_distributed_by_detector:
                 msg = "Observation data must be distributed by detector, not samples"
                 log.error(msg)
                 raise RuntimeError(msg)
