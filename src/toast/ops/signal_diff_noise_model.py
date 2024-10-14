@@ -114,7 +114,7 @@ class SignalDiffNoiseModel(Operator):
             raise RuntimeError(msg)
 
         for ob in data.obs:
-            if ob.comm_row_size != 1:
+            if not ob.is_distributed_by_detector:
                 msg = "Observation data must be distributed by detector, not samples"
                 log.error(msg)
                 raise RuntimeError(msg)
@@ -142,9 +142,7 @@ class SignalDiffNoiseModel(Operator):
                 indices[name] = focalplane[name]["uid"]
 
             # Set the NET for the good detectors
-            for name in ob.select_local_detectors(
-                flagmask=defaults.det_mask_invalid
-            ):
+            for name in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 # Estimate white noise from consecutive sample differences.
                 # Neither of the samples can have flags raised.
                 sig = ob.detdata[self.det_data][name]

@@ -286,7 +286,7 @@ conf["author_email"] = "tskisner.public@gmail.com"
 conf["license"] = "BSD"
 conf["url"] = "https://github.com/hpc4cmb/toast"
 conf["version"] = get_version()
-conf["python_requires"] = ">=3.8.0"
+conf["python_requires"] = ">=3.9.0"
 conf["setup_requires"] = (["wheel"],)
 conf["install_requires"] = [
     "tomlkit",

@@ -272,7 +272,7 @@ class SimNoise(Operator):
             nse = ob[self.noise_model]
 
             # Eventually we'll redistribute, to allow long correlations...
-            if ob.comm_row_size != 1:
+            if not ob.is_distributed_by_detector:
                 msg = "Noise simulation for process grids with multiple ranks in the sample direction not implemented"
                 log.error(msg)
                 raise NotImplementedError(msg)

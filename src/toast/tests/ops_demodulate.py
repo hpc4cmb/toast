@@ -18,7 +18,7 @@ from ._helpers import (
     close_data,
     create_ground_data,
     create_outdir,
-    create_fake_constant_sky_tod,
+    create_fake_sky_tod,
 )
 
 from .mpi import MPITestCase
@@ -53,7 +53,7 @@ class DemodulateTest(MPITestCase):
         )
 
         map_values = (10.0, 2.0, 0.0)
-        map_key = create_fake_constant_sky_tod(
+        map_key = create_fake_sky_tod(
             data,
             pixels,
             weights,

@@ -1001,7 +1001,7 @@ class Offset(Template):
             for iob, ob in enumerate(self.data.obs):
                 if det not in self._obs_dets[iob]:
                     continue
-                if ob.comm_row_size != 1:
+                if not ob.is_distributed_by_detector:
                     raise NotImplementedError(
                         "Only observations distributed by detector are supported"
                     )

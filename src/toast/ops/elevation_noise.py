@@ -161,7 +161,7 @@ class ElevationNoise(Operator):
             raise RuntimeError(msg)
 
         for obs in data.obs:
-            if obs.comm_row_size != 1:
+            if not obs.is_distributed_by_detector:
                 msg = "Observation data must be distributed by detector, not samples"
                 log.error(msg)
                 raise RuntimeError(msg)

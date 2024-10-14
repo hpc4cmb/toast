@@ -41,7 +41,7 @@ class CalibrateDetectors(Operator):
 
     cal_mask = Int(
         defaults.det_mask_invalid,
-        help="Bit mask to apply to detectors with no calibration information"
+        help="Bit mask to apply to detectors with no calibration information",
     )
 
     @traitlets.validate("det_mask")

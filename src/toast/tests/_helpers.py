@@ -552,14 +552,17 @@ def create_fake_sky(data, dist_key, map_key, hpix_out=None):
         )
 
 
-def create_fake_constant_sky_tod(
+def create_fake_sky_tod(
     data,
     pixel_pointing,
     stokes_weights,
     map_vals=(1.0, 1.0, 1.0),
     det_data=defaults.det_data,
+    randomize=False,
 ):
     """Fake sky signal with constant I/Q/U"""
+    np.random.seed(987654321)
+
     # Build the pixel distribution
     build_dist = ops.BuildPixelDistribution(
         pixel_dist="fake_map_dist",
@@ -575,9 +578,20 @@ def create_fake_constant_sky_tod(
     off = 0
     for submap in range(dist.n_submap):
         if submap in dist.local_submaps:
-            pix_data.data[off, :, 0] = map_vals[0]
-            pix_data.data[off, :, 1] = map_vals[1]
-            pix_data.data[off, :, 2] = map_vals[2]
+            if randomize:
+                pix_data.data[off, :, 0] = map_vals[0] * np.random.normal(
+                    size=dist.n_pix_submap
+                )
+                pix_data.data[off, :, 1] = map_vals[1] * np.random.normal(
+                    size=dist.n_pix_submap
+                )
+                pix_data.data[off, :, 2] = map_vals[2] * np.random.normal(
+                    size=dist.n_pix_submap
+                )
+            else:
+                pix_data.data[off, :, 0] = map_vals[0]
+                pix_data.data[off, :, 1] = map_vals[1]
+                pix_data.data[off, :, 2] = map_vals[2]
             off += 1
     data[map_key] = pix_data
 
@@ -793,7 +807,9 @@ def fake_hwpss_data(ang, scale):
     sincoeff = scale * np.array([0.7, 0.9, 0.1, 0.002, 0.0005])
     out = np.zeros_like(ang)
     for h in range(n_harmonic):
-        out[:] += coscoeff[h] * np.cos(h * ang) + sincoeff[h] * np.sin(h * ang)
+        out[:] += coscoeff[h] * np.cos((h + 1) * ang) + sincoeff[h] * np.sin(
+            (h + 1) * ang
+        )
     return out, coscoeff, sincoeff
 
 
