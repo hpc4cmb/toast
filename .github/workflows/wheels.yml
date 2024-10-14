@@ -40,6 +40,10 @@ jobs:
             arch: x86_64
             python: 311
             builder: manylinux
+          - os: ubuntu-latest
+            arch: x86_64
+            python: 312
+            builder: manylinux
 
           # MacOS x86_64.  The macos-13 runner is the last
           # Intel-based runner version.  At some point we'll
@@ -54,6 +58,11 @@ jobs:
             python: 311
             builder: macosx
             deploy: 13.0
+          - os: macos-13
+            arch: x86_64
+            python: 312
+            builder: macosx
+            deploy: 13.0
 
           # MacOS arm64
           - os: macos-latest
@@ -64,6 +73,11 @@ jobs:
           - os: macos-latest
             arch: arm64
             python: 311
+            builder: macosx
+            deploy: 14.0
+          - os: macos-latest
+            arch: arm64
+            python: 312
             builder: macosx
             deploy: 14.0
     env:
