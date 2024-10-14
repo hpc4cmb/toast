@@ -32,7 +32,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            python: "3.8"
+            python: "3.9"
             arch: Linux-x86_64
             ompdisable: 0
           - os: ubuntu-latest
