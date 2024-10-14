@@ -222,7 +222,7 @@ else()
     endif()
 endif()
 
-find_package(Python3 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(Python3 3.9 COMPONENTS Interpreter Development.Module REQUIRED)
 
 # Internal products
 
