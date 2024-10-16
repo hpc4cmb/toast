@@ -251,7 +251,7 @@ class SimpleJumpCorrect(Operator):
             views = ob.intervals[self.view]
             focalplane = ob.telescope.focalplane
 
-            local_dets = ob.select_local_detectors(flagmask=defaults.det_mask_invalid)
+            local_dets = ob.select_local_detectors(flagmask=self.det_mask)
             shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
             for name in local_dets:
                 sig = ob.detdata[self.det_data][name]
