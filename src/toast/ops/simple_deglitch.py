@@ -32,7 +32,7 @@ class SimpleDeglitch(Operator):
     det_data = Unicode(defaults.det_data, help="Observation detdata key to analyze")
 
     det_mask = Int(
-        defaults.det_mask_nonscience,
+        defaults.det_mask_invalid,
         help="Bit mask value for per-detector flagging",
     )
 
@@ -43,7 +43,7 @@ class SimpleDeglitch(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_nonscience,
+        defaults.det_mask_invalid,
         help="Bit mask value for detector sample flagging",
     )
 
