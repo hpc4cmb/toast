@@ -32,7 +32,7 @@ class SimpleJumpCorrect(Operator):
     det_data = Unicode(defaults.det_data, help="Observation detdata key to analyze")
 
     det_mask = Int(
-        defaults.det_mask_nonscience,
+        defaults.det_mask_invalid,
         help="Bit mask value for per-detector flagging",
     )
 
@@ -43,7 +43,7 @@ class SimpleJumpCorrect(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_nonscience,
+        defaults.det_mask_invalid,
         help="Bit mask value for detector sample flagging",
     )
 
@@ -251,7 +251,7 @@ class SimpleJumpCorrect(Operator):
             views = ob.intervals[self.view]
             focalplane = ob.telescope.focalplane
 
-            local_dets = ob.select_local_detectors(flagmask=defaults.det_mask_invalid)
+            local_dets = ob.select_local_detectors(flagmask=self.det_mask)
             shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
             for name in local_dets:
                 sig = ob.detdata[self.det_data][name]
