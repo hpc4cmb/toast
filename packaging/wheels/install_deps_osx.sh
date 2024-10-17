@@ -95,26 +95,27 @@ pyver=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*
 numpy_ver="2.0.1"
 
 # Install build requirements.
-CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt" "numpy==${numpy_ver}" "scipy_openblas32"
+# CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt" "numpy==${numpy_ver}" "scipy_openblas32"
+CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt" "numpy==${numpy_ver}"
 
-# We use the scipy openblas wheel to get the openblas to use.
+# # We use the scipy openblas wheel to get the openblas to use.
 
-# First ensure that pkg-config is set to search somewhere
-if [ -z "${PKG_CONFIG_PATH}" ]; then
-    export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig"
-fi
+# # First ensure that pkg-config is set to search somewhere
+# if [ -z "${PKG_CONFIG_PATH}" ]; then
+#     export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig"
+# fi
 
-python3 -c "import scipy_openblas32; print(scipy_openblas32.get_pkg_config())" > ${PKG_CONFIG_PATH}/scipy-openblas.pc
+# python3 -c "import scipy_openblas32; print(scipy_openblas32.get_pkg_config())" > ${PKG_CONFIG_PATH}/scipy-openblas.pc
 
-# To help delocate find the libraries, we copy them into /usr/local
-python3 <<EOF
-import os, scipy_openblas32, shutil
-srcdir = os.path.dirname(scipy_openblas32.__file__)
-incdir = os.path.join(srcdir, "include")
-libdir = os.path.join(srcdir, "lib")
-shutil.copytree(libdir, "/usr/local/lib", dirs_exist_ok=True)
-shutil.copytree(incdir, "/usr/local/include", dirs_exist_ok=True)
-EOF
+# # To help delocate find the libraries, we copy them into /usr/local
+# python3 <<EOF
+# import os, scipy_openblas32, shutil
+# srcdir = os.path.dirname(scipy_openblas32.__file__)
+# incdir = os.path.join(srcdir, "include")
+# libdir = os.path.join(srcdir, "lib")
+# shutil.copytree(libdir, "/usr/local/lib", dirs_exist_ok=True)
+# shutil.copytree(incdir, "/usr/local/include", dirs_exist_ok=True)
+# EOF
 
 # Build compiled dependencies
 
@@ -124,10 +125,17 @@ export STATIC=no
 export SHLIBEXT="dylib"
 export CLEANUP=yes
 
-export BLAS_LIBRARIES="/usr/local/lib/libscipy_openblas.dylib"
-export LAPACK_LIBRARIES="/usr/local/lib/libscipy_openblas.dylib"
-export BLA_OPTIONS="-DBLA_PREFER_PKGCONFIG=1 -DBLA_PKGCONFIG_BLAS=scipy-openblas -DBLAS_NO_UNDERSCORE=1"
+# export BLAS_LIBRARIES="/usr/local/lib/libscipy_openblas.dylib"
+# export LAPACK_LIBRARIES="/usr/local/lib/libscipy_openblas.dylib"
+# export BLA_OPTIONS="-DBLA_PREFER_PKGCONFIG=1 -DBLA_PKGCONFIG_BLAS=scipy-openblas -DBLAS_NO_UNDERSCORE=1"
 
-for pkg in fftw libflac suitesparse libaatm; do
+# for pkg in fftw libflac suitesparse libaatm; do
+#     source "${depsdir}/${pkg}.sh"
+# done
+
+export BLAS_LIBRARIES="-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}"
+export LAPACK_LIBRARIES="-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}"
+
+for pkg in openblas fftw libflac suitesparse libaatm; do
     source "${depsdir}/${pkg}.sh"
 done
