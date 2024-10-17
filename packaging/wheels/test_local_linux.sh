@@ -40,7 +40,7 @@ source "${venv_path}/bin/activate"
 venv_py_ver=$(python3 --version | awk '{print $2}')
 
 # Install our dependencies
-eval "${topdir}/wheels/install_deps_linux.sh" "${toolchain}" "${venv_path}" "no"
+eval "${topdir}/packaging/wheels/install_deps_linux.sh" "${toolchain}" "${venv_path}" "no"
 
 # Look for our dependencies in the virtualenv
 export LD_LIBRARY_PATH="${venv_path}/lib"
