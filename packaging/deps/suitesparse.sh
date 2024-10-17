@@ -64,7 +64,7 @@ tar xzf ${ssparse_pkg} \
     -DCMAKE_BUILD_TYPE=Release ${shr} \
     -DBLAS_LIBRARIES="${BLAS_LIBRARIES}" \
     -DLAPACK_LIBRARIES="${LAPACK_LIBRARIES}" ${BLA_OPTIONS} \
-    -DSUITESPARSE_ENABLE_PROJECTS "cholmod" \
+    -DSUITESPARSE_ENABLE_PROJECTS="cholmod" \
     -S . -B build \
     && cmake --build build \
     && cmake --install build \
