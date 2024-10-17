@@ -7,7 +7,7 @@ import copy
 import numpy as np
 import traitlets
 from astropy import units as u
-from scipy.signal import fftconvolve
+from scipy.signal import convolve
 
 from .. import qarray as qa
 from ..intervals import IntervalList
@@ -163,6 +163,7 @@ class SimpleJumpCorrect(Operator):
         """
         peaks = []
         mytoi = np.ma.masked_array(toi)
+        nsample = len(mytoi)
         # Do not accept jumps at the ends due to boundary effects
         lbound = tol
         rbound = tol
@@ -179,27 +180,30 @@ class SimpleJumpCorrect(Operator):
             npeak = np.ma.sum(np.abs(mytoi) > sigma * lim)
 
         # Only one jump per iteration
-        if npeak > 0:
+        while npeak > 0:
             imax = np.argmax(np.abs(mytoi))
             amplitude = mytoi[imax]
             significance = np.abs(amplitude) / sigma
 
-            # Mask the peak for taking mean and finding additional peaks
-            istart = max(0, imax - tol)
-            istop = min(len(mytoi), imax + tol)
             # mask out the vicinity not to have false detections near the peak
+            istart = max(0, imax - tol)
+            istop = min(nsample, imax + tol)
             mytoi[istart:istop] = np.ma.masked
             flag_out[istart:istop] = True
-            if sigma_in is None:
-                sigma = self._get_sigma(mytoi, flag_out, tol)
-
             # Excessive flagging is a sign of false detection
             if significance > 5 or (
-                float(np.sum(flag[istart:istop])) / (istop - istart) < 0.5
+                float(np.sum(flag_out[istart:istop])) / (istop - istart) < 0.5
             ):
                 peaks.append((imax, significance, amplitude))
 
-            npeak = np.sum(np.abs(mytoi) > sigma * lim)
+            # Find additional peaks
+            if sigma_in is None:
+                sigma = self._get_sigma(mytoi, flag_out, tol)
+            if np.isnan(sigma) or sigma == 0:
+                npeak = 0
+            else:
+                npeak = np.ma.sum(np.abs(mytoi) > sigma * lim)
+
         return peaks
 
     def _get_sigma(self, toi, flag, tol):
@@ -208,10 +212,9 @@ class SimpleJumpCorrect(Operator):
 
         sigmas = []
         nn = len(toi)
-        for start in range(tol, nn - tol, 2 * tol):
+        # Ignore tol samples at the edge
+        for start in range(tol, nn - 3*tol + 1, 2*tol):
             stop = start + 2 * tol
-            if stop > nn - tol:
-                break
             ind = slice(start, stop)
             x = toi[ind][full_flag[ind] == 0]
             if len(x) != 0:
@@ -231,10 +234,13 @@ class SimpleJumpCorrect(Operator):
 
         """
         corrected_signal = signal.copy()
+        nsample = len(signal)
         flag_out = flag.copy()
         for peak, _, amplitude in peaks:
             corrected_signal[peak:] -= amplitude
-            flag_out[peak - int(tol) : peak + int(tol)] = True
+            pstart = max(0, peak - tol)
+            pstop = min(nsample, peak + tol)
+            flag_out[pstart : pstop] = True
         return corrected_signal, flag_out
 
     @function_timer
@@ -268,7 +274,7 @@ class SimpleJumpCorrect(Operator):
                     sig_view = sig[ind].copy()
                     bad_view = bad[ind]
                     bad_view_out = bad_view.copy()
-                    sig_filtered = fftconvolve(sig_view, stepfilter, mode="same")
+                    sig_filtered = convolve(sig_view, stepfilter, mode="same")
                     peaks = self._find_peaks(
                         sig_filtered,
                         bad_view,
