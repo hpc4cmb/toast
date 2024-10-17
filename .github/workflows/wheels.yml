@@ -103,6 +103,9 @@ jobs:
         TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
         TOAST_BUILD_DISABLE_OPENMP=1
         TOAST_BUILD_BLAS_LIBRARIES='/usr/local/lib/libscipy_openblas.dylib'
+        TOAST_BUILD_BLA_PREFER_PKGCONFIG=1
+        TOAST_BUILD_BLA_PKGCONFIG_BLAS=scipy-openblas
+        TOAST_BUILD_BLAS_NO_UNDERSCORE=1
         TOAST_BUILD_LAPACK_LIBRARIES='/usr/local/lib/libscipy_openblas.dylib'
         TOAST_BUILD_FFTW_ROOT=/usr/local
         TOAST_BUILD_AATM_ROOT=/usr/local
