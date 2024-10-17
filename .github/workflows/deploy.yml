@@ -129,4 +129,4 @@ jobs:
 
       - name: Upload to PyPI
         run: |
-          python -m twine upload wheelhouse/toast*cp${{ matrix.python }}-${{ matrix.builder }}*.whl
+          python -m twine upload wheelhouse/toast*cp${{ matrix.python }}-${{ matrix.builder }}*${{ matrix.arch }}*.whl

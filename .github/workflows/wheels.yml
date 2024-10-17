@@ -140,5 +140,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels_cp${{ matrix.python }}-${{ matrix.builder }}
-          path: ./wheelhouse/toast*cp${{ matrix.python }}-${{ matrix.builder }}*.whl
+          name: wheels_cp${{ matrix.python }}-${{ matrix.builder }}_${{ matrix.arch }}
+          path: ./wheelhouse/toast*cp${{ matrix.python }}-${{ matrix.builder }}*${{ matrix.arch }}*.whl
