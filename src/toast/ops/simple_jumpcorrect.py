@@ -94,12 +94,6 @@ class SimpleJumpCorrect(Operator):
         help="Minimum number of good samples in an interval",
     )
 
-    medfilt_kernel_size = Int(
-        101,
-        help="Median filter kernel width.  Either 0 (full interval) "
-        "or a positive odd number",
-    )
-
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
@@ -119,15 +113,6 @@ class SimpleJumpCorrect(Operator):
         check = proposal["value"]
         if check < 0:
             raise traitlets.TraitError("Det flag mask should be a positive integer")
-        return check
-
-    @traitlets.validate("medfilt_kernel_size")
-    def _check_medfilt_kernel_size(self, proposal):
-        check = proposal["value"]
-        if check < 0:
-            raise traitlets.TraitError("medfilt_kernel_size cannot be negative")
-        if check > 0 and check % 2 == 0:
-            raise traitlets.TraitError("medfilt_kernel_size cannot be even")
         return check
 
     def __init__(self, **kwargs):
