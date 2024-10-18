@@ -12,7 +12,7 @@
 # - MAKEJ
 # - CLEANUP (yes/no)
 
-openblas_version=0.3.27
+openblas_version=0.3.28
 openblas_dir=OpenBLAS-${openblas_version}
 openblas_pkg=${openblas_dir}.tar.gz
 
@@ -30,11 +30,16 @@ if [ "${STATIC}" = "yes" ]; then
     targ="libs netlib"
 fi
 
+omp="USE_OPENMP=1"
+if [ "x${OMPFLAGS}" = "x" ]; then
+    omp="USE_OPENMP=0"
+fi
+
 start_dir=$(pwd)
 rm -rf ${openblas_dir}
 tar xzf ${openblas_pkg} \
     && pushd ${openblas_dir} >/dev/null 2>&1 \
-    && make USE_OPENMP=1 ${shr} \
+    && make ${omp} ${shr} \
     MAKE_NB_JOBS=${MAKEJ} \
     CC="${CC}" FC="${FC}" DYNAMIC_ARCH=1 TARGET=GENERIC \
     COMMON_OPT="${CFLAGS}" FCOMMON_OPT="${FCFLAGS}" \
