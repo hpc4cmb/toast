@@ -8,8 +8,8 @@ pytest
 tomlkit
 traitlets
 h5py
-numpy<2
-scipy<1.14
+numpy
+scipy
 astropy
 ephem
 healpy
