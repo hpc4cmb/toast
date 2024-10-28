@@ -12,7 +12,7 @@ from astropy import units as u
 from .io import have_hdf5_parallel
 from .mpi import MPI, use_mpi
 from .timing import Timer, function_timer
-from .utils import Logger, memreport
+from .utils import Logger, memreport, unit_conversion
 
 
 @function_timer
@@ -76,8 +76,7 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
             log.info(msg)
             funits = pix.units
         if funits != pix.units:
-            scale = 1.0 * funits
-            fscale = scale.to_value(pix.units)
+            fscale = unit_conversion(funits, pix.units)
 
         if nside_map != nside:
             errors += f"Wrong NSide: {path} has {nside_map}, expected {nside}\n"
