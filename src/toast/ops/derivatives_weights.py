@@ -93,6 +93,40 @@ class DerivativesWeights(Operator):
         help="The observation key with a dictionary of pointing weight "
         "calibration for each det",
     )
+    
+    dx = Unicode(
+        None,
+        allow_none=True,
+        help="The observation key with a dictionary of detector offset "
+        "for each det in the x direction",
+    )
+    
+    dy = Unicode(
+        None,
+        allow_none=True,
+        help="The observation key with a dictionary of detector offset "
+        "for each det in the y direction",
+    )
+
+    dsigma = Unicode(
+        None,
+        allow_none=True,
+        help="The observation key with a dictionary of detector fwhm error for each det",
+    )
+        
+    dp = Unicode(
+        None,
+        allow_none=True,
+        help="The observation key with a dictionary of detector ellipticity "
+        "for each det in one direction",
+    )
+    
+    dc = Unicode(
+        None,
+        allow_none=True,
+        help="The observation key with a dictionary of detector ellipticity "
+        "for each det in the other direction",
+    )
 
     IAU = Bool(False, help="If True, use the IAU convention rather than COSMO")
 
@@ -135,7 +169,7 @@ class DerivativesWeights(Operator):
         env = Environment.get()
         log = Logger.get()
 
-        self._nnz = len(self.mode)
+        self._nnz = 6
 
         # Kernel selection
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
@@ -200,7 +234,6 @@ class DerivativesWeights(Operator):
 
             quat_indx = ob.detdata[quats_name].indices(dets)
             weight_indx = ob.detdata[self.weights].indices(dets)
-
             # Do we already have pointing for all requested detectors?
             if exists:
                 # Yes
@@ -219,8 +252,9 @@ class DerivativesWeights(Operator):
             # Get the boresight offsets from the focal plane
             for idet, d in enumerate(dets):
                 det_qoff[idet] = focalplane[d]["quat"]
-            qbore = ob.detdata["quats_radec"]
-            nsamp = len(bore_quats)
+            qbore = ob.shared["boresight_radec"]
+            
+            nsamp = len(qbore)
             ndets = len(det_qoff)
             det_qoff = np.stack([det_qoff for _ in range(nsamp)], axis=1)
             qbore = np.stack([qbore for _ in range(ndets)], axis=0)
@@ -279,7 +313,7 @@ class DerivativesWeights(Operator):
             weights[:,:,0] = cal # gain error
             weights[:,:,1] = dx * ws - dy * wc #dtheta
             weights[:,:,2] = -dx * wc - dy * ws + (dp * ws2 - dc * wc2) * inv_tan_theta #dphi
-            ob.detdata[self.weights].data = weights
+            ob.detdata[self.weights][dets,:] = weights
             
         return
 
