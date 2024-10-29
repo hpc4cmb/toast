@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -773,8 +773,7 @@ def unit_conversion(source, target):
 
     """
     scale = 1.0 * source
-    scale.to(target)
-    return scale.to(target).value
+    return scale.to_value(target)
 
 
 class SetDict(UserDict):

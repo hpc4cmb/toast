@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -12,7 +12,7 @@ from astropy import units as u
 from .io import have_hdf5_parallel
 from .mpi import MPI, use_mpi
 from .timing import Timer, function_timer
-from .utils import Logger, memreport
+from .utils import Logger, memreport, unit_conversion
 
 
 @function_timer
@@ -76,19 +76,14 @@ def read_healpix_fits(pix, path, nest=True, comm_bytes=10000000):
             log.info(msg)
             funits = pix.units
         if funits != pix.units:
-            scale = 1.0 * funits
-            scale.to(pix.units)
-            fscale = scale.value
+            fscale = unit_conversion(funits, pix.units)
 
         if nside_map != nside:
-            errors += "Wrong NSide: {} has {}, expected {}\n" "".format(
-                path, nside_map, nside
-            )
+            errors += f"Wrong NSide: {path} has {nside_map}, expected {nside}\n"
         map_nnz = h[1].header["tfields"]
         if map_nnz != pix.n_value:
-            errors += "Wrong number of columns: {} has {}, expected {}\n" "".format(
-                path, map_nnz, pix.n_value
-            )
+            errors += f"Wrong number of columns: {path} has {map_nnz}, "
+            errors += f"expected {pix.n_value}\n"
         h.close()
         if len(errors) != 0:
             raise RuntimeError(errors)
