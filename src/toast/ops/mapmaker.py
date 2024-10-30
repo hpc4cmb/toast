@@ -384,11 +384,21 @@ class MapMaker(Operator):
 
         # Pixel distribution
         if self.reset_pix_dist:
-            if map_binning.pixel_dist in self._data:
-                del self._data[map_binning.pixel_dist]
-            if map_binning.covariance in self._data:
-                # Cannot trust earlier covariance
-                del self._data[map_binning.covariance]
+            # Purge any stale products from previous runs
+            for name in [
+                self.hits_name,
+                self.cov_name,
+                self.invcov_name,
+                self.rcond_name,
+                self.clean_name,
+                self.binmap_name,
+                self.map_name,
+                self.noiseweighted_map_name,
+                map_binning.pixel_dist,
+                map_binning.covariance,
+            ]:
+                if name in self._data:
+                    del self._data[name]
 
         if map_binning.pixel_dist not in self._data:
             self._log.info_rank(
