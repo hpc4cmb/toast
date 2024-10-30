@@ -21,7 +21,7 @@ from ._helpers import (
     close_data,
     create_boresight_telescope,
     create_comm,
-    create_fake_sky,
+    create_fake_wcs_scanned_tod,
     create_ground_data,
     create_outdir,
     plot_wcs_maps,
@@ -263,33 +263,28 @@ class PointingWCSTest(MPITestCase):
             )
             pix_dist.apply(data)
 
-            # Create fake polarized sky pixel values locally
-            create_fake_sky(data, "pixel_dist", "fake_map")
+            # Create fake polarized sky signal
+            skyfile = os.path.join(self.outdir, f"mapmaking_{proj}_input.fits")
+            map_key = "fake_map"
+            create_fake_wcs_scanned_tod(
+                data,
+                pixels,
+                weights,
+                skyfile,
+                "pixel_dist",
+                map_key=map_key,
+                fwhm=30.0 * u.arcmin,
+                I_scale=0.001,
+                Q_scale=0.0001,
+                U_scale=0.0001,
+                det_data=defaults.det_data,
+            )
 
             if self.write_extra:
-                # Write it out
-                outfile = os.path.join(self.outdir, f"mapmaking_{proj}_input.fits")
-                write_wcs_fits(data["fake_map"], outfile)
                 if rank == 0:
-                    plot_wcs_maps(mapfile=outfile)
+                    plot_wcs_maps(mapfile=skyfile)
             if data.comm.comm_world is not None:
                 data.comm.comm_world.barrier()
-
-            # Scan map into timestreams
-            scanner = ops.Pipeline(
-                operators=[
-                    pixels,
-                    weights,
-                    ops.ScanMap(
-                        det_data=defaults.det_data,
-                        pixels=pixels.pixels,
-                        weights=weights.weights,
-                        map_key="fake_map",
-                    ),
-                ],
-                detsets=["SINGLE"],
-            )
-            scanner.apply(data)
 
             # Create an uncorrelated noise model from focalplane detector properties
             default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -407,45 +402,39 @@ class PointingWCSTest(MPITestCase):
             auto_bounds=True,
         )
 
-        pix_dist = ops.BuildPixelDistribution(
-            pixel_dist="source_pixel_dist",
-            pixel_pointing=pixels,
-        )
-        pix_dist.apply(data)
-
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "source_pixel_dist", "fake_map")
-
-        if self.write_extra:
-            # Write it out
-            outfile = os.path.join(self.outdir, f"source_{proj}_input.fits")
-            write_wcs_fits(data["fake_map"], outfile)
-            if data.comm.world_rank == 0:
-                plot_wcs_maps(mapfile=outfile)
-
         weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=defaults.hwp_angle,
             weights="temp_weights",
             detector_pointing=detpointing,
         )
-        weights.apply(data)
 
-        # Scan map into timestreams
-        scanner = ops.Pipeline(
-            operators=[
-                pixels,
-                weights,
-                ops.ScanMap(
-                    det_data=signal_name,
-                    pixels=pixels.pixels,
-                    weights=weights.weights,
-                    map_key="fake_map",
-                ),
-            ],
-            detsets=["SINGLE"],
+        pix_dist = ops.BuildPixelDistribution(
+            pixel_dist="source_pixel_dist",
+            pixel_pointing=pixels,
         )
-        scanner.apply(data)
+        pix_dist.apply(data)
+
+        # Create fake polarized sky signal
+        skyfile = os.path.join(self.outdir, f"source_{proj}_input.fits")
+        map_key = "fake_map"
+        create_fake_wcs_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "source_pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+
+        if self.write_extra:
+            if data.comm.world_rank == 0:
+                plot_wcs_maps(mapfile=skyfile)
 
         if azel:
             # Simulating a drone near the center

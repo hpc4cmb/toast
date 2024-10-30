@@ -13,7 +13,6 @@ from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
 from ._helpers import (
     close_data,
-    create_fake_sky,
     create_outdir,
     create_satellite_data,
     create_satellite_data_big,

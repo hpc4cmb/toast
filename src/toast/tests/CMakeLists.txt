@@ -78,5 +78,6 @@ install(FILES
     ops_signal_diff_noise.py
     ops_loader.py
     accelerator.py
+    ops_example_ground.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

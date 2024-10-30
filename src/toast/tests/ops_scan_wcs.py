@@ -15,7 +15,7 @@ from ..pixels_io_wcs import write_wcs_fits
 from ._helpers import (
     close_data,
     create_fake_mask,
-    create_fake_sky,
+    create_fake_wcs_map,
     create_ground_data,
     create_outdir,
 )
@@ -58,19 +58,26 @@ class ScanWCSTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Write this to a file
+        # Create fake polarized sky signal
         input_file = os.path.join(self.outdir, "fake.fits")
-        write_wcs_fits(data["fake_map"], input_file)
+        map_key = "fake_map"
+        data[map_key] = create_fake_wcs_map(
+            input_file,
+            "pixel_dist",
+            fwhm=10.0 * u.arcmin,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+        map_data = data[map_key]
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
-            map_key="fake_map",
+            map_key=map_key,
         )
         scanner.apply(data)
 

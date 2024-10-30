@@ -20,7 +20,7 @@ from ._helpers import (
     create_outdir,
     fake_flags,
     fake_hwpss,
-    create_fake_sky_tod,
+    create_fake_healpix_scanned_tod,
 )
 from .mpi import MPITestCase
 
@@ -42,7 +42,7 @@ class HWPModelTest(MPITestCase):
         # Extra debug plots?
         self.debug_plots = False
 
-    def create_test_data(self):
+    def create_test_data(self, testdir):
         # Slightly slower than 1 Hz
         hwp_rpm = 59.0
         hwp_rate = 2 * np.pi * hwp_rpm / 60.0  # rad/s
@@ -98,12 +98,21 @@ class HWPModelTest(MPITestCase):
         )
 
         # Create some fake sky tod
-        map_key = create_fake_sky_tod(
+        skyfile = os.path.join(testdir, "input_sky.fits")
+        map_key = "input_sky"
+        create_fake_healpix_scanned_tod(
             data,
             pixels,
             weights,
-            map_vals=(1.0, 0.2, 0.2),
-            randomize=True,
+            skyfile,
+            "input_sky_dist",
+            map_key="input_sky",
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
         )
 
         # Simulate noise from this model and save the result for comparison
@@ -264,7 +273,7 @@ class HWPModelTest(MPITestCase):
         if self.comm is None or self.comm.rank == 0:
             os.makedirs(testdir)
 
-        data, tod_rms, coeff = self.create_test_data()
+        data, tod_rms, coeff = self.create_test_data(testdir)
         n_harmonics = len(coeff) // 4
 
         # Add random DC level
@@ -321,7 +330,7 @@ class HWPModelTest(MPITestCase):
         if self.comm is None or self.comm.rank == 0:
             os.makedirs(testdir)
 
-        data, tod_rms, coeff = self.create_test_data()
+        data, tod_rms, coeff = self.create_test_data(testdir)
         n_harmonics = len(coeff) // 4
 
         # Apply a random inverse relative calibration
@@ -390,7 +399,7 @@ class HWPModelTest(MPITestCase):
         if self.comm is None or self.comm.rank == 0:
             os.makedirs(testdir)
 
-        data, tod_rms, coeff = self.create_test_data()
+        data, tod_rms, coeff = self.create_test_data(testdir)
         n_harmonics = len(coeff) // 4
 
         # Apply a random inverse relative calibration that is time-varying

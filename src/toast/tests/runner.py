@@ -31,6 +31,7 @@ from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_demodulate as test_ops_demodulate
 from . import ops_elevation_noise as test_ops_elevation_noise
+from . import ops_example_ground as test_ops_example_ground
 from . import ops_filterbin as test_ops_filterbin
 from . import ops_flag_sso as test_ops_flag_sso
 from . import ops_gainscrambler as test_ops_gainscrambler

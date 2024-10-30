@@ -1156,7 +1156,10 @@ def plot(amp_file, compare=dict(), out=None):
             fig = plt.figure(dpi=fig_dpi, figsize=(fig_width, fig_height))
             ax = fig.add_subplot(1, 1, 1)
             if det in compare:
-                ax.plot(x_samples, compare[det], color="black", label=f"{det} Data")
+                dc = np.mean(compare[det])
+                ax.plot(
+                    x_samples, compare[det] - dc, color="black", label=f"{det} Data"
+                )
             ax.step(
                 amp_first[:],
                 hamps[idet],

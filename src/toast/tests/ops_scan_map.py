@@ -12,7 +12,12 @@ from .. import ops as ops
 from ..accelerator import ImplementationType
 from ..observation import default_values as defaults
 from ..pixels import PixelData
-from ._helpers import close_data, create_fake_sky, create_outdir, create_satellite_data
+from ._helpers import (
+    close_data,
+    create_fake_healpix_map,
+    create_outdir,
+    create_satellite_data,
+)
 from .mpi import MPITestCase
 
 
@@ -41,16 +46,27 @@ class ScanMapTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-        map_data = data["fake_map"]
+        # Create fake polarized sky signal
+        hpix_file = os.path.join(self.outdir, "fake.fits")
+        map_key = "fake_map"
+        data[map_key] = create_fake_healpix_map(
+            hpix_file,
+            "pixel_dist",
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+        map_data = data[map_key]
 
         # Scan map into timestreams
         scanner = ops.ScanMap(
             det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
-            map_key="fake_map",
+            map_key=map_key,
         )
 
         for impl in [ImplementationType.DEFAULT, ImplementationType.NUMPY]:
@@ -100,8 +116,20 @@ class ScanMapTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
+        # Create fake polarized sky signal
+        hpix_file = os.path.join(self.outdir, "fake.fits")
+        map_key = "fake_map"
+        data[map_key] = create_fake_healpix_map(
+            hpix_file,
+            "pixel_dist",
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+        map_data = data[map_key]
 
         # Scan map into timestreams twice, adding once and then subtracting.  Also test
         # zero option.
@@ -110,7 +138,7 @@ class ScanMapTest(MPITestCase):
             det_data=defaults.det_data,
             pixels=pixels.pixels,
             weights=weights.weights,
-            map_key="fake_map",
+            map_key=map_key,
         )
         scanner.apply(data)
 
@@ -158,12 +186,24 @@ class ScanMapTest(MPITestCase):
         )
         pixels.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
+        # Create fake polarized sky signal
+        hpix_file = os.path.join(self.outdir, "fake.fits")
+        map_key = "fake_map"
+        data[map_key] = create_fake_healpix_map(
+            hpix_file,
+            "pixel_dist",
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+        map_data = data[map_key]
 
         # Generate a mask
         data["fake_mask"] = PixelData(data["pixel_dist"], np.uint8, n_value=1)
-        small_vals = data["fake_map"].data[:, :, 0] < 10.0
+        small_vals = data[map_key].data[:, :, 0] < 10.0
         # print("{} map vals masked".format(np.sum(small_vals)))
         data["fake_mask"].data[small_vals] = 1
 

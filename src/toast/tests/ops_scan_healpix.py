@@ -15,7 +15,7 @@ from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
 from ._helpers import (
     close_data,
     create_fake_mask,
-    create_fake_sky,
+    create_fake_healpix_scanned_tod,
     create_outdir,
     create_satellite_data,
 )
@@ -47,24 +47,25 @@ class ScanHealpixTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Write this to a file
+        # Create fake polarized sky signal
         hpix_file = os.path.join(self.outdir, "fake.fits")
-        write_healpix_fits(data["fake_map"], hpix_file, nest=pixels.nest)
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            hpix_file,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
         )
-        scanner.apply(data)
 
         # Run the scanning from the file
-
         scan_hpix = ops.ScanHealpixMap(
             file=hpix_file,
             det_data="test",
@@ -162,26 +163,32 @@ class ScanHealpixTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Write this to a file
-        hpix_file = os.path.join(self.outdir, "fake.h5")
-        write_healpix_hdf5(data["fake_map"], hpix_file, nest=pixels.nest)
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
+        # Create fake polarized sky signal
+        hpix_file = os.path.join(self.outdir, "fake.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            hpix_file,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
         )
-        scanner.apply(data)
+
+        # Write to HDF5
+        hpix_hdf5 = os.path.join(self.outdir, "fake.h5")
+        write_healpix_hdf5(data[map_key], hpix_hdf5, nest=True)
 
         # Run the scanning from the file
 
         scan_hpix = ops.ScanHealpixMap(
-            file=hpix_file,
+            file=hpix_hdf5,
             det_data="test",
             pixel_pointing=pixels,
             stokes_weights=weights,
