@@ -168,8 +168,10 @@ class DerivativesWeights(Operator):
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
-
-        self._nnz = 6
+        if self.mode == "d2I":      
+            self._nnz = 6
+        else:
+            self._nnz = 3 
 
         # Kernel selection
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
@@ -248,18 +250,16 @@ class DerivativesWeights(Operator):
             # FIXME:  temporary hack until instrument classes are also pre-staged
             # to GPU
             focalplane = ob.telescope.focalplane
-            det_qoff = np.zeros((len(dets), 4), dtype=np.float64)
-            # Get the boresight offsets from the focal plane
-            for idet, d in enumerate(dets):
-                det_qoff[idet] = focalplane[d]["quat"]
+            #Get the boresight pointing
             qbore = ob.shared["boresight_radec"]
-            
             nsamp = len(qbore)
-            ndets = len(det_qoff)
-            det_qoff = np.stack([det_qoff for _ in range(nsamp)], axis=1)
-            qbore = np.stack([qbore for _ in range(ndets)], axis=0)
-            theta, _, psi = to_iso_angles(mult(qbore, det_qoff))
-
+            ndets = len(dets)
+            theta = np.empty((ndets, nsamp)) 
+            psi = np.empty((ndets, nsamp)) 
+            # Get the per-detector pointing for orientation/sine theta purposes
+            for idet, d in enumerate(dets):
+                theta[idet], _, psi[idet] = to_iso_angles(mult(qbore, focalplane[d]["quat"]))
+            
             # Get the per-detector calibration
             if self.cal is None:
                 cal = np.array([1.0 for x in dets], np.float64)
@@ -295,24 +295,21 @@ class DerivativesWeights(Operator):
             dp = np.stack([dp for _ in range(nsamp)], axis=1)
             dc = np.stack([dc for _ in range(nsamp)], axis=1)
             
-            
-            wc = np.cos(psi)
+            wc = np.cos(psi) 
             wc2 = np.cos(2*psi)
             ws = np.sin(psi)
             ws2 = np.sin(2*psi)
             inv_tan_theta = np.cos(theta)/np.sin(theta)
             
-            if self.mode == "d2I":
-                weights = np.empty((ndets,nsamp,6))
-                weights[:,:,3] = dsigma + dp * wc2 - dc * ws2 #d2theta
-                weights[:,:,4] = -2.0 * dp * ws2 + 2.0 * dc * wc2 #dphi dtheta
-                weights[:,:,5] = dsigma + dp * wc2 + dc * ws2 #dphi2
-            else:
-                weights = np.empty((ndets, nsamp,3))
-            
+            weights = np.empty((ndets,nsamp,self._nnz))
             weights[:,:,0] = cal # gain error
             weights[:,:,1] = dx * ws - dy * wc #dtheta
             weights[:,:,2] = -dx * wc - dy * ws + (dp * ws2 - dc * wc2) * inv_tan_theta #dphi
+            if self.mode == "d2I":      
+                weights[:,:,3] = dsigma + dp * wc2 - dc * ws2 #d2theta
+                weights[:,:,4] = -2.0 * dp * ws2 + 2.0 * dc * wc2 #dphi dtheta
+                weights[:,:,5] = dsigma + dp * wc2 + dc * ws2 #dphi2
+                
             ob.detdata[self.weights][dets,:] = weights
             
         return
