@@ -25,6 +25,7 @@ install(FILES
     ops_sim_ground.py
     ops_sim_tod_noise.py
     ops_stokes_weights.py
+    ops_derivatives_weights.py
     ops_common_mode_noise.py
     ops_sim_tod_dipole.py
     ops_sim_tod_atm.py
