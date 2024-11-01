@@ -203,7 +203,7 @@ class DemodulateTest(MPITestCase):
             for i, m in enumerate(map_mod):
                 value = map_input[i]
                 good = m != 0
-                rms = np.sqrt(np.mean((m[good] - value) ** 2))
+                rms = np.sqrt(np.mean((m[good] - value[good]) ** 2))
                 m[m == 0] = hp.UNSEEN
                 stokes = "IQU"[i]
                 amp = 0.0001
@@ -213,15 +213,15 @@ class DemodulateTest(MPITestCase):
                     reso=reso,
                     rot=rot,
                     title=f"Modulated {stokes} : rms = {rms}",
-                    min=value - amp,
-                    max=value + amp,
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
                     cmap="coolwarm",
                 )
 
             for i, m in enumerate(map_demod):
                 value = map_input[i]
                 good = m != 0
-                rms = np.sqrt(np.mean((m[good] - value) ** 2))
+                rms = np.sqrt(np.mean((m[good] - value[good]) ** 2))
                 m[m == 0] = hp.UNSEEN
                 stokes = "IQU"[i]
                 amp = 0.0001
@@ -231,8 +231,8 @@ class DemodulateTest(MPITestCase):
                     reso=reso,
                     rot=rot,
                     title=f"Demodulated {stokes} : rms = {rms}",
-                    min=value - amp,
-                    max=value + amp,
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
                     cmap="coolwarm",
                 )
                 if rms > 1.0e-3:

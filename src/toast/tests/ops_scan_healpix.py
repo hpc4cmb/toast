@@ -48,7 +48,7 @@ class ScanHealpixTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky signal
-        hpix_file = os.path.join(self.outdir, "fake.fits")
+        hpix_file = os.path.join(self.outdir, "fake_fits.fits")
         map_key = "fake_map"
         create_fake_healpix_scanned_tod(
             data,
@@ -164,7 +164,7 @@ class ScanHealpixTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky signal
-        hpix_file = os.path.join(self.outdir, "fake.fits")
+        hpix_file = os.path.join(self.outdir, "fake_hdf5.fits")
         map_key = "fake_map"
         create_fake_healpix_scanned_tod(
             data,

@@ -47,17 +47,16 @@ class ScanMapTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky signal
-        hpix_file = os.path.join(self.outdir, "fake.fits")
+        hpix_file = os.path.join(self.outdir, "fake_scan.fits")
         map_key = "fake_map"
         data[map_key] = create_fake_healpix_map(
             hpix_file,
-            "pixel_dist",
+            data["pixel_dist"],
             fwhm=30.0 * u.arcmin,
             lmax=3 * pixels.nside,
             I_scale=0.001,
             Q_scale=0.0001,
             U_scale=0.0001,
-            det_data=defaults.det_data,
         )
         map_data = data[map_key]
 
@@ -117,17 +116,16 @@ class ScanMapTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky signal
-        hpix_file = os.path.join(self.outdir, "fake.fits")
+        hpix_file = os.path.join(self.outdir, "fake_add_subtract.fits")
         map_key = "fake_map"
         data[map_key] = create_fake_healpix_map(
             hpix_file,
-            "pixel_dist",
+            data["pixel_dist"],
             fwhm=30.0 * u.arcmin,
             lmax=3 * pixels.nside,
             I_scale=0.001,
             Q_scale=0.0001,
             U_scale=0.0001,
-            det_data=defaults.det_data,
         )
         map_data = data[map_key]
 
@@ -187,17 +185,16 @@ class ScanMapTest(MPITestCase):
         pixels.apply(data)
 
         # Create fake polarized sky signal
-        hpix_file = os.path.join(self.outdir, "fake.fits")
+        hpix_file = os.path.join(self.outdir, "fake_mask.fits")
         map_key = "fake_map"
         data[map_key] = create_fake_healpix_map(
             hpix_file,
-            "pixel_dist",
+            data["pixel_dist"],
             fwhm=30.0 * u.arcmin,
             lmax=3 * pixels.nside,
             I_scale=0.001,
             Q_scale=0.0001,
             U_scale=0.0001,
-            det_data=defaults.det_data,
         )
         map_data = data[map_key]
 

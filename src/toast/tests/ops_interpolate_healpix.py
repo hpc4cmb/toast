@@ -79,7 +79,7 @@ class InterpolateHealpixTest(MPITestCase):
         for ob in data.obs:
             for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 np.testing.assert_almost_equal(
-                    ob.detdata["scan_data"][det],
+                    ob.detdata[defaults.det_data][det],
                     ob.detdata["interp_data"][det],
                     decimal=1,
                 )

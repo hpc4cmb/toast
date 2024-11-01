@@ -63,12 +63,13 @@ class ScanWCSTest(MPITestCase):
         map_key = "fake_map"
         data[map_key] = create_fake_wcs_map(
             input_file,
-            "pixel_dist",
+            data["pixel_dist"],
+            pixels.wcs,
+            pixels.wcs_shape,
             fwhm=10.0 * u.arcmin,
             I_scale=0.001,
             Q_scale=0.0001,
             U_scale=0.0001,
-            det_data=defaults.det_data,
         )
         map_data = data[map_key]
 

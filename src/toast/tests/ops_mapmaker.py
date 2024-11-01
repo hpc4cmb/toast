@@ -72,7 +72,7 @@ class MapmakerTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky signal
-        skyfile = os.path.join(testdir, "input_sky.fits")
+        skyfile = os.path.join(testdir, "input_map.fits")
         map_key = "fake_map"
         create_fake_healpix_scanned_tod(
             data,
@@ -208,7 +208,7 @@ class MapmakerTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky signal
-        skyfile = os.path.join(testdir, "input_sky.fits")
+        skyfile = os.path.join(testdir, "input_map.fits")
         map_key = "fake_map"
         create_fake_healpix_scanned_tod(
             data,
@@ -539,7 +539,7 @@ class MapmakerTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky signal
-        skyfile = os.path.join(testdir, "input_sky.fits")
+        skyfile = os.path.join(testdir, "input_map.fits")
         map_key = "fake_map"
         create_fake_healpix_scanned_tod(
             data,
@@ -809,7 +809,7 @@ class MapmakerTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky signal
-        skyfile = os.path.join(testdir, "input_sky.fits")
+        skyfile = os.path.join(testdir, "input_map.fits")
         map_key = "fake_map"
         create_fake_healpix_scanned_tod(
             data,

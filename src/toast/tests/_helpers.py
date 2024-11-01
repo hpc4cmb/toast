@@ -813,6 +813,13 @@ def create_fake_healpix_scanned_tod(
     else:
         units = u.K
 
+    # Create detector data if needed
+    for ob in data.obs:
+        exists = ob.detdata.ensure(
+            det_data,
+            create_units=units,
+        )
+
     # Create and load the map
     data[map_key] = create_fake_healpix_map(
         out_file,
@@ -908,6 +915,13 @@ def create_fake_wcs_scanned_tod(
         units = first_obs.detdata[det_data].units
     else:
         units = u.K
+
+    # Create detector data if needed
+    for ob in data.obs:
+        exists = ob.detdata.ensure(
+            det_data,
+            create_units=units,
+        )
 
     # Get the WCS info from the pixel operator
     wcs = pixel_pointing.wcs
