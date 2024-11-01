@@ -209,11 +209,11 @@ def plot_wcs_maps(
         for mindx in range(mdata.shape[0]):
             mdata[mindx, hitmask] = np.nan
 
-    def sub_mono(hitmask, mdata):
-        if hitmask is None:
-            goodpix = mdata != 0
-        else:
-            goodpix = np.logical_and(hitmask, (mdata != 0))
+    def sub_mono(mdata):
+        goodpix = np.logical_and(
+            np.logical_not(np.isnan(mdata)),
+            mdata != 0,
+        )
         mono = np.mean(mdata[goodpix])
         print(f"Monopole = {mono}")
         mdata[goodpix] -= mono
@@ -244,7 +244,7 @@ def plot_wcs_maps(
 
         flag_unhit(hitmask, mapdata)
 
-        sub_mono(hitmask, mapdata[0])
+        sub_mono(mapdata[0])
         mmin, mmax = sym_range(mapdata[0, :, :])
         if range_I is not None:
             mmin, mmax = range_I
@@ -255,6 +255,7 @@ def plot_wcs_maps(
             plot_single(wcs, mapdata, 0, tmin, tmax, f"{mapfile}_resid_I.{format}")
 
         if mapdata.shape[0] > 1:
+            sub_mono(mapdata[1])
             mmin, mmax = sym_range(mapdata[1, :, :])
             if range_Q is not None:
                 mmin, mmax = range_Q
@@ -264,6 +265,7 @@ def plot_wcs_maps(
                 mapdata[1, :, :] -= thdu.data[1, :, :]
                 plot_single(wcs, mapdata, 1, tmin, tmax, f"{mapfile}_resid_Q.{format}")
 
+            sub_mono(mapdata[2])
             mmin, mmax = sym_range(mapdata[2, :, :])
             if range_U is not None:
                 mmin, mmax = range_U
