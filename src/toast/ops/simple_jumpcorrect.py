@@ -94,6 +94,12 @@ class SimpleJumpCorrect(Operator):
         help="Minimum number of good samples in an interval",
     )
 
+    njump_limit = Int(
+        10,
+        help="If the detector has more than `njump_limit` jumps the detector "
+        "the detector and time stream will be flagged as invalid.",
+    )
+
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
@@ -113,6 +119,13 @@ class SimpleJumpCorrect(Operator):
         check = proposal["value"]
         if check < 0:
             raise traitlets.TraitError("Det flag mask should be a positive integer")
+        return check
+
+    @traitlets.validate("njump_limit")
+    def _check_det_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check <= 0:
+            raise traitlets.TraitError("njump limit should be a positive integer")
         return check
 
     def __init__(self, **kwargs):
@@ -165,7 +178,8 @@ class SimpleJumpCorrect(Operator):
             npeak = np.ma.sum(np.abs(mytoi) > sigma * lim)
 
         # Only one jump per iteration
-        while npeak > 0:
+        # And skip remaining if find more than `njump_limit` jumps
+        while (npeak > 0) and (len(peaks) <= self.njump_limit) :
             imax = np.argmax(np.abs(mytoi))
             amplitude = mytoi[imax]
             significance = np.abs(amplitude) / sigma
@@ -271,8 +285,10 @@ class SimpleJumpCorrect(Operator):
                     njump = len(peaks)
                     if njump == 0:
                         continue
-                    if njump > 10:
-                        raise RuntimeError(f"Found {njump} jumps!")
+                    if njump > self.njump_limit:
+                        ob._detflags[name] |= self.det_mask
+                        det_flags[ind] |= self.det_flag_mask
+                        continue
 
                     corrected_signal, flag_out = self._remove_jumps(
                         sig_view, bad_view, peaks, self.jump_radius
