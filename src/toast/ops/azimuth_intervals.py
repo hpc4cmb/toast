@@ -109,7 +109,7 @@ class AzimuthIntervals(Operator):
         help="Bit mask value for bad azimuth pointing",
     )
 
-    window_seconds = Float(0.25, help="Smoothing window in seconds")
+    window_seconds = Float(0.5, help="Smoothing window in seconds")
 
     debug_root = Unicode(
         None,
@@ -142,6 +142,7 @@ class AzimuthIntervals(Operator):
             stable_times = None
             stable_leftright_times = None
             stable_rightleft_times = None
+            have_scanning = True
 
             # Sample rate
             stamps = obs.shared[self.times].data
@@ -151,8 +152,12 @@ class AzimuthIntervals(Operator):
                 # Smoothing window in samples
                 window = int(rate * self.window_seconds)
 
+                # The azimuth, with flagged samples interpolated
+                azimuth = np.array(obs.shared[self.azimuth].data)
+                self._interpolate_azimuth(obs, azimuth)
+
                 # The scan velocity
-                scan_vel = np.gradient(obs.shared[self.azimuth].data)
+                scan_vel = np.gradient(azimuth)
 
                 # Smooth with moving window
                 wscan_vel = uniform_filter1d(scan_vel, size=window, mode="nearest")
@@ -178,6 +183,8 @@ class AzimuthIntervals(Operator):
                 )
                 stable *= np.absolute(wscan_vel) > 0.1 * vel_range
 
+                # The first estimate of the samples where stable pointing
+                # begins and ends.
                 begin_stable = np.where(stable[1:] - stable[:-1] == 1)[0]
                 end_stable = np.where(stable[:-1] - stable[1:] == 1)[0]
 
@@ -187,110 +194,128 @@ class AzimuthIntervals(Operator):
                     msg += f" change the filter window.  Flagging all samples"
                     msg += f" as unstable pointing."
                     log.warning(msg)
-                    continue
+                    have_scanning = False
 
-                if begin_stable[0] > end_stable[0]:
-                    # We start in the middle of a scan
-                    begin_stable = np.concatenate(([0], begin_stable))
-                if begin_stable[-1] > end_stable[-1]:
-                    # We end in the middle of a scan
-                    end_stable = np.concatenate((end_stable, [obs.n_local_samples]))
-                stable_times = [
-                    (stamps[x[0]], stamps[x[1] - 1])
-                    for x in zip(begin_stable, end_stable)
-                ]
+                if have_scanning:
+                    # Refine our list of stable periods
+                    if begin_stable[0] > end_stable[0]:
+                        # We start in the middle of a scan
+                        begin_stable = np.concatenate(([0], begin_stable))
+                    if begin_stable[-1] > end_stable[-1]:
+                        # We end in the middle of a scan
+                        end_stable = np.concatenate((end_stable, [obs.n_local_samples]))
 
-                # In some situations there are very short stable scans detected at the
-                # beginning and end of observations.  Here we cut any short throw and
-                # stable periods.
-                if self.cut_short:
-                    stable_spans = np.array([(x[1] - x[0]) for x in stable_times])
-                    try:
-                        # First try short limit as time
-                        stable_bad = stable_spans < self.short_limit.to_value(u.s)
-                    except:
-                        # Try short limit as fraction
-                        median_stable = np.median(stable_spans)
-                        stable_bad = stable_spans < self.short_limit * median_stable
-                    begin_stable = np.array(
-                        [x for (x, y) in zip(begin_stable, stable_bad) if not y]
-                    )
-                    end_stable = np.array(
-                        [x for (x, y) in zip(end_stable, stable_bad) if not y]
-                    )
-                    stable_times = [
-                        x for (x, y) in zip(stable_times, stable_bad) if not y
-                    ]
-                if self.cut_long:
-                    stable_spans = np.array([(x[1] - x[0]) for x in stable_times])
-                    try:
-                        # First try long limit as time
-                        stable_bad = stable_spans > self.long_limit.to_value(u.s)
-                    except:
-                        # Try long limit as fraction
-                        median_stable = np.median(stable_spans)
-                        stable_bad = stable_spans > self.long_limit * median_stable
-                    begin_stable = np.array(
-                        [x for (x, y) in zip(begin_stable, stable_bad) if not y]
-                    )
-                    end_stable = np.array(
-                        [x for (x, y) in zip(end_stable, stable_bad) if not y]
-                    )
-                    stable_times = [
-                        x for (x, y) in zip(stable_times, stable_bad) if not y
-                    ]
+                    # In some situations there are very short stable scans detected at
+                    # the beginning and end of observations.  Here we cut any short
+                    # throw and stable periods.
+                    cut_threshold = 4
+                    if (self.cut_short or self.cut_long) and (
+                        len(begin_stable) >= cut_threshold
+                    ):
+                        if self.cut_short:
+                            stable_timespans = np.array(
+                                [stamps[y-1] - stamps[x] for x, y in zip(begin_stable, end_stable)]
+                            )
+                            try:
+                                # First try short limit as time
+                                stable_bad = stable_timespans < self.short_limit.to_value(
+                                    u.s
+                                )
+                            except:
+                                # Try short limit as fraction
+                                median_stable = np.median(stable_timespans)
+                                stable_bad = (
+                                    stable_timespans < self.short_limit * median_stable
+                                )
+                            begin_stable = np.array(
+                                [x for (x, y) in zip(begin_stable, stable_bad) if not y]
+                            )
+                            end_stable = np.array(
+                                [x for (x, y) in zip(end_stable, stable_bad) if not y]
+                            )
+                        if self.cut_long:
+                            stable_timespans = np.array(
+                                [stamps[y-1] - stamps[x] for x, y in zip(begin_stable, end_stable)]
+                            )
+                            try:
+                                # First try long limit as time
+                                stable_bad = stable_timespans > self.long_limit.to_value(
+                                    u.s
+                                )
+                            except:
+                                # Try long limit as fraction
+                                median_stable = np.median(stable_timespans)
+                                stable_bad = (
+                                    stable_timespans > self.long_limit * median_stable
+                                )
+                            begin_stable = np.array(
+                                [x for (x, y) in zip(begin_stable, stable_bad) if not y]
+                            )
+                            end_stable = np.array(
+                                [x for (x, y) in zip(end_stable, stable_bad) if not y]
+                            )
+                    if len(begin_stable) == 0:
+                        have_scanning = False
 
                 # The "throw" intervals extend from one turnaround to the next.
                 # We start the first throw at the beginning of the first stable scan
                 # and then find the sample between stable scans where the turnaround
                 # happens.  This reduces false detections of turnarounds before or
                 # after the stable scanning within the observation.
+                #
+                # If no turnaround is found between stable scans, we log a warning
+                # and choose the sample midway between stable scans to be the throw
+                # boundary.
+                if have_scanning:
+                    begin_throw = [begin_stable[0]]
+                    end_throw = list()
+                    for start_turn, end_turn in zip(end_stable[:-1], begin_stable[1:]):
+                        vel_switch = np.where(
+                            wscan_vel[start_turn : end_turn - 1]
+                            * wscan_vel[start_turn + 1 : end_turn]
+                            < 0
+                        )[0]
+                        if len(vel_switch) != 1:
+                            msg = f"{obs.name}: Single turnaround not found between"
+                            msg += " end of stable scan at"
+                            msg += f" sample {start_turn} and next start at"
+                            msg += f" {end_turn}. Selecting midpoint as turnaround."
+                            log.warning(msg)
+                            half_gap = (end_turn - start_turn) // 2
+                            end_throw.append(start_turn + half_gap)
+                        else:
+                            end_throw.append(start_turn + vel_switch[0])
+                        begin_throw.append(end_throw[-1] + 1)
+                    end_throw.append(end_stable[-1])
+                    begin_throw = np.array(begin_throw)
+                    end_throw = np.array(end_throw)
 
-                begin_throw = [begin_stable[0]]
-                end_throw = list()
-                for start_turn, end_turn in zip(end_stable[:-1], begin_stable[1:]):
-                    vel_switch = np.where(
-                        wscan_vel[start_turn : end_turn - 1]
-                        * wscan_vel[start_turn + 1 : end_turn]
-                        < 0
-                    )[0]
-                    if len(vel_switch) > 1:
-                        msg = f"{obs.name}: Multiple turnarounds between end of "
-                        msg += "stable scan at"
-                        msg += f" sample {start_turn} and next start at {end_turn}."
-                        msg += " Cutting ."
-                        log.warning(msg)
-                        break
-                    end_throw.append(start_turn + vel_switch[0])
-                    begin_throw.append(end_throw[-1] + 1)
-                end_throw.append(end_stable[-1])
-                begin_throw = np.array(begin_throw)
-                end_throw = np.array(end_throw)
+                    stable_times = [
+                        (stamps[x[0]], stamps[x[1] - 1])
+                        for x in zip(begin_stable, end_stable)
+                    ]
+                    throw_times = [
+                        (stamps[x[0]], stamps[x[1] - 1])
+                        for x in zip(begin_throw, end_throw)
+                    ]
 
-                throw_times = [
-                    (stamps[x[0]], stamps[x[1] - 1])
-                    for x in zip(begin_throw, end_throw)
-                ]
+                    throw_leftright_times = list()
+                    throw_rightleft_times = list()
+                    stable_leftright_times = list()
+                    stable_rightleft_times = list()
 
-                # Split scans into left and right-going intervals
-                stable_leftright_times = []
-                stable_rightleft_times = []
-                throw_leftright_times = []
-                throw_rightleft_times = []
-
-                for iscan, (first, last) in enumerate(zip(begin_stable, end_stable)):
-                    # Check the velocity at the middle of the scan
-                    mid = first + (last - first) // 2
-                    if wscan_vel[mid] > 0:
-                        stable_leftright_times.append(stable_times[iscan])
-                        throw_leftright_times.append(throw_times[iscan])
-                    elif wscan_vel[mid] < 0:
-                        stable_rightleft_times.append(stable_times[iscan])
-                        throw_rightleft_times.append(throw_times[iscan])
-                    else:
-                        msg = "Velocity is zero in the middle of scan"
-                        msg += f" samples {first} ... {last}"
-                        raise RuntimeError(msg)
+                    # Split scans into left and right-going intervals
+                    for iscan, (first, last) in enumerate(
+                        zip(begin_stable, end_stable)
+                    ):
+                        # Check the velocity at the middle of the scan
+                        mid = first + (last - first) // 2
+                        if wscan_vel[mid] >= 0:
+                            stable_leftright_times.append(stable_times[iscan])
+                            throw_leftright_times.append(throw_times[iscan])
+                        else:
+                            stable_rightleft_times.append(stable_times[iscan])
+                            throw_rightleft_times.append(throw_times[iscan])
 
                 if self.debug_root is not None:
                     set_matplotlib_backend()
@@ -298,87 +323,146 @@ class AzimuthIntervals(Operator):
                     import matplotlib.pyplot as plt
 
                     # Dump some plots
-                    out_file = f"{self.debug_root}_{obs.comm_row_rank}.pdf"
-                    if len(end_throw) >= 5:
-                        # Plot a few scans
-                        n_plot = end_throw[4]
+                    out_file = f"{self.debug_root}_{obs.name}_{obs.comm_row_rank}.pdf"
+                    if have_scanning:
+                        if len(end_throw) >= 10:
+                            # Plot a few scans
+                            n_plot = end_throw[10]
+                        else:
+                            # Plot it all
+                            n_plot = obs.n_local_samples
+
+                        swplot = vel_switch[vel_switch <= n_plot]
+                        bstable = begin_stable[begin_stable <= n_plot]
+                        estable = end_stable[end_stable <= n_plot]
+                        bthrow = begin_throw[begin_throw <= n_plot]
+                        ethrow = end_throw[end_throw <= n_plot]
+
+                        fig = plt.figure(dpi=100, figsize=(8, 16))
+
+                        ax = fig.add_subplot(4, 1, 1)
+                        ax.plot(
+                            np.arange(n_plot),
+                            azimuth[:n_plot],
+                            "-",
+                        )
+                        ax.set_xlabel("Samples")
+                        ax.set_ylabel("Azimuth")
+
+                        ax = fig.add_subplot(4, 1, 2)
+                        ax.plot(np.arange(n_plot), stable[:n_plot], "-")
+                        ax.vlines(bstable, ymin=-1, ymax=2, color="green")
+                        ax.vlines(estable, ymin=-1, ymax=2, color="red")
+                        ax.vlines(bthrow, ymin=-2, ymax=1, color="cyan")
+                        ax.vlines(ethrow, ymin=-2, ymax=1, color="purple")
+                        ax.set_xlabel("Samples")
+                        ax.set_ylabel("Stable Scan / Throw")
+
+                        ax = fig.add_subplot(4, 1, 3)
+                        ax.plot(np.arange(n_plot), scan_vel[:n_plot], "-")
+                        ax.plot(np.arange(n_plot), wscan_vel[:n_plot], "-")
+                        ax.vlines(
+                            swplot,
+                            ymin=np.amin(scan_vel),
+                            ymax=np.amax(scan_vel),
+                        )
+                        ax.set_xlabel("Samples")
+                        ax.set_ylabel("Scan Velocity")
+
+                        ax = fig.add_subplot(4, 1, 4)
+                        ax.plot(np.arange(n_plot), scan_accel[:n_plot], "-")
+                        ax.set_xlabel("Samples")
+                        ax.set_ylabel("Scan Acceleration")
                     else:
-                        # Plot it all
                         n_plot = obs.n_local_samples
+                        fig = plt.figure(dpi=100, figsize=(8, 12))
 
-                    swplot = vel_switch[vel_switch <= n_plot]
-                    bstable = begin_stable[begin_stable <= n_plot]
-                    estable = end_stable[end_stable <= n_plot]
-                    bthrow = begin_throw[begin_throw <= n_plot]
-                    ethrow = end_throw[end_throw <= n_plot]
+                        ax = fig.add_subplot(3, 1, 1)
+                        ax.plot(
+                            np.arange(n_plot),
+                            azimuth[:n_plot],
+                            "-",
+                        )
+                        ax.set_xlabel("Samples")
+                        ax.set_ylabel("Azimuth")
 
-                    fig = plt.figure(dpi=100, figsize=(8, 16))
+                        ax = fig.add_subplot(3, 1, 2)
+                        ax.plot(np.arange(n_plot), scan_vel[:n_plot], "-")
+                        ax.plot(np.arange(n_plot), wscan_vel[:n_plot], "-")
+                        ax.vlines(
+                            swplot,
+                            ymin=np.amin(scan_vel),
+                            ymax=np.amax(scan_vel),
+                        )
+                        ax.set_xlabel("Samples")
+                        ax.set_ylabel("Scan Velocity")
 
-                    ax = fig.add_subplot(4, 1, 1)
-                    ax.plot(
-                        np.arange(n_plot),
-                        obs.shared[self.azimuth].data[:n_plot],
-                        "-",
-                    )
-                    ax.set_xlabel("Samples")
-                    ax.set_ylabel("Azimuth")
-
-                    ax = fig.add_subplot(4, 1, 2)
-                    ax.plot(np.arange(n_plot), stable[:n_plot], "-")
-                    ax.vlines(bstable, ymin=-1, ymax=2, color="green")
-                    ax.vlines(estable, ymin=-1, ymax=2, color="red")
-                    ax.vlines(bthrow, ymin=-2, ymax=1, color="cyan")
-                    ax.vlines(ethrow, ymin=-2, ymax=1, color="purple")
-                    ax.set_xlabel("Samples")
-                    ax.set_ylabel("Stable Scan / Throw")
-
-                    ax = fig.add_subplot(4, 1, 3)
-                    ax.plot(np.arange(n_plot), scan_vel[:n_plot], "-")
-                    ax.plot(np.arange(n_plot), wscan_vel[:n_plot], "-")
-                    ax.vlines(
-                        swplot,
-                        ymin=np.amin(scan_vel),
-                        ymax=np.amax(scan_vel),
-                    )
-                    ax.set_xlabel("Samples")
-                    ax.set_ylabel("Scan Velocity")
-
-                    ax = fig.add_subplot(4, 1, 4)
-                    ax.plot(np.arange(n_plot), scan_accel[:n_plot], "-")
-                    ax.set_xlabel("Samples")
-                    ax.set_ylabel("Scan Acceleration")
-
+                        ax = fig.add_subplot(3, 1, 3)
+                        ax.plot(np.arange(n_plot), scan_accel[:n_plot], "-")
+                        ax.set_xlabel("Samples")
+                        ax.set_ylabel("Scan Acceleration")
                     plt.savefig(out_file)
                     plt.close()
 
             # Now create the intervals across each process column
+            if obs.comm_col is not None:
+                have_scanning = obs.comm_col.bcast(have_scanning, root=0)
 
-            # The throw intervals are between turnarounds
-            obs.intervals.create_col(
-                self.throw_interval, throw_times, stamps, fromrank=0
-            )
-            obs.intervals.create_col(
-                self.throw_leftright_interval, throw_leftright_times, stamps, fromrank=0
-            )
-            obs.intervals.create_col(
-                self.throw_rightleft_interval, throw_rightleft_times, stamps, fromrank=0
-            )
+            if have_scanning:
+                # The throw intervals are between turnarounds
+                obs.intervals.create_col(
+                    self.throw_interval, throw_times, stamps, fromrank=0
+                )
+                obs.intervals.create_col(
+                    self.throw_leftright_interval,
+                    throw_leftright_times,
+                    stamps,
+                    fromrank=0,
+                )
+                obs.intervals.create_col(
+                    self.throw_rightleft_interval,
+                    throw_rightleft_times,
+                    stamps,
+                    fromrank=0,
+                )
 
-            # Stable scanning intervals
-            obs.intervals.create_col(
-                self.scanning_interval, stable_times, stamps, fromrank=0
-            )
-            obs.intervals.create_col(
-                self.scan_leftright_interval, stable_leftright_times, stamps, fromrank=0
-            )
-            obs.intervals.create_col(
-                self.scan_rightleft_interval, stable_rightleft_times, stamps, fromrank=0
-            )
+                # Stable scanning intervals
+                obs.intervals.create_col(
+                    self.scanning_interval, stable_times, stamps, fromrank=0
+                )
+                obs.intervals.create_col(
+                    self.scan_leftright_interval,
+                    stable_leftright_times,
+                    stamps,
+                    fromrank=0,
+                )
+                obs.intervals.create_col(
+                    self.scan_rightleft_interval,
+                    stable_rightleft_times,
+                    stamps,
+                    fromrank=0,
+                )
 
-            # Turnarounds are the inverse of stable scanning
-            obs.intervals[self.turnaround_interval] = ~obs.intervals[
-                self.scanning_interval
-            ]
+                # Turnarounds are the inverse of stable scanning
+                obs.intervals[self.turnaround_interval] = ~obs.intervals[
+                    self.scanning_interval
+                ]
+            else:
+                # Flag all samples as unstable
+                if self.shared_flags not in obs.shared:
+                    obs.shared.create_column(
+                        self.shared_flags,
+                        shape=(obs.n_local_samples,),
+                        dtype=np.uint8,
+                    )
+                if obs.comm_col_rank == 0:
+                    obs.shared[self.shared_flags].set(
+                        np.zeros_like(obs.shared[self.shared_flags].data),
+                        offset=(0,),
+                        fromrank=0,
+                    )
+                else:
+                    obs.shared[self.shared_flags].set(None, offset=(0,), fromrank=0)
 
         # Additionally flag turnarounds as unstable pointing
         flag_intervals = FlagIntervals(
@@ -389,6 +473,31 @@ class AzimuthIntervals(Operator):
             ],
         )
         flag_intervals.apply(data, detectors=None)
+
+    def _interpolate_azimuth(self, obs, az):
+        flags = np.array(obs.shared[self.shared_flags].data)
+        flags &= self.shared_flag_mask
+        flag_indx = np.arange(len(flags), dtype=np.int64)[np.nonzero(flags)]
+        flag_groups = np.split(flag_indx, np.where(np.diff(flag_indx) != 1)[0] + 1)
+        for grp in flag_groups:
+            if len(grp) == 0:
+                continue
+            bad_first = grp[0]
+            bad_last = grp[-1]
+            if bad_first == 0:
+                # Starting bad samples
+                az[: bad_last + 1] = az[bad_last + 1]
+            elif bad_last == len(flags) - 1:
+                # Ending bad samples
+                az[bad_first:] = az[bad_first - 1]
+            else:
+                int_first = bad_first - 1
+                int_last = bad_last + 1
+                az[bad_first : bad_last + 1] = np.interp(
+                    np.arange(bad_first, bad_last + 1, 1, dtype=np.int32),
+                    [int_first, int_last],
+                    [az[int_first], az[int_last]],
+                )
 
     def _finalize(self, data, **kwargs):
         return

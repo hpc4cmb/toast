@@ -69,15 +69,18 @@ class IntervalList(Sequence, AcceleratorObject):
                 raise RuntimeError(
                     "If constructing from intervals, other spans should be None"
                 )
-            timespans = [(x.start, x.stop) for x in intervals]
-            indices = self._find_indices(timespans)
-            self.data = np.array(
-                [
-                    (self.timestamps[x[0]], self.timestamps[x[1]], x[0], x[1])
-                    for x in indices
-                ],
-                dtype=interval_dtype,
-            ).view(np.recarray)
+            if len(intervals) == 0:
+                self.data = np.zeros(0, dtype=interval_dtype).view(np.recarray)
+            else:
+                timespans = [(x.start, x.stop) for x in intervals]
+                indices = self._find_indices(timespans)
+                self.data = np.array(
+                    [
+                        (self.timestamps[x[0]], self.timestamps[x[1]], x[0], x[1])
+                        for x in indices
+                    ],
+                    dtype=interval_dtype,
+                ).view(np.recarray)
         elif timespans is not None:
             if samplespans is not None:
                 raise RuntimeError("Cannot construct from both time and sample spans")

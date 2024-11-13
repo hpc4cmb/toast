@@ -309,18 +309,13 @@ class Demodulate(Operator):
             self.demod_data.obs.append(demod_obs)
 
             if self.purge:
-                if self.shared_flags is not None:
-                    del obs.shared[self.shared_flags]
-                for det_data in self.det_data.split(";"):
-                    del obs.detdata[det_data]
-                if self.det_flags is not None:
-                    del obs.detdata[self.det_flags]
-                if self.noise_model is not None:
-                    del obs[self.noise_model]
+                obs.clear()
 
             log.debug_rank(
                 "Demodulated observation in", comm=data.comm.comm_group, timer=timer
             )
+        if self.purge:
+            data.clear()
 
         return
 
