@@ -519,9 +519,9 @@ class AzimuthIntervals(Operator):
         flag_intervals.apply(data, detectors=None)
 
     def _find_turnaround(self, vel):
-        """Fit a quadratic polynomial and find the turnaround sample."""
+        """Fit a polynomial and find the turnaround sample."""
         x = np.arange(len(vel))
-        fit_poly = np.polynomial.polynomial.Polynomial.fit(x, vel, 4)
+        fit_poly = np.polynomial.polynomial.Polynomial.fit(x, vel, 5)
         fit_vel = fit_poly(x)
         vel_switch = np.where(fit_vel[:-1] * fit_vel[1:] < 0)[0]
         if len(vel_switch) != 1:
