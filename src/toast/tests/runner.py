@@ -26,6 +26,7 @@ from . import io_hdf5 as test_io_hdf5
 from . import math_misc as test_math_misc
 from . import noise as test_noise
 from . import observation as test_observation
+from . import ops_azimuth_intervals as test_ops_azimuth_intervals
 from . import ops_cadence_map as test_ops_cadence_map
 from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_crosslinking as test_ops_crosslinking
@@ -183,6 +184,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_dist))
         suite.addTest(loader.loadTestsFromModule(test_config))
 
+        suite.addTest(loader.loadTestsFromModule(test_ops_azimuth_intervals))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_satellite))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_ground))
         suite.addTest(loader.loadTestsFromModule(test_ops_memory_counter))

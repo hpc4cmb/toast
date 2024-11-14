@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2023-2024 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -148,29 +148,25 @@ class AzimuthIntervals(Operator):
             stamps = obs.shared[self.times].data
             (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(stamps)
 
+            # Smoothing window in samples
+            window = int(rate * self.window_seconds)
+
             if obs.comm_col_rank == 0:
-                # Smoothing window in samples
-                window = int(rate * self.window_seconds)
-
-                # The azimuth, with flagged samples interpolated
+                # The azimuth angle
                 azimuth = np.array(obs.shared[self.azimuth].data)
-                self._interpolate_azimuth(obs, azimuth)
 
-                # The scan velocity
-                scan_vel = np.gradient(azimuth)
+                # The azimuth flags
+                flags = np.array(obs.shared[self.shared_flags].data)
+                flags &= self.shared_flag_mask
 
-                # Smooth with moving window
-                wscan_vel = uniform_filter1d(scan_vel, size=window, mode="nearest")
+                # Scan velocity
+                scan_vel = self._gradient(azimuth, window, flags=flags)
 
                 # The peak to peak range of the scan velocity
-                vel_range = np.amax(wscan_vel) - np.amin(wscan_vel)
+                vel_range = np.amax(scan_vel) - np.amin(scan_vel)
 
-                # The smoothed scan acceleration
-                scan_accel = uniform_filter1d(
-                    np.gradient(wscan_vel),
-                    size=window,
-                    mode="nearest",
-                )
+                # Scan acceleration
+                scan_accel = self._gradient(scan_vel, window)
 
                 # Peak to peak acceleration range
                 accel_range = np.amax(scan_accel) - np.amin(scan_accel)
@@ -181,7 +177,7 @@ class AzimuthIntervals(Operator):
                 stable = (np.absolute(scan_accel) < 0.1 * accel_range) * np.ones(
                     len(scan_accel), dtype=np.int8
                 )
-                stable *= np.absolute(wscan_vel) > 0.1 * vel_range
+                stable *= np.absolute(scan_vel) > 0.1 * vel_range
 
                 # The first estimate of the samples where stable pointing
                 # begins and ends.
@@ -214,12 +210,15 @@ class AzimuthIntervals(Operator):
                     ):
                         if self.cut_short:
                             stable_timespans = np.array(
-                                [stamps[y-1] - stamps[x] for x, y in zip(begin_stable, end_stable)]
+                                [
+                                    stamps[y - 1] - stamps[x]
+                                    for x, y in zip(begin_stable, end_stable)
+                                ]
                             )
                             try:
                                 # First try short limit as time
-                                stable_bad = stable_timespans < self.short_limit.to_value(
-                                    u.s
+                                stable_bad = (
+                                    stable_timespans < self.short_limit.to_value(u.s)
                                 )
                             except:
                                 # Try short limit as fraction
@@ -235,12 +234,15 @@ class AzimuthIntervals(Operator):
                             )
                         if self.cut_long:
                             stable_timespans = np.array(
-                                [stamps[y-1] - stamps[x] for x, y in zip(begin_stable, end_stable)]
+                                [
+                                    stamps[y - 1] - stamps[x]
+                                    for x, y in zip(begin_stable, end_stable)
+                                ]
                             )
                             try:
                                 # First try long limit as time
-                                stable_bad = stable_timespans > self.long_limit.to_value(
-                                    u.s
+                                stable_bad = (
+                                    stable_timespans > self.long_limit.to_value(u.s)
                                 )
                             except:
                                 # Try long limit as fraction
@@ -269,14 +271,12 @@ class AzimuthIntervals(Operator):
                 if have_scanning:
                     begin_throw = [begin_stable[0]]
                     end_throw = list()
+                    vel_switch = list()
                     for start_turn, end_turn in zip(end_stable[:-1], begin_stable[1:]):
-                        vel_switch = np.where(
-                            wscan_vel[start_turn : end_turn - 1]
-                            * wscan_vel[start_turn + 1 : end_turn]
-                            < 0
-                        )[0]
-                        if len(vel_switch) != 1:
-                            msg = f"{obs.name}: Single turnaround not found between"
+                        # Fit a quadratic polynomial and find the velocity change sample
+                        vel_turn = self._find_turnaround(scan_vel[start_turn:end_turn])
+                        if vel_turn is None:
+                            msg = f"{obs.name}: Turnaround not found between"
                             msg += " end of stable scan at"
                             msg += f" sample {start_turn} and next start at"
                             msg += f" {end_turn}. Selecting midpoint as turnaround."
@@ -284,11 +284,13 @@ class AzimuthIntervals(Operator):
                             half_gap = (end_turn - start_turn) // 2
                             end_throw.append(start_turn + half_gap)
                         else:
-                            end_throw.append(start_turn + vel_switch[0])
+                            end_throw.append(start_turn + vel_turn)
+                        vel_switch.append(end_throw[-1])
                         begin_throw.append(end_throw[-1] + 1)
                     end_throw.append(end_stable[-1])
                     begin_throw = np.array(begin_throw)
                     end_throw = np.array(end_throw)
+                    vel_switch = np.array(vel_switch)
 
                     stable_times = [
                         (stamps[x[0]], stamps[x[1] - 1])
@@ -310,7 +312,7 @@ class AzimuthIntervals(Operator):
                     ):
                         # Check the velocity at the middle of the scan
                         mid = first + (last - first) // 2
-                        if wscan_vel[mid] >= 0:
+                        if scan_vel[mid] >= 0:
                             stable_leftright_times.append(stable_times[iscan])
                             throw_leftright_times.append(throw_times[iscan])
                         else:
@@ -325,52 +327,95 @@ class AzimuthIntervals(Operator):
                     # Dump some plots
                     out_file = f"{self.debug_root}_{obs.name}_{obs.comm_row_rank}.pdf"
                     if have_scanning:
-                        if len(end_throw) >= 10:
+                        if len(end_throw) >= 5:
                             # Plot a few scans
-                            n_plot = end_throw[10]
+                            plot_start = 0
+                            n_plot = end_throw[4]
                         else:
                             # Plot it all
+                            plot_start = 0
                             n_plot = obs.n_local_samples
+                        pslc = slice(plot_start, plot_start + n_plot, 1)
+                        px = np.arange(plot_start, plot_start + n_plot, 1)
 
-                        swplot = vel_switch[vel_switch <= n_plot]
-                        bstable = begin_stable[begin_stable <= n_plot]
-                        estable = end_stable[end_stable <= n_plot]
-                        bthrow = begin_throw[begin_throw <= n_plot]
-                        ethrow = end_throw[end_throw <= n_plot]
+                        swplot = vel_switch[
+                            np.logical_and(
+                                vel_switch <= plot_start + n_plot,
+                                vel_switch >= plot_start,
+                            )
+                        ]
+                        bstable = begin_stable[
+                            np.logical_and(
+                                begin_stable <= plot_start + n_plot,
+                                begin_stable >= plot_start,
+                            )
+                        ]
+                        estable = end_stable[
+                            np.logical_and(
+                                end_stable <= plot_start + n_plot,
+                                end_stable >= plot_start,
+                            )
+                        ]
+                        bthrow = begin_throw[
+                            np.logical_and(
+                                begin_throw <= plot_start + n_plot,
+                                begin_throw >= plot_start,
+                            )
+                        ]
+                        ethrow = end_throw[
+                            np.logical_and(
+                                end_throw <= plot_start + n_plot,
+                                end_throw >= plot_start,
+                            )
+                        ]
 
                         fig = plt.figure(dpi=100, figsize=(8, 16))
 
                         ax = fig.add_subplot(4, 1, 1)
-                        ax.plot(
-                            np.arange(n_plot),
-                            azimuth[:n_plot],
-                            "-",
-                        )
+                        ax.plot(px, azimuth[pslc], "-", label="Azimuth")
+                        ax.legend(loc="best")
                         ax.set_xlabel("Samples")
-                        ax.set_ylabel("Azimuth")
+                        ax.set_ylabel("Azimuth (Radians)")
 
                         ax = fig.add_subplot(4, 1, 2)
-                        ax.plot(np.arange(n_plot), stable[:n_plot], "-")
-                        ax.vlines(bstable, ymin=-1, ymax=2, color="green")
-                        ax.vlines(estable, ymin=-1, ymax=2, color="red")
-                        ax.vlines(bthrow, ymin=-2, ymax=1, color="cyan")
-                        ax.vlines(ethrow, ymin=-2, ymax=1, color="purple")
+                        ax.plot(px, stable[pslc], "-", label="Stable Pointing")
+                        ax.plot(px, flags[pslc], color="black", label="Flags")
+                        ax.vlines(
+                            bstable,
+                            ymin=-1,
+                            ymax=2,
+                            color="green",
+                            label="Begin Stable",
+                        )
+                        ax.vlines(
+                            estable, ymin=-1, ymax=2, color="red", label="End Stable"
+                        )
+                        ax.vlines(
+                            bthrow, ymin=-2, ymax=1, color="cyan", label="Begin Throw"
+                        )
+                        ax.vlines(
+                            ethrow, ymin=-2, ymax=1, color="purple", label="End Throw"
+                        )
+                        ax.legend(loc="best")
                         ax.set_xlabel("Samples")
                         ax.set_ylabel("Stable Scan / Throw")
 
                         ax = fig.add_subplot(4, 1, 3)
-                        ax.plot(np.arange(n_plot), scan_vel[:n_plot], "-")
-                        ax.plot(np.arange(n_plot), wscan_vel[:n_plot], "-")
+                        ax.plot(px, scan_vel[pslc], "-", label="Velocity")
                         ax.vlines(
                             swplot,
                             ymin=np.amin(scan_vel),
                             ymax=np.amax(scan_vel),
+                            color="red",
+                            label="Velocity Switch",
                         )
+                        ax.legend(loc="best")
                         ax.set_xlabel("Samples")
-                        ax.set_ylabel("Scan Velocity")
+                        ax.set_ylabel("Scan Velocity (Radians / s)")
 
                         ax = fig.add_subplot(4, 1, 4)
-                        ax.plot(np.arange(n_plot), scan_accel[:n_plot], "-")
+                        ax.plot(px, scan_accel[pslc], "-", label="Acceleration")
+                        ax.legend(loc="best")
                         ax.set_xlabel("Samples")
                         ax.set_ylabel("Scan Acceleration")
                     else:
@@ -388,7 +433,6 @@ class AzimuthIntervals(Operator):
 
                         ax = fig.add_subplot(3, 1, 2)
                         ax.plot(np.arange(n_plot), scan_vel[:n_plot], "-")
-                        ax.plot(np.arange(n_plot), wscan_vel[:n_plot], "-")
                         ax.vlines(
                             swplot,
                             ymin=np.amin(scan_vel),
@@ -474,30 +518,105 @@ class AzimuthIntervals(Operator):
         )
         flag_intervals.apply(data, detectors=None)
 
-    def _interpolate_azimuth(self, obs, az):
-        flags = np.array(obs.shared[self.shared_flags].data)
-        flags &= self.shared_flag_mask
+    def _find_turnaround(self, vel):
+        """Fit a quadratic polynomial and find the turnaround sample."""
+        x = np.arange(len(vel))
+        fit_poly = np.polynomial.polynomial.Polynomial.fit(x, vel, 4)
+        fit_vel = fit_poly(x)
+        vel_switch = np.where(fit_vel[:-1] * fit_vel[1:] < 0)[0]
+        if len(vel_switch) != 1:
+            return None
+        else:
+            return vel_switch[0]
+
+    def _gradient(self, data, window, flags=None):
+        """Compute the numerical derivative with smoothing.
+
+        Args:
+            data (array):  The local data buffer to process.
+            window (int):  The number of samples in the smoothing window.
+            flags (array):  The optional array of sample flags.
+
+        Returns:
+            (array):  The result.
+
+        """
+        if flags is not None:
+            # Fill flags with noise
+            self._fill_flagged(data, flags, window // 4)
+        # Smooth the data
+        smoothed = uniform_filter1d(
+            data,
+            size=window,
+            mode="nearest",
+        )
+        # Derivative
+        result = np.gradient(smoothed)
+        return result
+
+    def _fill_flagged(self, data, flags, buffer):
+        """Fill flagged samples with noise.
+
+        Args:
+            data (array):  The local data buffer to process.
+            flags (array):  The array of sample flags.
+            buffer (int):  Number of samples to use on either side of flagged regions
+
+        Returns:
+            None
+
+        """
         flag_indx = np.arange(len(flags), dtype=np.int64)[np.nonzero(flags)]
         flag_groups = np.split(flag_indx, np.where(np.diff(flag_indx) != 1)[0] + 1)
-        for grp in flag_groups:
+        nfgroup = len(flag_groups)
+
+        # Merge groups that are closer than the buffer length
+        groups = list()
+        igrp = 0
+        while igrp < nfgroup:
+            grp = flag_groups[igrp]
             if len(grp) == 0:
                 continue
-            bad_first = grp[0]
-            bad_last = grp[-1]
-            if bad_first == 0:
-                # Starting bad samples
-                az[: bad_last + 1] = az[bad_last + 1]
-            elif bad_last == len(flags) - 1:
-                # Ending bad samples
-                az[bad_first:] = az[bad_first - 1]
-            else:
-                int_first = bad_first - 1
-                int_last = bad_last + 1
-                az[bad_first : bad_last + 1] = np.interp(
-                    np.arange(bad_first, bad_last + 1, 1, dtype=np.int32),
-                    [int_first, int_last],
-                    [az[int_first], az[int_last]],
-                )
+            first = grp[0]
+            last = grp[-1] + 1
+            while igrp + 1 < nfgroup and last + buffer > flag_groups[igrp + 1][0]:
+                igrp += 1
+                last = flag_groups[igrp][-1] + 1
+            groups.append((int(first), int(last)))
+            igrp += 1
+
+        for igrp, (bad_first, bad_last) in enumerate(groups):
+            full_first = bad_first - buffer
+            if full_first < 0:
+                full_first = 0
+            full_last = bad_last + buffer
+            if full_last > len(data):
+                full_last = len(data)
+            in_fit_x = np.concatenate(
+                [
+                    np.arange(full_first, bad_first),
+                    np.arange(bad_last, full_last),
+                ]
+            )
+            in_fit_y = np.concatenate(
+                [
+                    data[full_first:bad_first],
+                    data[bad_last:full_last],
+                ]
+            )
+            fit_poly = np.polynomial.polynomial.Polynomial.fit(in_fit_x, in_fit_y, 5)
+            fit_line = fit_poly(in_fit_x)
+
+            rms = np.std(np.array(in_fit_y) - fit_line)
+
+            # Fill the gap with noise plus the linear trend
+            n_gap = bad_last - bad_first
+            full_fit = fit_poly(np.arange(full_first, full_last))
+
+            fit_slice = slice(bad_first - full_first, bad_first - full_first + n_gap, 1)
+            data[bad_first:bad_last] = full_fit[fit_slice] + np.random.normal(
+                scale=rms, size=n_gap
+            )
 
     def _finalize(self, data, **kwargs):
         return
