@@ -81,6 +81,7 @@ class AzimuthIntervalsTest(MPITestCase):
         azimuth = None
         elevation = None
         flags = None
+        scans = None
         if ob.comm_col_rank == 0:
             start_time = 0.0 + float(ob.local_index_offset) / rate.to_value(u.Hz)
             stop_time = start_time + float(ob.n_local_samples - 1) / rate.to_value(u.Hz)
@@ -141,6 +142,9 @@ class AzimuthIntervalsTest(MPITestCase):
             bad_samps = flags != 0
             azimuth[bad_samps] = 10.0
             elevation[bad_samps] = -10.0
+
+        if ob.comm_col is not None:
+            scans = ob.comm_col.bcast(scans, root=0)
 
         ob.shared[defaults.times].set(stamps, offset=(0,), fromrank=0)
         ob.shared[defaults.azimuth].set(azimuth, offset=(0,), fromrank=0)
