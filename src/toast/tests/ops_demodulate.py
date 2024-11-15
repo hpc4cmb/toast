@@ -113,7 +113,7 @@ class DemodulateTest(MPITestCase):
         # Demodulate
 
         downsample = 3
-        demod = ops.Demodulate(stokes_weights=weights, nskip=downsample, purge=True)
+        demod = ops.Demodulate(stokes_weights=weights, nskip=downsample, purge=False)
         demod_data = demod.apply(data)
 
         # Map again
