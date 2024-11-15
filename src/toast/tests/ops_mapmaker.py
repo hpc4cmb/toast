@@ -20,7 +20,12 @@ from ..timing import GlobalTimers
 from ..timing import dump as dump_timers
 from ..timing import gather_timers
 from ..vis import set_matplotlib_backend
-from ._helpers import close_data, create_fake_sky, create_outdir, create_satellite_data
+from ._helpers import (
+    close_data,
+    create_fake_healpix_scanned_tod,
+    create_outdir,
+    create_satellite_data,
+)
 from .mpi import MPITestCase
 
 
@@ -66,17 +71,23 @@ class MapmakerTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
         )
-        scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
         delete_pointing = ops.Delete(
@@ -196,17 +207,23 @@ class MapmakerTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
         )
-        scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
         delete_pointing = ops.Delete(
@@ -521,22 +538,23 @@ class MapmakerTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
             data,
+            pixels,
+            weights,
+            skyfile,
             "pixel_dist",
-            "fake_map",
-            hpix_out=os.path.join(testdir, "input_map.fits"),
-        )
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
         )
-        scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
         delete_pointing = ops.Delete(detdata=[pixels.pixels, weights.weights])
@@ -790,22 +808,23 @@ class MapmakerTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
             data,
+            pixels,
+            weights,
+            skyfile,
             "pixel_dist",
-            "fake_map",
-            hpix_out=os.path.join(testdir, "input_map.fits"),
-        )
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
         )
-        scanner.apply(data)
 
         # Now clear the pointing and reset things for use with the mapmaking test later
         delete_pointing = ops.Delete(

@@ -18,7 +18,7 @@ from ._helpers import (
     close_data,
     create_ground_data,
     create_outdir,
-    create_fake_sky_tod,
+    create_fake_healpix_scanned_tod,
 )
 
 from .mpi import MPITestCase
@@ -52,12 +52,21 @@ class DemodulateTest(MPITestCase):
             detector_pointing=detpointing,
         )
 
-        map_values = (10.0, 2.0, 0.0)
-        map_key = create_fake_sky_tod(
+        sky_file = os.path.join(self.outdir, "fake_sky.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
             data,
             pixels,
             weights,
-            map_vals=map_values,
+            sky_file,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
         )
 
         # Simulate noise
@@ -184,6 +193,7 @@ class DemodulateTest(MPITestCase):
 
             map_mod = hp.read_map(fname_mod, None)
             map_demod = hp.read_map(fname_demod, None)
+            map_input = hp.read_map(sky_file, None)
 
             fig = plt.figure(figsize=[18, 12])
             nrow, ncol = 2, 3
@@ -191,9 +201,9 @@ class DemodulateTest(MPITestCase):
             reso = 5
 
             for i, m in enumerate(map_mod):
-                value = map_values[i]
+                value = map_input[i]
                 good = m != 0
-                rms = np.sqrt(np.mean((m[good] - value) ** 2))
+                rms = np.sqrt(np.mean((m[good] - value[good]) ** 2))
                 m[m == 0] = hp.UNSEEN
                 stokes = "IQU"[i]
                 amp = 0.0001
@@ -203,15 +213,15 @@ class DemodulateTest(MPITestCase):
                     reso=reso,
                     rot=rot,
                     title=f"Modulated {stokes} : rms = {rms}",
-                    min=value - amp,
-                    max=value + amp,
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
                     cmap="coolwarm",
                 )
 
             for i, m in enumerate(map_demod):
-                value = map_values[i]
+                value = map_input[i]
                 good = m != 0
-                rms = np.sqrt(np.mean((m[good] - value) ** 2))
+                rms = np.sqrt(np.mean((m[good] - value[good]) ** 2))
                 m[m == 0] = hp.UNSEEN
                 stokes = "IQU"[i]
                 amp = 0.0001
@@ -221,8 +231,8 @@ class DemodulateTest(MPITestCase):
                     reso=reso,
                     rot=rot,
                     title=f"Demodulated {stokes} : rms = {rms}",
-                    min=value - amp,
-                    max=value + amp,
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
                     cmap="coolwarm",
                 )
                 if rms > 1.0e-3:

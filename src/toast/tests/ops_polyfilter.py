@@ -18,7 +18,7 @@ from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
 from ._helpers import (
     close_data,
-    create_fake_sky,
+    create_fake_healpix_scanned_tod,
     create_ground_data,
     create_outdir,
     create_satellite_data,
@@ -54,17 +54,23 @@ class PolyFilterTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
+        # Create fake polarized sky signal
+        skyfile = os.path.join(self.outdir, "input_sky_polyfilter.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
         )
-        scanner.apply(data)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -145,17 +151,23 @@ class PolyFilterTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
+        # Create fake polarized sky signal
+        skyfile = os.path.join(self.outdir, "input_sky_polyfilter_trend.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
         )
-        scanner.apply(data)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -283,17 +295,23 @@ class PolyFilterTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
+        # Create fake polarized sky signal
+        skyfile = os.path.join(self.outdir, "input_sky_polyfilter2D.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
         )
-        scanner.apply(data)
 
         # Add 2D polynomial modes.
         coeff = np.arange(norder**2)
@@ -462,17 +480,23 @@ class PolyFilterTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
+        # Create fake polarized sky signal
+        skyfile = os.path.join(self.outdir, "input_sky_common_mode.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
         )
-        scanner.apply(data)
 
         # Make fake flags
         fake_flags(data)

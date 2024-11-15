@@ -15,7 +15,7 @@ from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
 from ._helpers import (
     close_data,
     create_fake_mask,
-    create_fake_sky,
+    create_fake_healpix_scanned_tod,
     create_outdir,
     create_satellite_data,
 )
@@ -47,28 +47,25 @@ class InterpolateHealpixTest(MPITestCase):
         )
         weights.apply(data)
 
+        # Create fake polarized sky signal
         hpix_file = os.path.join(self.outdir, "fake.fits")
-        if data.comm.comm_world is None or data.comm.comm_world.rank == 0:
-            # Create a smooth sky
-            lmax = 3 * pixels.nside
-            cls = np.ones([4, lmax + 1])
-            np.random.seed(98776)
-            fake_sky = hp.synfast(cls, pixels.nside, fwhm=np.radians(30))
-            # Write this to a file
-            hp.write_map(hpix_file, fake_sky)
-
-        # Scan the map from the file
-
-        scan_hpix = ops.ScanHealpixMap(
-            file=hpix_file,
-            det_data="scan_data",
-            pixel_pointing=pixels,
-            stokes_weights=weights,
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            hpix_file,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.degree,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
         )
-        scan_hpix.apply(data)
 
         # Interpolate the map from the file
-
         interp_hpix = ops.InterpolateHealpixMap(
             file=hpix_file,
             det_data="interp_data",
@@ -82,7 +79,7 @@ class InterpolateHealpixTest(MPITestCase):
         for ob in data.obs:
             for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 np.testing.assert_almost_equal(
-                    ob.detdata["scan_data"][det],
+                    ob.detdata[defaults.det_data][det],
                     ob.detdata["interp_data"][det],
                     decimal=1,
                 )

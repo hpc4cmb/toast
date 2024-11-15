@@ -27,7 +27,8 @@ from ..utils import rate_from_times
 from ..vis import plot_noise_estim
 from ._helpers import (
     close_data,
-    create_fake_sky,
+    create_fake_healpix_scanned_tod,
+    create_fake_wcs_scanned_tod,
     create_ground_data,
     create_outdir,
     create_satellite_data,
@@ -356,13 +357,6 @@ class TemplateHwpssTest(MPITestCase):
         )
         pix_dist.apply(data)
 
-        create_fake_sky(data, "sky_pixel_dist", "fake_map")
-
-        outfile = os.path.join(outdir, f"sky_{self.nside}_input.fits")
-        write_healpix_fits(data["fake_map"], outfile, nest=True)
-        if data.comm.world_rank == 0:
-            plot_healpix_maps(mapfile=outfile)
-
         weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=defaults.hwp_angle,
@@ -370,21 +364,26 @@ class TemplateHwpssTest(MPITestCase):
             detector_pointing=detpointing,
         )
 
-        scanner = ops.Pipeline(
-            operators=[
-                pixels,
-                weights,
-                ops.ScanMap(
-                    det_data="sky",
-                    pixels=pixels.pixels,
-                    weights=weights.weights,
-                    map_key="fake_map",
-                    det_data_units=defaults.det_data_units,
-                ),
-            ],
-            detsets=["SINGLE"],
+        # Create fake polarized sky signal
+        skyfile = os.path.join(outdir, f"sky_{self.nside}_input.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "sky_pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data="sky",
         )
-        scanner.apply(data)
+
+        if data.comm.world_rank == 0:
+            plot_healpix_maps(mapfile=skyfile)
 
         ops.Combine(
             op="add",
@@ -471,15 +470,6 @@ class TemplateHwpssTest(MPITestCase):
         )
         pix_dist.apply(data)
 
-        create_fake_sky(data, "sky_pixel_dist", "fake_map")
-
-        outfile = os.path.join(
-            outdir, f"sky_{sky_proj}_{sky_res.to_value(u.arcmin)}_input.fits"
-        )
-        write_wcs_fits(data["fake_map"], outfile)
-        if data.comm.world_rank == 0:
-            plot_wcs_maps(mapfile=outfile)
-
         weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=defaults.hwp_angle,
@@ -487,21 +477,25 @@ class TemplateHwpssTest(MPITestCase):
             detector_pointing=detpointing,
         )
 
-        scanner = ops.Pipeline(
-            operators=[
-                pixels,
-                weights,
-                ops.ScanMap(
-                    det_data="sky",
-                    pixels=pixels.pixels,
-                    weights=weights.weights,
-                    map_key="fake_map",
-                    det_data_units=defaults.det_data_units,
-                ),
-            ],
-            detsets=["SINGLE"],
+        outfile = os.path.join(
+            outdir, f"sky_{sky_proj}_{sky_res.to_value(u.arcmin)}_input.fits"
         )
-        scanner.apply(data)
+        create_fake_wcs_scanned_tod(
+            data,
+            pixels,
+            weights,
+            outfile,
+            "sky_pixel_dist",
+            map_key="fake_map",
+            fwhm=10.0 * u.arcmin,
+            I_scale=1.0,
+            Q_scale=1.0,
+            U_scale=1.0,
+            det_data="sky",
+        )
+
+        if data.comm.world_rank == 0:
+            plot_wcs_maps(mapfile=outfile)
 
         ops.Combine(
             op="add",

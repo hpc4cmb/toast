@@ -19,7 +19,7 @@ from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from ._helpers import (
     close_data,
-    create_fake_sky,
+    create_fake_healpix_scanned_tod,
     create_ground_data,
     create_outdir,
     create_satellite_data,
@@ -352,6 +352,10 @@ class NoiseEstimTest(MPITestCase):
         # Create a fake ground data set for testing
         data = create_ground_data(self.comm)
 
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
         pixels = ops.PixelsHealpix(
@@ -367,25 +371,22 @@ class NoiseEstimTest(MPITestCase):
         )
         weights.apply(data)
 
-        # Create fake polarized sky pixel values locally
-        create_fake_sky(data, "pixel_dist", "fake_map")
-
-        # Scan map into timestreams
-        scanner = ops.ScanMap(
-            det_data=defaults.det_data,
-            pixels=pixels.pixels,
-            weights=weights.weights,
-            map_key="fake_map",
-        )
-        scanner.apply(data)
-
-        # Write map to a file
+        # Create fake polarized sky pixel values
         map_file = os.path.join(self.outdir, "fake_map.fits")
-        write_healpix_fits(data["fake_map"], map_file, nest=pixels.nest)
-
-        # Create an uncorrelated noise model from focalplane detector properties
-        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
-        default_model.apply(data)
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            map_file,
+            "pixel_dist",
+            map_key="fake_map",
+            fwhm=60.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
 
         # Simulate noise from this model
         sim_noise = ops.SimNoise(noise_model="noise_model")

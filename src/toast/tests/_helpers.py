@@ -15,9 +15,11 @@ from astropy import units as u
 from astropy.table import Column, QTable, Table
 from astropy.table import vstack as table_vstack
 from astropy.wcs import WCS
+from scipy.ndimage import gaussian_filter
 
 from .. import ops as ops
 from .. import qarray as qa
+from .. import rng
 from ..data import Data
 from ..instrument import Focalplane, GroundSite, SpaceSite, Telescope
 from ..instrument_sim import fake_boresight_focalplane, fake_hexagon_focalplane
@@ -25,7 +27,8 @@ from ..mpi import Comm
 from ..observation import DetectorData, Observation
 from ..observation import default_values as defaults
 from ..pixels import PixelData
-from ..pixels_io_healpix import write_healpix_fits
+from ..pixels_io_healpix import write_healpix_fits, read_healpix_fits
+from ..pixels_io_wcs import read_wcs_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..schedule_sim_satellite import create_satellite_schedule
@@ -525,79 +528,313 @@ def create_healpix_ring_satellite(
     return data
 
 
-def create_fake_sky(data, dist_key, map_key, hpix_out=None):
-    np.random.seed(987654321)
-    dist = data[dist_key]
-    pix_data = PixelData(dist, np.float64, n_value=3, units=defaults.det_data_units)
-    # Just replicate the fake data across all local submaps
+def create_fake_healpix_file(
+    out_file,
+    nside,
+    fwhm=10.0 * u.arcmin,
+    lmax=256,
+    I_scale=1.0,
+    Q_scale=1.0,
+    U_scale=1.0,
+    units=u.K,
+):
+    """Generate a fake sky map on disk with one process.
+
+    This should only be called on a single process!
+
+    Args:
+        out_file (str):  The output FITS map.
+        nside (int):  The NSIDE value.
+        fwhm (Quantity):  The beam smoothing FWHM.
+        lmax (int):  The ell_max of the expansion for smoothing.
+        I_scale (float):  The overall scaling factor of the intensity map.
+        Q_scale (float):  The overall scaling factor of the Stokes Q map.
+        U_scale (float):  The overall scaling factor of the Stokes U map.
+        units (Unit):  The map units to write to the file.
+
+    Returns:
+        None
+
+    """
+    npix = 12 * nside**2
     off = 0
-    for submap in range(dist.n_submap):
-        I_data = 0.3 * np.random.normal(size=dist.n_pix_submap)
-        Q_data = 0.03 * np.random.normal(size=dist.n_pix_submap)
-        U_data = 0.03 * np.random.normal(size=dist.n_pix_submap)
-        if submap in dist.local_submaps:
-            pix_data.data[off, :, 0] = I_data
-            pix_data.data[off, :, 1] = Q_data
-            pix_data.data[off, :, 2] = U_data
-            off += 1
-    data[map_key] = pix_data
-    if hpix_out is not None:
-        write_healpix_fits(
-            pix_data,
-            hpix_out,
-            nest=True,
-            comm_bytes=10000000,
-            report_memory=False,
-            single_precision=False,
+    maps = list()
+    for scale in [I_scale, Q_scale, U_scale]:
+        vals = np.array(
+            rng.random(
+                npix,
+                key=(12345, 6789),
+                counter=(0, off),
+                sampler="gaussian",
+            ),
+            dtype=np.float64,
         )
+        vals = hp.smoothing(vals, fwhm=fwhm.to_value(u.radian), lmax=lmax)
+        maps.append(scale * vals)
+        off += npix
+    del vals
+    unit_str = f"{units}"
+    hp.write_map(
+        out_file,
+        maps,
+        nest=True,
+        fits_IDL=False,
+        coord="C",
+        column_units=unit_str,
+        dtype=np.float32,
+    )
+    del maps
 
 
-def create_fake_sky_tod(
+def create_fake_wcs_file(
+    out_file,
+    wcs,
+    wcs_shape,
+    fwhm=10.0 * u.arcmin,
+    I_scale=1.0,
+    Q_scale=1.0,
+    U_scale=1.0,
+    units=u.K,
+):
+    """Generate a fake sky map on disk with one process.
+
+    This should only be called on a single process!
+
+    Args:
+        out_file (str):  The output FITS map.
+        wcs (astropy.wcs.WCS):  The WCS structure.
+        wcs_shape (tuple):  The image dimensions in longitude, latitude.
+        fwhm (Quantity):  The beam smoothing FWHM.
+        I_scale (float):  The overall scaling factor of the intensity map.
+        Q_scale (float):  The overall scaling factor of the Stokes Q map.
+        U_scale (float):  The overall scaling factor of the Stokes U map.
+        units (Unit):  The map units to write to the file.
+
+    Returns:
+        None
+
+    """
+    # Image dimensions
+    lon_dim = wcs_shape[0]
+    lat_dim = wcs_shape[1]
+    # Get the smoothing kernel FWHM in terms of pixels
+    lon_res_deg = np.absolute(wcs.wcs.cdelt[0])
+    lat_res_deg = np.absolute(wcs.wcs.cdelt[1])
+    lon_fwhm = fwhm.to_value(u.degree) / lon_res_deg
+    lat_fwhm = fwhm.to_value(u.degree) / lat_res_deg
+
+    image_shape = (3, lat_dim, lon_dim)
+    image = np.zeros(image_shape, dtype=np.float64)
+
+    np.random.seed(987654321)
+    for imap, scale in enumerate([I_scale, Q_scale, U_scale]):
+        temp = np.random.normal(loc=0.0, scale=scale, size=(lat_dim, lon_dim))
+        image[imap, :, :] = gaussian_filter(temp, sigma=(lat_fwhm, lon_fwhm))
+
+    # Basic wcs header
+    header = wcs.to_header(relax=True)
+    # Add map dimensions
+    header["NAXIS"] = image.ndim
+    for i, n in enumerate(image.shape[::-1]):
+        header[f"NAXIS{i+1}"] = n
+    # Add units
+    header["BUNIT"] = str(units)
+    hdus = af.HDUList([af.PrimaryHDU(image.astype(np.float32), header)])
+    hdus.writeto(out_file)
+    del hdus
+    del image
+
+
+def create_fake_healpix_map(
+    out_file,
+    pixel_dist,
+    fwhm=10.0 * u.arcmin,
+    lmax=256,
+    I_scale=1.0,
+    Q_scale=1.0,
+    U_scale=1.0,
+    units=u.K,
+):
+    """Create and load a healpix map into a PixelData object.
+
+    This starts from a pre-made PixelDistribution and uses that to determine
+    the Healpix NSIDE.  It then creates a map on disk and loads it into a
+    distributed PixelData object.
+
+    Args:
+        out_file (str):  The generated FITS map.
+        pixel_dist (PixelDistribution):  The pixel distribution to use.
+        fwhm (Quantity):  The beam smoothing FWHM.
+        lmax (int):  The ell_max of the expansion for smoothing.
+        I_scale (float):  The overall scaling factor of the intensity map.
+        Q_scale (float):  The overall scaling factor of the Stokes Q map.
+        U_scale (float):  The overall scaling factor of the Stokes U map.
+        units (Unit):  The map units to write to the file.
+
+    Returns:
+        (PixelData):  The distributed map.
+
+    """
+    comm = pixel_dist.comm
+    if comm is None:
+        rank = 0
+    else:
+        rank = comm.rank
+    npix = pixel_dist.n_pix
+    nside = hp.npix2nside(npix)
+    if rank == 0:
+        create_fake_healpix_file(
+            out_file,
+            nside,
+            fwhm=fwhm,
+            lmax=lmax,
+            I_scale=I_scale,
+            Q_scale=Q_scale,
+            U_scale=U_scale,
+            units=units,
+        )
+    if comm is not None:
+        comm.barrier()
+    pix = PixelData(pixel_dist, np.float64, n_value=3, units=units)
+    read_healpix_fits(pix, out_file, nest=True)
+    return pix
+
+
+def create_fake_wcs_map(
+    out_file,
+    pixel_dist,
+    wcs,
+    wcs_shape,
+    fwhm=10.0 * u.arcmin,
+    I_scale=1.0,
+    Q_scale=1.0,
+    U_scale=1.0,
+    units=u.K,
+):
+    """Create and load a WCS map into a PixelData object.
+
+    This starts from a pre-made PixelDistribution and WCS information (from,
+    for example, a PixelsWCS instance).  It then creates a map on disk and loads
+    it into a distributed PixelData object.
+
+    Args:
+        out_file (str):  The generated FITS map.
+        pixel_dist (PixelDistribution):  The pixel distribution to use.
+        wcs (astropy.wcs.WCS):  The WCS structure.
+        wcs_shape (tuple):  The image dimensions in longitude, latitude.
+        fwhm (Quantity):  The beam smoothing FWHM.
+        I_scale (float):  The overall scaling factor of the intensity map.
+        Q_scale (float):  The overall scaling factor of the Stokes Q map.
+        U_scale (float):  The overall scaling factor of the Stokes U map.
+        units (Unit):  The map units to write to the file.
+
+    Returns:
+        (PixelData):  The distributed map.
+
+    """
+    comm = pixel_dist.comm
+    if comm is None:
+        rank = 0
+    else:
+        rank = comm.rank
+    if rank == 0:
+        create_fake_wcs_file(
+            out_file,
+            wcs,
+            wcs_shape,
+            fwhm=fwhm,
+            I_scale=I_scale,
+            Q_scale=Q_scale,
+            U_scale=U_scale,
+            units=units,
+        )
+    if comm is not None:
+        comm.barrier()
+    pix = PixelData(pixel_dist, np.float64, n_value=3, units=units)
+    read_wcs_fits(pix, out_file)
+    return pix
+
+
+def create_fake_healpix_scanned_tod(
     data,
     pixel_pointing,
     stokes_weights,
-    map_vals=(1.0, 1.0, 1.0),
+    out_file,
+    pixel_dist,
+    map_key="fake_sky",
+    fwhm=10.0 * u.arcmin,
+    lmax=256,
+    I_scale=1.0,
+    Q_scale=1.0,
+    U_scale=1.0,
     det_data=defaults.det_data,
-    randomize=False,
 ):
-    """Fake sky signal with constant I/Q/U"""
-    np.random.seed(987654321)
+    """Create a fake healpix map and scan this into detector timestreams.
 
-    # Build the pixel distribution
-    build_dist = ops.BuildPixelDistribution(
-        pixel_dist="fake_map_dist",
-        pixel_pointing=pixel_pointing,
+    The pixel distribution is created if it does not exist.  The map is created
+    on disk and then loaded into a PixelData object.  The pointing expansion and
+    map scanning are pipelined so that detector pointing does not need to be stored
+    persistently.
+
+    Args:
+        data (Data):  The data container.
+        pixel_pointing (Operator):  The healpix pixelization operator.
+        stokes_weights (Operator):  The detector weights operator.
+        out_file (str):  The generated FITS map.
+        pixel_dist (PixelDistribution):  The pixel distribution to use.
+        map_key (str):  The data key to hold the generated map in memory.
+        fwhm (Quantity):  The beam smoothing FWHM.
+        lmax (int):  The ell_max of the expansion for smoothing.
+        I_scale (float):  The overall scaling factor of the intensity map.
+        Q_scale (float):  The overall scaling factor of the Stokes Q map.
+        U_scale (float):  The overall scaling factor of the Stokes U map.
+        det_data (str):  The detdata name of the output scanned signal.
+
+    Returns:
+        None
+
+    """
+    if pixel_dist not in data:
+        # Build the pixel distribution
+        build_dist = ops.BuildPixelDistribution(
+            pixel_dist=pixel_dist,
+            pixel_pointing=pixel_pointing,
+        )
+        build_dist.apply(data)
+
+    if map_key in data:
+        msg = f"Generated map '{map_key}' already exists in data"
+        raise RuntimeError(msg)
+
+    # Use detector data units for the map, if it exists.
+    first_obs = data.obs[0]
+    if det_data in first_obs.detdata:
+        units = first_obs.detdata[det_data].units
+    else:
+        units = u.K
+
+    # Create detector data if needed
+    for ob in data.obs:
+        exists = ob.detdata.ensure(
+            det_data,
+            create_units=units,
+        )
+
+    # Create and load the map
+    data[map_key] = create_fake_healpix_map(
+        out_file,
+        data[pixel_dist],
+        fwhm=fwhm,
+        lmax=lmax,
+        I_scale=I_scale,
+        Q_scale=Q_scale,
+        U_scale=U_scale,
+        units=units,
     )
-    build_dist.apply(data)
-
-    # Create a fake sky
-    map_key = "fake_map"
-    dist_key = build_dist.pixel_dist
-    dist = data[dist_key]
-    pix_data = PixelData(dist, np.float64, n_value=3, units=u.K)
-    off = 0
-    for submap in range(dist.n_submap):
-        if submap in dist.local_submaps:
-            if randomize:
-                pix_data.data[off, :, 0] = map_vals[0] * np.random.normal(
-                    size=dist.n_pix_submap
-                )
-                pix_data.data[off, :, 1] = map_vals[1] * np.random.normal(
-                    size=dist.n_pix_submap
-                )
-                pix_data.data[off, :, 2] = map_vals[2] * np.random.normal(
-                    size=dist.n_pix_submap
-                )
-            else:
-                pix_data.data[off, :, 0] = map_vals[0]
-                pix_data.data[off, :, 1] = map_vals[1]
-                pix_data.data[off, :, 2] = map_vals[2]
-            off += 1
-    data[map_key] = pix_data
 
     # Scan map into timestreams
     scanner = ops.ScanMap(
-        det_data=defaults.det_data,
+        det_data=det_data,
         pixels=pixel_pointing.pixels,
         weights=stokes_weights.weights,
         map_key=map_key,
@@ -611,7 +848,124 @@ def create_fake_sky_tod(
         ],
     )
     scan_pipe.apply(data)
-    return map_key
+
+    # Cleanup, to avoid any conflicts with the calling code.
+    for ob in data.obs:
+        for buf in [
+            pixel_pointing.pixels,
+            stokes_weights.weights,
+            pixel_pointing.detector_pointing.quats,
+        ]:
+            if buf in ob:
+                del ob[buf]
+
+
+def create_fake_wcs_scanned_tod(
+    data,
+    pixel_pointing,
+    stokes_weights,
+    out_file,
+    pixel_dist,
+    map_key="fake_sky",
+    fwhm=10.0 * u.arcmin,
+    I_scale=1.0,
+    Q_scale=1.0,
+    U_scale=1.0,
+    det_data=defaults.det_data,
+):
+    """Create a fake WCS map and scan this into detector timestreams.
+
+    The pixel distribution is created if it does not exist.  The map is created
+    on disk and then loaded into a PixelData object.  The pointing expansion and
+    map scanning are pipelined so that detector pointing does not need to be stored
+    persistently.
+
+    Args:
+        data (Data):  The data container.
+        pixel_pointing (Operator):  The healpix pixelization operator.
+        stokes_weights (Operator):  The detector weights operator.
+        out_file (str):  The generated FITS map.
+        pixel_dist (PixelDistribution):  The pixel distribution to use.
+        map_key (str):  The data key to hold the generated map in memory.
+        fwhm (Quantity):  The beam smoothing FWHM.
+        I_scale (float):  The overall scaling factor of the intensity map.
+        Q_scale (float):  The overall scaling factor of the Stokes Q map.
+        U_scale (float):  The overall scaling factor of the Stokes U map.
+        det_data (str):  The detdata name of the output scanned signal.
+
+    Returns:
+        None
+
+    """
+    if pixel_dist not in data:
+        # Build the pixel distribution
+        build_dist = ops.BuildPixelDistribution(
+            pixel_dist=pixel_dist,
+            pixel_pointing=pixel_pointing,
+        )
+        build_dist.apply(data)
+
+    if map_key in data:
+        msg = f"Generated map '{map_key}' already exists in data"
+        raise RuntimeError(msg)
+
+    # Use detector data units for the map, if it exists.
+    first_obs = data.obs[0]
+    if det_data in first_obs.detdata:
+        units = first_obs.detdata[det_data].units
+    else:
+        units = u.K
+
+    # Create detector data if needed
+    for ob in data.obs:
+        exists = ob.detdata.ensure(
+            det_data,
+            create_units=units,
+        )
+
+    # Get the WCS info from the pixel operator
+    wcs = pixel_pointing.wcs
+    wcs_shape = pixel_pointing.wcs_shape
+
+    # Create and load the map
+    data[map_key] = create_fake_wcs_map(
+        out_file,
+        data[pixel_dist],
+        wcs,
+        wcs_shape,
+        fwhm=fwhm,
+        I_scale=I_scale,
+        Q_scale=Q_scale,
+        U_scale=U_scale,
+        units=units,
+    )
+
+    # Scan map into timestreams
+    scanner = ops.ScanMap(
+        det_data=det_data,
+        pixels=pixel_pointing.pixels,
+        weights=stokes_weights.weights,
+        map_key=map_key,
+    )
+    scan_pipe = ops.Pipeline(
+        detector_sets=["SINGLE"],
+        operators=[
+            pixel_pointing,
+            stokes_weights,
+            scanner,
+        ],
+    )
+    scan_pipe.apply(data)
+
+    # Cleanup, to avoid any conflicts with the calling code.
+    for ob in data.obs:
+        for buf in [
+            pixel_pointing.pixels,
+            stokes_weights.weights,
+            pixel_pointing.detector_pointing.quats,
+        ]:
+            if buf in ob:
+                del ob[buf]
 
 
 def create_fake_mask(data, dist_key, mask_key):

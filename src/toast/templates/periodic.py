@@ -552,10 +552,12 @@ def plot(amp_file, out_root=None):
             amp_max = list(ast.literal_eval(obgrp.attrs["max"]))
             amp_incr = list(ast.literal_eval(obgrp.attrs["incr"]))
 
-            hamps = obgrp["amplitudes"]
-            hhits = obgrp["hits"]
-            hflags = obgrp["flags"]
+            hamps = np.array(obgrp["amplitudes"])
+            hhits = np.array(obgrp["hits"])
+            hflags = np.array(obgrp["flags"])
             n_bin = hamps.shape[1]
+            bad = hflags != 0
+            hamps[bad] = np.nan
 
             for idet, det in enumerate(det_list):
                 outfile = f"{out_root}_{obname}_{det}.pdf"
