@@ -576,6 +576,7 @@ class AzimuthIntervals(Operator):
         while igrp < nfgroup:
             grp = flag_groups[igrp]
             if len(grp) == 0:
+                igrp += 1
                 continue
             first = grp[0]
             last = grp[-1] + 1
