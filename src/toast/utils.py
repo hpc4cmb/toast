@@ -831,3 +831,86 @@ class SetDict(UserDict):
             if (len(v) > 0) and not all(x is None for x in v):
                 return False
         return True
+
+
+def flagged_noise_fill(data, flags, buffer, poly_order=1):
+    """Fill flagged samples with noise.
+
+    This finds contiguous flagged samples and fills each gap with a polynomial
+    trend using nearby samples plus gaussian white noise.
+
+    Args:
+        data (array):  The local data buffer to process.
+        flags (array):  The array of sample flags.
+        buffer (int):  Number of samples to use on either side of flagged regions.
+        poly_order (int):  The polynomial order to fit across the gap.
+
+    Returns:
+        None
+
+    """
+    n_samp = len(data)
+    if len(flags) != n_samp:
+        msg = "Data and flag array lengths should be the same"
+        raise RuntimeError(msg)
+
+    if buffer <= 0 or buffer > n_samp // 4:
+        msg = "The buffer size around flagged regions should be large enough"
+        msg += " to estimate nearby noise properties, but small enough to fit"
+        msg += " within the buffer"
+        raise RuntimeError(msg)
+
+    flag_indx = np.arange(n_samp, dtype=np.int64)[np.nonzero(flags)]
+    flag_groups = np.split(flag_indx, np.where(np.diff(flag_indx) != 1)[0] + 1)
+    nfgroup = len(flag_groups)
+
+    # Merge groups that are closer than the buffer length
+    groups = list()
+    igrp = 0
+    while igrp < nfgroup:
+        grp = flag_groups[igrp]
+        if len(grp) == 0:
+            igrp += 1
+            continue
+        first = grp[0]
+        last = grp[-1] + 1
+        while igrp + 1 < nfgroup and last + buffer > flag_groups[igrp + 1][0]:
+            igrp += 1
+            last = flag_groups[igrp][-1] + 1
+        groups.append((int(first), int(last)))
+        igrp += 1
+
+    for igrp, (bad_first, bad_last) in enumerate(groups):
+        full_first = bad_first - buffer
+        if full_first < 0:
+            full_first = 0
+        full_last = bad_last + buffer
+        if full_last > n_samp:
+            full_last = n_samp
+        in_fit_x = np.concatenate(
+            [
+                np.arange(full_first, bad_first),
+                np.arange(bad_last, full_last),
+            ]
+        )
+        in_fit_y = np.concatenate(
+            [
+                data[full_first:bad_first],
+                data[bad_last:full_last],
+            ]
+        )
+        fit_poly = np.polynomial.polynomial.Polynomial.fit(
+            in_fit_x, in_fit_y, poly_order
+        )
+        fit_line = fit_poly(in_fit_x)
+
+        rms = np.std(np.array(in_fit_y) - fit_line)
+
+        # Fill the gap with noise plus the fit polynomial
+        n_gap = bad_last - bad_first
+        full_fit = fit_poly(np.arange(full_first, full_last))
+
+        fit_slice = slice(bad_first - full_first, bad_first - full_first + n_gap, 1)
+        data[bad_first:bad_last] = full_fit[fit_slice] + np.random.normal(
+            scale=rms, size=n_gap
+        )

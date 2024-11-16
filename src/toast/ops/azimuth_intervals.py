@@ -16,7 +16,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
-from ..utils import Environment, Logger, rate_from_times
+from ..utils import Environment, Logger, rate_from_times, flagged_noise_fill
 from ..vis import set_matplotlib_backend
 from .flag_intervals import FlagIntervals
 from .operator import Operator
@@ -543,7 +543,7 @@ class AzimuthIntervals(Operator):
         """
         if flags is not None:
             # Fill flags with noise
-            self._fill_flagged(data, flags, window // 4)
+            flagged_noise_fill(data, flags, window // 4, poly_order=5)
         # Smooth the data
         smoothed = uniform_filter1d(
             data,
@@ -553,71 +553,6 @@ class AzimuthIntervals(Operator):
         # Derivative
         result = np.gradient(smoothed)
         return result
-
-    def _fill_flagged(self, data, flags, buffer):
-        """Fill flagged samples with noise.
-
-        Args:
-            data (array):  The local data buffer to process.
-            flags (array):  The array of sample flags.
-            buffer (int):  Number of samples to use on either side of flagged regions
-
-        Returns:
-            None
-
-        """
-        flag_indx = np.arange(len(flags), dtype=np.int64)[np.nonzero(flags)]
-        flag_groups = np.split(flag_indx, np.where(np.diff(flag_indx) != 1)[0] + 1)
-        nfgroup = len(flag_groups)
-
-        # Merge groups that are closer than the buffer length
-        groups = list()
-        igrp = 0
-        while igrp < nfgroup:
-            grp = flag_groups[igrp]
-            if len(grp) == 0:
-                igrp += 1
-                continue
-            first = grp[0]
-            last = grp[-1] + 1
-            while igrp + 1 < nfgroup and last + buffer > flag_groups[igrp + 1][0]:
-                igrp += 1
-                last = flag_groups[igrp][-1] + 1
-            groups.append((int(first), int(last)))
-            igrp += 1
-
-        for igrp, (bad_first, bad_last) in enumerate(groups):
-            full_first = bad_first - buffer
-            if full_first < 0:
-                full_first = 0
-            full_last = bad_last + buffer
-            if full_last > len(data):
-                full_last = len(data)
-            in_fit_x = np.concatenate(
-                [
-                    np.arange(full_first, bad_first),
-                    np.arange(bad_last, full_last),
-                ]
-            )
-            in_fit_y = np.concatenate(
-                [
-                    data[full_first:bad_first],
-                    data[bad_last:full_last],
-                ]
-            )
-            fit_poly = np.polynomial.polynomial.Polynomial.fit(in_fit_x, in_fit_y, 5)
-            fit_line = fit_poly(in_fit_x)
-
-            rms = np.std(np.array(in_fit_y) - fit_line)
-
-            # Fill the gap with noise plus the linear trend
-            n_gap = bad_last - bad_first
-            full_fit = fit_poly(np.arange(full_first, full_last))
-
-            fit_slice = slice(bad_first - full_first, bad_first - full_first + n_gap, 1)
-            data[bad_first:bad_last] = full_fit[fit_slice] + np.random.normal(
-                scale=rms, size=n_gap
-            )
 
     def _finalize(self, data, **kwargs):
         return
