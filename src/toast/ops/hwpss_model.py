@@ -335,12 +335,13 @@ class HWPSynchronousModel(Operator):
                     ob.detdata[self.det_data][det][good] -= dc
                 if self.fill_gaps:
                     rate = ob.telescope.focalplane.sample_rate.to_value(u.Hz)
-                    buffer = int(rate)  # approximately one second buffer on either side
+                    # 2 second buffer
+                    buffer = 2 * int(rate)
                     flagged_noise_fill(
                         ob.detdata[self.det_data][det],
                         det_flags[det],
                         buffer,
-                        poly_order=3,
+                        poly_order=1,
                     )
                 if self.relcal_continuous is not None:
                     ob.detdata[self.relcal_continuous][det, :] = cal_center / det_mag
