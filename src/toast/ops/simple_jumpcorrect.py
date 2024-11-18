@@ -100,6 +100,18 @@ class SimpleJumpCorrect(Operator):
         "the detector and time stream will be flagged as invalid.",
     )
 
+    save_jumps = Unicode(
+        None,
+        allow_none=True,
+        help="Save the jump corrections to a dictionary of values per observation",
+    )
+
+    apply_jumps = Unicode(
+        None,
+        allow_none=True,
+        help="Do not compute jumps, instead apply the specified dictionary of values",
+    )
+
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
@@ -179,7 +191,7 @@ class SimpleJumpCorrect(Operator):
 
         # Only one jump per iteration
         # And skip remaining if find more than `njump_limit` jumps
-        while (npeak > 0) and (len(peaks) <= self.njump_limit) :
+        while (npeak > 0) and (len(peaks) <= self.njump_limit):
             imax = np.argmax(np.abs(mytoi))
             amplitude = mytoi[imax]
             significance = np.abs(amplitude) / sigma
@@ -212,7 +224,7 @@ class SimpleJumpCorrect(Operator):
         sigmas = []
         nn = len(toi)
         # Ignore tol samples at the edge
-        for start in range(tol, nn - 3*tol + 1, 2*tol):
+        for start in range(tol, nn - 3 * tol + 1, 2 * tol):
             stop = start + 2 * tol
             ind = slice(start, stop)
             x = toi[ind][full_flag[ind] == 0]
@@ -239,12 +251,16 @@ class SimpleJumpCorrect(Operator):
             corrected_signal[peak:] -= amplitude
             pstart = max(0, peak - tol)
             pstop = min(nsample, peak + tol)
-            flag_out[pstart : pstop] = True
+            flag_out[pstart:pstop] = True
         return corrected_signal, flag_out
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+
+        if self.save_jumps is not None and self.apply_jumps is not None:
+            msg = "Cannot both save to and apply pre-existing jumps"
+            raise RuntimeError(msg)
 
         stepfilter = self._get_stepfilter(self.filterlen)
 
@@ -258,7 +274,11 @@ class SimpleJumpCorrect(Operator):
 
             local_dets = ob.select_local_detectors(flagmask=self.det_mask)
             shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
+            if self.save_jumps is not None:
+                jump_props = dict()
             for name in local_dets:
+                if self.save_jumps is not None:
+                    jump_dets = list()
                 sig = ob.detdata[self.det_data][name]
                 det_flags = ob.detdata[self.det_flags][name]
                 if self.reset_det_flags:
@@ -267,35 +287,48 @@ class SimpleJumpCorrect(Operator):
                     shared_flags != 0,
                     (det_flags & self.det_flag_mask) != 0,
                 )
-                for iview, view in enumerate(views):
-                    nsample = view.last - view.first + 1
-                    ind = slice(view.first, view.last + 1)
-                    sig_view = sig[ind].copy()
-                    bad_view = bad[ind]
-                    bad_view_out = bad_view.copy()
-                    sig_filtered = convolve(sig_view, stepfilter, mode="same")
-                    peaks = self._find_peaks(
-                        sig_filtered,
-                        bad_view,
-                        bad_view_out,
-                        lim=self.jump_limit,
-                        tol=self.filterlen // 2,
-                    )
-
-                    njump = len(peaks)
-                    if njump == 0:
-                        continue
-                    if njump > self.njump_limit:
-                        ob._detflags[name] |= self.det_mask
-                        det_flags[ind] |= self.det_flag_mask
-                        continue
-
+                if self.apply_jumps is not None:
                     corrected_signal, flag_out = self._remove_jumps(
-                        sig_view, bad_view, peaks, self.jump_radius
+                        sig, bad, ob[self.apply_jumps], self.jump_radius
                     )
-                    sig[ind] = corrected_signal
-                    det_flags[ind][flag_out] |= self.jump_mask
+                    sig[:] = corrected_signal
+                    det_flags[flag_out] |= self.jump_mask
+                else:
+                    for iview, view in enumerate(views):
+                        nsample = view.last - view.first + 1
+                        ind = slice(view.first, view.last + 1)
+                        sig_view = sig[ind].copy()
+                        bad_view = bad[ind]
+                        bad_view_out = bad_view.copy()
+                        sig_filtered = convolve(sig_view, stepfilter, mode="same")
+                        peaks = self._find_peaks(
+                            sig_filtered,
+                            bad_view,
+                            bad_view_out,
+                            lim=self.jump_limit,
+                            tol=self.filterlen // 2,
+                        )
+                        if self.save_jumps is not None:
+                            jump_dets.extend(
+                                [(x + view.first, y, z) for x, y, z in peaks]
+                            )
+                        njump = len(peaks)
+                        if njump == 0:
+                            continue
+                        if njump > self.njump_limit:
+                            ob._detflags[name] |= self.det_mask
+                            det_flags[ind] |= self.det_flag_mask
+                            continue
 
+                        corrected_signal, flag_out = self._remove_jumps(
+                            sig_view, bad_view, peaks, self.jump_radius
+                        )
+                        sig[ind] = corrected_signal
+                        det_flags[ind][flag_out] |= self.jump_mask
+                    if self.save_jumps is not None:
+                        jump_props[name] = jump_dets
+            if self.save_jumps is not None:
+                ob[self.save_jumps] = jump_props
         return
 
     def _finalize(self, data, **kwargs):
