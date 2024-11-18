@@ -8,6 +8,7 @@ install(FILES
     delete.py
     copy.py
     reset.py
+    fill_gaps.py
     arithmetic.py
     memory_counter.py
     simple_deglitch.py
