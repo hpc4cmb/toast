@@ -144,9 +144,9 @@ class FillGaps(Operator):
             for idet, det in enumerate(local_dets):
                 flags = np.array(shared_flags)
                 if self.det_flags is not None:
-                    flags |= ob.detdata[self.det_flags][det, :] & self.det_flag_mask
+                    flags[:] |= ob.detdata[self.det_flags][det, :] & self.det_flag_mask
                 flagged_noise_fill(
-                    ob.detdata[self.det_data],
+                    ob.detdata[self.det_data][det],
                     flags,
                     buf_samp,
                     poly_order=self.poly_order,
