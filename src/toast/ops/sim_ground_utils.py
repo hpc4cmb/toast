@@ -258,6 +258,7 @@ def oscillate_el(
                 "Cannot perform {:.2f} deg elevation oscillation in {:.2f} s "
                 "with {:.2f} deg/s^2 acceleration".format(
                     np.degrees(el_mod_amplitude * 2),
+                    t_mod,
                     np.degrees(el_accel),
                 )
             )
