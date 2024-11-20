@@ -105,10 +105,15 @@ class FlagIntervals(Operator):
             if ob.comm_col_rank == 0:
                 new_flags = np.array(ob.shared[self.shared_flags])
                 for vname, vmask in self.view_mask:
-                    views = ob.view[vname]
-                    for vw in views:
-                        # Note that a View acts like a slice
-                        new_flags[vw] |= vmask
+                    if vname in ob.intervals:
+                        views = ob.view[vname]
+                        for vw in views:
+                            # Note that a View acts like a slice
+                            new_flags[vw] |= vmask
+                    else:
+                        msg = f"Intervals '{vname}' does not exist in {ob.name}"
+                        msg += " skipping flagging"
+                        log.warning(msg)
             ob.shared[self.shared_flags].set(new_flags, offset=(0,), fromrank=0)
 
     def _finalize(self, data, **kwargs):

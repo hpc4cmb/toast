@@ -26,12 +26,14 @@ from . import io_hdf5 as test_io_hdf5
 from . import math_misc as test_math_misc
 from . import noise as test_noise
 from . import observation as test_observation
+from . import ops_azimuth_intervals as test_ops_azimuth_intervals
 from . import ops_cadence_map as test_ops_cadence_map
 from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_demodulate as test_ops_demodulate
 from . import ops_elevation_noise as test_ops_elevation_noise
 from . import ops_example_ground as test_ops_example_ground
+from . import ops_fill_gaps as test_ops_fill_gaps
 from . import ops_filterbin as test_ops_filterbin
 from . import ops_flag_sso as test_ops_flag_sso
 from . import ops_gainscrambler as test_ops_gainscrambler
@@ -183,6 +185,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_dist))
         suite.addTest(loader.loadTestsFromModule(test_config))
 
+        suite.addTest(loader.loadTestsFromModule(test_ops_azimuth_intervals))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_satellite))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_ground))
         suite.addTest(loader.loadTestsFromModule(test_ops_memory_counter))
@@ -211,6 +214,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_gainscrambler))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_gaindrifts))
         suite.addTest(loader.loadTestsFromModule(test_ops_polyfilter))
+        suite.addTest(loader.loadTestsFromModule(test_ops_fill_gaps))
         suite.addTest(loader.loadTestsFromModule(test_ops_groundfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_hwpfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_hwpss_model))

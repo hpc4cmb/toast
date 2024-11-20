@@ -19,7 +19,7 @@ from ..mpi import MPI, flatten
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
 from ..traits import Bool, Int, Quantity, Unicode, Float, trait_docs
-from ..utils import Environment, Logger
+from ..utils import Environment, Logger, flagged_noise_fill
 from .operator import Operator
 
 
@@ -126,7 +126,7 @@ class HWPSynchronousModel(Operator):
 
     time_drift = Bool(False, help="If True, include time drift terms in the model")
 
-    fill_gaps = Bool(False, help="If True, fit a simple line across gaps")
+    fill_gaps = Bool(False, help="If True, fill gaps with a simple noise model")
 
     debug = Unicode(
         None,
@@ -334,7 +334,15 @@ class HWPSynchronousModel(Operator):
                     dc = np.mean(ob.detdata[self.det_data][det][good])
                     ob.detdata[self.det_data][det][good] -= dc
                 if self.fill_gaps:
-                    self._fill_gaps(ob, det, det_flags[det])
+                    rate = ob.telescope.focalplane.sample_rate.to_value(u.Hz)
+                    # 1 second buffer
+                    buffer = int(rate)
+                    flagged_noise_fill(
+                        ob.detdata[self.det_data][det],
+                        det_flags[det],
+                        buffer,
+                        poly_order=1,
+                    )
                 if self.relcal_continuous is not None:
                     ob.detdata[self.relcal_continuous][det, :] = cal_center / det_mag
 
@@ -924,33 +932,6 @@ class HWPSynchronousModel(Operator):
         unstable = np.absolute(hvel - nominal) > 1.0e-3 * nominal
         stopped = np.array(unstable, dtype=np.uint8)
         return stopped
-
-    def _fill_gaps(self, obs, det, flags):
-        # Fill gaps with a line, just to kill large artifacts in flagged
-        # regions after removal of the HWPSS.  This is mostly just for visualization.
-        # Downstream codes should ignore these flagged samples anyway.
-        sig = obs.detdata[self.det_data][det]
-        flag_indx = np.arange(len(flags), dtype=np.int64)[np.nonzero(flags)]
-        flag_groups = np.split(flag_indx, np.where(np.diff(flag_indx) != 1)[0] + 1)
-        for grp in flag_groups:
-            if len(grp) == 0:
-                continue
-            bad_first = grp[0]
-            bad_last = grp[-1]
-            if bad_first == 0:
-                # Starting bad samples
-                sig[: bad_last + 1] = sig[bad_last + 1]
-            elif bad_last == len(flags) - 1:
-                # Ending bad samples
-                sig[bad_first:] = sig[bad_first - 1]
-            else:
-                int_first = bad_first - 1
-                int_last = bad_last + 1
-                sig[bad_first : bad_last + 1] = np.interp(
-                    np.arange(bad_first, bad_last + 1, 1, dtype=np.int32),
-                    [int_first, int_last],
-                    [sig[int_first], sig[int_last]],
-                )
 
     def _finalize(self, data, **kwargs):
         return

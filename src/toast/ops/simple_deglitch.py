@@ -17,7 +17,7 @@ from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
-from ..utils import Environment, Logger, name_UID
+from ..utils import Environment, Logger, name_UID, flagged_noise_fill
 from .operator import Operator
 
 
@@ -48,7 +48,7 @@ class SimpleDeglitch(Operator):
     )
 
     reset_det_flags = Bool(
-        True,
+        False,
         help="Replace existing detector flags",
     )
 
@@ -204,17 +204,15 @@ class SimpleDeglitch(Operator):
                         continue
                     bad_view = np.isnan(sig_view)
                     det_flags[ind][bad_view] |= self.glitch_mask
-                    if self.fill_gaps:
-                        nbad = np.sum(bad_view)
-                        corrected_signal = sig[ind].copy()
-                        corrected_signal[bad_view] = trend[bad_view]
-                        corrected_signal[bad_view] += np.random.randn(nbad) * rms
-                        # DEBUG begin
-                        # import pdb
-                        # import matplotlib.pyplot as plt
-                        # pdb.set_trace()
-                        # DEBUG end
-                        sig[ind] = corrected_signal
+                if self.fill_gaps:
+                    # 1 second buffer
+                    buffer = int(focalplane.sample_rate.to_value(u.Hz))
+                    flagged_noise_fill(
+                        sig,
+                        det_flags,
+                        buffer,
+                        poly_order=1,
+                    )
 
         return
 
