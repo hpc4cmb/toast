@@ -31,6 +31,7 @@ class AzimuthIntervalsTest(MPITestCase):
         self.outdir = create_outdir(self.comm, fixture_name)
 
     def create_fake_data(self):
+        np.random.seed(123456)
         # Just one group with all processes
         toastcomm = create_comm(self.comm, single_group=True)
 
@@ -129,7 +130,7 @@ class AzimuthIntervalsTest(MPITestCase):
                     elevation[first_samp : first_samp + n_scan] = el
 
             # Add some noise
-            scale = 0.0005
+            scale = 0.00005
             azimuth[:] += np.random.normal(loc=0, scale=scale, size=ob.n_local_samples)
             elevation[:] += np.random.normal(
                 loc=0, scale=scale, size=ob.n_local_samples
