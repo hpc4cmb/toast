@@ -372,8 +372,7 @@ class HWPModelTest(MPITestCase):
             harmonics=n_harmonics,
             relcal_fixed="calibration",
             subtract_model=True,
-            # fill_gaps=True,
-            fill_gaps=False,
+            fill_gaps=True,
             debug=debug,
         )
         hwpss_model.apply(data)
@@ -391,7 +390,7 @@ class HWPModelTest(MPITestCase):
                 good = ob.detdata[defaults.det_flags][det] == 0
                 original_rms = np.std(ob.detdata["original"][det][good])
                 filtered_rms = np.std(ob.detdata[defaults.det_data][det][good])
-                print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
+                # print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
                 self.assertTrue(filtered_rms < original_rms)
         close_data(data)
 
@@ -453,8 +452,7 @@ class HWPModelTest(MPITestCase):
             # chunk_view="scanning",
             chunk_time=60 * u.second,
             subtract_model=True,
-            # fill_gaps=True,
-            fill_gaps=False,
+            fill_gaps=True,
             debug=debug,
         )
         hwpss_model.apply(data)
@@ -477,6 +475,6 @@ class HWPModelTest(MPITestCase):
                 good = ob.detdata[defaults.det_flags][det] == 0
                 original_rms = np.std(ob.detdata["original"][det][good])
                 filtered_rms = np.std(ob.detdata[defaults.det_data][det][good])
-                print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
+                # print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
                 self.assertTrue(filtered_rms < original_rms)
         close_data(data)

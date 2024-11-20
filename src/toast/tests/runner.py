@@ -33,6 +33,7 @@ from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_demodulate as test_ops_demodulate
 from . import ops_elevation_noise as test_ops_elevation_noise
 from . import ops_example_ground as test_ops_example_ground
+from . import ops_fill_gaps as test_ops_fill_gaps
 from . import ops_filterbin as test_ops_filterbin
 from . import ops_flag_sso as test_ops_flag_sso
 from . import ops_gainscrambler as test_ops_gainscrambler
@@ -213,6 +214,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_gainscrambler))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_gaindrifts))
         suite.addTest(loader.loadTestsFromModule(test_ops_polyfilter))
+        suite.addTest(loader.loadTestsFromModule(test_ops_fill_gaps))
         suite.addTest(loader.loadTestsFromModule(test_ops_groundfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_hwpfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_hwpss_model))

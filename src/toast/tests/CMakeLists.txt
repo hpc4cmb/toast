@@ -80,5 +80,6 @@ install(FILES
     ops_loader.py
     accelerator.py
     ops_example_ground.py
+    ops_fill_gaps.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )

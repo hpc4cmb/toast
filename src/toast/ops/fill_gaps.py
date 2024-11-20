@@ -136,15 +136,20 @@ class FillGaps(Operator):
 
             # The shared flags
             if self.shared_flags is None:
-                shared_flags = np.zeros(ob.n_local_samples, dtype=np.uint8)
+                shared_flags = np.zeros(ob.n_local_samples, dtype=bool)
             else:
-                shared_flags = np.array(ob.shared[self.shared_flags].data)
-                shared_flags &= self.shared_flag_mask
+                shared_flags = (
+                    ob.shared[self.shared_flags].data & self.shared_flag_mask
+                ) != 0
 
             for idet, det in enumerate(local_dets):
-                flags = np.array(shared_flags)
-                if self.det_flags is not None:
-                    flags[:] |= ob.detdata[self.det_flags][det, :] & self.det_flag_mask
+                if self.det_flags is None:
+                    flags = shared_flags
+                else:
+                    flags = np.logical_or(
+                        shared_flags,
+                        (ob.detdata[self.det_flags][det, :] & self.det_flag_mask) != 0,
+                    )
                 flagged_noise_fill(
                     ob.detdata[self.det_data][det],
                     flags,

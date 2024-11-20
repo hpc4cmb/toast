@@ -860,7 +860,7 @@ def flagged_noise_fill(data, flags, buffer, poly_order=1):
         msg += " within the buffer"
         raise RuntimeError(msg)
 
-    flag_indx = np.arange(n_samp, dtype=np.int64)[np.nonzero(flags)]
+    flag_indx = np.arange(n_samp, dtype=np.int64)[flags != 0]
     flag_groups = np.split(flag_indx, np.where(np.diff(flag_indx) != 1)[0] + 1)
     nfgroup = len(flag_groups)
 
@@ -887,30 +887,23 @@ def flagged_noise_fill(data, flags, buffer, poly_order=1):
         full_last = bad_last + buffer
         if full_last > n_samp:
             full_last = n_samp
-        in_fit_x = np.concatenate(
-            [
-                np.arange(full_first, bad_first),
-                np.arange(bad_last, full_last),
-            ]
-        )
-        in_fit_y = np.concatenate(
-            [
-                data[full_first:bad_first],
-                data[bad_last:full_last],
-            ]
-        )
+        fit_n_samps = full_last - full_first
+        fit_samps = np.arange(fit_n_samps)
+        fit_flags = flags[full_first:full_last]
+        fit_good = fit_flags == 0
+        fit_bad = np.logical_not(fit_good)
+        in_fit_x = fit_samps[fit_good]
+        in_fit_y = data[full_first:full_last][fit_good]
         fit_poly = np.polynomial.polynomial.Polynomial.fit(
             in_fit_x, in_fit_y, poly_order
         )
-        fit_line = fit_poly(in_fit_x)
+        fit_curve = fit_poly(in_fit_x)
 
-        rms = np.std(np.array(in_fit_y) - fit_line)
+        rms = np.std(in_fit_y - fit_curve)
 
-        # Fill the gap with noise plus the fit polynomial
-        n_gap = bad_last - bad_first
-        full_fit = fit_poly(np.arange(full_first, full_last))
-
-        fit_slice = slice(bad_first - full_first, bad_first - full_first + n_gap, 1)
-        data[bad_first:bad_last] = full_fit[fit_slice] + np.random.normal(
-            scale=rms, size=n_gap
+        # Fill the gaps with noise plus the fit polynomial
+        full_fit = fit_poly(fit_samps)
+        n_bad = np.count_nonzero(fit_bad)
+        data[full_first:full_last][fit_bad] = full_fit[fit_bad] + np.random.normal(
+            scale=rms, size=n_bad
         )
