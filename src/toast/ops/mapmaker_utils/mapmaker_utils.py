@@ -441,7 +441,7 @@ class BuildInverseCovariance(Operator):
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
-
+            log.info(f"{len(dets)} detectors in observation {ob.name}, first one is {dets[0]}")
             # Check that the noise model exists
             if self.noise_model not in ob:
                 msg = "Noise model {} does not exist in observation {}".format(
@@ -454,6 +454,7 @@ class BuildInverseCovariance(Operator):
             # The pixels and weights view for this observation
             pix = ob.view[self.view].detdata[self.pixels]
             wts = ob.view[self.view].detdata[self.weights]
+            log.info(str(wts))
             if self.det_flags is not None:
                 flgs = ob.view[self.view].detdata[self.det_flags]
             else:

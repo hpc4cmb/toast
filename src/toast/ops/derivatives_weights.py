@@ -29,35 +29,20 @@ class DerivativesWeights(Operator):
     differential beam fwhm dsigma, and ellipticity dp/dc. Since we are focused
     on total intensity, there is no HWP term or detector polarisation efficiency.
 
-    If the hwp_angle field is specified, then an ideal HWP Mueller matrix is inserted
-    in the optics chain before the linear polarizer.  In this case, the fp_gamma key
-    name must be specified and each detector must have a value in the focalplane
-    table.
-
     The timestream model without a HWP in COSMO convention is:
 
     .. math::
-        d = cal \\left[I + \\frac{1 - \\epsilon}{1 + \\epsilon} \\left[Q \\cos\\left(2\\alpha\\right) + U \\sin\\left(2\\alpha\\right) \\right] \\right]
+        d = cal*I + d_\\theta I \\left[ dx\\sin\\psi - dy\\cos\\psi \\right] 
+                  + d_\\phi I \\left[ -dx\\cos\\psi - dy\\sin\\psi + (dp\\sin(2\\psi) - dc\\cos(2\\psi))\frac{\\cos\\theta}{\\sin\\theta} \\right]
+                  + d^2_\\theta I \\left[dsigma + dp\\cos(2\\psi) - dc\\sin(2\\psi)\\right]
+                  + d_\\phi d_\\theta I \\left[-2dp\\sin(2\\psi) + 2dc\\cos(2\\psi) \\right]
+                  + d^2_\\phi I \\left[\\ dsigma + dp\\cos(2\\psi) + dc\\sin(2\\psi) \\right]
 
-    When a HWP is present, we have:
-
-    .. math::
-        d = cal \\left[I + \\frac{1 - \\epsilon}{1 + \\epsilon} \\left[Q \\cos\\left(2(\\alpha - 2\\omega) \\right) - U \\sin\\left(2(\\alpha - 2\\omega) \\right) \\right] \\right]
-
-    The detector orientation angle "alpha" in COSMO convention is measured in a
-    right-handed sense from the local meridian and the HWP angle "omega" is also
-    measured from the local meridian.  The omega value can be described in terms of
-    alpha, a fixed per-detector offset gamma, and the time varying HWP angle measured
-    from the focalplane coordinate frame X-axis:
-
-    .. math::
-        \\omega = \\alpha + {\\gamma}_{HWP}(t) - {\\gamma}_{DET}
-
-    See documentation for a full treatment of this math.
+    The detector orientation angle "psi" in COSMO convention is measured in a
+    right-handed sense from the local meridian.
 
     By default, this operator uses the "COSMO" convention for Q/U.  If the "IAU" trait
-    is set to True, then resulting weights will differ by the sign of the U Stokes
-    weight.
+    is set to True, then resulting weights will differ as psi will jump around.
 
     If the view trait is not specified, then this operator will use the same data
     view as the detector pointing operator when computing the pointing matrix pixels
@@ -234,14 +219,12 @@ class DerivativesWeights(Operator):
                     accel=use_accel,
                 )
 
-            quat_indx = ob.detdata[quats_name].indices(dets)
-            weight_indx = ob.detdata[self.weights].indices(dets)
             # Do we already have pointing for all requested detectors?
             if exists:
                 # Yes
                 if data.comm.group_rank == 0:
                     msg = (
-                        f"Group {data.comm.group}, ob {ob.name}, Stokes weights "
+                        f"Group {data.comm.group}, ob {ob.name}, derivative weights "
                         f"already computed for {dets}"
                     )
                     log.verbose(msg)
