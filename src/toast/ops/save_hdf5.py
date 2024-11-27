@@ -325,7 +325,9 @@ class SaveHDF5(Operator):
                             detectors=ob.detdata[fld].detectors,
                             units=ob.detdata[fld].units,
                         )
-                        original.detdata[fld][:] = ob.detdata[fld][:].astype(np.float32)
+                        original.detdata[fld].data[:] = (
+                            ob.detdata[fld].data[:].astype(np.float32)
+                        )
                 else:
                     # Duplicate detdata
                     original = ob.duplicate(

@@ -358,9 +358,10 @@ class PolyFilter2D(Operator):
                         sample_flags *= dets_in_group
                         for isample in range(nsample):
                             if np.all(coeff[isample, igroup] == 0):
-                                temp_ob.detdata[self.det_flags][
-                                    detectors, view.first + isample
-                                ] |= sample_flags
+                                for idet, det in enumerate(detectors):
+                                    temp_ob.detdata[self.det_flags][
+                                        det, view.first + isample
+                                    ] |= sample_flags[idet]
 
                 gt.stop("Poly2D:  Update detector flags")
 

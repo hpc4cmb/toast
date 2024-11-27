@@ -49,7 +49,8 @@ def main():
             if mat is not None:
                 # this is a function timer
                 trace = mat.group(1)
-                value = float(row[7])
+                # Get the maximum time, since only some processes might be doing work
+                value = float(row[5])
                 if trace == "main":
                     # special case
                     continue
