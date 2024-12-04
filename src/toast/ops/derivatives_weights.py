@@ -237,65 +237,103 @@ class DerivativesWeights(Operator):
             qbore = ob.shared["boresight_radec"]
             nsamp = len(qbore)
             ndets = len(dets)
-            theta = np.empty((ndets, nsamp)) 
-            psi = np.empty((ndets, nsamp)) 
+            theta = np.empty(nsamp) 
+            psi = np.empty(nsamp) 
             # Get the per-detector pointing for orientation/sine theta purposes
             for idet, d in enumerate(dets):
-                theta[idet], _, psi[idet] = to_iso_angles(mult(qbore, focalplane[d]["quat"]))
+                theta, _, psi = to_iso_angles(mult(qbore, focalplane[d]["quat"]))
+                wc = np.cos(psi) 
+                wc2 = np.cos(2*psi)
+                ws = np.sin(psi)
+                ws2 = np.sin(2*psi)
+                inv_tan_theta = np.cos(theta)/np.sin(theta)
+                # Get the per-detector calibration. For now we sidestep with the Nones
+                cal = ob.telescope.focalplane[d].get("cal")
+                dx = ob.telescope.focalplane[d].get("dx")
+                dy = ob.telescope.focalplane[d].get("dy")
+                dsigma = ob.telescope.focalplane[d].get("dsigma")
+                dp = ob.telescope.focalplane[d].get("dp")
+                dc = ob.telescope.focalplane[d].get("dc") 
+                if cal is None:
+                    cal = 1.0
+                if dx is None:
+                    dx = 0.0
+                if dy is None:
+                    dy = 0.0
+                if dsigma is None:
+                    dsigma = 0.0
+                if dp is None:
+                    dp = 0.0
+                if dc is None:
+                    dc = 0.0
             
-            # Get the per-detector calibration
-            if self.cal is None:
-                cal = np.array([1.0 for x in dets], np.float64)
-            else:
-                cal = np.array([ob[self.cal][x] for x in dets], np.float64)
-            cal = np.stack([cal for _ in range(nsamp)], axis=1)
-            # Per-detector pointing error
-            if self.dx is None:
-                dx = np.array([0.0 for x in dets], np.float64)
-            else:
-                dx = np.array([ob[self.dx][x] for x in dets], np.float64)
-            if self.dy is None:
-                dy = np.array([0.0 for x in dets], np.float64)
-            else:
-                dy = np.array([ob[self.dy][x] for x in dets], np.float64)
-            dx = np.stack([dx for _ in range(nsamp)], axis=1)
-            dy = np.stack([dy for _ in range(nsamp)], axis=1)
-            #Per-detector fwhm/sigma error    
-            if self.dsigma is None:
-                dsigma = np.array([0.0 for x in dets], np.float64)
-            else:
-                dsigma = np.array([ob[self.dsigma][x] for x in dets], np.float64)
-            dsigma = np.stack([dsigma for _ in range(nsamp)], axis=1)
-            #Per-detector ellipticity
-            if self.dp is None:
-                dp = np.array([0.0 for x in dets], np.float64)
-            else:
-                dp = np.array([ob[self.dp][x] for x in dets], np.float64)
-            if self.dc is None:
-                dc = np.array([0.0 for x in dets], np.float64)
-            else:
-                dc = np.array([ob[self.dc][x] for x in dets], np.float64)
-            dp = np.stack([dp for _ in range(nsamp)], axis=1)
-            dc = np.stack([dc for _ in range(nsamp)], axis=1)
-            
-            wc = np.cos(psi) 
-            wc2 = np.cos(2*psi)
-            ws = np.sin(psi)
-            ws2 = np.sin(2*psi)
-            inv_tan_theta = np.cos(theta)/np.sin(theta)
-            
-            weights = np.empty((ndets,nsamp,self._nnz))
-            weights[:,:,0] = cal # gain error
-            weights[:,:,1] = dx * ws - dy * wc #dtheta
-            weights[:,:,2] = -dx * wc - dy * ws + (dp * ws2 - dc * wc2) * inv_tan_theta #dphi
-            if self.mode == "d2I":      
-                weights[:,:,3] = dsigma + dp * wc2 - dc * ws2 #d2theta
-                weights[:,:,4] = -2.0 * dp * ws2 + 2.0 * dc * wc2 #dphi dtheta
-                weights[:,:,5] = dsigma + dp * wc2 + dc * ws2 #dphi2
-                
-            ob.detdata[self.weights][dets,:] = weights
+                weights = np.empty((nsamp, self._nnz))
+                weights[:,0] = cal # gain error
+                weights[:,1] = dx * ws - dy * wc #dtheta
+                weights[:,2] = -dx * wc - dy * ws + (dp * ws2 - dc * wc2) * inv_tan_theta #dphi
+                if self.mode == "d2I":      
+                    weights[:,3] = dsigma + dp * wc2 - dc * ws2 #d2theta
+                    weights[:,4] = -2.0 * dp * ws2 + 2.0 * dc * wc2 #dphi dtheta
+                    weights[:,5] = dsigma + dp * wc2 + dc * ws2 #dphi2
+                ob.detdata[self.weights][d, :] = weights
+            log.info(f"{len(ob.detdata[self.weights])} items in obs {ob.name}")
             
         return
+    """
+    # Get the per-detector calibration
+    if self.cal is None:
+        cal = np.array([1.0 for x in dets], np.float64)
+    else:
+        cal = np.array([ob[self.cal][x] for x in dets], np.float64)
+    cal = np.stack([cal for _ in range(nsamp)], axis=1)
+    # Per-detector pointing error
+    if self.dx is None:
+        dx = np.array([0.0 for x in dets], np.float64)
+    else:
+        dx = np.array([ob[self.dx][x] for x in dets], np.float64)
+    if self.dy is None:
+        dy = np.array([0.0 for x in dets], np.float64)
+    else:
+        dy = np.array([ob[self.dy][x] for x in dets], np.float64)
+    dx = np.stack([dx for _ in range(nsamp)], axis=1)
+    dy = np.stack([dy for _ in range(nsamp)], axis=1)
+    #Per-detector fwhm/sigma error    
+    if self.dsigma is None:
+        dsigma = np.array([0.0 for x in dets], np.float64)
+    else:
+        dsigma = np.array([ob[self.dsigma][x] for x in dets], np.float64)
+    dsigma = np.stack([dsigma for _ in range(nsamp)], axis=1)
+    #Per-detector ellipticity
+    if self.dp is None:
+        dp = np.array([0.0 for x in dets], np.float64)
+    else:
+        dp = np.array([ob[self.dp][x] for x in dets], np.float64)
+    if self.dc is None:
+        dc = np.array([0.0 for x in dets], np.float64)
+    else:
+        dc = np.array([ob[self.dc][x] for x in dets], np.float64)
+    dp = np.stack([dp for _ in range(nsamp)], axis=1)
+    dc = np.stack([dc for _ in range(nsamp)], axis=1)
+
+    wc = np.cos(psi) 
+    wc2 = np.cos(2*psi)
+    ws = np.sin(psi)
+    ws2 = np.sin(2*psi)
+    inv_tan_theta = np.cos(theta)/np.sin(theta)
+
+    weights = np.empty((ndets,nsamp,self._nnz))
+    weights[:,:,0] = cal # gain error
+    weights[:,:,1] = dx * ws - dy * wc #dtheta
+    weights[:,:,2] = -dx * wc - dy * ws + (dp * ws2 - dc * wc2) * inv_tan_theta #dphi
+    if self.mode == "d2I":      
+        weights[:,:,3] = dsigma + dp * wc2 - dc * ws2 #d2theta
+        weights[:,:,4] = -2.0 * dp * ws2 + 2.0 * dc * wc2 #dphi dtheta
+        weights[:,:,5] = dsigma + dp * wc2 + dc * ws2 #dphi2
+
+    for idet, d in enumerate(dets):
+        ob.detdata[self.weights][d, :] = weights[idet]
+    """
+
 
     def _finalize(self, data, **kwargs):
         return

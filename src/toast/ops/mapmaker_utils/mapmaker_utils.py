@@ -454,7 +454,6 @@ class BuildInverseCovariance(Operator):
             # The pixels and weights view for this observation
             pix = ob.view[self.view].detdata[self.pixels]
             wts = ob.view[self.view].detdata[self.weights]
-            log.info(str(wts))
             if self.det_flags is not None:
                 flgs = ob.view[self.view].detdata[self.det_flags]
             else:

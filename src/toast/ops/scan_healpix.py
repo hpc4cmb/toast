@@ -230,6 +230,7 @@ class ScanHealpixMap(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
+            log.info_rank(f"scan_healpix: {len(dets)} dets in obs {ob.name}")
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
