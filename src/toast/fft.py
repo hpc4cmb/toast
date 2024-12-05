@@ -288,7 +288,7 @@ def convolve(
                 _debug_plot_tod(tdata, f"{debug}_tin_{itod}")
 
             # Forward transform
-            _ = np.fft.rfft(tdata, out=fdata, norm="backward")
+            fdata[:] = np.fft.rfft(tdata, norm="backward")
 
             if debug is not None:
                 # Plot the initial fourier domain buffer
@@ -318,7 +318,7 @@ def convolve(
                 _debug_plot_fourier(fdata, f"{debug}_fout_{itod}")
 
             # Inverse transform
-            _ = np.fft.irfft(fdata, out=tdata, norm="backward")
+            tdata[:] = np.fft.irfft(fdata, norm="backward")
 
             # Copy back to input array
             if debug is not None:
