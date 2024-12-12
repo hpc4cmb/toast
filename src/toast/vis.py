@@ -310,8 +310,10 @@ def plot_projected_quats(
 
     qdang = None
     if qdet is not None:
-        qdang = np.zeros((qdet.shape[0], 3, qdet.shape[1]), dtype=np.float64)
-        for det in range(qdet.shape[0]):
+        n_qdet = len(qdet)
+        n_samp = len(qdet[0])
+        qdang = np.zeros((n_qdet, 3, n_samp), dtype=np.float64)
+        for det in range(n_qdet):
             qdang[det, 0], qdang[det, 1], qdang[det, 2] = qa.to_lonlat_angles(qdet[det])
             qdang[det, 0] *= 180.0 / np.pi
             qdang[det, 1] *= 180.0 / np.pi

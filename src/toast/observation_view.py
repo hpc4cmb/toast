@@ -38,7 +38,8 @@ class DetDataView(MutableMapping):
             if len(value) != len(vw):
                 msg = "when assigning to a view, you must have one value or one value for each view interval"
                 raise RuntimeError(msg)
-            vw[:] = value
+            for iv, v in enumerate(vw):
+                v[:] = value[iv]
 
     def __iter__(self):
         return iter(self.slices)
@@ -62,7 +63,7 @@ class SharedView(MutableMapping):
     # Mapping methods
 
     def __getitem__(self, key):
-        vw = [self.obj.shared[key][x] for x in self.slices]
+        vw = [np.array(self.obj.shared[key].data[x], copy=False) for x in self.slices]
         return vw
 
     def __delitem__(self, key):

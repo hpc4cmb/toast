@@ -2,13 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
+
 import numpy as np
 import traitlets
 from astropy import units as u
 
 from .. import qarray as qa
 from .. import rng
-from ..fft import FFTPlanReal1DStore
+from ..fft import convolve
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
 from ..timing import function_timer
@@ -26,6 +28,12 @@ class TimeConstant(Operator):
     det_data = Unicode(
         defaults.det_data,
         help="Observation detdata key apply filtering to",
+    )
+
+    det_flags = Unicode(
+        defaults.det_flags,
+        allow_none=True,
+        help="Observation detdata key for flags to use",
     )
 
     tau = Quantity(
@@ -51,11 +59,22 @@ class TimeConstant(Operator):
         help="Detector flag mask for cutting detectors with invalid Tau values.",
     )
 
+    edge_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Sample flag mask for cutting samples at the ends due to filter effects.",
+    )
+
     batch = Bool(False, help="If True, batch all detectors and process at once")
 
     deconvolve = Bool(False, help="Deconvolve the time constant instead.")
 
     realization = Int(0, help="Realization ID, only used if tau_sigma is nonzero")
+
+    debug = Unicode(
+        None,
+        allow_none=True,
+        help="Path to directory for generating debug plots",
+    )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -95,169 +114,66 @@ class TimeConstant(Operator):
         if self.tau is None and self.tau_name is None:
             raise RuntimeError("Either tau or tau_name must be set.")
 
-        # The store of FFT plans which we will re-use for all observations
-        store = FFTPlanReal1DStore.get()
-
         for obs in data.obs:
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.tau_flag_mask)
             if len(dets) == 0:
                 continue
-            fsample = obs.telescope.focalplane.sample_rate
 
-            nsample = obs.n_local_samples
+            fsample = obs.telescope.focalplane.sample_rate.to_value(u.Hz)
 
-            # Compute the radix-2 FFT length to use
-            fftlen = 2
-            while fftlen <= 2 * nsample:
-                fftlen *= 2
-            npsd = fftlen // 2 + 1
-            npad = fftlen - nsample
-            nfirsthalf = nsample // 2
-            if nsample % 2 == 0:
-                nsecondhalf = nfirsthalf
-            else:
-                nsecondhalf = nfirsthalf + 1
+            # Get the timeconstants for all detectors
+            tau_det = dict()
+            for idet, det in enumerate(dets):
+                tau_det[idet] = self._get_tau(obs, det)
 
-            freqs = np.fft.rfftfreq(fftlen, 1 / fsample.to_value(u.Hz))
+            def _filter_kernel(indx, kfreqs):
+                """Function to generate the filter kernel on demand.
 
-            # The forward and reverse plans
-            if self.batch:
-                fplan = store.forward(fftlen, len(dets))
-                rplan = store.backward(fftlen, len(dets))
-            else:
-                fplan = store.forward(fftlen, 1)
-                rplan = store.backward(fftlen, 1)
-
-            # Temporary buffer for the imaginary terms of the filter
-            imgfilt = np.zeros(len(freqs) - 2)
-            imgsq = np.zeros(len(freqs) - 2)
-
-            def _fill_forward(fp, indx, sig):
-                """Fill the forward buffer for one detector.
-
-                To avoid boundary effects, we continue the signal with a
-                time-reversed copy of itself
+                Our complex filter kernel is:
+                    1 + j * (2 * pi * tau * freqs)
 
                 """
-                # Original signal
-                #print(f"DBG: 0:{nsample} = sig[0:{len(sig)}]")
-                fp.tdata(indx)[:nsample] = sig
-                # Continue with time-reversed second half
-                #print(f"DBG: {nsample}:{nsample+nsecondhalf} = sig[-1:{-nsecondhalf-1}]")
-                fp.tdata(indx)[nsample:nsample + nsecondhalf] = sig[:-nsecondhalf-1:-1]
-                # Pad with the center value
-                #print(f"DBG: {nsample+nsecondhalf}:{-nfirsthalf} = pad")
-                fp.tdata(indx)[nsample + nsecondhalf:-nfirsthalf] = sig[nfirsthalf]
-                # End with the time-reversed first half
-                #print(f"DBG: {-nfirsthalf}:-1 = sig[{nfirsthalf-1}:0]")
-                fp.tdata(indx)[-nfirsthalf:] = sig[nfirsthalf - 1::-1]
+                tau = tau_det[indx].to_value(u.second)
+                kernel = np.zeros(len(kfreqs), dtype=np.complex128)
+                kernel.real[:] = 1
+                kernel.imag[:] = 2.0 * np.pi * tau * kfreqs
+                return kernel
 
-            def _convolve_tau(fp, rp, indx, taudet):
-                """Multiply a single fourier domain buffer with the kernel"""
-                # Our complex filter kernel is:
-                #
-                #   1 + 2 * pi * tau * freqs
-                #
-                # So the real part is "1" and we do not need to store that.  We
-                # just need to compute the imaginary terms:
-                imgfilt[:] = 2.0 * np.pi * taudet * freqs[1:-1]
-
-                # Apply the kernel.  Here we are multiplying or dividing complex
-                # numbers.  The simplified steps here are the operations needed
-                # if one writes down the algebra and uses the fact that the real part
-                # of the filter is one.  We store the result in the fourier domain
-                # buffer of the reverse plan.
-                #
-                # If X = a + b*i, Y = c + d*i, and c == 1, then:
-                #   X * Y = (a - b*d) + (a*d + b)i
-                #   X / Y = (a + b*d) / (1 + d^2) + (b - a*d)i / (1 + d^2)
-                #
-                # Helper views that put the frequencies in the right order.  We
-                # handle the zero and Nyquist frequencies separately.
-                redata = fp.fdata(indx)[1 : npsd - 1]
-                imgdata = fp.fdata(indx)[-1 : npsd - 1 : -1]
-
-                if self.deconvolve:
-                    rp.fdata(indx)[0] = fp.fdata(indx)[0]
-                    rp.fdata(indx)[1 : npsd - 1] = redata - imgdata * imgfilt
-                    rp.fdata(indx)[npsd - 1] = fp.fdata(indx)[npsd - 1]
-                    rp.fdata(indx)[-1 : npsd - 1 : -1] = redata * imgfilt + imgdata
-                else:
-                    imgsq[:] = 1.0 / (1.0 + imgfilt * imgfilt)
-                    rp.fdata(indx)[0] = fp.fdata(indx)[0]
-                    rp.fdata(indx)[1 : npsd - 1] = (
-                        redata + imgdata * imgfilt
-                    ) * imgsq
-                    rp.fdata(indx)[npsd - 1] = fp.fdata(indx)[npsd - 1]
-                    rp.fdata(indx)[-1 : npsd - 1 : -1] = (
-                        imgdata - redata * imgfilt
-                    ) * imgsq
+            # The slice of detector data we will use
+            signal = obs.detdata[self.det_data][dets, :]
 
             if self.batch:
-                # We are processing all local detectors at once.  This allows us
-                # to thread over detectors, but require 4x the amount of detector
-                # memory.  It should only be used if running fewer processes and
-                # more threads.
-                # Fill forward buffer
-                for idet, det in enumerate(dets):
-                    signal = obs.detdata[self.det_data][det]
-                    _fill_forward(fplan, idet, signal)
-                # Execute forward transform
-                fplan.exec()
-                # Convolve with filter
-                for idet, det in enumerate(dets):
-                    tau = self._get_tau(obs, det)
-                    if np.isnan(tau):
-                        old_flag = obs.local_detector_flags[det]
-                        obs.update_local_detector_flags(
-                            {det: old_flag | self.tau_flag_mask}
-                        )
-                        continue
-                    tau_s = tau.to_value(u.s)
-                    _convolve_tau(fplan, rplan, idet, tau_s)
-                # Inverse transform
-                rplan.exec()
-                # Copy result into place
-                for idet, det in enumerate(dets):
-                    obs.detdata[self.det_data][det] = rplan.tdata(idet)[:nsample]
+                # Use the internal batched (threaded) implementation.  This
+                # is likely faster, but at the cost of memory use equal to
+                # at least 8 times the detector timestream memory for
+                # a given observation.
+                algo = "internal"
             else:
-                # Process each detector one at a time.
-                for idet, det in enumerate(dets):
-                    signal = obs.detdata[self.det_data][det]
-                    # Fill forward buffer
-                    _fill_forward(fplan, 0, signal)
-                    # Execute forward transform
-                    fplan.exec()
-                    # Convolve with filter
-                    tau = self._get_tau(obs, det)
-                    if np.isnan(tau):
-                        old_flag = obs.local_detector_flags[det]
-                        obs.update_local_detector_flags(
-                            {det: old_flag | self.tau_flag_mask}
-                        )
-                        continue
-                    tau_s = tau.to_value(u.s)
-                    _convolve_tau(fplan, rplan, 0, tau_s)
-                    # Inverse transform
-                    rplan.exec()
-                    # Copy result into place
-                    obs.detdata[self.det_data][det] = rplan.tdata(0)[:nsample]
+                # Use numpy, one detector at a time.
+                algo = "numpy"
 
-            # # Original signal
-            # fplan.tdata(idet)[:nsample] = signal
-            # # Continue with time-reversed second half
-            # fplan.tdata(idet)[nsample : nsample + nhalf] = signal[: nhalf - 1 : -1]
-            # # Pad with the center value
-            # fplan.tdata(idet)[nsample + nhalf : -nsample - nhalf] = signal[nhalf]
-            # # End with the time-reversed first half
-            # fplan.tdata(idet)[-nhalf:] = signal[nhalf - 1 :: -1]
+            if self.debug is not None:
+                debug_root = os.path.join(self.debug, f"{self.name}_{algo}")
+            else:
+                debug_root = None
 
-            # Clear the FFT plans after each observation to save memory.  This means
-            # we are just using the plan store for convenience and not re-using the
-            # allocated memory.
-            store.clear()
+            convolve(
+                signal,
+                fsample,
+                kernel_func=_filter_kernel,
+                deconvolve=self.deconvolve,
+                algorithm=algo,
+                debug=debug_root,
+            )
 
-        return
+            # Flag 5 time-constants of data at the beginning and end
+            for idet, det in enumerate(dets):
+                tau = tau_det[idet].to_value(u.second)
+                n_edge = int(5 * tau * fsample)
+                if n_edge == 0:
+                    continue
+                obs.detdata[self.det_flags][det][:n_edge] |= self.edge_flag_mask
+                obs.detdata[self.det_flags][det][-n_edge:] |= self.edge_flag_mask
 
     def _finalize(self, data, **kwargs):
         return

@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import numbers
 from collections.abc import Mapping, MutableMapping
 from typing import NamedTuple
 
@@ -102,13 +103,16 @@ class DetectorData(AcceleratorObject):
             self._allocate()
             self._is_view = False
         else:
-            # We are provided the data
-            if self._shape != view_data.shape:
-                msg = (
-                    "view data shape ({}) does not match constructor shape ({})".format(
-                        view_data.shape, self._shape
-                    )
-                )
+            # We are provided the data.  This will be a list of arrays, each of which
+            # is a view of the underlying memory.
+            if self._shape[0] != len(view_data):
+                msg = f"view data has different number of detectors ({len(view_data)})"
+                msg += f" than constructor shape ({self.shape[0]})"
+                log.error(msg)
+                raise RuntimeError(msg)
+            if self._shape[1:] != view_data[0].shape:
+                msg = f"view data sample shape ({view_data[0].shape})"
+                msg += f" does not match constructor sample shape ({self._shape[1:]})"
                 log.error(msg)
                 raise RuntimeError(msg)
             self._data = view_data
@@ -226,12 +230,18 @@ class DetectorData(AcceleratorObject):
     def data(self):
         if (not hasattr(self, "_data")) or self._data is None:
             raise RuntimeError("Cannot use DetectorData object after clearing memory")
+        if self._is_view:
+            msg = "DetectorData view is not guaranteed to be contiguous.  "
+            msg += "Use the [...] set / get pattern instead."
+            raise RuntimeError(msg)
         return self._data
 
     @property
     def flatdata(self):
         if (not hasattr(self, "_flatdata")) or self._flatdata is None:
             raise RuntimeError("Cannot use DetectorData object after clearing memory")
+        if self._is_view:
+            raise RuntimeError("DetectorData view has no flat shape")
         return self._flatdata
 
     def update_units(self, new_units):
@@ -372,18 +382,18 @@ class DetectorData(AcceleratorObject):
     def _det_axis_view(self, key):
         if isinstance(key, (int, np.integer)):
             # Just one detector by index
-            view = key
+            view = [key]
         elif isinstance(key, str):
             # Just one detector by name
-            view = self._name2idx[key]
+            view = [self._name2idx[key]]
         elif isinstance(key, slice):
             # We are slicing detectors by index
-            view = key
+            view = list(np.arange(len(self._detectors), dtype=np.int32)[key])
         else:
             # Assume that our key is at least iterable
             try:
                 test = iter(key)
-                view = tuple([self._name2idx[k] for k in key])
+                view = [self._name2idx[k] for k in key]
             except TypeError:
                 log = Logger.get()
                 msg = "Detector indexing supports slice, int, string or "
@@ -402,22 +412,35 @@ class DetectorData(AcceleratorObject):
                 raise TypeError(msg)
             view = [self._det_axis_view(key[0])]
             for k in key[1:]:
-                view.append(k)
-            # for s in range(len(self._shape) - len(key)):
-            #     view += (slice(None, None, None),)
-            return tuple(view)
+                # Convert any explicit integers into slices
+                if isinstance(k, numbers.Number):
+                    view.append(slice(k, k + 1, 1))
+                else:
+                    view.append(k)
+            for s in range(len(self._shape) - len(key)):
+                view.append(slice(None, None, None))
+            return view
         else:
             # Only detector slice
-            view = self._det_axis_view(key)
-            # for s in range(len(self._shape) - 1):
-            #     view += (slice(None, None, None),)
+            view = [self._det_axis_view(key)]
+            for s in range(len(self._shape) - 1):
+                view.append(slice(None, None, None))
             return view
 
     def __getitem__(self, key):
         if not hasattr(self, "_data"):
             raise RuntimeError("Cannot use DetectorData object after clearing memory")
         view = self._get_view(key)
-        return self._data[view]
+        # Always return a list of per-detector views, so that we can modify the
+        # underlying data if needed.
+        if len(view) > 2:
+            sample_slice = tuple(view[1:])
+        else:
+            sample_slice = (view[1],)
+        if len(view[0]) == 1:
+            return np.array(self._data[view[0][0]][sample_slice], copy=False)
+        else:
+            return [np.array(self._data[x][sample_slice], copy=False) for x in view[0]]
 
     def __delitem__(self, key):
         raise NotImplementedError("Cannot delete individual elements")
@@ -427,7 +450,20 @@ class DetectorData(AcceleratorObject):
         if not hasattr(self, "_data"):
             raise RuntimeError("Cannot use DetectorData object after clearing memory")
         view = self._get_view(key)
-        self._data[view] = value
+        if len(view) > 2:
+            sample_slice = tuple(view[1:])
+        else:
+            sample_slice = (view[1],)
+        if len(view[0]) == 1:
+            self._data[view[0][0]][sample_slice] = value
+        else:
+            if isinstance(value, numbers.Number) or len(value) == 1:
+                # This is a numerical scalar or identical array for all slices
+                for idet, detindx in enumerate(view[0]):
+                    self._data[detindx][sample_slice] = value
+            else:
+                for idet, detindx in enumerate(view[0]):
+                    self._data[detindx][sample_slice] = value[idet]
 
     def view(self, key):
         """Create a new DetectorData instance that acts as a view of the data.
@@ -443,12 +479,22 @@ class DetectorData(AcceleratorObject):
         if not hasattr(self, "_data"):
             raise RuntimeError("Cannot use DetectorData object after clearing memory")
         full_view = self._get_view(key)
-        view_dets = self.detectors[full_view[0]]
+        view_dets = [self._detectors[x] for x in full_view[0]]
+        full_detshape = tuple(self._shape[1:])
+        if len(full_view) > 2:
+            sample_slice = tuple(full_view[1:])
+        else:
+            sample_slice = (full_view[1],)
+        test = np.empty(full_detshape, dtype=bool)
+        test_view = test[sample_slice]
+        detshape = test_view.shape
         return DetectorData(
             view_dets,
-            self._data[full_view].shape[1:],
+            detshape,
             self._dtype,
-            view_data=self._data[full_view],
+            view_data=[
+                np.array(self._data[x][sample_slice], copy=False) for x in full_view[0]
+            ],
         )
 
     def __iter__(self):
@@ -468,14 +514,16 @@ class DetectorData(AcceleratorObject):
         )
         if self._shape[1] <= 4:
             for d in self._detectors:
-                vw = self.data[self._get_view(d)]
+                full_view = self._get_view(d)
+                vw = self._data[full_view[0][0]]
                 val += "\n  {} = [ ".format(d)
                 for i in range(self._shape[1]):
                     val += "{} ".format(vw[i])
                 val += "]"
         else:
             for d in self._detectors:
-                vw = self.data[self._get_view(d)]
+                full_view = self._get_view(d)
+                vw = self._data[full_view[0][0]]
                 val += "\n  {} = [ {} {} ... {} {} ]".format(
                     d, vw[0], vw[1], vw[-2], vw[-1]
                 )
