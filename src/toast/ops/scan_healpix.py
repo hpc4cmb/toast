@@ -230,7 +230,6 @@ class ScanHealpixMap(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-            log.info_rank(f"scan_healpix: {len(dets)} dets in obs {ob.name}")
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -242,15 +241,15 @@ class ScanHealpixMap(Operator):
 
         # Configure the low-level map scanning operator
         if self.derivatives_weights.enabled:
-            weights = self.derivatives_weights
+            weights_operator = self.derivatives_weights
         else:
-            weights = self.stokes_weights
+            weights_operator = self.stokes_weights
         scanner = ScanMap(
             det_data=self.det_data_keys[0],
             det_data_units=self.det_data_units,
             det_mask=self.det_mask,
             pixels=self.pixel_pointing.pixels,
-            weights=weights.weights,
+            weights=weights_operator.weights,
             map_key=self.map_names[0],
             subtract=self.subtract,
             zero=self.zero,
@@ -259,7 +258,7 @@ class ScanHealpixMap(Operator):
         # Build and run a pipeline that scans from our map
         scan_pipe = Pipeline(
             detector_sets=["SINGLE"],
-            operators=[self.pixel_pointing, weights, scanner],
+            operators=[self.pixel_pointing, weights_operator, scanner],
         )
 
         for imap, map_name in enumerate(self.map_names):

@@ -276,8 +276,6 @@ class DerivativesWeights(Operator):
                     weights[:,4] = -2.0 * dp * ws2 + 2.0 * dc * wc2 #dphi dtheta
                     weights[:,5] = dsigma + dp * wc2 + dc * ws2 #dphi2
                 ob.detdata[self.weights][d, :] = weights
-            log.info(f"{len(ob.detdata[self.weights])} items in obs {ob.name}")
-            
         return
     """
     # Get the per-detector calibration
