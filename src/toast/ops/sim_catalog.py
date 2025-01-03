@@ -8,31 +8,42 @@
 # Copyright (c) 2018-2024 Simons Observatory.
 # Full license can be found in the top level "LICENSE" file.
 
-import h5py
 import os
-import pickle
 
-from astropy import units as u
-import ephem
+import h5py
 import healpy as hp
 import numpy as np
-from scipy.constants import h, c, k
-from scipy.interpolate import RectBivariateSpline
-from scipy.signal import fftconvolve
 import toml
 import traitlets
+from astropy.stats import gaussian_fwhm_to_sigma
+from astropy import units as u
+from scipy.constants import c, h, k
+from scipy.interpolate import RectBivariateSpline
+from scipy.signal import fftconvolve
 
-import toast
-from toast.timing import function_timer, Timer
-from toast import qarray as qa
-from toast.data import Data
-from toast.traits import (
-    trait_docs, Int, Unicode, Unit, Bool, Quantity, Float, Instance
-)
-from toast.ops.operator import Operator
-from toast.utils import Environment, Logger
-from toast.observation import default_values as defaults
-from toast.coordinates import azel_to_radec, to_JD, to_MJD, to_DJD
+from .. import qarray as qa
+from ..coordinates import azel_to_radec, to_DJD, to_JD, to_MJD
+from ..data import Data
+from ..observation import default_values as defaults
+from ..timing import Timer, function_timer
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
+from ..utils import Environment, Logger, unit_conversion
+from .operator import Operator
+
+
+# Only the following keys will be parsed in the source catalog.
+# Not all are required
+
+SUPPORTED_KEYS = [
+    "ra_deg",
+    "dec_deg",
+    "freqs_ghz",
+    "flux_density_Jy",
+    "flux_density_mJy",
+    "times_mjd",
+    "pol_frac",
+    "pol_angle_deg",
+]
 
 
 @trait_docs
@@ -125,6 +136,11 @@ class SimCatalog(Operator):
         help="Observation detdata key for simulated signal",
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     det_data_units = Unit(
         defaults.det_data_units, help="Output units if creating detector data"
     )
@@ -134,6 +150,13 @@ class SimCatalog(Operator):
         allow_none=True,
         help="Operator that translates boresight Az/El pointing into detector frame",
     )
+
+    @traitlets.validate("det_mask")
+    def _check_det_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Det mask should be a positive integer")
+        return check
 
     @traitlets.validate("catalog_file")
     def _check_catalog_file(self, proposal):
@@ -174,9 +197,35 @@ class SimCatalog(Operator):
 
     @function_timer
     def _load_catalog(self):
+        log = Logger.get()
         # Load the TOML into a dictionary
         with open(self.catalog_file, "r") as f:
             self.catalog = toml.loads(f.read())
+        # Check that the necessary keys are defined for every source
+        for source_name, source_dict in self.catalog.items():
+            for key in ["ra_deg", "dec_deg", "freqs_ghz"]:
+                if key not in source_dict:
+                    msg = f"Catalog parsing error: '{source_name}' " \
+                        f"in '{self.catalog_file}' does not define '{key}'"
+                    raise RuntimeError(msg)
+            key1 = "flux_density_Jy"
+            key2 = "flux_density_mJy"
+            if key1 in source_dict and key2 in source_dict:
+                msg = f"Catalog parsing error: '{source_name}' " \
+                    f"in '{self.catalog_file}' defines both " \
+                    f"'{key1}' and '{key2}'"
+                raise RuntimeError(msg)
+            if key1 not in source_dict and key2 not in source_dict:
+                msg = f"Catalog parsing error: '{source_name}' " \
+                    f"in '{self.catalog_file}' does not define " \
+                    f"'{key1}' or '{key2}'"
+                raise RuntimeError(msg)
+        # Extra keys are allowed but produce warnings
+        for source_name, source_dict in self.catalog.items():
+            if key not in SUPPORTED_KEYS:
+                msg = f"WARNING: '{source_name}' entry to '{self.catalog_file}'" \
+                    f"contains an unsupported key: '{key}'"
+                log.warning(msg)
         # Translate each source position into a vector for rapid
         # distance calculations
         for source_name, source_dict in self.catalog.items():
@@ -212,12 +261,12 @@ class SimCatalog(Operator):
             # Make sure detector data output exists.  If not, create it
             # with units of Kelvin.
 
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             exists = obs.detdata.ensure(
                 self.det_data, detectors=dets, create_units=self.det_data_units
             )
             det_units = obs.detdata[self.det_data].units
-            scale = toast.utils.unit_conversion(u.K, det_units)
+            scale = unit_conversion(u.K, det_units)
 
             self._observe_catalog(
                 data,
@@ -244,18 +293,31 @@ class SimCatalog(Operator):
         else:
             if self.beam_file is None:
                 # Use the FWHM to generate a beam dictionary
-                pass
+                fwhm = focalplane[det]["fwhm"]
+                sigma = fwhm * gaussian_fwhm_to_sigma
+                w = 2 * fwhm
+                n = 101  # Should be odd to include origin
+                x = np.linspace(-w, w, n)
+                y = np.linspace(-w, w, n)
+                X, Y = np.meshgrid(x, y)
+                model = np.exp(-(X**2 + Y**2) / (2*sigma**2)).to_value()
+                beam_dict = {
+                    "data" : model,
+                    "size" : 2 * w,
+                    "npix" : n,
+                    "res" : 2 * w / (n - 1),
+                }
             else:
-                with h5py.File(self.beam_file, 'r') as f:
+                with h5py.File(self.beam_file, "r") as f:
                     beam_dict = {}
                     beam_dict["data"] = f["beam"][:]
                     beam_dict["size"] = f["beam"].attrs["size"] * u.degree
                     beam_dict["res"] = f["beam"].attrs["res"] * u.degree
                     beam_dict["npix"] = f["beam"].attrs["npix"]
                     self.beam_props["ALL"] = beam_dict
+
         model = beam_dict["data"].copy()
         model /= np.amax(model)
-        beam_solid_angle = np.sum(model) * beam_dict["res"]**2
 
         # DEBUG begin
         # These commands add a tail to the beam that points towards the horizon
@@ -268,9 +330,16 @@ class SimCatalog(Operator):
         w = beam_dict["size"].to_value(u.rad) / 2
         n = beam_dict["npix"]
         x = np.linspace(-w, w, n)
-        y = np.linspace(-w, w, n)
-        beam = RectBivariateSpline(x, y, model)
+        beam = RectBivariateSpline(x, x, model)
+        # Farthest distance (corner) where beam data is available
         r = np.sqrt(w**2 + w**2)
+
+        # Measure the solid angle using the interpolator
+
+        x = np.linspace(-w, w, 10 * n + 1)
+        dx = (x[1] - x[0]) * u.rad
+        beam_solid_angle = np.sum(beam(x, x)) * dx**2
+
         return beam, r, beam_solid_angle
 
     @function_timer
@@ -304,18 +373,29 @@ class SimCatalog(Operator):
             signal = obs.detdata[self.det_data][det]
 
             self.detector_pointing.apply(obs_data, detectors=[det])
-            det_quat = obs_data.obs[0].detdata[self.detector_pointing.quats][det]
+            try:
+                det_quat = obs_data.obs[0].detdata[self.detector_pointing.quats][det]
+            except:
+                import pdb
+                pdb.set_trace()
 
             # Convert Az/El quaternion of the detector into angles
             # `psi` includes the rotation to the detector polarization
-            #sensitive direction
+            # sensitive direction
 
             det_theta, det_phi, det_psi = qa.to_iso_angles(det_quat)
             det_vec = hp.dir2vec(det_theta, det_phi).T.copy()
-            det_psi_pol = focalplane[det]["pol_ang"]
+            try:
+                det_psi_pol = focalplane[det]["pol_angle"]
+            except KeyError:
+                det_psi_pol = focalplane[det]["pol_ang"]
 
+            # For now, we use the first detector's beam for all detectors.
+            # Will be revisited when more refined beam products become available
             if beam is None or not "ALL" in self.beam_props:
-                beam, beam_radius, beam_solid_angle = self._get_beam_map(det, focalplane)
+                beam, beam_radius, beam_solid_angle = self._get_beam_map(
+                    det, focalplane
+                )
             dp_radius = np.cos(beam_radius)
 
             for source_name, source_dict in self.catalog.items():
@@ -341,8 +421,7 @@ class SimCatalog(Operator):
                         continue
                     ind = ind[hit]
                     lengths = source_times[ind] - source_times[ind - 1]
-                    right_weights = (source_times[ind] - times_mjd[hit]) \
-                                    / lengths
+                    right_weights = (source_times[ind] - times_mjd[hit]) / lengths
                     left_weights = 1 - right_weights
                     # useful shorthands
                     freq = np.array(source_dict["freqs_ghz"]) * u.GHz
@@ -365,35 +444,34 @@ class SimCatalog(Operator):
                         # Interpolate the SED to the detector central frequency
                         # in log-log domain where power-law spectra are
                         # linear
-                        amp = np.exp(np.interp(
+                        amp = np.exp(
+                            np.interp(
                                 np.log(cfreq.to_value(u.GHz)),
                                 np.log(freq.to_value(u.GHz)),
-                                np.log(sed.to_value(u.Jy))
-                        ))
+                                np.log(sed.to_value(u.Jy)),
+                            )
+                        )
                         amplitudes.append(amp)
                     amplitudes = np.array(amplitudes)
                     # This is the time-dependent amplitude relative to
                     # sed_mean
                     amplitude = (
-                        left_weights * amplitudes[ind - 1] +
-                        right_weights * amplitudes[ind]
+                        left_weights * amplitudes[ind - 1]
+                        + right_weights * amplitudes[ind]
                     )
-                    amplitude /=  (
-                        wleft * amplitudes[cindex - 1] +
-                        wright * amplitudes[cindex]
+                    amplitude /= (
+                        wleft * amplitudes[cindex - 1] + wright * amplitudes[cindex]
                     )
                     if "pol_frac" in source_dict:
                         pol_fracs = np.array(source_dict["pol_frac"])
                         pol_frac = (
-                            left_weights * pol_fracs[ind - 1] +
-                            right_weights * pol_fracs[ind]
+                            left_weights * pol_fracs[ind - 1]
+                            + right_weights * pol_fracs[ind]
                         )
-                        pol_angles = np.unwrap(
-                            np.radians(source_dict["pol_angle_deg"])
-                        )
+                        pol_angles = np.unwrap(np.radians(source_dict["pol_angle_deg"]))
                         pol_angle = np.array(
-                            left_weights * pol_angles[ind - 1] +
-                            right_weights * pol_angles[ind]
+                            left_weights * pol_angles[ind - 1]
+                            + right_weights * pol_angles[ind]
                         )
                     else:
                         pol_frac = None
@@ -405,6 +483,8 @@ class SimCatalog(Operator):
                     elif "flux_density_mJy" in source_dict:
                         sed_mean = np.array(source_dict["flux_density_mJy"]) * u.mJy
                     else:
+                        import pdb
+                        pdb.set_trace()
                         msg = f"No flux density for {source_name}"
                         raise RuntimeError(msg)
                     if "pol_frac" in source_dict:
@@ -414,7 +494,7 @@ class SimCatalog(Operator):
                         pol_frac = None
                         pol_angle = None
                     amplitude = 1
-                    
+
                 # Convolve the SED with the detector bandpass
                 flux_density = bandpass.convolve(
                     det,
@@ -438,7 +518,7 @@ class SimCatalog(Operator):
                     U = temperature * pol_frac * np.sin(2 * pol_angle)
                     psi = det_psi[hit]
                     if hwp_angle is not None:
-                        psi +=  2 * hwp_angle[hit]
+                        psi += 2 * hwp_angle[hit]
                     temperature += Q * np.cos(2 * psi) + U * np.sin(2 * psi)
 
                 # Interpolate the beam map at appropriate locations
