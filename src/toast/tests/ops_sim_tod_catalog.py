@@ -10,6 +10,7 @@ import numpy as np
 from astropy import units as u
 
 from .. import ops as ops
+from ..observation import default_values as defaults
 from ..vis import set_matplotlib_backend
 from ._helpers import (
     close_data,
@@ -17,6 +18,7 @@ from ._helpers import (
     create_ground_data,
 )
 from .mpi import MPITestCase
+
 
 class SimCatalogTest(MPITestCase):
     def setUp(self):
@@ -35,41 +37,44 @@ class SimCatalogTest(MPITestCase):
 
             # Example static source
             catalog["static_source"] = {
-                "ra_deg" : 41,
-                "dec_deg" : -41,
-                "freqs_ghz" : [1., 1000.],
-                "flux_density_Jy" : [10., 1.],
-                "pol_frac" : 0.1,
-                "pol_angle_deg" : 0,
+                "ra_deg": 41,
+                "dec_deg": -41,
+                "freqs_ghz": [1.0, 1000.0],
+                "flux_density_Jy": [10.0, 1.0],
+                "pol_frac": 0.1,
+                "pol_angle_deg": 0,
             }
 
             # Example variable source
             # (the operator will not extrapolate)
             catalog["variable_source"] = {
-                "ra_deg" : 41,
-                "dec_deg" : -43,
-                "freqs_ghz" : [1., 1000.],
-                "flux_density_Jy" : [
-                    [10., 1.],
-                    [30., 10.],
-                    [10., 1.],
+                "ra_deg": 41,
+                "dec_deg": -43,
+                "freqs_ghz": [1.0, 1000.0],
+                "flux_density_Jy": [
+                    [10.0, 1.0],
+                    [30.0, 10.0],
+                    [10.0, 1.0],
                 ],
-                "times_mjd" : [58800., 58850., 58900.],
-                "pol_frac" : [0.05, 0.15, 0.05],
-                "pol_angle_deg" : [45, 45, 45],
+                "times_mjd": [58800.0, 58850.0, 58900.0],
+                "pol_frac": [0.05, 0.15, 0.05],
+                "pol_angle_deg": [45, 45, 45],
             }
 
             # Example transient source
             # (the operator will not extrapolate outside times_mjd)
             catalog["transient_source"] = {
-                "ra_deg" : 43,
-                "dec_deg" : -43,
-                "freqs_ghz" : [1., 1000.],
-                "flux_density_Jy" : [
-                    [10., 1.],
-                    [30., 10.],
+                "ra_deg": 43,
+                "dec_deg": -43,
+                "freqs_ghz": [1.0, 1000.0],
+                "flux_density_Jy": [
+                    [10.0, 1.0],
+                    [30.0, 10.0],
                 ],
-                "times_mjd" : [58849., 58850.,],
+                "times_mjd": [
+                    58849.0,
+                    58850.0,
+                ],
             }
 
             with open(self.catalog_file, "w") as f:
@@ -83,7 +88,7 @@ class SimCatalogTest(MPITestCase):
     def test_sim_catalog(self):
         # Create a fake ground data set for testing.  It targets a small patch at
         # RA = [40, 44], Dec = [-44, -40]
-        data = create_ground_data(self.comm, turnarounds_invalid=True)
+        data = create_ground_data(self.comm, turnarounds_invalid=True, hwp_rpm=0)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -91,7 +96,7 @@ class SimCatalogTest(MPITestCase):
 
         # Create some detector pointing matrices
 
-        nside = 512
+        nside = 1024
 
         detpointing = ops.PointingDetectorSimple()
         pixels = ops.PixelsHealpix(
@@ -102,6 +107,7 @@ class SimCatalogTest(MPITestCase):
         weights = ops.StokesWeights(
             mode="IQU",
             detector_pointing=detpointing,
+            hwp_angle=defaults.hwp_angle,
         )
 
         # Simulate point sources
@@ -145,7 +151,9 @@ class SimCatalogTest(MPITestCase):
             nrow, ncol = 1, 3
             fig = plt.figure(figsize=[6 * ncol, 4 * nrow])
             for i, mm in enumerate(np.atleast_2d(m)):
-                hp.mollview(mm, sub=[nrow, ncol, 1 + i])
+                hp.gnomview(
+                    mm, sub=[nrow, ncol, 1 + i], rot=[42, -42], xsize=800, reso=0.5
+                )
 
             outfile = os.path.join(self.outdir, "map.png")
             fig.savefig(outfile)

@@ -205,26 +205,34 @@ class SimCatalog(Operator):
         for source_name, source_dict in self.catalog.items():
             for key in ["ra_deg", "dec_deg", "freqs_ghz"]:
                 if key not in source_dict:
-                    msg = f"Catalog parsing error: '{source_name}' " \
+                    msg = (
+                        f"Catalog parsing error: '{source_name}' "
                         f"in '{self.catalog_file}' does not define '{key}'"
+                    )
                     raise RuntimeError(msg)
             key1 = "flux_density_Jy"
             key2 = "flux_density_mJy"
             if key1 in source_dict and key2 in source_dict:
-                msg = f"Catalog parsing error: '{source_name}' " \
-                    f"in '{self.catalog_file}' defines both " \
+                msg = (
+                    f"Catalog parsing error: '{source_name}' "
+                    f"in '{self.catalog_file}' defines both "
                     f"'{key1}' and '{key2}'"
+                )
                 raise RuntimeError(msg)
             if key1 not in source_dict and key2 not in source_dict:
-                msg = f"Catalog parsing error: '{source_name}' " \
-                    f"in '{self.catalog_file}' does not define " \
+                msg = (
+                    f"Catalog parsing error: '{source_name}' "
+                    f"in '{self.catalog_file}' does not define "
                     f"'{key1}' or '{key2}'"
+                )
                 raise RuntimeError(msg)
         # Extra keys are allowed but produce warnings
         for source_name, source_dict in self.catalog.items():
             if key not in SUPPORTED_KEYS:
-                msg = f"WARNING: '{source_name}' entry to '{self.catalog_file}'" \
+                msg = (
+                    f"WARNING: '{source_name}' entry to '{self.catalog_file}'"
                     f"contains an unsupported key: '{key}'"
+                )
                 log.warning(msg)
         # Translate each source position into a vector for rapid
         # distance calculations
@@ -300,12 +308,12 @@ class SimCatalog(Operator):
                 x = np.linspace(-w, w, n)
                 y = np.linspace(-w, w, n)
                 X, Y = np.meshgrid(x, y)
-                model = np.exp(-(X**2 + Y**2) / (2*sigma**2)).to_value()
+                model = np.exp(-(X**2 + Y**2) / (2 * sigma**2)).to_value()
                 beam_dict = {
-                    "data" : model,
-                    "size" : 2 * w,
-                    "npix" : n,
-                    "res" : 2 * w / (n - 1),
+                    "data": model,
+                    "size": 2 * w,
+                    "npix": n,
+                    "res": 2 * w / (n - 1),
                 }
             else:
                 with h5py.File(self.beam_file, "r") as f:
@@ -377,6 +385,7 @@ class SimCatalog(Operator):
                 det_quat = obs_data.obs[0].detdata[self.detector_pointing.quats][det]
             except:
                 import pdb
+
                 pdb.set_trace()
 
             # Convert Az/El quaternion of the detector into angles
@@ -389,6 +398,11 @@ class SimCatalog(Operator):
                 det_psi_pol = focalplane[det]["pol_angle"]
             except KeyError:
                 det_psi_pol = focalplane[det]["pol_ang"]
+            # gamma angle is required when dealing with a HWP
+            if hwp_angle is not None:
+                det_gamma = focalplane[det]["gamma"]
+            else:
+                det_gamma = None
 
             # For now, we use the first detector's beam for all detectors.
             # Will be revisited when more refined beam products become available
@@ -484,6 +498,7 @@ class SimCatalog(Operator):
                         sed_mean = np.array(source_dict["flux_density_mJy"]) * u.mJy
                     else:
                         import pdb
+
                         pdb.set_trace()
                         msg = f"No flux density for {source_name}"
                         raise RuntimeError(msg)
@@ -518,8 +533,12 @@ class SimCatalog(Operator):
                     U = temperature * pol_frac * np.sin(2 * pol_angle)
                     psi = det_psi[hit]
                     if hwp_angle is not None:
-                        psi += 2 * hwp_angle[hit]
-                    temperature += Q * np.cos(2 * psi) + U * np.sin(2 * psi)
+                        psi = 2 * (det_gamma.to_value(u.rad) - hwp_angle[hit]) - psi
+                        # COSMO convention, note the sign for U
+                        temperature += Q * np.cos(2 * psi) - U * np.sin(2 * psi)
+                    else:
+                        # COSMO convention, note the sign for U
+                        temperature += Q * np.cos(2 * psi) + U * np.sin(2 * psi)
 
                 # Interpolate the beam map at appropriate locations
                 source_theta = np.radians(90 - source_dict["dec_deg"])
