@@ -464,7 +464,7 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
     if ops.sim_catalog.enabled:
         ops.sim_catalog.detector_pointing = ops.det_pointing_radec
         log.info_rank("  Simulating point sources", comm=world_comm)
-        ops_sim_catalog.apply(data)
+        ops.sim_catalog.apply(data)
         log.info_rank("  Simulated point sources in", comm=world_comm, timer=timer)
 
     # Simulate sky signal from a map.  We scan the sky with the "final" pointing model
