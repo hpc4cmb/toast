@@ -887,6 +887,7 @@ def attempt_scan(
     """Attempt scanning the visible patches in order until success."""
     log = Logger.get()
     success = False
+    el = None
     # Always begin by attempting full scans.  If none can be completed
     # and user allowed partials scans, try them next.
     for allow_partial_scans in False, True:
@@ -1013,6 +1014,9 @@ def attempt_scan(
                 break
         if success:
             break
+    if t is None:
+        import pdb
+        pdb.set_trace()
     return success, t, el
 
 
