@@ -1014,9 +1014,6 @@ def attempt_scan(
                 break
         if success:
             break
-    if t is None:
-        import pdb
-        pdb.set_trace()
     return success, t, el
 
 
