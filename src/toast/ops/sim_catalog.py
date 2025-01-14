@@ -142,7 +142,7 @@ class SimCatalog(Operator):
     detector_pointing = Instance(
         klass=Operator,
         allow_none=True,
-        help="Operator that translates boresight Az/El pointing into detector frame",
+        help="Operator that translates boresight RA/Dec pointing into detector frame",
     )
 
     @traitlets.validate("det_mask")
@@ -375,14 +375,9 @@ class SimCatalog(Operator):
             signal = obs.detdata[self.det_data][det]
 
             self.detector_pointing.apply(obs_data, detectors=[det])
-            try:
-                det_quat = obs_data.obs[0].detdata[self.detector_pointing.quats][det]
-            except:
-                import pdb
+            det_quat = obs.detdata[self.detector_pointing.quats][det]
 
-                pdb.set_trace()
-
-            # Convert Az/El quaternion of the detector into angles
+            # Convert RA/Dec quaternion of the detector into angles
             # `psi` includes the rotation to the detector polarization
             # sensitive direction
 
