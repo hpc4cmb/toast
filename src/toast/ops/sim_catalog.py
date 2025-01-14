@@ -2,12 +2,6 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-# This operator is based on a Simons Observatory source file,
-# https://github.com/simonsobs/sotodlib/blob/master/sotodlib/toast/ops/sim_catalog.py
-
-# Copyright (c) 2018-2024 Simons Observatory.
-# Full license can be found in the top level "LICENSE" file.
-
 import os
 
 import h5py
