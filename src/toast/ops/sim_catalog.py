@@ -486,9 +486,6 @@ class SimCatalog(Operator):
                     elif "flux_density_mJy" in source_dict:
                         sed_mean = np.array(source_dict["flux_density_mJy"]) * u.mJy
                     else:
-                        import pdb
-
-                        pdb.set_trace()
                         msg = f"No flux density for {source_name}"
                         raise RuntimeError(msg)
                     if "pol_frac" in source_dict:
