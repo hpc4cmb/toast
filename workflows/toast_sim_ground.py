@@ -460,6 +460,13 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
     if ops.sim_atmosphere.cache_only:
         return data
 
+    # Simulate signal from static, variable and transient point sources
+    if ops.sim_catalog.enabled:
+        ops.sim_catalog.detector_pointing = ops.det_pointing_radec
+        log.info_rank("  Simulating point sources", comm=world_comm)
+        ops.sim_catalog.apply(data)
+        log.info_rank("  Simulated point sources in", comm=world_comm, timer=timer)
+
     # Simulate sky signal from a map.  We scan the sky with the "final" pointing model
     # in case that is different from the solver pointing model.
 
@@ -910,6 +917,7 @@ def main():
         toast.ops.ScanHealpixMap(name="scan_healpix_map", enabled=False),
         toast.ops.ScanWCSMap(name="scan_wcs_map", enabled=False),
         toast.ops.SimAtmosphere(name="sim_atmosphere"),
+        toast.ops.SimCatalog(name="sim_catalog", enabled=False),
         toast.ops.SimScanSynchronousSignal(name="sim_sss", enabled=False),
         toast.ops.TimeConstant(
             name="convolve_time_constant", deconvolve=False, enabled=False

@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -56,6 +56,7 @@ from .scan_healpix import ScanHealpixMap, ScanHealpixMask
 from .scan_map import ScanMap, ScanMask, ScanScale
 from .scan_wcs import ScanWCSMap, ScanWCSMask
 from .signal_diff_noise_model import SignalDiffNoiseModel
+from .sim_catalog import SimCatalog
 from .sim_cosmic_rays import InjectCosmicRays
 from .sim_crosstalk import CrossTalk, MitigateCrossTalk
 from .sim_gaindrifts import GainDrifter

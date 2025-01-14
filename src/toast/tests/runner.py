@@ -59,6 +59,7 @@ from . import ops_scan_healpix as test_ops_scan_healpix
 from . import ops_scan_map as test_ops_scan_map
 from . import ops_scan_wcs as test_ops_scan_wcs
 from . import ops_signal_diff_noise as test_ops_signal_diff_noise
+from . import ops_sim_tod_catalog as test_ops_sim_tod_catalog
 from . import ops_sim_cosmic_rays as test_ops_sim_cosmic_rays
 from . import ops_sim_crosstalk as test_ops_sim_crosstalk
 from . import ops_sim_gaindrifts as test_ops_sim_gaindrifts
@@ -219,6 +220,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_hwpfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_hwpss_model))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_crosstalk))
+        suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_catalog))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_cosmic_rays))
         suite.addTest(loader.loadTestsFromModule(test_ops_time_constant))
         suite.addTest(loader.loadTestsFromModule(test_ops_pixels_healpix))
