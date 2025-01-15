@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -760,6 +760,135 @@ class SiderealPatch(HorizontalPatch):
         return in_view, msg
 
 
+class MaxDepthPatch(Patch):
+    elevations = None
+
+    def __init__(
+        self,
+        name,
+        weight,
+        center,
+        radius,
+        throw,
+        scantime,
+        el_min=0,
+        el_max=np.pi / 2,
+        el_step=0,
+        alternate=False,
+        site_lat=0,
+        area=None,
+        elevations=None,
+    ):
+        self.name = name
+        self.weight = weight
+        self.center = center
+        self.radius = radius
+        self.throw = throw
+        self.scantime = scantime
+        self.el_min = el_min
+        self.el_max = el_max
+        """
+        self.el_min0 = el_min
+        self.el_max0 = el_max
+        self.el_step = np.abs(el_step)
+        self.alternate = alternate
+        self._area = area
+        self.site_lat = site_lat
+        # Use the site latitude to infer the lowest elevation that all
+        # corners cross.
+        site_el_max = np.pi / 2
+        for corner in corners:
+            el_max = np.pi / 2 - np.abs(corner._dec - self.site_lat)
+            if el_max < site_el_max:
+                site_el_max = el_max
+        self.parse_elevations(elevations, site_el_max)
+        if el_step != 0:
+            self.nstep_el = int((self.el_max0 - self.el_min0 + 1e-3) // el_step) + 1
+        self.el_max = self.el_max0
+        self.el_lim = self.el_min0
+        self.step_azel()
+        """
+        return
+
+    #def parse_elevations(self, elevations, site_el_max=np.pi / 2):
+    #    pass
+
+    #def oscillate(self):
+    #    pass
+
+    def get_area(self, observer, nside=32, equalize=False):
+        return 1
+
+    def corner_coordinates(self, observer, unwind=False):
+        #   - return the default az range
+        #   - centered on the patch
+        #   - elevation as close as possible to the center.
+        #  sets self.az_min, self.az_max
+        self.update(observer)
+        azs = [self.az_min, self.az_max]
+        els = [self.el, self.el]
+        return np.array(azs), np.array(els)
+
+    def in_patch(self, obj):
+        return False
+
+    def step_azel(self):
+        return
+
+    def reset(self):
+        return
+
+    def el_range(self, observer, rising):
+        pass
+
+    def visible(
+        self,
+        el_min,
+        observer,
+        sun,
+        moon,
+        sun_avoidance_angle,
+        moon_avoidance_angle,
+        check_sso,
+    ):
+        self.center.compute(observer)
+        el = self.center.alt
+        if el < self.el_min - self.radius:
+            in_view = False
+            msg = "Below el_min = {:.2f} at el = {:.2f}".format(
+                np.degrees(self.el_min - self.radius), np.degrees(el)
+            )
+        elif el > self.el_max + self.radius:
+            in_view = False
+            msg = "Above el_max = {:.2f} at el = {:.2f}".format(
+                np.degrees(self.el_min + self.radius), np.degrees(el)
+            )
+        else:
+            in_view = True
+            msg = "in view"
+        return in_view, msg
+
+    def update(self, observer):
+        self.center.compute(observer)
+        az = self.center.az
+        self.rising = az < np.pi
+        self.az_min = az - self.throw / 2
+        self.az_max = az + self.throw / 2
+        el = self.center.alt
+        # print(np.degrees([el, self.el_min]))
+        if el < self.el_min:
+            el = self.el_min
+        elif el > self.el_max:
+            el = self.el_max
+        self.el = el
+        return
+
+    # Must add support to:
+    # get_constant_elevation()
+    # scan_patch()
+    # add_scan()
+
+
 def patch_is_rising(patch):
     try:
         # Horizontal patch definition
@@ -1036,41 +1165,26 @@ def check_sso(observer, az1, az2, el, sso, angle, el_min, tstart, tstop):
     Check if a solar system object (SSO) enters within "angle" of
     the constant elevation scan.
     """
-    if az2 < az1:
-        az2 += 360
-    naz = max(3, int(0.25 * (az2 - az1) * np.cos(np.radians(el))))
+    azmin, azmax = np.unwrap([az1, az2], period=360)
+    times = np.linspace(tstart, tstop, 10)
+
     quats = []
-    for az in np.linspace(az1, az2, naz):
+    for az in np.linspace(azmin, azmax, 10):
         quats.append(from_angles(az % 360, el))
     vecs = qa.rotate(quats, ZAXIS)
 
-    tstart = to_DJD(tstart)
-    tstop = to_DJD(tstop)
-    t1 = tstart
-    # Test every ten minutes
-    tstep = 10 / 1440
-    while t1 < tstop:
-        t2 = min(tstop, t1 + tstep)
-        observer.date = t1
+    for t in times:
+        observer.date = to_DJD(t)
         sso.compute(observer)
-        az1, el1 = np.degrees(sso.az), np.degrees(sso.alt)
-        observer.date = t2
-        sso.compute(observer)
-        az2, el2 = np.degrees(sso.az), np.degrees(sso.alt)
-        # Only test distance if the SSO is high enough
-        if el1 > el_min and el2 > el_min:
-            quat1 = from_angles(az1, el1)
-            quat2 = from_angles(az2, el2)
-            quat2 = unwind_quat(quat1, quat2)
-            t = np.linspace(0, 1, 10)
-            quats = qa.slerp(t, [0, 1], [quat1, quat2])
-            sso_vecs = qa.rotate(quats, ZAXIS).T
-            dpmax = np.amax(np.dot(vecs, sso_vecs))
+        sso_az, sso_el = np.degrees(sso.az), np.degrees(sso.alt)
+        if sso_el > el_min:
+            sso_quat = from_angles(sso_az, sso_el)
+            sso_vec = qa.rotate(sso_quat, ZAXIS)
+            dpmax = np.amax(np.dot(vecs, sso_vec))
             min_dist = np.degrees(np.arccos(dpmax))
             if min_dist < angle:
-                return True, DJDtoUNIX(t1)
-        t1 = t2
-    return False, DJDtoUNIX(t2)
+                return True, t
+    return False, tstop
 
 
 @function_timer
@@ -1190,6 +1304,13 @@ def get_constant_elevation(
     log = Logger.get()
 
     azs, els = patch.corner_coordinates(observer)
+    if isinstance(patch, MaxDepthPatch):
+        # Bypass all checks
+        az = np.mean(azs)
+        if rising == patch.rising:
+            return els[0]
+        else:
+            return None
 
     ind_rising = azs < np.pi
     ind_setting = azs > np.pi
@@ -1347,8 +1468,10 @@ def scan_patch(
     """Attempt scanning the patch specified by corners at elevation el."""
     log = Logger.get()
     azmins, azmaxs, aztimes = [], [], []
-    if isinstance(patch, HorizontalPatch):
+    if isinstance(patch, HorizontalPatch) or isinstance(patch, MaxDepthPatch):
         # No corners.  Simply scan for the requested time
+        if isinstance(patch, MaxDepthPatch):
+            azs, els = patch.corner_coordinates(observer)  # Make sure azimuth ranges are up to date
         if rising and not patch.rising:
             return False, azmins, azmaxs, aztimes, t
         if check_sun_el(t, observer, sun, sun_el_max, args, not_visible):
@@ -1859,7 +1982,7 @@ def add_scan(
         )
 
         if (
-            (isinstance(patch, HorizontalPatch) or partial_scan)
+            (isinstance(patch, HorizontalPatch) or isinstance(patch, MaxDepthPatch) or partial_scan)
             and sun_time > tstart + 1
             and moon_time > tstart + 1
         ):
@@ -2649,6 +2772,7 @@ instead of the concise 11-field schedule""",
             cycle_time_h,az,el (Cooler cycle)
     --patch name,HORIZONTAL,weight,azmin,azmax,el,scantime_min
     --patch name,SIDEREAL,weight,azmin,azmax,el,RA_start,RA_stop,scantime_min
+    --patch name,MAX-DEPTH,weight,lon,lat,radius,throw,scantime_min
 Weight is interpreted like a UNIX priority. Lower number translates to more
 frequent observations""",
     )
@@ -3076,6 +3200,50 @@ def parse_patch_sidereal(args, parts):
 
 
 @function_timer
+def parse_patch_max_depth(args, parts, observer):
+    """Parse a maximum depth patch definition line"""
+    log = Logger.get()
+    corners = []
+    log.info("Maximum depth format")
+    name = parts[0]
+    weight = float(parts[2])
+    try:
+        # Assume coordinates in degrees
+        lon = float(parts[3]) * degree
+        lat = float(parts[4]) * degree
+    except ValueError:
+        # Failed simple interpreration, assume pyEphem strings
+        lon = parts[3]
+        lat = parts[4]
+    if args.patch_coord == "C":
+        center = ephem.Equatorial(lon, lat, epoch="2000")
+    elif args.patch_coord == "E":
+        center = ephem.Ecliptic(lon, lat, epoch="2000")
+    elif args.patch_coord == "G":
+        center = ephem.Galactic(lon, lat, epoch="2000")
+    else:
+        raise RuntimeError("Unknown coordinate system: {}".format(args.patch_coord))
+    center = ephem.Equatorial(center)
+    patch_center = ephem.FixedBody()
+    patch_center._ra = center.ra
+    patch_center._dec = center.dec
+    radius = float(parts[5]) * degree
+    throw = float(parts[6]) * degree
+    scantime = float(parts[7])
+    patch = MaxDepthPatch(
+        name, weight, patch_center, radius, throw, scantime,
+        el_min=args.el_min_deg * degree,
+        el_max=args.el_max_deg * degree,
+        el_step=args.el_step_deg * degree,
+        alternate=args.alternate,
+        site_lat=observer.lat,
+        area=None,
+        elevations=args.elevations_deg,
+    )
+    return patch
+
+
+@function_timer
 def parse_patch_explicit(args, parts):
     """Parse an explicit patch definition line"""
     log = Logger.get()
@@ -3263,6 +3431,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
             patch = parse_patch_horizontal(args, parts)
         elif parts[1].upper() == "SIDEREAL":
             patch = parse_patch_sidereal(args, parts)
+        elif parts[1].upper() == "MAX-DEPTH":
+            patch = parse_patch_max_depth(args, parts, observer)
         elif parts[1].upper() == "SSO":
             patch = parse_patch_sso(args, parts)
         elif parts[1].upper() == "COOLER":
