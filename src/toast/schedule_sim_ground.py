@@ -787,34 +787,7 @@ class MaxDepthPatch(Patch):
         self.scantime = scantime
         self.el_min = el_min
         self.el_max = el_max
-        """
-        self.el_min0 = el_min
-        self.el_max0 = el_max
-        self.el_step = np.abs(el_step)
-        self.alternate = alternate
-        self._area = area
-        self.site_lat = site_lat
-        # Use the site latitude to infer the lowest elevation that all
-        # corners cross.
-        site_el_max = np.pi / 2
-        for corner in corners:
-            el_max = np.pi / 2 - np.abs(corner._dec - self.site_lat)
-            if el_max < site_el_max:
-                site_el_max = el_max
-        self.parse_elevations(elevations, site_el_max)
-        if el_step != 0:
-            self.nstep_el = int((self.el_max0 - self.el_min0 + 1e-3) // el_step) + 1
-        self.el_max = self.el_max0
-        self.el_lim = self.el_min0
-        self.step_azel()
-        """
         return
-
-    #def parse_elevations(self, elevations, site_el_max=np.pi / 2):
-    #    pass
-
-    #def oscillate(self):
-    #    pass
 
     def get_area(self, observer, nside=32, equalize=False):
         return 1
@@ -883,10 +856,47 @@ class MaxDepthPatch(Patch):
         self.el = el
         return
 
-    # Must add support to:
-    # get_constant_elevation()
-    # scan_patch()
-    # add_scan()
+    # Disable time and hit accumulation. For this target type the
+    # priorities are not modulated
+
+    @property
+    def rising_time(self):
+        return self.time
+
+    @rising_time.setter
+    def rising_time(self, value):
+        # self.time += value
+        pass
+
+    @property
+    def setting_time(self):
+        return self.time
+
+    @setting_time.setter
+    def setting_time(self, value):
+        # self.time += value
+        pass
+
+    @property
+    def rising_hits(self):
+        return self.hits
+
+    @rising_hits.setter
+    def rising_hits(self, value):
+        # self.hits += value
+        pass
+
+    @property
+    def setting_hits(self):
+        return self.hits
+
+    @setting_hits.setter
+    def setting_hits(self, value):
+        # self.hits += value
+        pass
+
+    def get_area(self, observer, nside=32, equalize=False):
+        return 1
 
 
 def patch_is_rising(patch):
