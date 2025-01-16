@@ -675,6 +675,105 @@ class HorizontalPatch(Patch):
         return in_view, msg
 
 
+class WeightedHorizontalPatch(HorizontalPatch):
+    elevations = None
+    _area = 1
+    weightmaps = {}
+
+    def __init__(self, name, weight, azmin, azmax, el, scantime_min, weightfile, fov):
+        self.name = name
+        self.weight = weight
+        self.weight0 = weight
+        if azmin <= np.pi and azmax <= np.pi:
+            self.rising = True
+        elif azmin >= np.pi and azmax >= np.pi:
+            self.rising = False
+        else:
+            # This patch is being observed across the meridian
+            self.rising = None
+        self.az_min = azmin
+        self.az_max = azmax
+        self.el = el
+        # scan time is the maximum time spent on this scan before targeting again
+        self.scantime = scantime_min  # in minutes.
+
+        self.el_min0 = el
+        self.el_min = el
+        self.el_max0 = el
+        self.el_step = 0
+        self.alternate = False
+        self._area = 0
+        self.el_max = self.el_max0
+        self.el_lim = self.el_min0
+        self.time = 0
+        self.hits = 0
+
+        self.weightfile = weightfile
+        if weightfile not in self.weightmaps:
+            self.weightmaps[weightfile] = hp.read_map(weightfile)
+        self.fov = fov
+
+        return
+
+    def visible(
+        self,
+        el_min,
+        observer,
+        sun,
+        moon,
+        sun_avoidance_angle,
+        moon_avoidance_angle,
+        check_sso,
+    ):
+        in_view = True
+        msg = ""
+        if check_sso:
+            for sso, angle, name in [
+                (sun, sun_avoidance_angle, "Sun"),
+                (moon, moon_avoidance_angle, "Moon"),
+            ]:
+                if self.in_patch(sso, angle=angle, observer=observer):
+                    in_view = False
+                    msg += f"{name} too close;"
+        if in_view:
+            self.update_weight(observer)
+            if self.weight == 0:
+                in_view = False
+                msg += "Zero weight"
+            else:
+                msg = "in view"
+        return in_view, msg
+
+    def update_weight(self, observer):
+        """Measure the weight of the proposed observation
+        according to the weight map, FOV and the observer
+        """
+        weightmap = self.weightmaps[self.weightfile]
+        nside = hp.get_nside(weightmap)
+        hitmap = np.zeros_like(weightmap)
+        tstart = observer.date
+        tstop = observer.date + self.scantime / 1440
+        obs = observer.copy()
+        tstep = 5 / 1440  # 5 minutes in days
+        naz = 10  # Must be constant so total hits only depend on scan time
+        for t in np.arange(tstart, tstop, tstep):
+            obs.date = t
+            for az in np.linspace(self.az_min, self.az_max, naz):
+                ra, dec = obs.radec_of(az, self.el)
+                vec = hp.dir2vec(np.degrees(ra), np.degrees(dec), lonlat=True)
+                pix = hp.query_disc(nside, vec, radius=self.fov / 2)
+                hitmap[pix] += 1
+        nhit = np.sum(hitmap * weightmap)
+        if nhit == 0:
+            self.weight = 0
+        else:
+            self.weight = self.weight0 / nhit
+        # Modulate by scantime so longer observations don't automatically
+        # get higher priority
+        self.weight *= self.scantime
+        return
+
+
 class SiderealPatch(HorizontalPatch):
 
     def __init__(
@@ -915,7 +1014,10 @@ def patch_is_rising(patch):
 
 @function_timer
 def prioritize(args, observer, visible, last_el):
-    """Order visible targets by priority and number of scans."""
+    """Order visible targets by priority and number of scans.
+    The target with the lowest relative weight will be the
+    first on the list.
+    """
     log = Logger.get()
     for i in range(len(visible)):
         for j in range(len(visible) - i - 1):
@@ -2781,6 +2883,7 @@ instead of the concise 11-field schedule""",
     --patch name,COOLER,weight,power,hold_time_min_h,hold_time_max_h,
             cycle_time_h,az,el (Cooler cycle)
     --patch name,HORIZONTAL,weight,azmin,azmax,el,scantime_min
+    --patch name,WEIGHTED_HORIZONTAL,weight,azmin,azmax,el,scantime_min,weightfile,fov_deg
     --patch name,SIDEREAL,weight,azmin,azmax,el,RA_start,RA_stop,scantime_min
     --patch name,MAX-DEPTH,weight,lon,lat,radius,throw,scantime_min
 Weight is interpreted like a UNIX priority. Lower number translates to more
@@ -3190,6 +3293,26 @@ def parse_patch_horizontal(args, parts):
 
 
 @function_timer
+def parse_patch_weighted_horizontal(args, parts):
+    """Parse a weighted horizontal patch definition line"""
+    log = Logger.get()
+    corners = []
+    log.info("Weighted horizontal format")
+    name = parts[0]
+    weight = float(parts[2])
+    azmin = float(parts[3]) * degree
+    azmax = float(parts[4]) * degree
+    el = float(parts[5]) * degree
+    scantime = float(parts[6])  # minutes
+    weightfile = parts[7]
+    fov = float(parts[8]) * degree
+    patch = WeightedHorizontalPatch(
+        name, weight, azmin, azmax, el, scantime, weightfile, fov
+    )
+    return patch
+
+
+@function_timer
 def parse_patch_sidereal(args, parts):
     """Parse a sidereal patch definition line"""
     log = Logger.get()
@@ -3439,6 +3562,8 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         log.info(f'Adding patch "{name}"')
         if parts[1].upper() == "HORIZONTAL":
             patch = parse_patch_horizontal(args, parts)
+        elif parts[1].upper() == "WEIGHTED_HORIZONTAL":
+            patch = parse_patch_weighted_horizontal(args, parts)
         elif parts[1].upper() == "SIDEREAL":
             patch = parse_patch_sidereal(args, parts)
         elif parts[1].upper() == "MAX-DEPTH":
