@@ -361,11 +361,6 @@ class Patch(object):
         self,
         el_min,
         observer,
-        sun,
-        moon,
-        sun_avoidance_angle,
-        moon_avoidance_angle,
-        check_sso,
     ):
         self.update(observer)
         patch_el_max = -1000
@@ -378,17 +373,6 @@ class Patch(object):
             if corner.alt > el_min:
                 # At least one corner is visible
                 in_view = True
-            if check_sso:
-                if sun_avoidance_angle > 0:
-                    angle = np.degrees(ephem.separation(sun, corner))
-                    if angle < sun_avoidance_angle:
-                        # Patch is too close to the Sun
-                        return False, f"Too close to Sun {angle:.2f}"
-                if moon_avoidance_angle > 0:
-                    angle = np.degrees(ephem.separation(moon, corner))
-                    if angle < moon_avoidance_angle:
-                        # Patch is too close to the Moon
-                        return False, f"Too close to Moon {angle:.2f}"
         if not in_view:
             msg = "Below el_min = {:.2f} at el = {:.2f}..{:.2f}.".format(
                 np.degrees(el_min), np.degrees(patch_el_min), np.degrees(patch_el_max)
@@ -510,11 +494,6 @@ class CoolerCyclePatch(Patch):
         self,
         el_min,
         observer,
-        sun,
-        moon,
-        sun_avoidance_angle,
-        moon_avoidance_angle,
-        check_sso,
     ):
         self.update(observer)
         hold_time = self.get_current_hold_time(observer)
@@ -651,27 +630,10 @@ class HorizontalPatch(Patch):
         self,
         el_min,
         observer,
-        sun,
-        moon,
-        sun_avoidance_angle,
-        moon_avoidance_angle,
-        check_sso,
     ):
-        in_view = True
-        msg = ""
-        if check_sso:
-            for sso, angle, name in [
-                (sun, sun_avoidance_angle, "Sun"),
-                (moon, moon_avoidance_angle, "Moon"),
-            ]:
-                if self.in_patch(sso, angle=angle, observer=observer):
-                    in_view = False
-                    msg += f"{name} too close;"
-
-        if in_view:
-            msg = "in view"
-            self.current_el_min = self.el_min
-            self.current_el_max = self.el_max
+        msg = "in view"
+        self.current_el_min = self.el_min
+        self.current_el_max = self.el_max
         return in_view, msg
 
 
@@ -719,29 +681,15 @@ class WeightedHorizontalPatch(HorizontalPatch):
         self,
         el_min,
         observer,
-        sun,
-        moon,
-        sun_avoidance_angle,
-        moon_avoidance_angle,
-        check_sso,
     ):
         in_view = True
         msg = ""
-        if check_sso:
-            for sso, angle, name in [
-                (sun, sun_avoidance_angle, "Sun"),
-                (moon, moon_avoidance_angle, "Moon"),
-            ]:
-                if self.in_patch(sso, angle=angle, observer=observer):
-                    in_view = False
-                    msg += f"{name} too close;"
-        if in_view:
-            self.update_weight(observer)
-            if self.weight == 0:
-                in_view = False
-                msg += "Zero weight"
-            else:
-                msg = "in view"
+        self.update_weight(observer)
+        if self.weight == 0:
+            in_view = False
+            msg += "Zero weight"
+        else:
+            msg = "in view"
         return in_view, msg
 
     def update_weight(self, observer):
@@ -821,22 +769,9 @@ class SiderealPatch(HorizontalPatch):
         self,
         el_min,
         observer,
-        sun,
-        moon,
-        sun_avoidance_angle,
-        moon_avoidance_angle,
-        check_sso,
     ):
         in_view = True
         msg = ""
-        if check_sso:
-            for sso, angle, name in [
-                (sun, sun_avoidance_angle, "Sun"),
-                (moon, moon_avoidance_angle, "Moon"),
-            ]:
-                if self.in_patch(sso, angle=angle, observer=observer):
-                    in_view = False
-                    msg += f"{name} too close;"
         stime = observer.sidereal_time()
         outside = False
         if self.siderealtime_start < self.siderealtime_stop:
@@ -917,11 +852,6 @@ class MaxDepthPatch(Patch):
         self,
         el_min,
         observer,
-        sun,
-        moon,
-        sun_avoidance_angle,
-        moon_avoidance_angle,
-        check_sso,
     ):
         self.center.compute(observer)
         el = self.center.alt
@@ -2094,7 +2024,8 @@ def add_scan(
         )
 
         if (
-            (isinstance(patch, HorizontalPatch) or isinstance(patch, MaxDepthPatch) or partial_scan)
+            # (isinstance(patch, HorizontalPatch) or isinstance(patch, MaxDepthPatch) or partial_scan)
+            (isinstance(patch, HorizontalPatch) or partial_scan)
             and sun_time > tstart + 1
             and moon_time > tstart + 1
         ):
@@ -2320,13 +2251,11 @@ def add_cooler_cycle(
 
 
 @function_timer
-def get_visible(args, observer, sun, moon, patches, el_min):
+def get_visible(args, observer, patches, el_min):
     """Determine which patches are visible."""
     log = Logger.get()
     visible = []
     not_visible = []
-    check_sun = np.degrees(sun.alt) >= args.sun_avoidance_altitude_deg
-    check_moon = np.degrees(moon.alt) >= args.moon_avoidance_altitude_deg
     for patch in patches:
         # Reject all patches that have even one corner too close
         # to the Sun or the Moon and patches that are completely
@@ -2334,33 +2263,7 @@ def get_visible(args, observer, sun, moon, patches, el_min):
         in_view, msg = patch.visible(
             el_min,
             observer,
-            sun,
-            moon,
-            args.sun_avoidance_angle_deg * check_sun,
-            args.moon_avoidance_angle_deg * check_moon,
-            not (args.allow_partial_scans or args.delay_sso_check),
         )
-        if not in_view:
-            not_visible.append((patch.name, msg))
-
-        if in_view:
-            if not (args.allow_partial_scans or args.delay_sso_check):
-                # Finally, check that the Sun or the Moon are not
-                # inside the patch
-                if (
-                    args.sun_avoidance_angle_deg >= 0
-                    and np.degrees(sun.alt) >= args.sun_avoidance_altitude_deg
-                    and patch.in_patch(sun)
-                ):
-                    not_visible.append((patch.name, "Sun in patch"))
-                    in_view = False
-                if (
-                    args.moon_avoidance_angle_deg >= 0
-                    and np.degrees(moon.alt) >= args.moon_avoidance_altitude_deg
-                    and patch.in_patch(moon)
-                ):
-                    not_visible.append((patch.name, "Moon in patch"))
-                    in_view = False
         if in_view:
             visible.append(patch)
             log.debug(
@@ -2369,6 +2272,7 @@ def get_visible(args, observer, sun, moon, patches, el_min):
                 )
             )
         else:
+            not_visible.append((patch.name, msg))
             log.debug(f"NOT VISIBLE: {not_visible[-1]}")
     return visible, not_visible
 
@@ -2629,7 +2533,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
             continue
         moon.compute(observer)
 
-        visible, not_visible = get_visible(args, observer, sun, moon, patches, el_min)
+        visible, not_visible = get_visible(args, observer, patches, el_min)
 
         if len(visible) == 0:
             log.debug(f"No patches visible at {to_UTC(t)}: {not_visible}")
@@ -3080,13 +2984,6 @@ where YEAR, MONTH and DAY are integers. END days are inclusive""",
         required=False,
         type=float,
         help="Upper plotting range for polarization map",
-    )
-    parser.add_argument(
-        "--delay-sso-check",
-        required=False,
-        default=False,
-        action="store_true",
-        help="Only apply SSO check during simulated scan.",
     )
     parser.add_argument(
         "--pole-mode",
