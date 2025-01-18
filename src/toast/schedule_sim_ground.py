@@ -885,45 +885,6 @@ class MaxDepthPatch(Patch):
         self.el = el
         return
 
-    # Disable time and hit accumulation. For this target type the
-    # priorities are not modulated
-
-    @property
-    def rising_time(self):
-        return self.time
-
-    @rising_time.setter
-    def rising_time(self, value):
-        # self.time += value
-        pass
-
-    @property
-    def setting_time(self):
-        return self.time
-
-    @setting_time.setter
-    def setting_time(self, value):
-        # self.time += value
-        pass
-
-    @property
-    def rising_hits(self):
-        return self.hits
-
-    @rising_hits.setter
-    def rising_hits(self, value):
-        # self.hits += value
-        pass
-
-    @property
-    def setting_hits(self):
-        return self.hits
-
-    @setting_hits.setter
-    def setting_hits(self, value):
-        # self.hits += value
-        pass
-
     def get_area(self, observer, nside=32, equalize=False):
         return 1
 
