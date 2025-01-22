@@ -188,16 +188,15 @@ class ScanHealpixMap(Operator):
         # Use the pixel distribution and pointing configuration to allocate our
         # map data and read it in.
         nnz = None
-        if self.derivatives_weights.enabled:
+        if self.stokes_weights is None or self.stokes_weights.mode == "I":
+            nnz = 1
+        elif self.stokes_weights.mode in ("IQU", "dI"):
+            nnz = 3
+        elif self.stokes_weights.mode == "d2I":
             nnz = 6
         else:
-            if self.stokes_weights is None or self.stokes_weights.mode == "I":
-                nnz = 1
-            elif self.stokes_weights.mode == "IQU":
-                nnz = 3
-            else:
-                msg = f"Unknown Stokes weights mode '{self.stokes_weights.mode}'"
-                raise RuntimeError(msg)
+            msg = f"Unknown Stokes/Derivatives weights mode '{self.stokes_weights.mode}'"
+            raise RuntimeError(msg)
 
         filenames = self.file.split(";")
         detdata_keys = self.det_data.split(";")
@@ -240,16 +239,12 @@ class ScanHealpixMap(Operator):
                 )
 
         # Configure the low-level map scanning operator
-        if self.derivatives_weights.enabled:
-            weights_operator = self.derivatives_weights
-        else:
-            weights_operator = self.stokes_weights
         scanner = ScanMap(
             det_data=self.det_data_keys[0],
             det_data_units=self.det_data_units,
             det_mask=self.det_mask,
             pixels=self.pixel_pointing.pixels,
-            weights=weights_operator.weights,
+            weights=self.stokes_weights.weights,
             map_key=self.map_names[0],
             subtract=self.subtract,
             zero=self.zero,
@@ -258,7 +253,7 @@ class ScanHealpixMap(Operator):
         # Build and run a pipeline that scans from our map
         scan_pipe = Pipeline(
             detector_sets=["SINGLE"],
-            operators=[self.pixel_pointing, weights_operator, scanner],
+            operators=[self.pixel_pointing, self.stokes_weights, scanner],
         )
 
         for imap, map_name in enumerate(self.map_names):

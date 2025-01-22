@@ -241,6 +241,9 @@ class DerivativesWeights(Operator):
             psi = np.empty(nsamp) 
             # Get the per-detector pointing for orientation/sine theta purposes
             for idet, d in enumerate(dets):
+                if idet==0:
+                    log.info_rank(f"Keys in the detector {d}:  {focalplane[d].keys()}", data.comm.comm_world)
+                
                 theta, _, psi = to_iso_angles(mult(qbore, focalplane[d]["quat"]))
                 wc = np.cos(psi) 
                 wc2 = np.cos(2*psi)
@@ -248,14 +251,17 @@ class DerivativesWeights(Operator):
                 ws2 = np.sin(2*psi)
                 inv_tan_theta = np.cos(theta)/np.sin(theta)
                 # Get the per-detector calibration. For now we sidestep with the Nones
-                cal = ob.telescope.focalplane[d].get("cal")
-                dx = ob.telescope.focalplane[d].get("dx")
-                dy = ob.telescope.focalplane[d].get("dy")
-                dsigma = ob.telescope.focalplane[d].get("dsigma")
-                dp = ob.telescope.focalplane[d].get("dp")
-                dc = ob.telescope.focalplane[d].get("dc") 
+                cal = focalplane[d].get("cal")
+                fwhm = focalplane[d].get("fwhm")
+                dx = focalplane[d].get("dx")
+                dy = focalplane[d].get("dy")
+                dsigma = focalplane[d].get("dsigma")
+                dp = focalplane[d].get("dp")
+                dc = focalplane[d].get("dc") 
                 if cal is None:
                     cal = 1.0
+                if fwhm is None:
+                    fwhm = np.radians(10./60.)
                 if dx is None:
                     dx = 0.0
                 if dy is None:
@@ -266,15 +272,17 @@ class DerivativesWeights(Operator):
                     dp = 0.0
                 if dc is None:
                     dc = 0.0
+                
+                b_std = fwhm/np.sqrt(8*np.log(2)) #beam standard deviation
             
                 weights = np.empty((nsamp, self._nnz))
                 weights[:,0] = cal # gain error
                 weights[:,1] = dx * ws - dy * wc #dtheta
-                weights[:,2] = -dx * wc - dy * ws + (dp * ws2 - dc * wc2) * inv_tan_theta #dphi
+                weights[:,2] = -dx * wc - dy * ws + b_std**2 * (dp * ws2 - dc * wc2) * inv_tan_theta #dphi
                 if self.mode == "d2I":      
-                    weights[:,3] = dsigma + dp * wc2 - dc * ws2 #d2theta
-                    weights[:,4] = -2.0 * dp * ws2 + 2.0 * dc * wc2 #dphi dtheta
-                    weights[:,5] = dsigma + dp * wc2 + dc * ws2 #dphi2
+                    weights[:,3] = b_std * dsigma + 0.5 * b_std * b_std * (dp * wc2 - dc * ws2) #d2theta
+                    weights[:,4] = b_std**2 * (-2.0 * dp * ws2 + 2.0 * dc * wc2) #dphi dtheta
+                    weights[:,5] = b_std * dsigma +  b_std**2 * (dp * wc2 + dc * ws2) #dphi2
                 ob.detdata[self.weights][d, :] = weights
         return
     """
