@@ -7,7 +7,7 @@
 # - STATIC (yes/no)
 # - CLEANUP (yes/no)
 
-cfitsio_version=4.3.0
+cfitsio_version=4.5.0
 cfitsio_dir=cfitsio-${cfitsio_version}
 cfitsio_pkg=${cfitsio_dir}.tar.gz
 
