@@ -631,10 +631,9 @@ class HorizontalPatch(Patch):
         el_min,
         observer,
     ):
-        msg = "in view"
         self.current_el_min = self.el_min
         self.current_el_max = self.el_max
-        return in_view, msg
+        return True, "in view"
 
 
 class WeightedHorizontalPatch(HorizontalPatch):
