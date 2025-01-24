@@ -69,27 +69,10 @@ pip install --upgrade pip
 # Install a couple of base packages that are always required
 pip install -v cmake wheel
 
-# In order to maximize ABI compatibility with numpy, build with the newest numpy
-# version containing the oldest ABI version compatible with the python we are using.
-# NOTE: for now, we build with numpy 2.0.x, which is backwards compatible with
-# numpy-1.x and forward compatible with numpy-2.x.
 pyver=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
-# if [ ${pyver} == "3.8" ]; then
-#     numpy_ver="1.20"
-# fi
-# if [ ${pyver} == "3.9" ]; then
-#     numpy_ver="1.20"
-# fi
-# if [ ${pyver} == "3.10" ]; then
-#     numpy_ver="1.22"
-# fi
-# if [ ${pyver} == "3.11" ]; then
-#     numpy_ver="1.24"
-# fi
-numpy_ver="2.0.1"
 
 # Install build requirements.
-CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt" "numpy==${numpy_ver}"
+CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt" numpy
 
 # Build compiled dependencies
 

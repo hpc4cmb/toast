@@ -7,7 +7,7 @@ envname=$1
 # Explicit python version to use
 pyversion=$2
 if [ "x${pyversion}" = "x" ]; then
-    pyversion=3.10
+    pyversion=3.12
 fi
 
 # Install optional dependencies if desired
@@ -62,7 +62,7 @@ for pfile in ${pkgfiles}; do
     plist=$(cat "${pfile}" | xargs -I % echo -n '"%" ')
     pkglist="${pkglist} ${plist}"
 done
-pkglist="python=${pyversion} ${pkglist} compilers conda-build"
+pkglist="python=${pyversion} ${pkglist} compilers"
 echo "Installing conda packages:  ${pkglist}"
 conda install --yes --update-all ${pkglist}
 # The "cc" symlink breaks Crays...

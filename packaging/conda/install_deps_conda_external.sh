@@ -7,7 +7,7 @@ envname=$1
 # Explicit python version to use
 pyversion=$2
 if [ "x${pyversion}" = "x" ]; then
-    pyversion=3.10
+    pyversion=3.12
 fi
 
 # Install optional dependencies if desired

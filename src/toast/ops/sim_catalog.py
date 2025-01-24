@@ -7,7 +7,7 @@ import os
 import h5py
 import healpy as hp
 import numpy as np
-import toml
+import tomlkit
 import traitlets
 from astropy.stats import gaussian_fwhm_to_sigma
 from astropy import units as u
@@ -194,7 +194,7 @@ class SimCatalog(Operator):
         log = Logger.get()
         # Load the TOML into a dictionary
         with open(self.catalog_file, "r") as f:
-            self.catalog = toml.loads(f.read())
+            self.catalog = tomlkit.parse(f.read())
         # Check that the necessary keys are defined for every source
         for source_name, source_dict in self.catalog.items():
             for key in ["ra_deg", "dec_deg", "freqs_ghz"]:
@@ -233,7 +233,7 @@ class SimCatalog(Operator):
         for source_name, source_dict in self.catalog.items():
             lon = source_dict["ra_deg"]
             lat = source_dict["dec_deg"]
-            source_dict["vec"] = hp.dir2vec(lon, lat, lonlat=True)
+            source_dict["vec"] = hp.dir2vec(lon, lat, lonlat=True).tolist()
         return
 
     def __init__(self, **kwargs):

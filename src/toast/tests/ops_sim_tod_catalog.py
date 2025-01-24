@@ -4,7 +4,7 @@
 
 import os
 
-import toml
+import tomlkit
 import healpy as hp
 import numpy as np
 from astropy import units as u
@@ -78,7 +78,7 @@ class SimCatalogTest(MPITestCase):
             }
 
             with open(self.catalog_file, "w") as f:
-                f.write(toml.dumps(catalog))
+                f.write(tomlkit.dumps(catalog))
 
         if self.comm is not None:
             self.comm.barrier()
