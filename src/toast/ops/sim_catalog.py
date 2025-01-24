@@ -233,7 +233,7 @@ class SimCatalog(Operator):
         for source_name, source_dict in self.catalog.items():
             lon = source_dict["ra_deg"]
             lat = source_dict["dec_deg"]
-            source_dict["vec"] = hp.dir2vec(lon, lat, lonlat=True)
+            source_dict["vec"] = hp.dir2vec(lon, lat, lonlat=True).tolist()
         return
 
     def __init__(self, **kwargs):
