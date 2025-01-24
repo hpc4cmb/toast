@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -361,11 +361,6 @@ class Patch(object):
         self,
         el_min,
         observer,
-        sun,
-        moon,
-        sun_avoidance_angle,
-        moon_avoidance_angle,
-        check_sso,
     ):
         self.update(observer)
         patch_el_max = -1000
@@ -378,17 +373,6 @@ class Patch(object):
             if corner.alt > el_min:
                 # At least one corner is visible
                 in_view = True
-            if check_sso:
-                if sun_avoidance_angle > 0:
-                    angle = np.degrees(ephem.separation(sun, corner))
-                    if angle < sun_avoidance_angle:
-                        # Patch is too close to the Sun
-                        return False, f"Too close to Sun {angle:.2f}"
-                if moon_avoidance_angle > 0:
-                    angle = np.degrees(ephem.separation(moon, corner))
-                    if angle < moon_avoidance_angle:
-                        # Patch is too close to the Moon
-                        return False, f"Too close to Moon {angle:.2f}"
         if not in_view:
             msg = "Below el_min = {:.2f} at el = {:.2f}..{:.2f}.".format(
                 np.degrees(el_min), np.degrees(patch_el_min), np.degrees(patch_el_max)
@@ -510,11 +494,6 @@ class CoolerCyclePatch(Patch):
         self,
         el_min,
         observer,
-        sun,
-        moon,
-        sun_avoidance_angle,
-        moon_avoidance_angle,
-        check_sso,
     ):
         self.update(observer)
         hold_time = self.get_current_hold_time(observer)
@@ -651,28 +630,95 @@ class HorizontalPatch(Patch):
         self,
         el_min,
         observer,
-        sun,
-        moon,
-        sun_avoidance_angle,
-        moon_avoidance_angle,
-        check_sso,
+    ):
+        self.current_el_min = self.el_min
+        self.current_el_max = self.el_max
+        return True, "in view"
+
+
+class WeightedHorizontalPatch(HorizontalPatch):
+    elevations = None
+    _area = 1
+    weightmaps = {}
+
+    def __init__(self, name, weight, azmin, azmax, el, scantime_min, weightfile, fov):
+        self.name = name
+        self.weight = weight
+        self.weight0 = weight
+        if azmin <= np.pi and azmax <= np.pi:
+            self.rising = True
+        elif azmin >= np.pi and azmax >= np.pi:
+            self.rising = False
+        else:
+            # This patch is being observed across the meridian
+            self.rising = None
+        self.az_min = azmin
+        self.az_max = azmax
+        self.el = el
+        # scan time is the maximum time spent on this scan before targeting again
+        self.scantime = scantime_min  # in minutes.
+
+        self.el_min0 = el
+        self.el_min = el
+        self.el_max0 = el
+        self.el_step = 0
+        self.alternate = False
+        self._area = 0
+        self.el_max = self.el_max0
+        self.el_lim = self.el_min0
+        self.time = 0
+        self.hits = 0
+
+        self.weightfile = weightfile
+        if weightfile not in self.weightmaps:
+            self.weightmaps[weightfile] = hp.read_map(weightfile)
+        self.fov = fov
+
+        return
+
+    def visible(
+        self,
+        el_min,
+        observer,
     ):
         in_view = True
         msg = ""
-        if check_sso:
-            for sso, angle, name in [
-                (sun, sun_avoidance_angle, "Sun"),
-                (moon, moon_avoidance_angle, "Moon"),
-            ]:
-                if self.in_patch(sso, angle=angle, observer=observer):
-                    in_view = False
-                    msg += f"{name} too close;"
-
-        if in_view:
+        self.update_weight(observer)
+        if self.weight == 0:
+            in_view = False
+            msg += "Zero weight"
+        else:
             msg = "in view"
-            self.current_el_min = self.el_min
-            self.current_el_max = self.el_max
         return in_view, msg
+
+    def update_weight(self, observer):
+        """Measure the weight of the proposed observation
+        according to the weight map, FOV and the observer
+        """
+        weightmap = self.weightmaps[self.weightfile]
+        nside = hp.get_nside(weightmap)
+        hitmap = np.zeros_like(weightmap)
+        tstart = observer.date
+        tstop = observer.date + self.scantime / 1440
+        obs = observer.copy()
+        tstep = 5 / 1440  # 5 minutes in days
+        naz = 10  # Must be constant so total hits only depend on scan time
+        for t in np.arange(tstart, tstop, tstep):
+            obs.date = t
+            for az in np.linspace(self.az_min, self.az_max, naz):
+                ra, dec = obs.radec_of(az, self.el)
+                vec = hp.dir2vec(np.degrees(ra), np.degrees(dec), lonlat=True)
+                pix = hp.query_disc(nside, vec, radius=self.fov / 2)
+                hitmap[pix] += 1
+        nhit = np.sum(hitmap * weightmap)
+        if nhit == 0:
+            self.weight = 0
+        else:
+            self.weight = self.weight0 / nhit
+        # Modulate by scantime so longer observations don't automatically
+        # get higher priority
+        self.weight *= self.scantime
+        return
 
 
 class SiderealPatch(HorizontalPatch):
@@ -722,22 +768,9 @@ class SiderealPatch(HorizontalPatch):
         self,
         el_min,
         observer,
-        sun,
-        moon,
-        sun_avoidance_angle,
-        moon_avoidance_angle,
-        check_sso,
     ):
         in_view = True
         msg = ""
-        if check_sso:
-            for sso, angle, name in [
-                (sun, sun_avoidance_angle, "Sun"),
-                (moon, moon_avoidance_angle, "Moon"),
-            ]:
-                if self.in_patch(sso, angle=angle, observer=observer):
-                    in_view = False
-                    msg += f"{name} too close;"
         stime = observer.sidereal_time()
         outside = False
         if self.siderealtime_start < self.siderealtime_stop:
@@ -760,6 +793,101 @@ class SiderealPatch(HorizontalPatch):
         return in_view, msg
 
 
+class MaxDepthPatch(Patch):
+    elevations = None
+
+    def __init__(
+        self,
+        name,
+        weight,
+        center,
+        radius,
+        throw,
+        scantime,
+        el_min=0,
+        el_max=np.pi / 2,
+        el_step=0,
+        alternate=False,
+        site_lat=0,
+        area=None,
+        elevations=None,
+    ):
+        self.name = name
+        self.weight = weight
+        self.center = center
+        self.radius = radius
+        self.throw = throw
+        self.scantime = scantime
+        self.el_min = el_min
+        self.el_max = el_max
+        return
+
+    def get_area(self, observer, nside=32, equalize=False):
+        return 1
+
+    def corner_coordinates(self, observer, unwind=False):
+        #   - return the default az range
+        #   - centered on the patch
+        #   - elevation as close as possible to the center.
+        #  sets self.az_min, self.az_max
+        self.update(observer)
+        azs = [self.az_min, self.az_max]
+        els = [self.el, self.el]
+        return np.array(azs), np.array(els)
+
+    def in_patch(self, obj):
+        return False
+
+    def step_azel(self):
+        return
+
+    def reset(self):
+        return
+
+    def el_range(self, observer, rising):
+        pass
+
+    def visible(
+        self,
+        el_min,
+        observer,
+    ):
+        self.center.compute(observer)
+        el = self.center.alt
+        if el < self.el_min - self.radius:
+            in_view = False
+            msg = "Below el_min = {:.2f} at el = {:.2f}".format(
+                np.degrees(self.el_min - self.radius), np.degrees(el)
+            )
+        elif el > self.el_max + self.radius:
+            in_view = False
+            msg = "Above el_max = {:.2f} at el = {:.2f}".format(
+                np.degrees(self.el_min + self.radius), np.degrees(el)
+            )
+        else:
+            in_view = True
+            msg = "in view"
+        return in_view, msg
+
+    def update(self, observer):
+        self.center.compute(observer)
+        az = self.center.az
+        self.rising = az < np.pi
+        self.az_min = az - self.throw / 2
+        self.az_max = az + self.throw / 2
+        el = self.center.alt
+        # print(np.degrees([el, self.el_min]))
+        if el < self.el_min:
+            el = self.el_min
+        elif el > self.el_max:
+            el = self.el_max
+        self.el = el
+        return
+
+    def get_area(self, observer, nside=32, equalize=False):
+        return 1
+
+
 def patch_is_rising(patch):
     try:
         # Horizontal patch definition
@@ -776,7 +904,10 @@ def patch_is_rising(patch):
 
 @function_timer
 def prioritize(args, observer, visible, last_el):
-    """Order visible targets by priority and number of scans."""
+    """Order visible targets by priority and number of scans.
+    The target with the lowest relative weight will be the
+    first on the list.
+    """
     log = Logger.get()
     for i in range(len(visible)):
         for j in range(len(visible) - i - 1):
@@ -1036,41 +1167,26 @@ def check_sso(observer, az1, az2, el, sso, angle, el_min, tstart, tstop):
     Check if a solar system object (SSO) enters within "angle" of
     the constant elevation scan.
     """
-    if az2 < az1:
-        az2 += 360
-    naz = max(3, int(0.25 * (az2 - az1) * np.cos(np.radians(el))))
+    azmin, azmax = np.unwrap([az1, az2], period=360)
+    times = np.linspace(tstart, tstop, 10)
+
     quats = []
-    for az in np.linspace(az1, az2, naz):
+    for az in np.linspace(azmin, azmax, 10):
         quats.append(from_angles(az % 360, el))
     vecs = qa.rotate(quats, ZAXIS)
 
-    tstart = to_DJD(tstart)
-    tstop = to_DJD(tstop)
-    t1 = tstart
-    # Test every ten minutes
-    tstep = 10 / 1440
-    while t1 < tstop:
-        t2 = min(tstop, t1 + tstep)
-        observer.date = t1
+    for t in times:
+        observer.date = to_DJD(t)
         sso.compute(observer)
-        az1, el1 = np.degrees(sso.az), np.degrees(sso.alt)
-        observer.date = t2
-        sso.compute(observer)
-        az2, el2 = np.degrees(sso.az), np.degrees(sso.alt)
-        # Only test distance if the SSO is high enough
-        if el1 > el_min and el2 > el_min:
-            quat1 = from_angles(az1, el1)
-            quat2 = from_angles(az2, el2)
-            quat2 = unwind_quat(quat1, quat2)
-            t = np.linspace(0, 1, 10)
-            quats = qa.slerp(t, [0, 1], [quat1, quat2])
-            sso_vecs = qa.rotate(quats, ZAXIS).T
-            dpmax = np.amax(np.dot(vecs, sso_vecs))
+        sso_az, sso_el = np.degrees(sso.az), np.degrees(sso.alt)
+        if sso_el > el_min:
+            sso_quat = from_angles(sso_az, sso_el)
+            sso_vec = qa.rotate(sso_quat, ZAXIS)
+            dpmax = np.amax(np.dot(vecs, sso_vec))
             min_dist = np.degrees(np.arccos(dpmax))
             if min_dist < angle:
-                return True, DJDtoUNIX(t1)
-        t1 = t2
-    return False, DJDtoUNIX(t2)
+                return True, t
+    return False, tstop
 
 
 @function_timer
@@ -1190,6 +1306,13 @@ def get_constant_elevation(
     log = Logger.get()
 
     azs, els = patch.corner_coordinates(observer)
+    if isinstance(patch, MaxDepthPatch):
+        # Bypass all checks
+        az = np.mean(azs)
+        if rising == patch.rising:
+            return els[0]
+        else:
+            return None
 
     ind_rising = azs < np.pi
     ind_setting = azs > np.pi
@@ -1347,8 +1470,10 @@ def scan_patch(
     """Attempt scanning the patch specified by corners at elevation el."""
     log = Logger.get()
     azmins, azmaxs, aztimes = [], [], []
-    if isinstance(patch, HorizontalPatch):
+    if isinstance(patch, HorizontalPatch) or isinstance(patch, MaxDepthPatch):
         # No corners.  Simply scan for the requested time
+        if isinstance(patch, MaxDepthPatch):
+            azs, els = patch.corner_coordinates(observer)  # Make sure azimuth ranges are up to date
         if rising and not patch.rising:
             return False, azmins, azmaxs, aztimes, t
         if check_sun_el(t, observer, sun, sun_el_max, args, not_visible):
@@ -1859,6 +1984,7 @@ def add_scan(
         )
 
         if (
+            # (isinstance(patch, HorizontalPatch) or isinstance(patch, MaxDepthPatch) or partial_scan)
             (isinstance(patch, HorizontalPatch) or partial_scan)
             and sun_time > tstart + 1
             and moon_time > tstart + 1
@@ -2085,13 +2211,11 @@ def add_cooler_cycle(
 
 
 @function_timer
-def get_visible(args, observer, sun, moon, patches, el_min):
+def get_visible(args, observer, patches, el_min):
     """Determine which patches are visible."""
     log = Logger.get()
     visible = []
     not_visible = []
-    check_sun = np.degrees(sun.alt) >= args.sun_avoidance_altitude_deg
-    check_moon = np.degrees(moon.alt) >= args.moon_avoidance_altitude_deg
     for patch in patches:
         # Reject all patches that have even one corner too close
         # to the Sun or the Moon and patches that are completely
@@ -2099,33 +2223,7 @@ def get_visible(args, observer, sun, moon, patches, el_min):
         in_view, msg = patch.visible(
             el_min,
             observer,
-            sun,
-            moon,
-            args.sun_avoidance_angle_deg * check_sun,
-            args.moon_avoidance_angle_deg * check_moon,
-            not (args.allow_partial_scans or args.delay_sso_check),
         )
-        if not in_view:
-            not_visible.append((patch.name, msg))
-
-        if in_view:
-            if not (args.allow_partial_scans or args.delay_sso_check):
-                # Finally, check that the Sun or the Moon are not
-                # inside the patch
-                if (
-                    args.sun_avoidance_angle_deg >= 0
-                    and np.degrees(sun.alt) >= args.sun_avoidance_altitude_deg
-                    and patch.in_patch(sun)
-                ):
-                    not_visible.append((patch.name, "Sun in patch"))
-                    in_view = False
-                if (
-                    args.moon_avoidance_angle_deg >= 0
-                    and np.degrees(moon.alt) >= args.moon_avoidance_altitude_deg
-                    and patch.in_patch(moon)
-                ):
-                    not_visible.append((patch.name, "Moon in patch"))
-                    in_view = False
         if in_view:
             visible.append(patch)
             log.debug(
@@ -2134,6 +2232,7 @@ def get_visible(args, observer, sun, moon, patches, el_min):
                 )
             )
         else:
+            not_visible.append((patch.name, msg))
             log.debug(f"NOT VISIBLE: {not_visible[-1]}")
     return visible, not_visible
 
@@ -2394,7 +2493,7 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
             continue
         moon.compute(observer)
 
-        visible, not_visible = get_visible(args, observer, sun, moon, patches, el_min)
+        visible, not_visible = get_visible(args, observer, patches, el_min)
 
         if len(visible) == 0:
             log.debug(f"No patches visible at {to_UTC(t)}: {not_visible}")
@@ -2648,7 +2747,9 @@ instead of the concise 11-field schedule""",
     --patch name,COOLER,weight,power,hold_time_min_h,hold_time_max_h,
             cycle_time_h,az,el (Cooler cycle)
     --patch name,HORIZONTAL,weight,azmin,azmax,el,scantime_min
+    --patch name,WEIGHTED_HORIZONTAL,weight,azmin,azmax,el,scantime_min,weightfile,fov_deg
     --patch name,SIDEREAL,weight,azmin,azmax,el,RA_start,RA_stop,scantime_min
+    --patch name,MAX-DEPTH,weight,lon,lat,radius,throw,scantime_min
 Weight is interpreted like a UNIX priority. Lower number translates to more
 frequent observations""",
     )
@@ -2843,13 +2944,6 @@ where YEAR, MONTH and DAY are integers. END days are inclusive""",
         required=False,
         type=float,
         help="Upper plotting range for polarization map",
-    )
-    parser.add_argument(
-        "--delay-sso-check",
-        required=False,
-        default=False,
-        action="store_true",
-        help="Only apply SSO check during simulated scan.",
     )
     parser.add_argument(
         "--pole-mode",
@@ -3056,6 +3150,26 @@ def parse_patch_horizontal(args, parts):
 
 
 @function_timer
+def parse_patch_weighted_horizontal(args, parts):
+    """Parse a weighted horizontal patch definition line"""
+    log = Logger.get()
+    corners = []
+    log.info("Weighted horizontal format")
+    name = parts[0]
+    weight = float(parts[2])
+    azmin = float(parts[3]) * degree
+    azmax = float(parts[4]) * degree
+    el = float(parts[5]) * degree
+    scantime = float(parts[6])  # minutes
+    weightfile = parts[7]
+    fov = float(parts[8]) * degree
+    patch = WeightedHorizontalPatch(
+        name, weight, azmin, azmax, el, scantime, weightfile, fov
+    )
+    return patch
+
+
+@function_timer
 def parse_patch_sidereal(args, parts):
     """Parse a sidereal patch definition line"""
     log = Logger.get()
@@ -3071,6 +3185,50 @@ def parse_patch_sidereal(args, parts):
     scantime = float(parts[8])
     patch = SiderealPatch(
         name, weight, azmin, azmax, el, siderealtime_start, siderealtime_stop, scantime
+    )
+    return patch
+
+
+@function_timer
+def parse_patch_max_depth(args, parts, observer):
+    """Parse a maximum depth patch definition line"""
+    log = Logger.get()
+    corners = []
+    log.info("Maximum depth format")
+    name = parts[0]
+    weight = float(parts[2])
+    try:
+        # Assume coordinates in degrees
+        lon = float(parts[3]) * degree
+        lat = float(parts[4]) * degree
+    except ValueError:
+        # Failed simple interpreration, assume pyEphem strings
+        lon = parts[3]
+        lat = parts[4]
+    if args.patch_coord == "C":
+        center = ephem.Equatorial(lon, lat, epoch="2000")
+    elif args.patch_coord == "E":
+        center = ephem.Ecliptic(lon, lat, epoch="2000")
+    elif args.patch_coord == "G":
+        center = ephem.Galactic(lon, lat, epoch="2000")
+    else:
+        raise RuntimeError("Unknown coordinate system: {}".format(args.patch_coord))
+    center = ephem.Equatorial(center)
+    patch_center = ephem.FixedBody()
+    patch_center._ra = center.ra
+    patch_center._dec = center.dec
+    radius = float(parts[5]) * degree
+    throw = float(parts[6]) * degree
+    scantime = float(parts[7])
+    patch = MaxDepthPatch(
+        name, weight, patch_center, radius, throw, scantime,
+        el_min=args.el_min_deg * degree,
+        el_max=args.el_max_deg * degree,
+        el_step=args.el_step_deg * degree,
+        alternate=args.alternate,
+        site_lat=observer.lat,
+        area=None,
+        elevations=args.elevations_deg,
     )
     return patch
 
@@ -3261,8 +3419,12 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         log.info(f'Adding patch "{name}"')
         if parts[1].upper() == "HORIZONTAL":
             patch = parse_patch_horizontal(args, parts)
+        elif parts[1].upper() == "WEIGHTED_HORIZONTAL":
+            patch = parse_patch_weighted_horizontal(args, parts)
         elif parts[1].upper() == "SIDEREAL":
             patch = parse_patch_sidereal(args, parts)
+        elif parts[1].upper() == "MAX-DEPTH":
+            patch = parse_patch_max_depth(args, parts, observer)
         elif parts[1].upper() == "SSO":
             patch = parse_patch_sso(args, parts)
         elif parts[1].upper() == "COOLER":
