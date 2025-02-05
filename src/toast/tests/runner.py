@@ -18,6 +18,7 @@ from . import covariance as test_covariance
 from . import dist as test_dist
 from . import env as test_env
 from . import fft as test_fft
+from . import footprint as test_footprint
 from . import healpix as test_healpix
 from . import instrument as test_instrument
 from . import intervals as test_intervals
@@ -181,6 +182,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_instrument))
         suite.addTest(loader.loadTestsFromModule(test_pixels))
         suite.addTest(loader.loadTestsFromModule(test_weather))
+        suite.addTest(loader.loadTestsFromModule(test_footprint))
 
         suite.addTest(loader.loadTestsFromModule(test_observation))
         suite.addTest(loader.loadTestsFromModule(test_dist))

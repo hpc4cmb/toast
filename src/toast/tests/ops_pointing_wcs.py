@@ -121,7 +121,6 @@ class PointingWCSTest(MPITestCase):
         )
 
     def test_wcs(self):
-        return
         # Test basic creation of WCS projections and plotting
         res_deg = (0.01, 0.01)
         dims = self.proj_dims
@@ -161,7 +160,6 @@ class PointingWCSTest(MPITestCase):
                 plot_wcs_maps(hitfile=outfile)
 
     def test_projections(self):
-        return
         centers = list()
         for lon in [130.0, 180.0]:
             for lat in [-40.0, 0.0]:
@@ -184,6 +182,7 @@ class PointingWCSTest(MPITestCase):
                 # Verify that we can change the projection traits in various ways.
                 # First use non-auto_bounds to create one boresight pointing per
                 # pixel.
+                pixels.auto_bounds = False
                 pixels.center = center
                 pixels.bounds = ()
                 pixels.resolution = (0.02 * u.degree, 0.02 * u.degree)
