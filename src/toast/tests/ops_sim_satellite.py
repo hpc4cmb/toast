@@ -145,3 +145,82 @@ class SimSatelliteTest(MPITestCase):
         check = qa.rotate(q_prec, zaxis)
 
         np.testing.assert_almost_equal(np.dot(check[0], check[-1]), 1.0, decimal=5)
+
+    def test_load_pipe(self):
+        # Slow sampling
+        fp = fake_hexagon_focalplane(
+            n_pix=self.npix,
+            sample_rate=(5.0 / 60.0) * u.Hz,
+        )
+        site = SpaceSite("L2")
+
+        sch = create_satellite_schedule(
+            prefix="test_",
+            mission_start=datetime(2023, 2, 23),
+            observation_time=24 * u.hour,
+            gap_time=0 * u.second,
+            num_observations=30,
+            prec_period=90 * u.minute,
+            spin_period=10 * u.minute,
+        )
+
+        tele = Telescope("test", focalplane=fp, site=site)
+
+        data = Data(self.toastcomm)
+
+        # Build the loading pipe
+        load_pipe = ops.Pipeline(
+            operators = [
+                ops.Create(detdata=[("flags", "(1)", "uint8", None)]),
+                ops.DefaultNoiseModel(noise_model="noise_model"),
+                ops.SimNoise(
+                    noise_model="noise_model", det_data=defaults.det_data
+                ),
+            ]
+        )
+
+        # Scan fast enough to cover some sky in a short amount of time.  Reduce the
+        # angles to achieve a more compact hit map.
+        sim_sat = ops.SimSatellite(
+            name="sim_sat",
+            telescope=tele,
+            schedule=sch,
+            hwp_angle=defaults.hwp_angle,
+            hwp_rpm=1.0,
+            spin_angle=30.0 * u.degree,
+            prec_angle=65.0 * u.degree,
+            load_pipe=load_pipe,
+            det_data=None,
+            det_flags=None,
+        )
+        sim_sat.apply(data)
+
+        # Expand pointing and make a hit map.
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nest=True,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.nside_submap = 2
+        pixels.nside = 8
+        pixels.apply(data)
+
+        build_hits = ops.BuildHitMap(pixel_dist="pixel_dist", pixels=pixels.pixels)
+        build_hits.load_apply(data)
+
+        # Plot the hits
+
+        hit_path = os.path.join(self.outdir, "hits.fits")
+        data[build_hits.hits].write(hit_path)
+
+        if data.comm.world_rank == 0:
+            set_matplotlib_backend()
+            import matplotlib.pyplot as plt
+
+            hits = hp.read_map(hit_path, field=None, nest=pixels.nest)
+            outfile = os.path.join(self.outdir, "hits.png")
+            hp.mollview(hits, xsize=1600, nest=True)
+            plt.savefig(outfile)
+            plt.close()
+        close_data(data)

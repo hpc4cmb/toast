@@ -137,8 +137,8 @@ class Fourier2D(Template):
             # Build up detector list
             self._obs_dets[iob] = set()
             for d in ob.select_local_detectors(flagmask=self.det_mask):
-                if d not in ob.detdata[self.det_data].detectors:
-                    continue
+                # if d not in ob.detdata[self.det_data].detectors:
+                #     continue
                 self._obs_dets[iob].add(d)
                 if d not in all_dets:
                     all_dets[d] = None

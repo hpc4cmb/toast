@@ -162,8 +162,8 @@ class Periodic(Template):
             # Build up detector list
             self._obs_dets[iob] = set()
             for d in ob.select_local_detectors(flagmask=self.det_mask):
-                if d not in ob.detdata[self.det_data].detectors:
-                    continue
+                # if d not in ob.detdata[self.det_data].detectors:
+                #     continue
                 self._obs_dets[iob].add(d)
                 if d not in all_dets:
                     all_dets[d] = None
@@ -172,7 +172,7 @@ class Periodic(Template):
 
         if total_bins == 0:
             msg = f"Template {self.name} process group {new_data.comm.group}"
-            msg += f" has zero amplitude bins- change the binning size."
+            msg += " has zero amplitude bins- change the binning size."
             raise RuntimeError(msg)
 
         # During application of the template, we will be looping over detectors
@@ -241,7 +241,6 @@ class Periodic(Template):
                     if self.key not in ob.shared:
                         continue
                 nbins = self._obs_nbins[iob]
-                det_indx = ob.detdata[self.det_data].indices([det])[0]
                 amp_hits = self._amp_hits[amp_offset : amp_offset + nbins]
                 amp_flags = self._amp_flags[amp_offset : amp_offset + nbins]
                 if self.det_flags is not None:
@@ -255,7 +254,6 @@ class Periodic(Template):
                     else:
                         vw_data = ob.shared[self.key].data[vw_slc]
                     good, amp_indx = self._view_flags_and_index(
-                        det_indx,
                         iob,
                         ob,
                         vw,
@@ -282,7 +280,7 @@ class Periodic(Template):
         return z
 
     def _view_flags_and_index(
-        self, det_indx, ob_indx, ob, view, flag_indx=None, det_flags=False
+        self, ob_indx, ob, view, flag_indx=None, det_flags=False
     ):
         """Get the flags and amplitude indices for one detector and view."""
         vw_slc = slice(view.first, view.last, 1)
@@ -339,7 +337,6 @@ class Periodic(Template):
             for vw in ob.intervals[self.view].data:
                 vw_slc = slice(vw.first, vw.last, 1)
                 good, amp_indx = self._view_flags_and_index(
-                    det_indx,
                     iob,
                     ob,
                     vw,
@@ -374,7 +371,6 @@ class Periodic(Template):
             for vw in ob.intervals[self.view].data:
                 vw_slc = slice(vw.first, vw.last, 1)
                 good, amp_indx = self._view_flags_and_index(
-                    det_indx,
                     iob,
                     ob,
                     vw,

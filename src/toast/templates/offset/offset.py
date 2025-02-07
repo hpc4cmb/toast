@@ -141,10 +141,6 @@ class Offset(Template):
         # Units for inverse variance weighting
         detnoise_units = 1.0 / self.det_data_units**2
 
-        # Use this as an "Ordered Set".  We want the unique detectors on this process,
-        # but sorted in order of occurrence.
-        all_dets = OrderedDict()
-
         # Amplitude lengths of all views for each obs
         self._obs_views = dict()
 
@@ -160,14 +156,14 @@ class Offset(Template):
         # Good detectors to use for each observation
         self._obs_dets = dict()
 
-        for iob, ob in enumerate(new_data.obs):
+        for ob in new_data.obs:
             # Compute sample rate from timestamps
             (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(ob.shared[self.times])
-            self._obs_rate[iob] = rate
+            self._obs_rate[ob.uid] = rate
 
             # The step length for this observation
             step_length = self._step_length(
-                self.step_time.to_value(u.second), self._obs_rate[iob]
+                self.step_time.to_value(u.second), self._obs_rate[ob.uid]
             )
 
             # Track number of offset amplitudes per view, per det.
@@ -178,13 +174,13 @@ class Offset(Template):
                 if view_n_amp * step_length < view_len:
                     view_n_amp += 1
                 ob_views.append(view_n_amp)
-            self._obs_views[iob] = np.array(ob_views, dtype=np.int64)
+            self._obs_views[ob.uid] = np.array(ob_views, dtype=np.int64)
 
             # Even if we are not using a noise prior, we still use the "view"
             # to exclude samples.  Compute that common flag vector now.
-            self._obs_view_flags[iob] = np.ones(ob.n_local_samples, dtype=np.uint8)
+            self._obs_view_flags[ob.uid] = np.ones(ob.n_local_samples, dtype=np.uint8)
             for vw in ob.intervals[self.view]:
-                self._obs_view_flags[iob][vw.first : vw.last] = 0
+                self._obs_view_flags[ob.uid][vw.first : vw.last] = 0
 
             # The noise model.
             if self.noise_model is not None:
@@ -209,38 +205,32 @@ class Offset(Template):
                         msg = f"obs {ob.name} has only one offset amplitude,"
                         msg += " disabling noise prior"
                         log.warning(msg)
-                        self._freq[iob] = None
+                        self._freq[ob.uid] = None
                     else:
                         # Choose equal spacing in log units
                         powmin = np.floor(np.log10(1 / obstime)) - 1
                         powmax = min(
-                            np.ceil(np.log10(1 / tbase)) + 2, np.log10(self._obs_rate[iob])
+                            np.ceil(np.log10(1 / tbase)) + 2, np.log10(self._obs_rate[ob.uid])
                         )
-                        self._freq[iob] = np.logspace(powmin, powmax, 1000)
+                        self._freq[ob.uid] = np.logspace(powmin, powmax, 1000)
 
             # Build up detector list
-            self._obs_dets[iob] = set()
+            self._obs_dets[ob.uid] = set()
             for d in ob.select_local_detectors(flagmask=self.det_mask):
                 if d not in ob.detdata[self.det_data].detectors:
                     continue
-                self._obs_dets[iob].add(d)
-                if d not in all_dets:
-                    all_dets[d] = None
+                self._obs_dets[ob.uid].add(d)
 
-        self._all_dets = list(all_dets.keys())
-
-        # Go through the data one local detector at a time and compute the offsets
-        # into the amplitudes.
+        # Go through the data and compute the offsets into the amplitudes for each
+        # observation and detector.
 
         self._det_start = dict()
-
         offset = 0
-        for det in self._all_dets:
-            self._det_start[det] = offset
-            for iob, ob in enumerate(new_data.obs):
-                if det not in self._obs_dets[iob]:
-                    continue
-                offset += np.sum(self._obs_views[iob])
+        for ob in new_data.obs:
+            self._det_start[ob.uid] = dict()
+            for det in self._obs_dets[ob.uid]:
+                self._det_start[ob.uid][det] = offset
+                offset += np.sum(self._obs_views[ob.uid])
 
         # Now we know the total number of amplitudes.
 
@@ -271,11 +261,8 @@ class Offset(Template):
             self._offsetvar = self._offsetvar_raw.array()
 
         offset = 0
-        for det in self._all_dets:
-            for iob, ob in enumerate(new_data.obs):
-                if det not in self._obs_dets[iob]:
-                    continue
-
+        for ob in new_data.obs:
+            for det in self._obs_dets[ob.uid]:
                 # "Noise weight" (time-domain inverse variance)
                 detnoise = 1.0
                 if self.noise_model is not None:
@@ -287,14 +274,14 @@ class Offset(Template):
 
                 # The step length for this observation
                 step_length = self._step_length(
-                    self.step_time.to_value(u.second), self._obs_rate[iob]
+                    self.step_time.to_value(u.second), self._obs_rate[ob.uid]
                 )
 
                 # Loop over boundary views
                 for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
                     vw_slc = slice(vw.first, vw.last, 1)
                     view_samples = vw.last - vw.first
-                    n_amp_view = self._obs_views[iob][ivw]
+                    n_amp_view = self._obs_views[ob.uid][ivw]
 
                     # Move this loop to compiled code if it is slow...
                     # Note:  we are building the offset amplitude *variance*, which is
@@ -305,9 +292,7 @@ class Offset(Template):
                             self._offsetvar[offset + amp] = 0.0
                             self._amp_flags[offset + amp] = True
                     else:
-                        flags = np.array(
-                            self._obs_view_flags[iob][vw_slc], dtype=np.uint8
-                        )
+                        flags = np.copy(self._obs_view_flags[ob.uid][vw_slc])
                         if self.det_flags is not None:
                             flags[:] |= (
                                 ob.detdata[self.det_flags][det, vw_slc]
@@ -321,8 +306,9 @@ class Offset(Template):
                             n_good = amplen - np.count_nonzero(
                                 flags[voff : voff + amplen]
                             )
-                            if (n_good / amplen) <= self.good_fraction:
-                                # This detector is cut or too many samples flagged
+                            if (n_good / step_length) <= self.good_fraction:
+                                # This detector is cut or too many samples flagged,
+                                # OR the amplitude length is truncated and too short
                                 self._offsetvar[offset + amp] = 0.0
                                 self._amp_flags[offset + amp] = True
                             else:
@@ -330,7 +316,7 @@ class Offset(Template):
                                 self._offsetvar[offset + amp] = 1.0 / (
                                     detnoise * n_good
                                 )
-                            voff += step_length
+                            voff += amplen
                     offset += n_amp_view
 
         # Compute the amplitude noise filter and preconditioner for each detector
@@ -345,19 +331,16 @@ class Offset(Template):
 
         if self.use_noise_prior:
             offset = 0
-            for det in self._all_dets:
-                for iob, ob in enumerate(new_data.obs):
-                    if det not in self._obs_dets[iob]:
-                        continue
-                    if iob not in self._filters:
-                        self._filters[iob] = dict()
-                        self._precond[iob] = dict()
+            for ob in new_data.obs:
+                for det in self._obs_dets[ob.uid]:
+                    if ob.uid not in self._filters:
+                        self._filters[ob.uid] = dict()
+                        self._precond[ob.uid] = dict()
 
-                    base_sec = self.step_time.to_value(u.second)
                     offset_psd = self._get_offset_psd(
                         ob[self.noise_model],
-                        self._freq[iob],
-                        base_sec,
+                        self._freq[ob.uid],
+                        self.step_time.to_value(u.second),
                         det,
                     )
 
@@ -396,7 +379,7 @@ class Offset(Template):
 
                         ax = fig.add_subplot(2, 1, 2)
                         ax.loglog(
-                            self._freq[iob],
+                            self._freq[ob.uid],
                             offset_psd,
                             label="Offset PSD",
                         )
@@ -414,15 +397,15 @@ class Offset(Template):
                     )
 
                     # Log version of offset PSD and its inverse for interpolation
-                    logfreq = np.log(self._freq[iob])
+                    logfreq = np.log(self._freq[ob.uid])
                     logpsd = np.log(offset_psd)
                     logfilter = np.log(1.0 / offset_psd)
 
                     # Compute the list of filters and preconditioners (one per view)
                     # For this detector.
 
-                    self._filters[iob][det] = list()
-                    self._precond[iob][det] = list()
+                    self._filters[ob.uid][det] = list()
+                    self._precond[ob.uid][det] = list()
 
                     if self.debug_plots is not None:
                         ffilter = os.path.join(
@@ -441,7 +424,7 @@ class Offset(Template):
                     for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
                         vw_slc = slice(vw.first, vw.last, 1)
                         view_samples = vw.last - vw.first
-                        n_amp_view = self._obs_views[iob][ivw]
+                        n_amp_view = self._obs_views[ob.uid][ivw]
                         offsetvar_slice = self._offsetvar[offset : offset + n_amp_view]
 
                         filterlen = 2
@@ -465,7 +448,7 @@ class Offset(Template):
 
                         noisefilter = self._truncate(np.fft.irfft(fourierfilter))
 
-                        self._filters[iob][det].append(noisefilter)
+                        self._filters[ob.uid][det].append(noisefilter)
 
                         if self.debug_plots is not None:
                             axfilter.plot(
@@ -559,7 +542,7 @@ class Offset(Template):
                                     preconditioner,
                                     label=f"Banded preconditioner {ivw}",
                                 )
-                        self._precond[iob][det].append((preconditioner, lower))
+                        self._precond[ob.uid][det].append((preconditioner, lower))
                         offset += n_amp_view
 
                     if self.debug_plots is not None:
@@ -701,9 +684,6 @@ class Offset(Template):
 
         return offset_psd
 
-    def _detectors(self):
-        return self._all_dets
-
     def _zeros(self):
         z = Amplitudes(self.data.comm, self._n_global, self._n_local)
         if z.local_flags is not None:
@@ -714,61 +694,24 @@ class Offset(Template):
         return int(np.rint(stime * rate))
 
     @function_timer
-    def _add_to_signal(self, detector, amplitudes, use_accel=None, **kwargs):
-        log = Logger.get()
-
-        if detector not in self._all_dets:
-            # This must have been cut by per-detector flags during initialization
-            return
-
+    def _add_to_signal(self, obs, detectors, amplitudes, use_accel=None, **kwargs):
         # Kernel selection
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
-        amp_offset = self._det_start[detector]
-        for iob, ob in enumerate(self.data.obs):
-            if detector not in self._obs_dets[iob]:
+        for det in detectors:
+            if det not in self._det_start[obs.uid]:
                 continue
-            det_indx = ob.detdata[self.det_data].indices([detector])
+            amp_offset = self._det_start[obs.uid][det]
+            det_indx = obs.detdata[self.det_data].indices([det])
             # The step length for this observation
             step_length = self._step_length(
-                self.step_time.to_value(u.second), self._obs_rate[iob]
+                self.step_time.to_value(u.second), self._obs_rate[obs.uid]
             )
 
             # The number of amplitudes in each view
-            n_amp_views = self._obs_views[iob]
+            n_amp_views = self._obs_views[obs.uid]
 
-            # # DEBUGGING
-            # restore_dev = False
-            # prefix = "HOST"
-            # if amplitudes.accel_in_use():
-            #     amplitudes.accel_update_host()
-            #     restore_dev = True
-            #     prefix = "DEVICE"
-            # print(
-            #     f"{prefix} Add to signal input:  {amp_offset}, {n_amp_views}, {amplitudes.local}",
-            #     flush=True,
-            # )
-            # if restore_dev:
-            #     amplitudes.accel_update_device()
-
-            # # DEBUGGING
-            # restore_dev = False
-            # prefix = "HOST"
-            # if ob.detdata[self.det_data].accel_in_use():
-            #     ob.detdata[self.det_data].accel_update_host()
-            #     restore_dev = True
-            #     prefix = "DEVICE"
-            # tod_min = np.amin(ob.detdata[self.det_data])
-            # tod_max = np.amax(ob.detdata[self.det_data])
-            # print(
-            #     f"{prefix} Add to signal starting TOD output:  {ob.detdata[self.det_data]}, min={tod_min}, max={tod_max}",
-            #     flush=True,
-            # )
-            # if (np.absolute(tod_min) < 1.0e-15) and (np.absolute(tod_max) < 1.0e-15):
-            #     ob.detdata[self.det_data][:] = 0
-            # if restore_dev:
-            #     ob.detdata[self.det_data].accel_update_device()
-
+            # FIXME: come back to this and make this work with ALL dets.
             offset_add_to_signal(
                 step_length,
                 amp_offset,
@@ -776,74 +719,45 @@ class Offset(Template):
                 amplitudes.local,
                 amplitudes.local_flags,
                 det_indx[0],
-                ob.detdata[self.det_data].data,
-                ob.intervals[self._bounds_view].data,
+                obs.detdata[self.det_data].data,
+                obs.intervals[self._bounds_view].data,
                 impl=implementation,
                 use_accel=use_accel,
             )
 
-            # # DEBUGGING
-            # restore_dev = False
-            # prefix = "HOST"
-            # if ob.detdata[self.det_data].accel_in_use():
-            #     ob.detdata[self.det_data].accel_update_host()
-            #     restore_dev = True
-            #     prefix = "DEVICE"
-            # print(
-            #     f"{prefix} Add to signal output:  {ob.detdata[self.det_data]}",
-            #     flush=True,
-            # )
-            # if restore_dev:
-            #     ob.detdata[self.det_data].accel_update_device()
-
             amp_offset += np.sum(n_amp_views)
 
     @function_timer
-    def _project_signal(self, detector, amplitudes, use_accel=None, **kwargs):
-        log = Logger.get()
-
-        if detector not in self._all_dets:
-            # This must have been cut by per-detector flags during initialization
-            return
-
+    def _project_signal(self, obs, detectors, amplitudes, use_accel=None, **kwargs):
         # Kernel selection
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
-        amp_offset = self._det_start[detector]
-
-        for iob, ob in enumerate(self.data.obs):
-            if detector not in self._obs_dets[iob]:
+        for det in detectors:
+            if det not in self._det_start[obs.uid]:
                 continue
-            det_indx = ob.detdata[self.det_data].indices([detector])
+            amp_offset = self._det_start[obs.uid][det]
+            det_indx = obs.detdata[self.det_data].indices([det])
+
             if self.det_flags is not None:
-                flag_indx = ob.detdata[self.det_flags].indices([detector])
-                flag_data = np.copy(ob.detdata[self.det_flags].data)
-                flag_data |= self.det_flag_mask * self._obs_view_flags[iob]
+                flag_indx = obs.detdata[self.det_flags].indices([det])
+                flag_data = np.copy(obs.detdata[self.det_flags].data)
+                flag_data |= self.det_flag_mask * self._obs_view_flags[obs.uid]
             else:
                 flag_indx = np.array([-1], dtype=np.int32)
                 flag_data = np.zeros(1, dtype=np.uint8)
             # The step length for this observation
             step_length = self._step_length(
-                self.step_time.to_value(u.second), self._obs_rate[iob]
+                self.step_time.to_value(u.second), self._obs_rate[obs.uid]
             )
 
             # The number of amplitudes in each view
-            n_amp_views = self._obs_views[iob]
+            n_amp_views = self._obs_views[obs.uid]
 
-            # # DEBUGGING
-            # restore_dev = False
-            # prefix="HOST"
-            # if ob.detdata[self.det_data].accel_in_use():
-            #     ob.detdata[self.det_data].accel_update_host()
-            #     restore_dev = True
-            #     prefix="DEVICE"
-            # print(f"{prefix} Project signal input:  {ob.detdata[self.det_data]}", flush=True)
-            # if restore_dev:
-            #     ob.detdata[self.det_data].accel_update_device()
+            # FIXME: come back to this and make this work with ALL dets.
 
             offset_project_signal(
                 det_indx[0],
-                ob.detdata[self.det_data].data,
+                obs.detdata[self.det_data].data,
                 flag_indx[0],
                 flag_data,
                 self.det_flag_mask,
@@ -852,21 +766,10 @@ class Offset(Template):
                 n_amp_views,
                 amplitudes.local,
                 amplitudes.local_flags,
-                ob.intervals[self._bounds_view].data,
+                obs.intervals[self._bounds_view].data,
                 impl=implementation,
                 use_accel=use_accel,
             )
-
-            # restore_dev = False
-            # prefix="HOST"
-            # if amplitudes.accel_in_use():
-            #     amplitudes.accel_update_host()
-            #     restore_dev = True
-            #     prefix="DEVICE"
-            # print(f"{prefix} Project signal output:  {amp_offset}, {n_amp_views}, {amplitudes.local}", flush=True)
-            # if restore_dev:
-            #     amplitudes.accel_update_device()
-
             amp_offset += np.sum(n_amp_views)
 
     @function_timer
@@ -882,23 +785,20 @@ class Offset(Template):
             set_matplotlib_backend()
             import matplotlib.pyplot as plt
 
-        for det in self._all_dets:
-            offset = self._det_start[det]
-            for iob, ob in enumerate(self.data.obs):
-                if det not in self._obs_dets[iob]:
-                    continue
-
+        for ob in self.data.obs:
+            for det in self._obs_dets[ob.uid]:
+                offset = self._det_start[ob.uid][det]
                 for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
-                    n_amp_view = self._obs_views[iob][ivw]
+                    n_amp_view = self._obs_views[ob.uid][ivw]
                     amp_slice = slice(offset, offset + n_amp_view, 1)
                     amps_in = amplitudes_in.local[amp_slice]
                     amp_flags_in = amplitudes_in.local_flags[amp_slice]
                     amps_out = amplitudes_out.local[amp_slice]
-                    if det in self._filters[iob]:
+                    if det in self._filters[ob.uid]:
                         # There is some contribution from this detector
                         amps_out[:] += scipy.signal.convolve(
                             amps_in,
-                            self._filters[iob][det][ivw],
+                            self._filters[ob.uid][det][ivw],
                             mode="same",
                             method="auto",
                         )
@@ -942,7 +842,6 @@ class Offset(Template):
                             ax.legend(loc="best")
                             fig.savefig(fname)
                             plt.close(fig)
-
                     else:
                         amps_out[:] = 0.0
                     offset += n_amp_view
@@ -956,20 +855,18 @@ class Offset(Template):
                 )
             # Our design matrix includes a term with the inverse offset covariance.
             # This means that our preconditioner should include this term as well.
-            for det in self._all_dets:
-                offset = self._det_start[det]
-                for iob, ob in enumerate(self.data.obs):
-                    if det not in self._obs_dets[iob]:
-                        continue
+            for ob in self.data.obs:
+                for det in self._obs_dets[ob.uid]:
+                    offset = self._det_start[ob.uid][det]
                     # Loop over views
                     for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
-                        n_amp_view = self._obs_views[iob][ivw]
+                        n_amp_view = self._obs_views[ob.uid][ivw]
                         amp_slice = slice(offset, offset + n_amp_view, 1)
 
                         amps_in = amplitudes_in.local[amp_slice]
                         amp_flags_in = amplitudes_in.local_flags[amp_slice]
                         amps_out = None
-                        if det in self._precond[iob]:
+                        if det in self._precond[ob.uid]:
                             # We have a contribution from this detector
                             if self.precond_width <= 1:
                                 # We are using a Toeplitz preconditioner.
@@ -977,16 +874,17 @@ class Offset(Template):
                                 # `fftconvolve` depending on the size of the inputs
                                 amps_out = scipy.signal.convolve(
                                     amps_in,
-                                    self._precond[iob][det][ivw][0],
+                                    self._precond[ob.uid][det][ivw][0],
                                     mode="same",
                                     method="auto",
                                 )
                             else:
-                                # Use pre-computed Cholesky decomposition.  Note that this
-                                # is the decomposition of the actual preconditioner (not
-                                # its inverse), since we are solving Mx=b.
+                                # Use pre-computed Cholesky decomposition.  Note
+                                # that this is the decomposition of the actual
+                                # preconditioner (not its inverse), since we are
+                                # solving Mx=b.
                                 amps_out = scipy.linalg.cho_solve_banded(
-                                    self._precond[iob][det][ivw],
+                                    self._precond[ob.uid][det][ivw],
                                     amps_in,
                                     overwrite_b=False,
                                     check_finite=True,
@@ -1049,18 +947,17 @@ class Offset(Template):
         # Copy of the amplitudes, organized by observation and detector
         obs_det_amps = dict()
 
-        for det in self._all_dets:
-            amp_offset = self._det_start[det]
-            for iob, ob in enumerate(self.data.obs):
-                if det not in self._obs_dets[iob]:
-                    continue
+        for ob in self.data.obs:
+            for det in self._obs_dets[ob.uid]:
+                amp_offset = self._det_start[ob.uid][det]
+
                 if not ob.is_distributed_by_detector:
                     raise NotImplementedError(
                         "Only observations distributed by detector are supported"
                     )
                 # The step length for this observation
                 step_length = self._step_length(
-                    self.step_time.to_value(u.second), self._obs_rate[iob]
+                    self.step_time.to_value(u.second), self._obs_rate[ob.uid]
                 )
 
                 if ob.name not in obs_det_amps:
@@ -1074,7 +971,7 @@ class Offset(Template):
                     amp_start = list()
                     amp_stop = list()
                     for ivw, vw in enumerate(ob.intervals[self._bounds_view]):
-                        n_amp_view = self._obs_views[iob][ivw]
+                        n_amp_view = self._obs_views[ob.uid][ivw]
                         for istep in range(n_amp_view):
                             istart = vw.first + istep * step_length
                             amp_first.append(istart)
@@ -1095,7 +992,7 @@ class Offset(Template):
                 det_amps = list()
                 det_flags = list()
                 for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
-                    n_amp_view = self._obs_views[iob][ivw]
+                    n_amp_view = self._obs_views[ob.uid][ivw]
                     amp_slice = slice(amp_offset, amp_offset + n_amp_view, 1)
                     det_amps.append(amplitudes.local[amp_slice])
                     det_flags.append(amplitudes.local_flags[amp_slice])
@@ -1114,7 +1011,7 @@ class Offset(Template):
         # them in time rather than just extracting detector data and writing
         # to the datasets.
 
-        for iob, ob in enumerate(self.data.obs):
+        for ob in self.data.obs:
             if ob.name not in obs_det_amps:
                 # There were no good amplitudes in this observation
                 continue

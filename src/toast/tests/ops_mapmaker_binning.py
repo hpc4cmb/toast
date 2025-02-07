@@ -6,13 +6,11 @@ import os
 
 import healpy as hp
 import numpy as np
-import numpy.testing as nt
-from astropy import units as u
 
 from .. import ops as ops
 from ..covariance import covariance_apply
+from ..footprint import footprint_distribution
 from ..mpi import MPI
-from ..noise import Noise
 from ..observation import default_values as defaults
 from ..vis import set_matplotlib_backend
 from .helpers import close_data, create_outdir, create_satellite_data
@@ -125,6 +123,126 @@ class MapmakerBinningTest(MPITestCase):
             if comm is not None:
                 failed = comm.allreduce(failed, op=MPI.LOR)
             self.assertFalse(failed)
+
+        close_data(data)
+
+    def test_binned_load_and_cache(self):
+        np.random.seed(123456)
+        testdir = os.path.join(self.outdir, "bin_cache")
+        cache_dir = os.path.join(testdir, "cache")
+
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm, no_det_data=True)
+
+        sim_pipe_ops = list()
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        sim_pipe_ops.append(default_model)
+
+        # Simulate noise
+        sim_noise = ops.SimNoise(noise_model="noise_model")
+        sim_pipe_ops.append(sim_noise)
+
+        # Pointing operator
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            detector_pointing=detpointing,
+        )
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        sim_pipe_ops.append(pixels)
+        sim_pipe_ops.append(weights)
+
+        sim_pipe = ops.Pipeline(operators=sim_pipe_ops)
+
+        # Add this simulation pipeline as a loader to each observation
+        for ob in data.obs:
+            ob.loader = ops.PipelineLoader(pipeline=sim_pipe)
+
+        # Create a pixel distribution based on a footprint
+        data["pixel_dist"] = footprint_distribution(
+            healpix_nside=64,
+            healpix_nside_submap=16,
+            comm=data.comm.comm_world,
+        )
+
+        # Set up binned map
+        binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            covariance="covariance",
+            binned="binned",
+            hits="hits",
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+            cache_dir=cache_dir,
+        )
+        binner.apply(data)
+
+        binmap = data[binner.binned]
+
+        toast_hit_path = os.path.join(
+            testdir, "toast_hits.fits"
+        )
+        toast_bin_path = os.path.join(
+            testdir, "toast_bin.fits"
+        )
+        toast_cov_path = os.path.join(
+            testdir, "toast_cov.fits"
+        )
+        data[binner.binned].write(toast_bin_path)
+        data[binner.hits].write(toast_hit_path)
+        data[binner.covariance].write(toast_cov_path)
+
+        # Manual check
+
+        for ob in data.obs:
+            ob.detdata.create("signal", units=defaults.det_data_units)
+        sim_pipe.apply(data)
+
+        pixels.apply(data)
+        weights.apply(data)
+
+        noise_weight = ops.BuildNoiseWeighted(
+            pixel_dist="pixel_dist",
+            noise_model=default_model.noise_model,
+            pixels=pixels.pixels,
+            weights=weights.weights,
+            det_data=sim_noise.det_data,
+            zmap="zmap",
+        )
+        noise_weight.apply(data)
+
+        cov_and_hits = ops.CovarianceAndHits(
+            pixel_dist="pixel_dist",
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model="noise_model",
+            covariance="cov_check",
+            hits="hits_check",
+            rcond="rcond_check",
+        )
+        cov_and_hits.apply(data)
+
+        covariance_apply(
+            data[cov_and_hits.covariance], data["zmap"], use_alltoallv=False
+        )
+
+        comm = binmap.distribution.comm
+        failed = False
+        for sm in range(binmap.distribution.n_local_submap):
+            for px in range(binmap.distribution.n_pix_submap):
+                if not np.allclose(binmap.data[sm, px], data["zmap"].data[sm, px]):
+                    print(f"FAIL {binmap.data[sm, px]} != {data['zmap'].data[sm, px]}", flush=True)
+                    failed = True
+        if comm is not None:
+            failed = comm.allreduce(failed, op=MPI.LOR)
+        self.assertFalse(failed)
 
         close_data(data)
 
