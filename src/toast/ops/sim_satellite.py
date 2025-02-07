@@ -22,7 +22,7 @@ from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger, name_UID, rate_from_times
 from .operator import Operator
-from .pipeline import Pipeline
+from .pipeline import Pipeline, PipelineLoader
 from .sim_hwp import simulate_hwp_response
 
 
@@ -210,7 +210,9 @@ class SimSatellite(Operator):
     )
 
     telescope_file = Unicode(
-        None, allow_none=True, help="Path to HDF5 file containing an instrument group."
+        None,
+        allow_none=True,
+        help="Path to HDF5 file containing an instrument group."
     )
 
     schedule = Instance(
@@ -220,7 +222,7 @@ class SimSatellite(Operator):
     schedule_file = Unicode(
         None,
         allow_none=True,
-        help="satellite-based observing schedule file",
+        help="Satellite-based observing schedule file",
     )
 
     spin_angle = Quantity(
@@ -294,6 +296,12 @@ class SimSatellite(Operator):
         help="Observation detdata key for flags to initialize",
     )
 
+    load_pipe = Instance(
+        klass=Pipeline,
+        allow_none=True,
+        help="A Pipeline to add as a Loader to each observation",
+    )
+
     @traitlets.validate("coord")
     def _check_coord(self, proposal):
         check = proposal["value"]
@@ -362,10 +370,21 @@ class SimSatellite(Operator):
                 self.telescope = data.comm.comm_world.bcast(self.telescope, root=0)
 
         if self.schedule is None:
-            schedule = SatelliteSchedule()
-            schedule.read(self.schedule_file, comm=data.comm.comm_world)
+            schedule = None
+            if data.comm.world_rank == 0:
+                schedule = SatelliteSchedule()
+                schedule.read(self.schedule_file, comm=data.comm.comm_world)
+            if data.comm.comm_world is not None:
+                schedule = data.comm.comm_world.bcast(schedule, root=0)
         else:
             schedule = self.schedule
+
+        if self.load_pipe is not None and (
+            self.det_data is not None or self.det_flags is not None
+        ):
+            msg = "If load_pipe is specified, the detector data and flags should be "
+            msg += "specified by that operator, not with det_data and det_flags."
+            raise RuntimeError(msg)
 
         focalplane = self.telescope.focalplane
         rate = focalplane.sample_rate.to_value(u.Hz)
@@ -588,6 +607,9 @@ class SimSatellite(Operator):
                 exists_flags = ob.detdata.ensure(
                     self.det_flags, dtype=np.uint8, detectors=dets
                 )
+
+            if self.load_pipe is not None:
+                ob.loader = PipelineLoader(pipeline=self.load_pipe)
 
             data.obs.append(ob)
 

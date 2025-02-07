@@ -55,9 +55,9 @@ class TemplateOffsetTest(MPITestCase):
         amps.local[:] = 1.0
 
         # Project.
-        ops.Reset(detdata=[defaults.det_data]).apply(data)
-        for det in tmpl.detectors():
-            tmpl.add_to_signal(det, amps)
+        for ob in data.obs:
+            dets = ob.select_local_detectors()
+            tmpl.add_to_signal(ob, dets, amps)
 
         # Verify
         for ob in data.obs:
@@ -65,8 +65,9 @@ class TemplateOffsetTest(MPITestCase):
                 np.testing.assert_equal(ob.detdata[defaults.det_data][det], 1.0)
 
         # Accumulate amplitudes
-        for det in tmpl.detectors():
-            tmpl.project_signal(det, amps)
+        for ob in data.obs:
+            dets = ob.select_local_detectors()
+            tmpl.project_signal(ob, dets, amps)
 
         # Verify
         for ob in data.obs:
@@ -141,12 +142,14 @@ class TemplateOffsetTest(MPITestCase):
         amps.accel_update_device()
 
         # Project.
-        for det in tmpl.detectors():
-            tmpl.add_to_signal(det, amps, use_accel=True)
+        for ob in data.obs:
+            dets = ob.select_local_detectors()
+            tmpl.add_to_signal(ob, dets, amps, use_accel=True)
 
         # Accumulate amplitudes
-        for det in tmpl.detectors():
-            tmpl.project_signal(det, amps, use_accel=True)
+        for ob in data.obs:
+            dets = ob.select_local_detectors()
+            tmpl.project_signal(ob, dets, amps, use_accel=True)
 
         data.accel_update_host(data_names)
         amps.accel_update_host()
@@ -269,19 +272,19 @@ class TemplateOffsetTest(MPITestCase):
             data.obs[0].select_local_detectors(flagmask=defaults.det_mask_invalid)
         )
         expected = list()
-        for det in all_dets:
-            for iob, ob in enumerate(data.obs):
-                # Get the step boundaries
-                (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(
-                    ob.shared[defaults.times]
-                )
-                step_samples = int(step_seconds * rate + 0.5)
+        for iob, ob in enumerate(data.obs):
+            # Get the step boundaries
+            (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(
+                ob.shared[defaults.times]
+            )
+            step_samples = int(step_seconds * rate + 0.5)
 
-                n_step = ob.n_local_samples // step_samples
-                if n_step * step_samples < ob.n_local_samples:
-                    n_step += 1
-                sizes = [step_samples for x in range(n_step - 1)]
-                sizes.append(ob.n_local_samples - (n_step - 1) * step_samples)
+            n_step = ob.n_local_samples // step_samples
+            if n_step * step_samples < ob.n_local_samples:
+                n_step += 1
+            sizes = [step_samples for x in range(n_step - 1)]
+            sizes.append(ob.n_local_samples - (n_step - 1) * step_samples)
+            for det in ob.select_local_detectors():
                 expected.extend(sizes)
                 offset += len(sizes)
 
@@ -339,10 +342,12 @@ class TemplateOffsetTest(MPITestCase):
         pyamps.local[:] = 1.0
 
         # Project.
-        for det in tmpl.detectors():
-            tmpl.add_to_signal(det, amps)
-        for det in pytmpl.detectors():
-            pytmpl.add_to_signal(det, pyamps)
+        for ob in data.obs:
+            dets = ob.select_local_detectors()
+            tmpl.add_to_signal(ob, dets, amps)
+        for ob in data.obs:
+            dets = ob.select_local_detectors()
+            pytmpl.add_to_signal(ob, dets, pyamps)
 
         for ob in data.obs:
             np.testing.assert_allclose(
@@ -350,10 +355,12 @@ class TemplateOffsetTest(MPITestCase):
             )
 
         # Accumulate amplitudes
-        for det in tmpl.detectors():
-            tmpl.project_signal(det, amps)
-        for det in pytmpl.detectors():
-            pytmpl.project_signal(det, pyamps)
+        for ob in data.obs:
+            dets = ob.select_local_detectors()
+            tmpl.project_signal(ob, dets, amps)
+        for ob in data.obs:
+            dets = ob.select_local_detectors()
+            pytmpl.project_signal(ob, dets, pyamps)
 
         # Verify
         np.testing.assert_allclose(amps.local, pyamps.local)

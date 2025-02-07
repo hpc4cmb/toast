@@ -38,6 +38,9 @@ class MapmakerSolveTest(MPITestCase):
         )
         sim_noise.apply(data)
 
+        # Make a copy to restore later
+        ops.Copy(detdata=[(defaults.det_data, "original")]).apply(data)
+
         # Pointing operator
         detpointing = ops.PointingDetectorSimple()
         pixels = ops.PixelsHealpix(
@@ -104,6 +107,9 @@ class MapmakerSolveTest(MPITestCase):
         # Manual check.  This applies the same operators as the RHS operator, but
         # checks things along the way.  And these lower-level operators are unit
         # tested elsewhere as well...
+
+        # Restore original TOD
+        ops.Copy(detdata=[("original", defaults.det_data)]).apply(data)
 
         # Make the binned map in a different location
         binner.binned = "check"

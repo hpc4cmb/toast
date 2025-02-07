@@ -77,6 +77,8 @@ class SolverRHS(Operator):
                 "det_data",
                 "binned",
                 "full_pointing",
+                "cache_dir",
+                "cache_detdata",
             ]:
                 if not bin.has_trait(trt):
                     msg = f"binning operator should have a '{trt}' trait"
@@ -118,35 +120,20 @@ class SolverRHS(Operator):
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
-        # Make a binned map
-
-        timer.start()
-        log.debug_rank("MapMaker   RHS begin binned map", comm=comm)
-
-        self.binning.det_data = self.det_data
-        self.binning.det_data_units = self.det_data_units
-        self.binning.apply(data, detectors=detectors)
-
-        log.debug_rank("MapMaker   RHS binned map finished in", comm=comm, timer=timer)
-
-        # Build a pipeline for the projection and template matrix application.
-        # First create the operators that we will use.
-
-        log.debug_rank("MapMaker   RHS begin create projection pipeline", comm=comm)
-
-        # Name of the temporary detdata created if we are not overwriting inputs
-        det_temp = "temp_RHS"
-
-        # Use the same pointing operator as the binning
+        # Use the same pointing operators as the binning
         pixels = self.binning.pixel_pointing
         weights = self.binning.stokes_weights
 
-        # Optionally Copy data to a temporary location to avoid overwriting the input.
-        copy_det = Copy(
-            detdata=[
-                (self.det_data, det_temp),
-            ]
-        )
+        # Name of the temporary detdata, used if we are not caching detector data.
+        det_temp = "temp_RHS"
+
+        # Detector data to clean up after each observation
+        det_cleanup = list()
+        if not self.binning.single_det_pointing:
+            det_cleanup.extend([
+                pixels.pixels,
+                weights.weights
+            ])
 
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
@@ -154,7 +141,6 @@ class SolverRHS(Operator):
             weights=weights.weights,
             view=pixels.view,
             map_key=self.binning.binned,
-            det_data=det_temp,
             det_data_units=self.det_data_units,
             det_mask=self.binning.det_mask,
             det_flag_mask=self.binning.det_flag_mask,
@@ -164,7 +150,6 @@ class SolverRHS(Operator):
         # Set up noise weighting operator
         noise_weight = NoiseWeight(
             noise_model=self.binning.noise_model,
-            det_data=det_temp,
             det_mask=self.binning.det_mask,
             det_flag_mask=self.binning.det_flag_mask,
             view=pixels.view,
@@ -172,59 +157,88 @@ class SolverRHS(Operator):
 
         # Set up template matrix operator.
         self.template_matrix.transpose = True
-        self.template_matrix.det_data = det_temp
         self.template_matrix.det_data_units = self.det_data_units
 
-        # Create a pipeline that projects the binned map and applies noise
-        # weights and templates.
+        # The pipeline of operators to subtract the scanned map from the
+        # original timestreams.
+        pipe_ops = list()
 
-        proj_pipe = None
-        if self.binning.full_pointing:
-            # Process all detectors at once, since we have the pointing already
-            proj_pipe = Pipeline(detector_sets=["ALL"])
-            oplist = [
-                copy_det,
-                scan_map,
-                noise_weight,
-                self.template_matrix,
-            ]
-            proj_pipe.operators = oplist
-        else:
-            # Process one detector at a time.
-            proj_pipe = Pipeline(detector_sets=["SINGLE"])
-            oplist = [
-                copy_det,
+        if data.using_loaders():
+            # Our detector data is being loaded on demand.  We need to pass through
+            # the timestreams twice, and so we enable fast native caching of the
+            # signal while keeping the rest of the data in memory.
+            if self.binning.cache_dir is None:
+                # This is an error- at the workflow level, if lazy-loading of data
+                # is enabled, the binning operator should specify a cache location.
+                msg = "Data is using loaders, but no cache location specified "
+                msg += "for the binner"
+                raise RuntimeError(msg)
+            self.binning.cache_detdata = True
+            scan_map.det_data = self.det_data
+            noise_weight.det_data = self.det_data
+            self.template_matrix.det_data = self.det_data
+            det_cleanup.append(self.det_data)
+            pipe_ops = [
                 pixels,
                 weights,
                 scan_map,
                 noise_weight,
                 self.template_matrix,
+                Delete(detdata=det_cleanup),
             ]
-            proj_pipe.operators = oplist
+        else:
+            # We have persistent detector timestreams which we do not want to
+            # overwrite.  Copy this to a temp location each observation.
+            #self.binning.cache_detdata = False
+            scan_map.det_data = det_temp
+            noise_weight.det_data = det_temp
+            self.template_matrix.det_data = det_temp
+            det_cleanup.append(det_temp)
+            pipe_ops = [
+                Copy(detdata=[(self.det_data, det_temp)]),
+                pixels,
+                weights,
+                scan_map,
+                noise_weight,
+                self.template_matrix,
+                Delete(detdata=det_cleanup),
+            ]
 
-        log.debug_rank(
-            "MapMaker   RHS projection pipeline created in", comm=comm, timer=timer
-        )
+        # Make a binned map.
+
+        timer.start()
+        log.debug_rank("MapMaker   RHS begin binned map", comm=comm)
+
+        print(f"Binner rcond set to {self.binning.rcond}", flush=True)
+        print(f"Binner det_flags set to {self.binning.det_flags}", flush=True)
+        for ob in data.obs:
+            print(f"Binner   {ob.name} det_flags nz = {np.count_nonzero(ob.detdata[self.binning.det_flags][:])} / {len(ob.local_detectors) * ob.n_local_samples}", flush=True)
+
+        self.binning.det_data = self.det_data
+        self.binning.det_data_units = self.det_data_units
+        self.binning.apply(data, detectors=detectors)
+
+        log.debug_rank("MapMaker   RHS binned map finished in", comm=comm, timer=timer)
+
+        # Create a pipeline that projects the binned map and applies noise
+        # weights and templates.
+
+        if self.binning.single_det_pointing:
+            # Process one detector at a time.
+            proj_pipe = Pipeline(detector_sets=["SINGLE"])
+        else:
+            # Process all detectors at once in each observation.
+            proj_pipe = Pipeline(detector_sets=["ALL"])
+        proj_pipe.operators = pipe_ops
 
         # Run this projection pipeline.
 
         log.debug_rank("MapMaker   RHS begin run projection pipeline", comm=comm)
-
-        proj_pipe.apply(data, detectors=detectors)
+        proj_pipe.load_apply(data, detectors=detectors)
 
         log.debug_rank(
             "MapMaker   RHS projection pipeline finished in", comm=comm, timer=timer
         )
-
-        log.debug_rank(
-            "MapMaker   RHS begin cleanup temporary detector data", comm=comm
-        )
-
-        # Clean up our temp buffer
-        delete_temp = Delete(detdata=[det_temp])
-        delete_temp.apply(data)
-
-        log.debug_rank("MapMaker   RHS cleanup finished in", comm=comm, timer=timer)
 
         return
 
@@ -353,15 +367,11 @@ class SolverLHS(Operator):
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
-        # Clear temp detector data if it exists
-        for ob in data.obs:
-            if self.det_temp in ob.detdata:
-                ob.detdata[self.det_temp][:] = 0
-                ob.detdata[self.det_temp].update_units(self.det_data_units)
-                if ob.detdata[self.det_temp].accel_exists():
-                    ob.detdata[self.det_temp].accel_reset()
+        # Delete temp detector data if it exists
+        delete_temp = Delete(detdata=[self.det_temp])
+        delete_temp.apply(data)
 
-        # Pointing operator used in the binning
+        # Pointing operators used in the binning
         pixels = self.binning.pixel_pointing
         weights = self.binning.stokes_weights
 
@@ -378,9 +388,12 @@ class SolverLHS(Operator):
         self.binning.det_data_units = self.det_data_units
 
         self.binning.pre_process = self.template_matrix
+        self.binning.post_process = delete_temp
 
         self.binning.apply(data, detectors=detectors)
+
         self.binning.pre_process = None
+        self.binning.post_process = None
 
         # nz = data[self.binning.binned].data != 0
         # print(
@@ -427,6 +440,16 @@ class SolverLHS(Operator):
             "MapMaker   LHS begin scan map and accumulate amplitudes", comm=comm
         )
 
+        # At the end of the pipeline, delete the expanded pointing and temporary
+        # detector data.
+        det_cleanup = [self.det_temp]
+        if not self.binning.single_det_pointing:
+            det_cleanup.extend([
+                pixels.pixels,
+                weights.weights
+            ])
+        delete_det_temp = Delete(detdata=det_cleanup)
+
         # Set up map-scanning operator to project the binned map.
         scan_map = ScanMap(
             pixels=pixels.pixels,
@@ -456,46 +479,28 @@ class SolverLHS(Operator):
         template_transpose.amplitudes = self.out
         template_transpose.transpose = True
 
-        # Clear temp detector data
-        for ob in data.obs:
-            if self.det_temp in ob.detdata:
-                ob.detdata[self.det_temp][:] = 0
-                ob.detdata[self.det_temp].update_units(self.det_data_units)
-                if ob.detdata[self.det_temp].accel_exists():
-                    ob.detdata[self.det_temp].accel_reset()
-
         # Create a pipeline that projects the binned map and applies noise
         # weights and templates.
 
-        proj_pipe = None
-        if self.binning.full_pointing:
-            # Process all detectors at once
-            proj_pipe = Pipeline(
-                detector_sets=["ALL"],
-                operators=[
-                    self.template_matrix,
-                    scan_map,
-                    noise_weight,
-                    template_transpose,
-                ],
-            )
-        else:
+        if self.binning.single_det_pointing:
             # Process one detector at a time.
-            proj_pipe = Pipeline(
-                detector_sets=["SINGLE"],
-                operators=[
-                    self.template_matrix,
-                    pixels,
-                    weights,
-                    scan_map,
-                    noise_weight,
-                    template_transpose,
-                ],
-            )
+            proj_pipe = Pipeline(detector_sets=["SINGLE"])
+        else:
+            # Process all detectors at once in each observation.
+            proj_pipe = Pipeline(detector_sets=["ALL"])
+        proj_pipe.operators = [
+            self.template_matrix,
+            pixels,
+            weights,
+            scan_map,
+            noise_weight,
+            template_transpose,
+            delete_det_temp,
+        ]
 
         # Run the projection pipeline.
 
-        proj_pipe.apply(data, detectors=detectors)
+        proj_pipe.load_apply(data, detectors=detectors)
 
         log.debug_rank(
             "MapMaker   LHS map scan and amplitude accumulate finished in",
@@ -588,6 +593,20 @@ def solve(
             if v.n_local != rhs[k].n_local:
                 msg = f"starting guess['{k}'] has different n_global than rhs['{k}']"
                 raise RuntimeError(msg)
+
+    # Saving any Loaders.  The amplitude solve starts and ends with template amplitudes
+    # and creates temporary detector data as an intermediate product.  However, if a
+    # data loader class exists in the observations, that would be called every
+    # iteration, even if the original timestreams are not used.  To prevent that, we
+    # move any loaders out of the way and then restore them at the end.
+    saved_loaders = data.save_loaders()
+
+    # Similarly, if the LHS binning operator is configured to cache data, we want
+    # to disable that during the solve.
+    save_cache_dir = lhs_op.binning.cache_dir
+    lhs_op.binning.cache_dir = None
+    save_cache_detdata = lhs_op.binning.cache_detdata
+    lhs_op.binning.cache_detdata = False
 
     # Solving A * x = b ...
 
@@ -751,5 +770,12 @@ def solve(
     del data[proposal_key]
     del lhs_out
     del data[lhs_out_key]
+
+    # Restore loaders
+    data.restore_loaders(saved_loaders)
+
+    # Restore cache options
+    lhs_op.binning.cache_dir = save_cache_dir
+    lhs_op.binning.cache_detdata = save_cache_detdata
 
     return
