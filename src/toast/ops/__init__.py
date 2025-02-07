@@ -4,6 +4,7 @@
 
 # Import Operators into our public API
 
+from .accum_obs import AccumulateObservation
 from .arithmetic import Combine
 from .azimuth_intervals import AzimuthIntervals
 from .cadence_map import CadenceMap
