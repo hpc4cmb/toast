@@ -4,6 +4,7 @@
 
 # Import Operators into our public API
 
+from .accum_obs import AccumulateObservation
 from .arithmetic import Combine
 from .azimuth_intervals import AzimuthIntervals, AzimuthRanges
 from .cadence_map import CadenceMap
@@ -11,6 +12,7 @@ from .calibrate import CalibrateDetectors
 from .common_mode_noise import CommonModeNoise
 from .conviqt import SimConviqt, SimTEBConviqt, SimWeightedConviqt
 from .copy import Copy
+from .create import Create
 from .crosslinking import CrossLinking
 from .delete import Delete
 from .demodulation import Demodulate, StokesWeightsDemod
@@ -44,7 +46,7 @@ from .noise_model import DefaultNoiseModel, FitNoiseModel, FlagNoiseFit
 from .noise_weight import NoiseWeight
 from .obsmat import ObsMat, coadd_observation_matrix
 from .operator import Operator
-from .pipeline import Pipeline
+from .pipeline import Pipeline, PipelineLoader
 from .pixels_healpix import PixelsHealpix
 from .pixels_wcs import PixelsWCS
 from .pointing import BuildPixelDistribution

@@ -9,10 +9,10 @@ from astropy import units as u
 from ..covariance import covariance_apply
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
+from ..traits import Bool, Float, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .delete import Delete
-from .mapmaker_utils import BuildHitMap, BuildInverseCovariance, BuildNoiseWeighted
+from .accum_obs import AccumulateObservation
 from .operator import Operator
 from .pipeline import Pipeline
 
@@ -21,8 +21,15 @@ from .pipeline import Pipeline
 class BinMap(Operator):
     """Operator which bins a map.
 
-    Given a noise model and a pointing operator, build the noise weighted map and
+    Given a noise model and a pointing model, build the noise weighted map and
     apply the noise covariance to get resulting binned map.
+
+    If the covariance does not yet exist, it is accumulated, optionally with caching.
+
+    By default, detector pointing is expanded for a whole observation at a time and
+    then deleted.  If `full_pointing` is True, all the pointing is expanded and saved.
+    If `single_det_pointing` is True, the pointing is expanded one detector at a time
+    for each observation.
 
     """
 
@@ -32,7 +39,7 @@ class BinMap(Operator):
 
     pixel_dist = Unicode(
         "pixel_dist",
-        help="The Data key where the PixelDist object should be stored",
+        help="The Data key where the PixelDist object is stored",
     )
 
     covariance = Unicode(
@@ -49,6 +56,28 @@ class BinMap(Operator):
         None,
         allow_none=True,
         help="The Data key where the noiseweighted map should be stored",
+    )
+
+    hits = Unicode(
+        None,
+        allow_none=True,
+        help="Also accumulate the hit map and store in this Data key",
+    )
+
+    inverse_covariance = Unicode(
+        None,
+        allow_none=True,
+        help="The Data key where the inverse covariance should be stored",
+    )
+
+    rcond = Unicode(
+        None,
+        allow_none=True,
+        help="The Data key for the reciprocal condition number, if computed",
+    )
+
+    rcond_threshold = Float(
+        1.0e-8, help="Minimum value for inverse condition number cut."
     )
 
     det_data = Unicode(
@@ -102,6 +131,12 @@ class BinMap(Operator):
         help="Optional extra operator to run prior to binning",
     )
 
+    post_process = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="Optional extra operator to run after accumulation",
+    )
+
     noise_model = Unicode(
         defaults.noise_model, help="Observation key containing the noise model"
     )
@@ -111,7 +146,32 @@ class BinMap(Operator):
     )
 
     full_pointing = Bool(
-        False, help="If True, expand pointing for all detectors and save"
+        False, help="If True, save pointing for all observations and detectors"
+    )
+
+    single_det_pointing = Bool(
+        False, help="If True, expand pointing one detector at a time"
+    )
+
+    cache_dir = Unicode(
+        None,
+        allow_none=True,
+        help="Directory of per-observation cache directories for reading / writing",
+    )
+
+    overwrite_cache = Bool(
+        False,
+        help="If True and using a cache, overwrite any inputs found there",
+    )
+
+    cache_only = Bool(
+        False,
+        help="If True, do not accumulate the total products. Useful for pre-caching",
+    )
+
+    cache_detdata = Bool(
+        False,
+        help="If True, also cache the detector data",
     )
 
     @traitlets.validate("det_mask")
@@ -189,30 +249,29 @@ class BinMap(Operator):
         log.verbose_rank("  BinMap building pipeline", comm=data.comm.comm_world)
 
         if self.covariance not in data:
-            msg = f"Data does not contain noise covariance '{self.covariance}'"
-            log.error(msg)
-            raise RuntimeError(msg)
+            cov = None
+            print(f"BinMap covariance {self.covariance} does not exist, will build", flush=True)
+        else:
+            cov = data[self.covariance]
+            print(f"BinMap covariance {self.covariance} already exists", flush=True)
 
-        cov = data[self.covariance]
+            # Check that covariance has consistent units
+            if cov.units != (self.det_data_units**2).decompose():
+                msg = f"Covariance '{self.covariance}' units {cov.units} do not"
+                msg += f" equal det_data units ({self.det_data_units}) squared."
+                log.error(msg)
+                raise RuntimeError(msg)
 
-        # Check that covariance has consistent units
-        if cov.units != (self.det_data_units**2).decompose():
-            msg = f"Covariance '{self.covariance}' units {cov.units} do not"
-            msg += f" equal det_data units ({self.det_data_units}) squared."
-            log.error(msg)
-            raise RuntimeError(msg)
-
-        # Sanity check that the covariance pixel distribution agrees
-        if cov.distribution != data[self.pixel_dist]:
-            msg = (
-                f"Pixel distribution '{self.pixel_dist}' does not match the one "
-                f"used by covariance '{self.covariance}'"
-            )
-            log.error(msg)
-            raise RuntimeError(msg)
+            # Sanity check that the covariance pixel distribution agrees
+            if cov.distribution != data[self.pixel_dist]:
+                msg = (
+                    f"Pixel distribution '{self.pixel_dist}' does not match the one "
+                    f"used by covariance '{self.covariance}'"
+                )
+                log.error(msg)
+                raise RuntimeError(msg)
 
         # Set outputs of the pointing operator
-
         self.pixel_pointing.create_dist = None
 
         # If the binned map already exists in the data, verify the distribution and
@@ -229,6 +288,11 @@ class BinMap(Operator):
             data[self.binned].reset()
             data[self.binned].update_units(1.0 / self.det_data_units)
 
+        if self.binned in data:
+            indata = data[self.binned]
+            nonz = indata.data != 0
+            print(f"BinMap input zmap = {indata.data[nonz]}", flush=True)
+
         # Use the same detector mask in the pointing
         self.pixel_pointing.detector_pointing.det_mask = self.det_mask
         self.pixel_pointing.detector_pointing.det_flag_mask = self.det_flag_mask
@@ -236,25 +300,46 @@ class BinMap(Operator):
             self.stokes_weights.detector_pointing.det_mask = self.det_mask
             self.stokes_weights.detector_pointing.det_flag_mask = self.det_flag_mask
 
-        # Noise weighted map.  We output this to the final binned map location,
-        # since we will multiply by the covariance in-place.
-
-        build_zmap = BuildNoiseWeighted(
+        # Set up the Accumulation operator
+        if cov is None:
+            accum_cov = self.covariance
+            accum_invcov = self.inverse_covariance
+            if accum_invcov is None:
+                accum_invcov = f"{self.name}_invcov"
+            accum_rcond = self.rcond
+            if accum_rcond is None:
+                accum_rcond = f"{self.name}_rcond"
+        else:
+            accum_cov = None
+            accum_invcov = None
+            accum_rcond = None
+        obs_accum = AccumulateObservation(
+            cache_dir=self.cache_dir,
+            overwrite_cache=self.overwrite_cache,
+            cache_only=self.cache_only,
+            cache_detdata=self.cache_detdata,
             pixel_dist=self.pixel_dist,
+            inverse_covariance=accum_invcov,
+            hits=self.hits,
+            rcond=accum_rcond,
             zmap=self.binned,
-            view=self.pixel_pointing.view,
-            pixels=self.pixel_pointing.pixels,
-            weights=self.stokes_weights.weights,
-            noise_model=self.noise_model,
+            covariance=accum_cov,
             det_data=self.det_data,
-            det_data_units=self.det_data_units,
             det_mask=self.det_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
+            det_data_units=self.det_data_units,
             shared_flags=self.shared_flags,
             shared_flag_mask=self.shared_flag_mask,
+            pixel_pointing=self.pixel_pointing,
+            stokes_weights=self.stokes_weights,
+            obs_pointing=(not self.single_det_pointing),
+            save_pointing=self.full_pointing,
+            noise_model=self.noise_model,
+            rcond_threshold=self.rcond_threshold,
             sync_type=self.sync_type,
         )
+        print(f"BIN accum cache_detdata: {self.cache_detdata} -> {obs_accum.cache_detdata}", flush=True)
 
         # Build a pipeline to expand pointing and accumulate
 
@@ -262,25 +347,44 @@ class BinMap(Operator):
         accum_ops = list()
         if self.pre_process is not None:
             accum_ops.append(self.pre_process)
-        if self.full_pointing:
-            # Process all detectors at once
-            accum = Pipeline(detector_sets=["ALL"])
-        else:
+        accum_ops.append(obs_accum)
+        if self.post_process is not None:
+            accum_ops.append(self.post_process)
+
+        if self.single_det_pointing:
             # Process one detector at a time.
             accum = Pipeline(detector_sets=["SINGLE"])
-        accum_ops.extend([self.pixel_pointing, self.stokes_weights, build_zmap])
-
+        else:
+            # Process all detectors in an observation at once, optionally
+            # saving the pointing through options to AccumulateObservation
+            # above.
+            accum = Pipeline(detector_sets=["ALL"])
         accum.operators = accum_ops
 
         if data.comm.world_rank == 0:
             log.verbose("  BinMap running pipeline")
-        pipe_out = accum.apply(data, detectors=detectors)
 
-        # print("Binned zmap = ", data[self.binned].data)
+        # Use `load_apply()` to run the pipeline on one observation at a time,
+        # optionally loading data on the fly if a loader is defined in each
+        # observation.
+        pipe_out = accum.load_apply(data, detectors=detectors)
 
-        # Optionally, store the noise-weighted map
+        # If we built the covariance, and are not keeping the intermediate products,
+        # delete them now.
+        if cov is None:
+            if self.inverse_covariance is None:
+                del data[accum_invcov]
+            if self.rcond is None:
+                del data[accum_rcond]
+
+        # Optionally, store the noise-weighted map before applying the covariance
+        # in place.
         if self.noiseweighted is not None:
             data[self.noiseweighted] = data[self.binned].duplicate()
+
+        if cov is None:
+            # We computed it in our pipeline
+            cov = data[self.covariance]
 
         # Extract the results
         binned_map = data[self.binned]
@@ -289,8 +393,6 @@ class BinMap(Operator):
         if data.comm.world_rank == 0:
             log.verbose("  BinMap applying covariance")
         covariance_apply(cov, binned_map, use_alltoallv=(self.sync_type == "alltoallv"))
-        # print("Binned final = ", data[self.binned].data)
-        
         return
 
     def _finalize(self, data, **kwargs):

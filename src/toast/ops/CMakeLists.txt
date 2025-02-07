@@ -7,6 +7,7 @@ install(FILES
     pipeline.py
     delete.py
     copy.py
+    create.py
     reset.py
     fill_gaps.py
     arithmetic.py
@@ -64,6 +65,7 @@ install(FILES
     pixels_wcs.py
     filterbin.py
     obsmat.py
+    accum_obs.py
     save_hdf5.py
     load_hdf5.py
     noise_estimation.py

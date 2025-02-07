@@ -141,6 +141,7 @@ install(FILES
     observation_dist.py
     observation_data.py
     observation_view.py
+    observation_cache.py
     pointing_utils.py
     vis.py
     rng.py

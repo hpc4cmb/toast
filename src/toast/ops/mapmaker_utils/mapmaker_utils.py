@@ -706,6 +706,7 @@ class BuildNoiseWeighted(Operator):
         if self.zmap in data:
             # We have an existing map from a previous call.  Verify
             # the distribution and units
+            print(f"BuildNoiseWeighted: existing zmap: {data[self.zmap]}", flush=True)
             if data[self.zmap].distribution != dist:
                 msg = "Existing zmap '{}' has different data distribution".format(
                     self.zmap
@@ -728,6 +729,7 @@ class BuildNoiseWeighted(Operator):
                 )
                 if len(dets) == 0:
                     # Nothing to do for this observation
+                    print(f"BuildNoiseWeighted: ob {ob.name} has no dets", flush=True)
                     continue
                 if self.weights in ob.detdata:
                     if len(ob.detdata[self.weights].detector_shape) == 1:
@@ -743,6 +745,7 @@ class BuildNoiseWeighted(Operator):
             data[self.zmap] = PixelData(
                 dist, np.float64, n_value=weight_nnz, units=zmap_units
             )
+            print(f"BuildNoiseWeighted: created zmap: {data[self.zmap]}", flush=True)
             zmap = data[self.zmap]
 
         if use_accel:
@@ -799,6 +802,7 @@ class BuildNoiseWeighted(Operator):
             )
             if len(dets) == 0:
                 # Nothing to do for this observation
+                print(f"BuildNoiseWeighted: ob {ob.name} has no dets", flush=True)
                 continue
 
             # Check that the noise model exists
@@ -844,6 +848,12 @@ class BuildNoiseWeighted(Operator):
             else:
                 shared_flag_data = np.zeros(1, dtype=np.uint8)
 
+            # print(f"BuildNoiseWeighted: ob {ob.name} kernel:", flush=True)
+            # print(f"BuildNoiseWeighted:    {ob.detdata[self.det_data]} {flag_data}", flush=True)
+            # print(f"BuildNoiseWeighted:    {ob.detdata[self.pixels].data} {ob.detdata[self.weights].data}", flush=True)
+
+            print(f"BuildNoiseWeighted:    IN {np.count_nonzero(zmap.data)}", flush=True)
+
             build_noise_weighted(
                 zmap.distribution.global_submap_to_local,
                 zmap.data,
@@ -863,6 +873,9 @@ class BuildNoiseWeighted(Operator):
                 impl=implementation,
                 use_accel=use_accel,
             )
+            print(f"BuildNoiseWeighted:    OUT {np.count_nonzero(zmap.data)}", flush=True)
+        print(f"BuildNoiseWeighted: zmap = {zmap.data[:, :]}", flush=True)
+        print(f"BuildNoiseWeighted: zmap nz = {np.count_nonzero(zmap.data[:, :])}", flush=True)
 
         # # DEBUGGING
         # restore_dev = False
