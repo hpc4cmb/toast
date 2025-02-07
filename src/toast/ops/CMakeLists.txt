@@ -60,6 +60,7 @@ install(FILES
     pixels_wcs.py
     filterbin.py
     obsmat.py
+    accum_obs.py
     save_hdf5.py
     load_hdf5.py
     noise_estimation.py
