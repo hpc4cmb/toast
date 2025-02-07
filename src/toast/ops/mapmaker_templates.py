@@ -251,10 +251,6 @@ class TemplateMatrix(Operator):
             if tmpl.enabled:
                 tmpl.det_data = self.det_data
 
-        # We loop over detectors.  Internally, each template loops over observations
-        # and ignores observations where the detector does not exist.
-        all_dets = data.all_local_detectors(selection=detectors, flagmask=self.det_mask)
-
         if self.transpose:
             # Check that the incoming detector data in all observations has the correct
             # units.
@@ -265,7 +261,7 @@ class TemplateMatrix(Operator):
                 if ob.detdata[self.det_data].units != input_units:
                     msg = f"obs {ob.name} detdata {self.det_data}"
                     msg += f" does not have units of {input_units}"
-                    msg += f" before template matrix projection"
+                    msg += " before template matrix projection"
                     log.error(msg)
                     raise RuntimeError(msg)
 
@@ -287,14 +283,19 @@ class TemplateMatrix(Operator):
                 data[self.amplitudes].accel_create(self.name)
                 data[self.amplitudes].accel_update_device()
 
-            for d in all_dets:
+            for ob in data.obs:
+                dets = ob.select_local_detectors(
+                    selection=detectors,
+                    flagmask=self.det_mask,
+                )
                 for tmpl in self.templates:
                     if tmpl.enabled:
                         log.verbose(
-                            f"TemplateMatrix {d} project_signal {tmpl.name} (use_accel={use_accel})"
+                            f"TemplateMatrix project_signal {tmpl.name} (use_accel={use_accel})"
                         )
                         tmpl.project_signal(
-                            d,
+                            ob,
+                            dets,
                             data[self.amplitudes][tmpl.name],
                             use_accel=use_accel,
                             **kwargs,
@@ -321,6 +322,7 @@ class TemplateMatrix(Operator):
                     accel=use_accel,
                     create_units=self.det_data_units,
                 )
+                print(f"TemplateMatrix: ensured {self.det_data} in {ob.name}", flush=True)
                 if exists:
                     # We need to clear our detector TOD before projecting amplitudes
                     # into timestreams.  Note:  in the accelerator case, the reset call
@@ -333,14 +335,14 @@ class TemplateMatrix(Operator):
 
                 ob.detdata[self.det_data].update_units(self.det_data_units)
 
-            for d in all_dets:
                 for tmpl in self.templates:
                     if tmpl.enabled:
                         log.verbose(
-                            f"TemplateMatrix {d} add to signal {tmpl.name} (use_accel={use_accel})"
+                            f"TemplateMatrix add to signal {tmpl.name} (use_accel={use_accel})"
                         )
                         tmpl.add_to_signal(
-                            d,
+                            ob,
+                            dets,
                             data[self.amplitudes][tmpl.name],
                             use_accel=use_accel,
                             **kwargs,
@@ -418,7 +420,7 @@ class SolveAmplitudes(Operator):
     that model the timestream contributions from noise, systematics, etc:
 
     .. math::
-        \\left[ M^T N^{-1} Z M + M_p \\right] a = M^T N^{-1} Z d
+        [ M^T N^{-1} Z M + M_p ] a = M^T N^{-1} Z d
 
     Where `a` are the solved amplitudes and `d` is the input data.  `N` is the
     diagonal time domain noise covariance.  `M` is a matrix of templates that
@@ -436,6 +438,15 @@ class SolveAmplitudes(Operator):
     Where `P` is the pointing matrix.  This operator takes one operator for the
     template matrix `M` and one operator for the binning, `B`.  It then
     uses a conjugate gradient solver to solve for the amplitudes.
+
+    The PixelDistribution of the data (specified in the binner pixel_dist trait)
+    should already be computed before calling this function.  This can be produced
+    from a fixed sky footprint or by passing through the pointing once with the
+    BuildPixelDistribution operator.
+
+    A note on masking:  A map-domain mask can be specified for masking bright
+    regions or objects during the template solve.  This must use the same
+    PixelDistribution as the other map-domain products in the solver.
 
     """
 
@@ -458,11 +469,6 @@ class SolveAmplitudes(Operator):
     solve_rcond_threshold = Float(
         1.0e-8,
         help="When solving, minimum value for inverse pixel condition number cut.",
-    )
-
-    map_rcond_threshold = Float(
-        1.0e-8,
-        help="For final map, minimum value for inverse pixel condition number cut.",
     )
 
     mask = Unicode(
@@ -506,12 +512,6 @@ class SolveAmplitudes(Operator):
     mc_mode = Bool(False, help="If True, re-use solver flags, sparse covariances, etc")
 
     mc_index = Int(None, allow_none=True, help="The Monte-Carlo index")
-
-    reset_pix_dist = Bool(
-        False,
-        help="Clear any existing pixel distribution.  Useful when applying "
-        "repeatedly to different data objects.",
-    )
 
     report_memory = Bool(False, help="Report memory throughout the execution")
 
@@ -641,13 +641,6 @@ class SolveAmplitudes(Operator):
         repeatedly with different data objects)
         """
 
-        if self.reset_pix_dist:
-            if self.binning.pixel_dist in self._data:
-                del self._data[self.binning.pixel_dist]
-
-        self._memreport.prefix = "After resetting pixel distribution"
-        self._memreport.apply(self._data)
-
         # The pointing matrix used for the solve.  The per-detector flags
         # are normally reset when the binner is run, but here we set them
         # explicitly since we will use these pointing matrix operators for
@@ -668,8 +661,8 @@ class SolveAmplitudes(Operator):
             pixels=solve_pixels.pixels,
             view=self._solve_view,
         )
-        if self.binning.full_pointing:
-            # We are caching the pointing anyway- run with all detectors
+        if not self.binning.single_det_pointing:
+            # Run with all detectors
             scan_pipe = Pipeline(
                 detector_sets=["ALL"], operators=[solve_pixels, self._scanner]
             )
@@ -690,8 +683,10 @@ class SolveAmplitudes(Operator):
 
         # Get the detectors we are using for this observation
         dets = ob.select_local_detectors(self._detectors, flagmask=self._save_det_mask)
+        print(f"_prepare_flag_ob dets = {dets}", flush=True)
         if len(dets) == 0:
             # Nothing to do for this observation
+            print(f"DEBUG _prepare_flagging_ob {ob.name} has no dets", flush=True)
             return
 
         if self.mc_mode:
@@ -710,43 +705,42 @@ class SolveAmplitudes(Operator):
             return
 
         # Create the new solver flags
-        exists = ob.detdata.ensure(self.solver_flags, dtype=np.uint8, detectors=dets)
+        _ = ob.detdata.ensure(
+            self.solver_flags, dtype=np.uint8, detectors=self._detectors
+        )
+        ob.detdata[self.solver_flags][:] = defaults.det_mask_processing
+        print(
+            f"DEBUG _prepare_flagging_ob {ob.name} called ensure {self.solver_flags}",
+            flush=True,
+        )
 
-        # The data views
-        views = ob.view[self._solve_view]
-        # For each view...
-        for vw in range(len(views)):
-            view_samples = None
-            if views[vw].start is None:
-                # There is one view of the whole obs
-                view_samples = ob.n_local_samples
-            else:
-                view_samples = views[vw].stop - views[vw].start
-            starting_flags = np.zeros(view_samples, dtype=np.uint8)
-            if self._save_shared_flags is not None:
-                starting_flags[:] = np.where(
-                    (
-                        views.shared[self._save_shared_flags][vw]
-                        & self._save_shared_flag_mask
-                    )
-                    > 0,
-                    1,
-                    0,
-                )
-            for d in dets:
-                views.detdata[self.solver_flags][vw][d, :] = starting_flags
+        starting_flags = np.zeros(ob.n_local_samples, dtype=np.uint8)
+        if self._save_shared_flags is not None:
+            starting_flags[:] = np.where(
+                (ob.shared[self._save_shared_flags].data & self._save_shared_flag_mask)
+                > 0,
+                1,
+                0,
+            )
+        print(f"DEBUG {ob.name} starting flags = {np.count_nonzero(starting_flags)}")
+        for d in dets:
+            for vw in ob.intervals[self._solve_view]:
+                vw_slc = slice(vw.first, vw.last, 1)
+                detflgs = ob.detdata[self.solver_flags][d]
+                detflgs[vw_slc] = starting_flags[vw_slc]
                 if self._save_det_flags is not None:
-                    views.detdata[self.solver_flags][vw][d, :] |= np.where(
+                    print(f"DEBUG {ob.name}:{d}:{vw} pre flags = {np.count_nonzero(detflgs[vw_slc])}")
+                    detflgs[vw_slc] |= np.where(
                         (
-                            views.detdata[self._save_det_flags][vw][d]
+                            detflgs[vw_slc]
                             & self._save_det_flag_mask
                         )
                         > 0,
                         1,
                         0,
-                    ).astype(views.detdata[self.solver_flags][vw].dtype)
-
-        return
+                    ).astype(ob.detdata[self.solver_flags].dtype)
+                    print(f"DEBUG {ob.name}:{d}:{vw} post flags = {np.count_nonzero(detflgs[vw_slc])}")
+        print(f"_prepare_flag_ob: {ob.name} det_flags nz = {np.count_nonzero(ob.detdata[self.solver_flags][:])} / {len(ob.local_detectors) * ob.n_local_samples}", flush=True)
 
     @function_timer
     def _prepare_flagging(self, scan_pipe):
@@ -768,7 +762,7 @@ class SolveAmplitudes(Operator):
         if self.mc_mode:
             # Shortcut, just verified that our flags exist
             self._log.info_rank(
-                f"{self._log_prefix} MC mode, reusing flags for solver", comm=comm
+                f"{self._log_prefix} MC mode, reusing flags for solver", comm=self._comm
             )
             return
 
@@ -809,10 +803,12 @@ class SolveAmplitudes(Operator):
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
-            for vw in ob.view[self._solve_view].detdata[self.solver_flags]:
-                for d in dets:
-                    local_total += len(vw[d])
-                    local_cut += np.count_nonzero(vw[d])
+            for d in dets:
+                for vw in ob.intervals[self._solve_view]:
+                    slc = slice(vw.first, vw.last, 1)
+                    dflg = ob.detdata[self.solver_flags][d, slc]
+                    local_total += len(dflg)
+                    local_cut += np.count_nonzero(dflg)
 
         if self._comm is None:
             total = local_total
@@ -828,62 +824,8 @@ class SolveAmplitudes(Operator):
         return
 
     @function_timer
-    def _get_pixel_covariance(self, solve_pixels, solve_weights):
-        """Construct the noise covariance, hits, and condition number map for
-        the solver.
-        """
-
-        if self.mc_mode:
-            # Shortcut, verify that our covariance and other products exist.
-            if self.binning.pixel_dist not in self._data:
-                msg = f"MC mode, pixel distribution "
-                msg += f"'{self.binning.pixel_dist}' does not exist"
-                self._log.error(msg)
-                raise RuntimeError(msg)
-            if self.solver_cov_name not in self._data:
-                msg = f"MC mode, covariance '{self.solver_cov_name}' does not exist"
-                self._log.error(msg)
-                raise RuntimeError(msg)
-            self._log.info_rank(
-                f"{self._log_prefix} MC mode, reusing covariance for solver",
-                comm=self._comm,
-            )
-            return
-
-        self._log.info_rank(
-            f"{self._log_prefix} begin build of solver covariance",
-            comm=self._comm,
-        )
-
-        solver_cov = CovarianceAndHits(
-            pixel_dist=self.binning.pixel_dist,
-            covariance=self.solver_cov_name,
-            hits=self.solver_hits_name,
-            rcond=self.solver_rcond_name,
-            det_data_units=self._det_data_units,
-            det_mask=self._save_det_mask,
-            det_flags=self.solver_flags,
-            det_flag_mask=255,
-            pixel_pointing=solve_pixels,
-            stokes_weights=solve_weights,
-            noise_model=self.binning.noise_model,
-            rcond_threshold=self.solve_rcond_threshold,
-            sync_type=self.binning.sync_type,
-            save_pointing=self.binning.full_pointing,
-        )
-
-        solver_cov.apply(self._data, detectors=self._detectors)
-
-        self._memreport.prefix = "After constructing covariance and hits"
-        self._memreport.apply(self._data)
-
-        return
-
-    @function_timer
     def _get_rcond_mask(self, scan_pipe):
-        """Construct the noise covariance, hits, and condition number mask for
-        the solver.
-        """
+        """Construct the condition number mask for the solver."""
 
         if self.mc_mode:
             # The flags are already cached
@@ -902,6 +844,7 @@ class SolveAmplitudes(Operator):
         rcond_mask = self._data[self.solver_rcond_mask_name].data
         bad = rcond < self.solve_rcond_threshold
         n_bad = np.count_nonzero(bad)
+        print(f"RCOND MASK {n_bad} bad pixels")
         n_good = rcond.size - n_bad
         rcond_mask[bad] = 1
 
@@ -935,6 +878,7 @@ class SolveAmplitudes(Operator):
         )
 
         # Initialize the template matrix
+        self.template_matrix.reset()
         self.template_matrix.det_data = self.det_data
         self.template_matrix.det_data_units = self._det_data_units
         self.template_matrix.det_flags = self.solver_flags
@@ -949,12 +893,25 @@ class SolveAmplitudes(Operator):
         self.binning.det_flag_mask = 255
         self.binning.det_data_units = self._det_data_units
 
-        # Set the binning operator to output to temporary map.  This will be
-        # overwritten on each iteration of the solver.
+        # The binning operator (calling lower-level operators) will create the map
+        # domain quantities on the fly if they do not exist.
+
         self.binning.binned = self.solver_bin
         self.binning.covariance = self.solver_cov_name
+        self.binning.rcond = self.solver_rcond_name
+        self.binning.hits = self.solver_hits_name
+
+        write_hits = False
+        if self.solver_cov_name not in self._data:
+            # First time, we are going to create the covariance and hits
+            write_hits = True
 
         self.template_matrix.amplitudes = self.solver_rhs
+
+        print(
+            f"SolveAmplitudes _get_rhs cache_detdata: {self.binning.cache_detdata}",
+            flush=True,
+        )
 
         rhs_calc = SolverRHS(
             name=f"{self.name}_rhs",
@@ -964,6 +921,17 @@ class SolveAmplitudes(Operator):
             template_matrix=self.template_matrix,
         )
         rhs_calc.apply(self._data, detectors=self._detectors)
+
+        print("RHS Writing...", flush=True)
+        for tmpl in self.template_matrix.templates:
+            tmpl_amps = self._data[self.solver_rhs][tmpl.name]
+            out_root = os.path.join(self.output_dir, f"RHS_{tmpl.name}")
+            tmpl.write(tmpl_amps, out_root)
+
+        print(f"RHS rcond = {self._data[self.solver_rcond_name].data}")
+
+        if write_hits:
+            self._write_del(self.solver_hits_name)
 
         self._log.info_rank(
             f"{self._log_prefix}  finished RHS calculation in",
@@ -1039,9 +1007,6 @@ class SolveAmplitudes(Operator):
         self.template_matrix.det_flags = self._save_tmpl_flags
         self.template_matrix.det_flag_mask = self._save_tmpl_det_mask
         self.template_matrix.det_mask = self._save_tmpl_mask
-        # FIXME: this reset does not seem needed
-        # if not self.mc_mode:
-        #    self.template_matrix.reset_templates()
 
         del self._solve_view
 
@@ -1075,6 +1040,8 @@ class SolveAmplitudes(Operator):
         ):
             return
 
+        print(f"DEBUG SolveAmplitudes {self.name} call _setup", flush=True)
+
         self._setup(data, detectors, use_accel)
 
         self._memreport.prefix = "Start of amplitude solve"
@@ -1084,15 +1051,15 @@ class SolveAmplitudes(Operator):
 
         self._timer.start()
 
+        print(f"DEBUG SolveAmplitudes {self.name} call _prepare_flagging", flush=True)
         self._prepare_flagging(scan_pipe)
 
-        self._get_pixel_covariance(solve_pixels, solve_weights)
-        self._write_del(self.solver_hits_name)
+        print(f"DEBUG SolveAmplitudes {self.name} call _get_rhs", flush=True)
+        self._get_rhs()
 
         self._get_rcond_mask(scan_pipe)
         self._write_del(self.solver_rcond_mask_name)
 
-        self._get_rhs()
         self._solve_amplitudes()
 
         self._write_del(self.solver_cov_name)
@@ -1138,128 +1105,4 @@ class SolveAmplitudes(Operator):
                 ]
             )
             prov["detdata"] = [self.solver_flags]
-        return prov
-
-
-@trait_docs
-class ApplyAmplitudes(Operator):
-    """Project template amplitudes and do timestream arithmetic.
-
-    This projects amplitudes to the time domain and then adds, subtracts, multiplies,
-    or divides the original timestream by this result.
-
-    """
-
-    API = Int(0, help="Internal interface version for this operator")
-
-    op = Unicode(
-        "subtract",
-        help="Operation on the timestreams: 'subtract', 'add', 'multiply', or 'divide'",
-    )
-
-    det_data = Unicode(
-        defaults.det_data, help="Observation detdata key for the timestream data"
-    )
-
-    amplitudes = Unicode(None, allow_none=True, help="Data key for input amplitudes")
-
-    template_matrix = Instance(
-        klass=Operator,
-        allow_none=True,
-        help="This must be an instance of a template matrix operator",
-    )
-
-    output = Unicode(
-        None,
-        allow_none=True,
-        help="Name of output detdata.  If None, overwrite input.",
-    )
-
-    report_memory = Bool(False, help="Report memory throughout the execution")
-
-    @traitlets.validate("op")
-    def _check_op(self, proposal):
-        val = proposal["value"]
-        if val is not None:
-            if val not in ["add", "subtract", "multiply", "divide"]:
-                raise traitlets.TraitError("op must be one of the 4 allowed strings")
-        return val
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._initialized = False
-
-    @function_timer
-    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
-        log = Logger.get()
-
-        # Check if we have any templates
-        if self.template_matrix is None:
-            return
-
-        n_enabled_templates = 0
-        for template in self.template_matrix.templates:
-            if template.enabled:
-                n_enabled_templates += 1
-
-        if n_enabled_templates == 0:
-            # Nothing to do!
-            return
-
-        # Get the units used across the distributed data for our desired
-        # input detector data
-        det_data_units = data.detector_units(self.det_data)
-
-        # Temporary location for single-detector projected template
-        # timestreams.
-        projected = f"{self.name}_temp"
-
-        # Are we saving the resulting timestream to a new location?  If so,
-        # create that now for all detectors.
-
-        if self.output is not None:
-            # We just copy the input here, since it will be overwritten
-            Copy(detdata=[(self.det_data, self.output)]).apply(
-                data, use_accel=use_accel
-            )
-
-        # Projecting amplitudes to timestreams
-        self.template_matrix.transpose = False
-        self.template_matrix.det_data = projected
-        self.template_matrix.det_data_units = det_data_units
-        self.template_matrix.amplitudes = self.amplitudes
-
-        # Arithmetic operator
-        combine = Combine(op=self.op, first=self.det_data, second=projected)
-        if self.output is None:
-            combine.result = self.det_data
-        else:
-            combine.result = self.output
-
-        # Project and operate, one detector at a time
-        pipe = Pipeline(
-            detector_sets=["SINGLE"],
-            operators=[
-                self.template_matrix,
-                combine,
-            ],
-        )
-        pipe.apply(data, use_accel=use_accel)
-
-    def _finalize(self, data, **kwargs):
-        return
-
-    def _requires(self):
-        # This operator requires everything that its sub-operators need.
-        req = dict()
-        req["global"] = [self.amplitudes]
-        req["detdata"] = list()
-        if self.template_matrix is not None:
-            req.update(self.template_matrix.requires())
-        req["detdata"].append(self.det_data)
-        return req
-
-    def _provides(self):
-        prov = dict()
-        prov["detdata"] = [self.output]
         return prov

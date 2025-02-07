@@ -13,6 +13,9 @@ from .mpi import Comm
 from .utils import Logger
 
 
+obs_loader_name = "loader"
+
+
 class Data(MutableMapping):
     """Class which represents distributed data
 
@@ -100,7 +103,7 @@ class Data(MutableMapping):
                     all_dets[d] = None
         return list(all_dets.keys())
 
-    def detector_units(self, det_data):
+    def detector_units(self, det_data, ob_key="detector_data_units"):
         """Get the detector data units for a given field.
 
         This verifies that the specified detector data field has the same
@@ -108,6 +111,8 @@ class Data(MutableMapping):
 
         Args:
             det_data (str):  The detector data field.
+            ob_key (str):  If detector data is not currently loaded, this
+                optional dictionary specifies the units for each field.
 
         Returns:
             (Unit):  The unit used across all observations.
@@ -117,8 +122,12 @@ class Data(MutableMapping):
         local_units = None
         for ob in self.obs:
             if det_data not in ob.detdata:
-                continue
-            ob_units = ob.detdata[det_data].units
+                if ob_key in ob:
+                    ob_units = ob[ob_key][det_data]
+                else:
+                    continue
+            else:
+                ob_units = ob.detdata[det_data].units
             if local_units is None:
                 local_units = ob_units
             else:
@@ -441,6 +450,65 @@ class Data(MutableMapping):
                     new_data.obs.append(ob)
                     continue
         return new_data
+
+    def using_loaders(self):
+        """Pass through Data and determine if Loaders are being used
+        
+        This is useful when an observation loader exists, but an operator wants to
+        perform other operations on an observation by calling load_exec() without
+        triggering the loading.  The returned dictionary can later be passed to
+        `restore_loaders()`.
+
+        Returns:
+            (bool):  True if any observation is using a loader.
+        
+        """
+        result = False
+        for ob in self.obs:
+            if hasattr(ob, obs_loader_name):
+                result = True
+                break
+        return result
+
+    def save_loaders(self):
+        """Pass through Data and save the loader instances.
+        
+        This is useful when an observation loader exists, but an operator wants to
+        perform other operations on an observation by calling load_exec() without
+        triggering the loading.  The returned dictionary can later be passed to
+        `restore_loaders()`.
+
+        Returns:
+            (dict):  The dictionary of loaders, indexed on the observation UID.
+        
+        """
+        loaders = dict()
+        for ob in self.obs:
+            if hasattr(ob, obs_loader_name):
+                loaders[ob.uid] = ob.loader
+                del ob.loader
+            else:
+                loaders[ob.uid] = None
+        return loaders
+
+    def restore_loaders(self, saved):
+        """Pass through Data and restore loader instances.
+        
+        This is useful when an observation loader exists, but an operator wants to
+        perform other operations on an observation by calling load_exec() without
+        triggering the loading.  The input dictionary should be generated with
+        `save_loaders()`.
+
+        Args:
+            saved (dict):  The dictionary of saved loader instances.
+
+        Returns:
+            None
+        
+        """
+        for ob in self.obs:
+            if saved[ob.uid] is not None:
+                setattr(ob, obs_loader_name, saved[ob.uid])
 
     # Accelerator use
 

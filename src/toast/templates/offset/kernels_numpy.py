@@ -17,7 +17,7 @@ def offset_add_to_signal_numpy(
     data_index,
     det_data,
     intervals,
-    use_accel,
+    use_accel=False,
 ):
     """
     Accumulate offset amplitudes to timestream data.
@@ -61,7 +61,7 @@ def offset_project_signal_numpy(
     amplitudes,
     amplitude_flags,
     intervals,
-    use_accel,
+    use_accel=False,
 ):
     """
     Accumulate timestream data into offset amplitudes.
@@ -109,7 +109,7 @@ def offset_project_signal_numpy(
 
 @kernel(impl=ImplementationType.NUMPY, name="offset_apply_diag_precond")
 def offset_apply_diag_precond_numpy(
-    offset_var, amplitudes_in, amplitude_flags, amplitudes_out, use_accel
+    offset_var, amplitudes_in, amplitude_flags, amplitudes_out, use_accel=False
 ):
     """
     Args:

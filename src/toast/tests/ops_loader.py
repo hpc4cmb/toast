@@ -25,7 +25,7 @@ class RandomLoader(object):
     def __init__(self, rms=1.0):
         self.rms = rms
 
-    def load(self, obs):
+    def load(self, obs, **kwargs):
         exists_data = obs.detdata.ensure(
             defaults.det_data,
             dtype=np.float64,
@@ -40,7 +40,7 @@ class RandomLoader(object):
             defaults.det_flags, dtype=np.uint8, detectors=obs.local_detectors
         )
 
-    def unload(self, obs):
+    def unload(self, obs, **kwargs):
         del obs.detdata[defaults.det_data]
         del obs.detdata[defaults.det_flags]
 
