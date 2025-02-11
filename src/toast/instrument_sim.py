@@ -1132,7 +1132,10 @@ def plot_focalplane(
 
     for d in focalplane.detectors:
         quat = focalplane[d]["quat"]
-        fwhm = focalplane[d]["fwhm"].to_value(u.arcmin)
+        if "fwhm" in focalplane[d].keys():
+            fwhm = focalplane[d]["fwhm"].to_value(u.arcmin)
+        else:
+            fwhm = None
 
         # radius in degrees
         detradius = 0.5 * 5.0 / 60.0
