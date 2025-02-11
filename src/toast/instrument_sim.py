@@ -1052,6 +1052,7 @@ def plot_focalplane(
     outfile=None,
     show_labels=False,
     face_color=None,
+    edge_color=None,
     pol_color=None,
     xieta=False,
     show_centers=False,
@@ -1075,6 +1076,8 @@ def plot_focalplane(
             used for inline plotting.
         show_labels (bool):  If True, plot detector names.
         face_color (dict): dictionary of color values for the face of each
+            detector circle.
+        edge_color (dict): dictionary of color values for the edge of each
             detector circle.
         pol_color (dict): dictionary of color values for the polarization
             arrows.
@@ -1164,8 +1167,11 @@ def plot_focalplane(
         detface = "none"
         if face_color is not None:
             detface = face_color[d]
+        detedge = "k"
+        if edge_color is not None:
+            detedge = edge_color[d]
 
-        circ = plt.Circle((xpos, ypos), radius=detradius, fc=detface, ec="k")
+        circ = plt.Circle((xpos, ypos), radius=detradius, fc=detface, ec=detedge)
         ax.add_artist(circ)
 
         ascale = 1.5
