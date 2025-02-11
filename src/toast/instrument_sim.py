@@ -1069,7 +1069,8 @@ def plot_focalplane(
     this function, so that it is only imported when the function is actually called.
 
     Args:
-        focalplane (Focalplane):  The focalplane to plot
+        focalplane (Focalplane):  The focalplane to plot. Single focalplane of 
+            a list of focalplanes.
         width (Quantity):  Width of plot.
         height (Quantity):  Height of plot.
         outfile (str):  Output PDF path.  If None, then matplotlib will be
@@ -1092,6 +1093,12 @@ def plot_focalplane(
     """
     if focalplane is None:
         raise RuntimeError("You must specify a Focalplane instance")
+    if isinstance(focalplane, Focalplane):
+        fp_list = [focalplane]
+    elif isinstance(focalplane, list):
+        fp_list = focalplane
+    else:
+        raise RuntimeError("focalplane has to a Focalplane instance or a list of focalplane instances.")
 
     if outfile is not None:
         set_matplotlib_backend(backend="pdf")
@@ -1133,113 +1140,114 @@ def plot_focalplane(
     yaxis = np.array([0.0, 1.0, 0.0], dtype=np.float64)
     zaxis = np.array([0.0, 0.0, 1.0], dtype=np.float64)
 
-    for d in focalplane.detectors:
-        quat = focalplane[d]["quat"]
-        if "fwhm" in focalplane[d].keys():
-            fwhm = focalplane[d]["fwhm"].to_value(u.arcmin)
-        else:
-            fwhm = None
+    for fp in fp_list:
+        for d in fp.detectors:
+            quat = fp[d]["quat"]
+            if "fwhm" in fp[d].keys():
+                fwhm = fp[d]["fwhm"].to_value(u.arcmin)
+            else:
+                fwhm = None
 
-        # radius in degrees
-        detradius = 0.5 * 5.0 / 60.0
-        if fwhm is not None:
-            detradius = 0.5 * fwhm / 60.0
+            # radius in degrees
+            detradius = 0.5 * 5.0 / 60.0
+            if fwhm is not None:
+                detradius = 0.5 * fwhm / 60.0
 
-        if xieta:
-            xi, eta, gamma = quat_to_xieta(quat)
-            xpos = xi * 180.0 / np.pi
-            ypos = eta * 180.0 / np.pi
-            # Polang is plotted relative to visualization x/y coords
-            polang = 1.5 * np.pi - gamma
-            plot_gamma = polang
-        else:
-            # rotation from boresight
-            rdir = qa.rotate(quat, zaxis).flatten()
-            mag = np.arccos(rdir[2]) * 180.0 / np.pi
-            ang = np.arctan2(rdir[1], rdir[0])
-            orient = qa.rotate(quat, xaxis).flatten()
-            polang = np.arctan2(orient[1], orient[0])
-            xpos = mag * np.cos(ang)
-            ypos = mag * np.sin(ang)
-            xi, eta, gamma = quat_to_xieta(quat)
-            plot_gamma = gamma
+            if xieta:
+                xi, eta, gamma = quat_to_xieta(quat)
+                xpos = xi * 180.0 / np.pi
+                ypos = eta * 180.0 / np.pi
+                # Polang is plotted relative to visualization x/y coords
+                polang = 1.5 * np.pi - gamma
+                plot_gamma = polang
+            else:
+                # rotation from boresight
+                rdir = qa.rotate(quat, zaxis).flatten()
+                mag = np.arccos(rdir[2]) * 180.0 / np.pi
+                ang = np.arctan2(rdir[1], rdir[0])
+                orient = qa.rotate(quat, xaxis).flatten()
+                polang = np.arctan2(orient[1], orient[0])
+                xpos = mag * np.cos(ang)
+                ypos = mag * np.sin(ang)
+                xi, eta, gamma = quat_to_xieta(quat)
+                plot_gamma = gamma
 
-        detface = "none"
-        if face_color is not None:
-            detface = face_color[d]
-        detedge = "k"
-        if edge_color is not None:
-            detedge = edge_color[d]
+            detface = "none"
+            if face_color is not None:
+                detface = face_color[d]
+            detedge = "k"
+            if edge_color is not None:
+                detedge = edge_color[d]
 
-        circ = plt.Circle((xpos, ypos), radius=detradius, fc=detface, ec=detedge)
-        ax.add_artist(circ)
+            circ = plt.Circle((xpos, ypos), radius=detradius, fc=detface, ec=detedge)
+            ax.add_artist(circ)
 
-        ascale = 1.5
+            ascale = 1.5
 
-        xtail = xpos - ascale * detradius * np.cos(polang)
-        ytail = ypos - ascale * detradius * np.sin(polang)
-        dx = ascale * 2.0 * detradius * np.cos(polang)
-        dy = ascale * 2.0 * detradius * np.sin(polang)
+            xtail = xpos - ascale * detradius * np.cos(polang)
+            ytail = ypos - ascale * detradius * np.sin(polang)
+            dx = ascale * 2.0 * detradius * np.cos(polang)
+            dy = ascale * 2.0 * detradius * np.sin(polang)
 
-        detcolor = "black"
-        if pol_color is not None:
-            detcolor = pol_color[d]
+            detcolor = "black"
+            if pol_color is not None:
+                detcolor = pol_color[d]
 
-        if show_centers:
-            ysgn = -1.0
-            if dx < 0.0:
-                ysgn = 1.0
-            ax.text(
-                (xpos + 0.1 * dx),
-                (ypos + 0.1 * ysgn * dy),
-                f"({xpos:0.4f}, {ypos:0.4f})",
-                color="green",
-                fontsize=fontpt,
-                horizontalalignment="center",
-                verticalalignment="center",
-                bbox=dict(fc="w", ec="none", pad=1, alpha=0.0),
-            )
+            if show_centers:
+                ysgn = -1.0
+                if dx < 0.0:
+                    ysgn = 1.0
+                ax.text(
+                    (xpos + 0.1 * dx),
+                    (ypos + 0.1 * ysgn * dy),
+                    f"({xpos:0.4f}, {ypos:0.4f})",
+                    color="green",
+                    fontsize=fontpt,
+                    horizontalalignment="center",
+                    verticalalignment="center",
+                    bbox=dict(fc="w", ec="none", pad=1, alpha=0.0),
+                )
 
-        if show_labels:
-            xsgn = 1.0
-            if dx < 0.0:
-                xsgn = -1.0
-            labeloff = 0.05 * xsgn * fontpix * len(d) / figdpi
-            ax.text(
-                (xtail + 1.3 * dx + labeloff),
-                (ytail + 1.2 * dy),
-                d,
-                color="k",
-                fontsize=fontpt,
-                horizontalalignment="center",
-                verticalalignment="center",
-                bbox=dict(fc="w", ec="none", pad=1, alpha=0.0),
-            )
+            if show_labels:
+                xsgn = 1.0
+                if dx < 0.0:
+                    xsgn = -1.0
+                labeloff = 0.05 * xsgn * fontpix * len(d) / figdpi
+                ax.text(
+                    (xtail + 1.3 * dx + labeloff),
+                    (ytail + 1.2 * dy),
+                    d,
+                    color="k",
+                    fontsize=fontpt,
+                    horizontalalignment="center",
+                    verticalalignment="center",
+                    bbox=dict(fc="w", ec="none", pad=1, alpha=0.0),
+                )
 
-        if show_gamma:
+            if show_gamma:
+                ax.arrow(
+                    xtail,
+                    ytail,
+                    1.3 * dx,
+                    1.3 * dy,
+                    width=0.1 * detradius,
+                    head_width=0.2 * detradius,
+                    head_length=0.2 * detradius,
+                    fc="gray",
+                    ec="gray",
+                    length_includes_head=True,
+                )
             ax.arrow(
                 xtail,
                 ytail,
-                1.3 * dx,
-                1.3 * dy,
+                dx,
+                dy,
                 width=0.1 * detradius,
-                head_width=0.2 * detradius,
-                head_length=0.2 * detradius,
-                fc="gray",
-                ec="gray",
+                head_width=0.3 * detradius,
+                head_length=0.3 * detradius,
+                fc=detcolor,
+                ec=detcolor,
                 length_includes_head=True,
-            )
-        ax.arrow(
-            xtail,
-            ytail,
-            dx,
-            dy,
-            width=0.1 * detradius,
-            head_width=0.3 * detradius,
-            head_length=0.3 * detradius,
-            fc=detcolor,
-            ec=detcolor,
-            length_includes_head=True,
         )
 
     # Draw a "mini" coordinate axes for reference
