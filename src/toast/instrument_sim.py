@@ -1051,6 +1051,7 @@ def plot_focalplane(
     height=None,
     outfile=None,
     show_labels=False,
+    det_diameter=None,
     face_color=None,
     edge_color=None,
     pol_color=None,
@@ -1076,6 +1077,7 @@ def plot_focalplane(
         outfile (str):  Output PDF path.  If None, then matplotlib will be
             used for inline plotting.
         show_labels (bool):  If True, plot detector names.
+        det_diameter (float): Plot detector with this diameter (arcmin) ignore fwhm.
         face_color (dict): dictionary of color values for the face of each
             detector circle.
         edge_color (dict): dictionary of color values for the edge of each
@@ -1152,6 +1154,8 @@ def plot_focalplane(
             detradius = 0.5 * 5.0 / 60.0
             if fwhm is not None:
                 detradius = 0.5 * fwhm / 60.0
+            if det_diameter is not None:
+                detradius = 0.5 * det_diameter / 60.0
 
             if xieta:
                 xi, eta, gamma = quat_to_xieta(quat)
