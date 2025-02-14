@@ -233,6 +233,7 @@ class DerivativesWeights(Operator):
             # FIXME:  temporary hack until instrument classes are also pre-staged
             # to GPU
             focalplane = ob.telescope.focalplane
+            focalplane.detector_data
             #Get the boresight pointing
             qbore = ob.shared["boresight_radec"]
             nsamp = len(qbore)
@@ -241,37 +242,21 @@ class DerivativesWeights(Operator):
             psi = np.empty(nsamp) 
             # Get the per-detector pointing for orientation/sine theta purposes
             for idet, d in enumerate(dets):
-                if idet==0:
-                    log.info_rank(f"Keys in the detector {d}:  {focalplane[d].keys()}", data.comm.comm_world)
-                
                 theta, _, psi = to_iso_angles(mult(qbore, focalplane[d]["quat"]))
+                psi -= focalplane[d]["pol_angle"].value
                 wc = np.cos(psi) 
                 wc2 = np.cos(2*psi)
                 ws = np.sin(psi)
                 ws2 = np.sin(2*psi)
                 inv_tan_theta = np.cos(theta)/np.sin(theta)
                 # Get the per-detector calibration. For now we sidestep with the Nones
-                cal = focalplane[d].get("cal")
-                fwhm = focalplane[d].get("fwhm")
-                dx = focalplane[d].get("dx")
-                dy = focalplane[d].get("dy")
-                dsigma = focalplane[d].get("dsigma")
-                dp = focalplane[d].get("dp")
-                dc = focalplane[d].get("dc") 
-                if cal is None:
-                    cal = 1.0
-                if fwhm is None:
-                    fwhm = np.radians(10./60.)
-                if dx is None:
-                    dx = 0.0
-                if dy is None:
-                    dy = 0.0
-                if dsigma is None:
-                    dsigma = 0.0
-                if dp is None:
-                    dp = 0.0
-                if dc is None:
-                    dc = 0.0
+                cal = focalplane[d].get("cal", 1.0)
+                fwhm = focalplane[d].get("FWHM", 1.4*u.arcmin).to(u.rad).value
+                dx = focalplane[d].get("dx", 0.0)
+                dy = focalplane[d].get("dy", 0.0)
+                dsigma = focalplane[d].get("dsigma", 0.0)
+                dp = focalplane[d].get("dp", 0.0)
+                dc = focalplane[d].get("dc", 0.0) 
                 
                 b_std = fwhm/np.sqrt(8*np.log(2)) #beam standard deviation
             
