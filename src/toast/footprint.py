@@ -77,9 +77,7 @@ def footprint_distribution(
         n_pix = None
         if rank == 0:
             hdulist = af.open(wcs_coverage_file)
-            n_pix = 1
-            for s in hdulist[0].data.shape:
-                n_pix *= s
+            n_pix = np.prod(hdulist[0].data.shape)
             hdulist.close()
             del hdulist
         if comm is not None:
@@ -95,7 +93,7 @@ def footprint_distribution(
         local_submaps = None
         if rank == 0:
             hpix_data = read_healpix(healpix_coverage_file, field=(0,), nest=True)
-            nside = hp.npix2nside(len(hpix_data))
+            nside = hp.get_nside(hpix_data)
             n_pix = 12 * nside**2
             n_submap = 12 * healpix_nside_submap**2
 
