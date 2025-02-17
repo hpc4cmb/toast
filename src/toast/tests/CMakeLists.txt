@@ -14,6 +14,7 @@ install(FILES
     math_misc.py
     qarray.py
     fft.py
+    footprint.py
     healpix.py
     config.py
     observation.py

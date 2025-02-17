@@ -145,6 +145,7 @@ install(FILES
     rng.py
     qarray.py
     fft.py
+    footprint.py
     healpix.py
     weather.py
     schedule.py
