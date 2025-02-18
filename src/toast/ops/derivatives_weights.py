@@ -72,47 +72,6 @@ class DerivativesWeights(Operator):
 
     single_precision = Bool(False, help="If True, use 32bit float in output")
 
-    cal = Unicode(
-        None,
-        allow_none=True,
-        help="The observation key with a dictionary of pointing weight "
-        "calibration for each det",
-    )
-    
-    dx = Unicode(
-        None,
-        allow_none=True,
-        help="The observation key with a dictionary of detector offset "
-        "for each det in the x direction",
-    )
-    
-    dy = Unicode(
-        None,
-        allow_none=True,
-        help="The observation key with a dictionary of detector offset "
-        "for each det in the y direction",
-    )
-
-    dsigma = Unicode(
-        None,
-        allow_none=True,
-        help="The observation key with a dictionary of detector fwhm error for each det",
-    )
-        
-    dp = Unicode(
-        None,
-        allow_none=True,
-        help="The observation key with a dictionary of detector ellipticity "
-        "for each det in one direction",
-    )
-    
-    dc = Unicode(
-        None,
-        allow_none=True,
-        help="The observation key with a dictionary of detector ellipticity "
-        "for each det in the other direction",
-    )
-
     IAU = Bool(False, help="If True, use the IAU convention rather than COSMO")
 
     @traitlets.validate("detector_pointing")
