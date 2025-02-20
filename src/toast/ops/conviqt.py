@@ -342,6 +342,14 @@ class SimConviqt(Operator):
         if det not in focalplane:
             raise RuntimeError(f"focalplane does not include {det}")
         props = focalplane[det]
+        if "pol" in props.colnames:
+            pol = props["pol"]
+        if pol == "A" or det.endswith(("a", "A", "t", "T")):
+            return 0.0
+        elif pol == "B" or det.endswith(("b", "B")):
+            return np.pi / 2
+        # Only if the polarization type is not recorded, will we look for
+        # polarization angle in the focalplane
         if "psi_pol" in props.colnames:
             psi_pol = props["psi_pol"].to_value(u.radian)
         elif "pol_angle" in props.colnames:
@@ -363,8 +371,8 @@ class SimConviqt(Operator):
         if "psi_uv_deg" in props.colnames:
             psi_uv = props["psi_uv"].to_value(u.radian)
         else:
-            msg = f"focalplane[{det}] does not include psi_uv. "
-            msg += "Valid column names are {props.colnames}"
+            msg = f"focalplane[{det}] does not include 'psi_uv'. "
+            msg += f"Valid column names are {props.colnames}"
             warnings.warn(msg)
             psi_uv = 0
         return psi_uv
