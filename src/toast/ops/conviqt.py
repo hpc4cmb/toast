@@ -344,6 +344,8 @@ class SimConviqt(Operator):
         props = focalplane[det]
         if "pol" in props.colnames:
             pol = props["pol"]
+        else:
+            pol = None
         if pol == "A" or det.endswith(("a", "A", "t", "T")):
             return 0.0
         elif pol == "B" or det.endswith(("b", "B")):
