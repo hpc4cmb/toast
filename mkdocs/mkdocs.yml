@@ -7,19 +7,40 @@ theme:
     - navigation.path
 
 plugins:
-  - mkdocstrings
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_root_heading: true
+            heading_level: 3
+            parameter_headings: false
+            show_object_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
   - mkdocs-jupyter:
-      execute: True
+      execute: False
       include_source: True
 
 nav:
   - Introduction: index.md
   - Installation: install.md
   - Tutorials:
-    - tutorials/index.md
-    - tutorials/data_model.ipynb
+      - tutorials/index.md
+      - tutorials/data_model.ipynb
   - Recipes: recipes.md
   - Design: design.md
   - API Reference: reference.md
   - For Developers: develop.md
 
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
