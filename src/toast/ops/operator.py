@@ -139,13 +139,13 @@ class Operator(TraitConfig):
             for iobs, obs in enumerate(data.obs):
                 unload = False
                 if hasattr(obs, "loader"):
-                    obs.loader.load(obs)
+                    obs.loader.load(obs, data=data)
                     unload = True
                 temp_data = data.select(obs_index=iobs)
                 self.exec(temp_data, detectors=detectors, **kwargs)
                 del temp_data
                 if unload:
-                    obs.loader.unload(obs)
+                    obs.loader.unload(obs, data=data)
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to load_exec()"

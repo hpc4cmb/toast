@@ -386,3 +386,37 @@ class Pipeline(Operator):
         Converts the pipeline into a human-readable string.
         """
         return f"Pipeline{[op.__class__.__qualname__ for op in self.operators]}"
+
+
+class PipelineLoader(object):
+    """Loader class that runs a Pipeline to generate data.
+
+    This class can be used as an observation loader.  It will apply the pipeline
+    to each specifed observation when the `load()` method is called.  When the
+    `unload()` method is called, all detector data created by the pipeline will
+    be purged.  Shared and metadata created by the pipeline will be left in
+    place.
+
+    Args:
+        pipeline (Pipeline):  The Pipeline instance to run on demand.
+
+    """
+
+    def __init__(self, pipeline=None):
+        self._pipe = pipeline
+        self._det_purge = pipeline.provides()["detdata"]
+
+    def load(self, obs, data=None):
+        if data is None:
+            msg = "PipelineLoader should be called with data argument"
+            raise RuntimeError(msg)
+        temp_data = data.select(obs_uid=obs.uid)
+        self._pipe.apply(temp_data)
+        del temp_data
+
+    def unload(self, obs, data=None):
+        if data is None:
+            msg = "PipelineLoader should be called with data argument"
+            raise RuntimeError(msg)
+        for dd in self._det_purge:
+            del obs.detdata[dd]
