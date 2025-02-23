@@ -2,6 +2,8 @@ site_name: TOAST
 
 theme:
   name: "material"
+  logo: toast_logo_small.png
+  favicon: toast_logo_small.png
   features:
     - navigation.expand
     - navigation.path
