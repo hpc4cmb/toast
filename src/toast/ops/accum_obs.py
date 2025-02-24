@@ -11,8 +11,8 @@ from ..covariance import covariance_invert
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_healpix import read_healpix_hdf5
-from ..pixels_io_wcs import read_wcs_fits
+from ..pixels_io_healpix import read_healpix_hdf5, write_healpix_hdf5
+from ..pixels_io_wcs import read_wcs_fits, write_wcs_fits
 from ..timing import function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, Unit, UseEnum, trait_docs
 from ..utils import Logger, unit_conversion
@@ -30,9 +30,9 @@ class AccumulateObservation(Operator):
     The pixel distribution should have already been computed (for example from a
     sky footprint file).
 
-    This operator uses the load_exec() functionality of the Pipeline operator to
-    optionally process one observation at a time, reducing the overall memory
-    requirements.
+    This operator is designed to have its exec() method called on a single observation,
+    for example as part of a call to Operator.load_exec().  An exception will be raised
+    if applied to a Data object with multiple observations.
 
     If caching is enabled, the per-observation quantities are written to disk for
     later use.
@@ -142,8 +142,13 @@ class AccumulateObservation(Operator):
     )
 
     obs_pointing = Bool(
-        True,
+        False,
         help="If True, expand pointing for all detectors at once in an observation",
+    )
+
+    save_pointing = Bool(
+        False,
+        help="If True, leave expanded pointing after processing the observation",
     )
 
     noise_model = Unicode(
@@ -216,7 +221,7 @@ class AccumulateObservation(Operator):
                     raise traitlets.TraitError(msg)
         return weights
 
-    # File root for objects on disk.
+    # File root name for objects on disk.
     obs_file_hits = "hits"
     obs_file_invcov = "invcov"
     obs_file_zmap = "zmap"
@@ -228,41 +233,100 @@ class AccumulateObservation(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        self._check_inputs(data)
-
-        # Create the single-observation pixel distribution on the group communicator
-        pixel_dist = data[self.pixel_dist]
-        obs_pixel_dist = PixelDistribution(
-            n_pix=pixel_dist.n_pix,
-            n_submap=pixel_dist.n_submap,
-            local_submaps=pixel_dist.local_submaps,
-            comm=data.comm.comm_group,
-        )
-
-        accum_pipe = self._create_pipeline()
-
-        for ob in data.obs:
-            # Compute the cache location for this observation and
-            # check if we have all the products we need.
-            use_cache, ob_dir = self._check_cache(ob)
-            all_cached = self._load_obs_products(data, ob_dir, obs_pixel_dist)
-            if not all_cached:
-                # We need to compute the products
-                self._compute_obs_products(data, ob, accum_pipe)
-            if use_cache and not all_cached:
-                # Write out our per-observation data
-                self._write_obs_products(data, ob_dir)
-            if self.cache_only:
-                # We are done
-                continue
-            # Accumulate to the totals
-            self._accumulate(data)
-
-        if self.cache_only:
-            # All done.  We are not building the final products.
+        if len(data.obs) > 1:
+            msg = "Each call to exec() should be used on a Data object with no "
+            msg += "more than one observation per group."
+            log.error_rank(msg, comm=data.comm.comm_group)
+            raise RuntimeError(msg)
+        elif len(data.obs) == 0:
+            # Nothing to do
             return
 
-        return
+        # The observation we are working with
+        the_obs = data.obs[0]
+
+        # Check inputs for consistency and create any map domain objects that do not
+        # yet exist.
+        self._check_inputs(data)
+
+        # Compute the cache location for this observation and
+        # check if we have all the products we need.
+        use_cache, ob_dir = self._check_cache(the_obs)
+        all_cached = self._load_obs_products(data, ob_dir)
+
+        if not all_cached:
+            # We need to compute the products.
+
+            # The observation pixel distribution
+            obs_pixel_dist = f"{self.name}_{self.pixel_dist}"
+
+            # Pipeline to accumulate a single observation
+            accum_pipe = self._create_pipeline(data[obs_pixel_dist])
+
+            # Run the pipeline to accumulate the products for this observation,
+            # but do not call "finalize" on the pipeline, which syncs data products.
+            self._compute_obs_products(data, accum_pipe)
+
+        if not self.cache_only:
+            # Accumulate the per-observation data to the global products.  This sums the
+            # per process submap data (which has not synced yet).
+            self._accumulate(data)
+
+        if use_cache and not all_cached:
+            # We are using the cache and we had to compute the per-observation
+            # products.  Write these out.  This will first call finalize() on the
+            # pipeline to sync the per-observation products before writing.
+            self._write_obs_products(data, ob_dir, accum_pipe)
+
+    def _n_stokes(self):
+        # Number of map values per pixel
+        if self.stokes_weights.mode == "IQU":
+            nvalue = 3
+        elif self.stokes_weights.mode == "I":
+            nvalue = 1
+        else:
+            raise RuntimeError(
+                f"Invalid Stokes weights mode: {self.stokes_weights.mode}"
+            )
+        return nvalue
+
+    def _check_obs_pixel_dist(self, data):
+        pix_dist = data[self.pixel_dist]
+        obs_pixel_dist = f"{self.name}_{self.pixel_dist}"
+        if obs_pixel_dist in data:
+            # Verify that it is equal to the global pixel dist with the exception of the
+            # communicator.  This mimics the __eq__ method of the PixelDistribution but
+            # with the different communicator check.
+            obs_pix_dist = data[obs_pixel_dist]
+            dist_equal = True
+            if obs_pix_dist.n_pix != pix_dist.n_pix:
+                dist_equal = False
+            if obs_pix_dist.n_submap != pix_dist.n_submap:
+                dist_equal = False
+            if obs_pix_dist.n_pix_submap != pix_dist.n_pix_submap:
+                dist_equal = False
+            if not np.array_equal(obs_pix_dist.local_submaps, pix_dist.local_submaps):
+                dist_equal = False
+            if obs_pix_dist.comm is None and data.comm.comm_group is not None:
+                dist_equal = False
+            if obs_pix_dist.comm is not None and data.comm.comm_group is None:
+                dist_equal = False
+            if obs_pix_dist.comm is not None:
+                comp = MPI.Comm.Compare(obs_pix_dist.comm, data.comm.comm_group)
+                if comp not in (MPI.IDENT, MPI.CONGRUENT):
+                    dist_equal = False
+            if not dist_equal:
+                # Delete it
+                del data[obs_pixel_dist]
+        if obs_pixel_dist not in data:
+            # Create it
+            data[obs_pixel_dist] = PixelDistribution(
+                n_pix=pix_dist.n_pix,
+                n_submap=pix_dist.n_submap,
+                local_submaps=pix_dist.local_submaps,
+                comm=data.comm.comm_group,
+            )
+        return obs_pixel_dist
 
     def _check_inputs(self, data):
         for trait in "pixel_pointing", "stokes_weights":
@@ -290,35 +354,53 @@ class AccumulateObservation(Operator):
             self.stokes_weights.detector_pointing.det_mask = self.det_mask
             self.stokes_weights.detector_pointing.det_flag_mask = self.det_flag_mask
 
-        # Check that the pixel distribution exists
+        # Check that the global pixel distribution exists
         if self.pixel_dist not in data:
             msg = f"The pixel distribution '{self.pixel_dist}' does not exist in data"
             raise RuntimeError(msg)
 
-        # Check if map domain products exist and are consistent.  Also delete our
-        # per-observation products if they exist.
-        for map_object in [
-            self.hits,
-            self.rcond,
-            self.zmap,
-            self.inverse_covariance,
-            self.covariance,
+        # Ensure that the single observation pixel distribution exists
+        obs_pixel_dist = self._check_obs_pixel_dist(data)
+
+        n_value = self._n_stokes()
+
+        for map_object, nval, map_units in [
+            (self.hits, 1, u.dimensionless_unscaled),
+            (self.zmap, n_value, self.det_data_units),
+            (
+                self.inverse_covariance,
+                n_value * (n_value + 1) / 2,
+                1.0 / (self.det_data_units**2),
+            ),
         ]:
             if map_object is None:
                 continue
             if map_object in data:
-                if data[map_object].distribution == data[self.pixel_dist]:
-                    # Distributions are equal, just set to zero
-                    data[map_object].reset()
-                else:
-                    # Inconsistent- delete it so that it will be re-created.
+                if data[map_object].distribution != data[self.pixel_dist]:
+                    # Inconsistent.  Delete and re-create
                     del data[map_object]
-            obs_map_object = f"{self.obs_prefix}_{map_object}"
-            if obs_map_object in data:
-                del data[obs_map_object]
-        # Special handling of units on the covariance
-        if self.covariance is not None and self.covariance in data:
-            data[self.covariance].update_units(1.0 / (self.det_data_units**2))
+            if map_object not in data:
+                data[map_object] = PixelData(
+                    data[self.pixel_dist],
+                    np.float64,
+                    n_value=nval,
+                    units=map_units,
+                )
+            obs_object = f"{self.name}_{map_object}"
+            if obs_object in data:
+                if data[obs_object].distribution != data[obs_pixel_dist]:
+                    # Inconsistent.  Delete and re-create
+                    del data[obs_object]
+            if obs_object not in data:
+                data[obs_object] = PixelData(
+                    data[obs_pixel_dist],
+                    np.float64,
+                    n_value=nval,
+                    units=map_units,
+                )
+            else:
+                # Zero for use with the current observation.
+                data[obs_object].reset()
 
     def _check_cache(self, obs):
         if self.cache_dir is None:
@@ -331,7 +413,7 @@ class AccumulateObservation(Operator):
                 if not os.path.exists(ob_dir):
                     os.makedirs(ob_dir)
                 # If we are overwriting the observation products,
-                # delete them now.
+                # delete them from disk now.
                 if self.overwrite_cache:
                     for map_object, prefix in [
                         (self.hits, self.obs_file_hits),
@@ -347,42 +429,22 @@ class AccumulateObservation(Operator):
                 obs.comm.comm_group.barrier()
         return use_cache, ob_dir
 
-    def _load_obs_products(self, data, ob_dir, ob_dist):
+    def _load_obs_products(self, data, ob_dir):
         """Load the per-observation objects from disk if they exist."""
-
         have_all = True
+
         # If we are using a WCS projection, there will be a copy of wcs in the
         # pixel distribution object.
         use_wcs = hasattr(data[self.pixel_dist], "wcs")
 
-        # Number of map values per pixel
-        if self.stokes_weights.mode == "IQU":
-            nvalue = 3
-        elif self.stokes_weights.mode == "I":
-            nvalue = 1
-        else:
-            raise RuntimeError(
-                f"Invalid Stokes weights mode: {self.stokes_weights.mode}"
-            )
-
-        for map_object, prefix, nvalue in [
-            (self.hits, self.obs_file_hits, 1),
-            (self.zmap, self.obs_file_zmap, nvalue),
-            (self.inverse_covariance, self.obs_file_invcov, nvalue * (nvalue + 1) / 2),
+        for map_object, prefix in [
+            (self.hits, self.obs_file_hits),
+            (self.zmap, self.obs_file_zmap),
+            (self.inverse_covariance, self.obs_file_invcov),
         ]:
             if map_object is None:
                 continue
             obs_object = f"{self.name}_{map_object}"
-
-            # Create or zero the per-observation object
-            if obs_object not in data:
-                data[obs_object] = PixelData(
-                    distribution=ob_dist,
-                    dtype=np.float64,
-                    n_value=nvalue,
-                )
-            else:
-                data[obs_object].reset()
 
             if ob_dir is None:
                 # Not using cache
@@ -393,7 +455,14 @@ class AccumulateObservation(Operator):
                 obs_object_path = os.path.join(ob_dir, f"{prefix}.fits")
             else:
                 obs_object_path = os.path.join(ob_dir, f"{prefix}.h5")
-            if not os.path.exists(obs_object_path):
+
+            obs_have_obj = True
+            if data.comm.group_rank == 0:
+                if not os.path.exists(obs_object_path):
+                    obs_have_obj = False
+            if data.comm.comm_group is not None:
+                obs_have_obj = data.comm.comm_group.bcast(obs_have_obj, root=0)
+            if not obs_have_obj:
                 have_all = False
                 continue
 
@@ -404,7 +473,7 @@ class AccumulateObservation(Operator):
                 read_healpix_hdf5(data[obs_object], obs_object_path)
         return have_all
 
-    def _create_pipeline(self):
+    def _create_pipeline(self, ob_dist):
         if self.obs_pointing:
             # Process all detectors at once
             accum = Pipeline(detector_sets=["ALL"])
@@ -420,8 +489,8 @@ class AccumulateObservation(Operator):
         if self.hits is not None:
             accum.operators.append(
                 BuildHitMap(
-                    pixel_dist=self.pixel_dist,
-                    hits=self.hits,
+                    pixel_dist=ob_dist,
+                    hits=f"{self.name}_{self.hits}",
                     view=self.pixel_pointing.view,
                     pixels=self.pixel_pointing.pixels,
                     det_mask=self.det_mask,
@@ -437,8 +506,8 @@ class AccumulateObservation(Operator):
         if self.inverse_covariance is not None:
             accum.operators.append(
                 BuildInverseCovariance(
-                    pixel_dist=self.pixel_dist,
-                    inverse_covariance=self.inverse_covariance,
+                    pixel_dist=ob_dist,
+                    inverse_covariance=f"{self.name}_{self.inverse_covariance}",
                     view=self.pixel_pointing.view,
                     pixels=self.pixel_pointing.pixels,
                     weights=self.stokes_weights.weights,
@@ -457,8 +526,8 @@ class AccumulateObservation(Operator):
         if self.zmap is not None:
             accum.operators.append(
                 BuildNoiseWeighted(
-                    pixel_dist=self.pixel_dist,
-                    zmap=self.zmap,
+                    pixel_dist=ob_dist,
+                    zmap=f"{self.name}_{self.zmap}",
                     view=self.pixel_pointing.view,
                     pixels=self.pixel_pointing.pixels,
                     weights=self.stokes_weights.weights,
@@ -474,6 +543,70 @@ class AccumulateObservation(Operator):
                 )
             )
         return accum
+
+    def _compute_obs_products(self, data, accum_pipe):
+        # The observation we are working with
+        the_obs = data.obs[0]
+
+        # We intentionally DO NOT call finalize() / apply() here.  We want to
+        # have the raw, per-process hits / noise weighted map / inverse covariance.
+        # We can then accumulate these to the global objects.
+        accum_pipe.exec(data)
+
+        if self.obs_pointing and not self.save_pointing:
+            # We created full detector pointing for this observation, but we are
+            # not saving it.  Clean it up now.
+            del the_obs.detdata[self.pixel_pointing.pixels]
+            del the_obs.detdata[self.stokes_weights.weights]
+            del the_obs.detdata[self.pixel_pointing.detector_pointing.quats]
+
+    def _write_obs_products(self, data, ob_dir, accum_pipe):
+        if ob_dir is None:
+            # Not caching anything
+            return
+
+        # Before writing out the data, we sync it.
+        accum_pipe.finalize()
+
+        # If we are using a WCS projection, there will be a copy of wcs in the
+        # pixel distribution object.
+        use_wcs = hasattr(data[self.pixel_dist], "wcs")
+
+        for map_object, prefix in [
+            (self.hits, self.obs_file_hits),
+            (self.zmap, self.obs_file_zmap),
+            (self.inverse_covariance, self.obs_file_invcov),
+        ]:
+            if map_object is None:
+                continue
+            obs_object = f"{self.name}_{map_object}"
+
+            if use_wcs:
+                obs_object_path = os.path.join(ob_dir, f"{prefix}.fits")
+            else:
+                obs_object_path = os.path.join(ob_dir, f"{prefix}.h5")
+
+            # Write the object
+            if use_wcs:
+                write_wcs_fits(data[obs_object], obs_object_path)
+            else:
+                write_healpix_hdf5(data[obs_object], obs_object_path, nest=True)
+
+    def _accumulate(self, data):
+        # The per-observation objects have not yet been synchronized.  So each process
+        # can just accumulate their locally hit submaps.
+
+        n_value = self._n_stokes()
+
+        for map_object, nval in [
+            (self.hits, 1),
+            (self.zmap, n_value),
+            (self.inverse_covariance, n_value * (n_value + 1) / 2),
+        ]:
+            if map_object is None:
+                continue
+            obs_object = f"{self.name}_{map_object}"
+            data[map_object].data[:] += data[obs_object].data
 
     def _finalize(self, data, **kwargs):
         log = Logger.get()
@@ -495,10 +628,14 @@ class AccumulateObservation(Operator):
             else:
                 data[map_object].sync_allreduce()
 
+        # Cleanup per-observation objects
+
         # Invert the total covariance
         if self.covariance is not None:
             # Copy the inverse
             data[self.covariance] = data[self.inverse_covariance].duplicate()
+            # Update units
+            data[self.covariance].update_units(1.0 / (self.det_data_units**2))
             # Invert in place
             covariance_invert(
                 data[self.covariance],
@@ -524,6 +661,7 @@ class AccumulateObservation(Operator):
     def _requires(self):
         req = self.pixel_pointing.requires()
         req.update(self.stokes_weights.requires())
+        req["global"].append(self.pixel_dist)
         req["meta"].append(self.noise_model)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
@@ -533,12 +671,19 @@ class AccumulateObservation(Operator):
 
     def _provides(self):
         prov = {
-            "global": [self.pixel_dist, self.hits, self.covariance, self.rcond],
+            "global": list(),
             "shared": list(),
             "detdata": list(),
         }
+        for map_obj in [
+            self.hits,
+            self.zmap,
+            self.inverse_covariance,
+            self.covariance,
+            self.rcond,
+        ]:
+            if map_obj is not None:
+                prov["global"].append(map_obj)
         if self.save_pointing:
             prov["detdata"].extend([self.pixels, self.weights])
-        if self.inverse_covariance is not None:
-            prov["global"].append(self.inverse_covariance)
         return prov

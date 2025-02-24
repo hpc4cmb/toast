@@ -315,7 +315,6 @@ class PixelDistribution(AcceleratorObject):
             return self._alltoallv_info
 
         owners = self.submap_owners
-        our_submaps = self.owned_submaps
 
         send_counts = None
         send_displ = None
@@ -868,7 +867,6 @@ class PixelData(AcceleratorObject):
             msg += " cannot do MPI communication"
             raise RuntimeError(msg)
 
-        log = Logger.get()
         gt = GlobalTimers.get()
         self.setup_alltoallv()
 
