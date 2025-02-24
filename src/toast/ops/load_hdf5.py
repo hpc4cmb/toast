@@ -44,7 +44,10 @@ class LoadHDF5(Operator):
 
     meta = List([], help="Only load this list of meta objects")
 
-    detdata = List([], help="Only load this list of detdata objects")
+    detdata = List(
+        [defaults.det_data, defaults.det_flags],
+        help="Only load this list of detdata objects",
+    )
 
     shared = List([], help="Only load this list of shared objects")
 
@@ -90,9 +93,10 @@ class LoadHDF5(Operator):
         if len(self.shared) > 0:
             shared_fields = list(self.shared)
 
-        detdata_fields = None
         if len(self.detdata) > 0:
             detdata_fields = list(self.detdata)
+        else:
+            detdata_fields = list()
 
         intervals_fields = None
         if len(self.intervals) > 0:
