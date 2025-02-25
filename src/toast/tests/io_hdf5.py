@@ -89,6 +89,7 @@ class IoHdf5Test(MPITestCase):
                 self.comm.barrier()
 
             data, config = self.create_data()
+            det_data_fields = ["signal", "flags", "alt_signal"]
 
             # Export the data, and make a copy for later comparison.
             original = list()
@@ -96,7 +97,11 @@ class IoHdf5Test(MPITestCase):
             for ob in data.obs:
                 original.append(ob.duplicate(times="times"))
                 obf = save_hdf5(
-                    ob, datadir, config=config, force_serial=(droot == "serial")
+                    ob,
+                    datadir,
+                    detdata=det_data_fields,
+                    config=config,
+                    force_serial=(droot == "serial"),
                 )
                 obfiles.append(obf)
 
@@ -107,7 +112,9 @@ class IoHdf5Test(MPITestCase):
             check_data = Data(comm=data.comm)
 
             for hfile in obfiles:
-                check_data.obs.append(load_hdf5(hfile, check_data.comm))
+                check_data.obs.append(
+                    load_hdf5(hfile, check_data.comm, detdata=det_data_fields)
+                )
 
             # Verify
             for ob, orig in zip(check_data.obs, original):
@@ -131,6 +138,7 @@ class IoHdf5Test(MPITestCase):
             self.comm.barrier()
 
         data, config = self.create_data()
+        det_data_fields = ["signal", "flags", "alt_signal"]
 
         # Make a copy for later comparison.  Convert float64 detdata to
         # float32.
@@ -149,14 +157,16 @@ class IoHdf5Test(MPITestCase):
                     new_dd[:] = original[ob.name].detdata[field][:]
                     original[ob.name].detdata._internal[field] = new_dd
 
-        saver = ops.SaveHDF5(volume=datadir, config=config, detdata_float32=True)
+        saver = ops.SaveHDF5(
+            volume=datadir, detdata=det_data_fields, config=config, detdata_float32=True
+        )
         saver.apply(data)
 
         if data.comm.comm_world is not None:
             data.comm.comm_world.barrier()
 
         check_data = Data(data.comm)
-        loader = ops.LoadHDF5(volume=datadir)
+        loader = ops.LoadHDF5(volume=datadir, detdata=det_data_fields)
         loader.apply(check_data)
 
         # Verify
@@ -180,20 +190,23 @@ class IoHdf5Test(MPITestCase):
             self.comm.barrier()
 
         data, config = self.create_data(split=True)
+        det_data_fields = ["signal", "flags", "alt_signal"]
 
         # Make a copy for later comparison.
         original = dict()
         for ob in data.obs:
             original[ob.name] = ob.duplicate(times="times")
 
-        saver = ops.SaveHDF5(volume=datadir, config=config, verify=True)
+        saver = ops.SaveHDF5(
+            volume=datadir, detdata=det_data_fields, config=config, verify=True
+        )
         saver.apply(data)
 
         if data.comm.comm_world is not None:
             data.comm.comm_world.barrier()
 
         check_data = Data(data.comm)
-        loader = ops.LoadHDF5(volume=datadir)
+        loader = ops.LoadHDF5(volume=datadir, detdata=det_data_fields)
         loader.apply(check_data)
 
         # Verify
@@ -232,6 +245,50 @@ class IoHdf5Test(MPITestCase):
 
         close_data(data)
 
+    def test_save_load_empty_detdata(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        datadir = os.path.join(self.outdir, "save_load_empty_detdata")
+        if rank == 0:
+            os.makedirs(datadir)
+        if self.comm is not None:
+            self.comm.barrier()
+
+        data, config = self.create_data(split=True)
+
+        # Set detdata to an empty list so that no detector data is written or loaded.
+        det_data_fields = []
+
+        # Make a copy for later comparison.
+        original = dict()
+        for ob in data.obs:
+            original[ob.name] = ob.duplicate(times="times")
+
+        saver = ops.SaveHDF5(
+            volume=datadir, detdata=det_data_fields, config=config, verify=True
+        )
+        saver.apply(data)
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
+
+        check_data = Data(data.comm)
+        loader = ops.LoadHDF5(volume=datadir, detdata=det_data_fields)
+        loader.apply(check_data)
+
+        # Verify.  Before checking equality, purge detdata from the original.
+        for ob in check_data.obs:
+            orig = original[ob.name]
+            orig.detdata.clear()
+            if ob != orig:
+                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
+            self.assertTrue(ob == orig)
+        del check_data
+
+        close_data(data)
+
     def test_save_load_ops_f32(self):
         rank = 0
         if self.comm is not None:
@@ -244,6 +301,7 @@ class IoHdf5Test(MPITestCase):
             self.comm.barrier()
 
         data, config = self.create_data(split=True)
+        det_data_fields = ["signal", "flags", "alt_signal"]
 
         # Make a copy for later comparison.
         original = dict()
@@ -251,7 +309,11 @@ class IoHdf5Test(MPITestCase):
             original[ob.name] = ob.duplicate(times="times")
 
         saver = ops.SaveHDF5(
-            volume=datadir, config=config, detdata_float32=True, verify=True
+            volume=datadir,
+            detdata=det_data_fields,
+            config=config,
+            detdata_float32=True,
+            verify=True,
         )
         saver.apply(data)
 

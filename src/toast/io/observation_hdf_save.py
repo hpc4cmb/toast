@@ -825,9 +825,9 @@ def save_hdf5(
                     meta_group.attrs[k] = v
             except (ValueError, TypeError) as e:
                 msg = f"Failed to store obs key '{k}' = '{v}' as an attribute ({e})."
-                msg += f" Try casting it to a supported type when storing in the "
-                msg += f"observation dictionary or implement save_hdf5() and "
-                msg += f"load_hdf5() methods."
+                msg += " Try casting it to a supported type when storing in the "
+                msg += "observation dictionary or implement save_hdf5() and "
+                msg += "load_hdf5() methods."
                 log.verbose(msg)
     del meta_group
 

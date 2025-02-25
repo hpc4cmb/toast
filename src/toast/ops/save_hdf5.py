@@ -159,7 +159,10 @@ class SaveHDF5(Operator):
 
     meta = List([], allow_none=True, help="Only save this list of meta objects")
 
-    detdata = List([], help="Only save this list of detdata objects")
+    detdata = List(
+        [defaults.det_data, defaults.det_flags],
+        help="Only save this list of detdata objects",
+    )
 
     shared = List([], help="Only save this list of shared objects")
 
@@ -240,7 +243,7 @@ class SaveHDF5(Operator):
             if len(self.detdata) > 0:
                 detdata_fields = list(self.detdata)
             else:
-                detdata_fields = list(ob.detdata.keys())
+                detdata_fields = list()
 
             if self.compress_detdata:
                 # Add generic compression instructions to detdata fields
@@ -293,8 +296,8 @@ class SaveHDF5(Operator):
                     else:
                         verify_fields = list(detdata_fields)
                 else:
-                    # We saved everything
-                    verify_fields = list(ob.detdata.keys())
+                    # We saved nothing
+                    verify_fields = list()
 
                 if self.detdata_float32:
                     # We want to duplicate everything *except* float64 detdata
@@ -350,7 +353,7 @@ class SaveHDF5(Operator):
                 )
 
                 if not obs_approx_equal(compare, original):
-                    msg = f"Observation HDF5 verify failed:\n"
+                    msg = "Observation HDF5 verify failed:\n"
                     msg += f"Input = {original}\n"
                     msg += f"Loaded = {compare}"
                     log.error(msg)

@@ -783,7 +783,7 @@ def load_hdf5(
         and (process_rows is not None)
         and (process_rows != comm.group_size)
     ):
-        msg = f"When loading observations with serial HDF5, process_rows must equal "
+        msg = "When loading observations with serial HDF5, process_rows must equal "
         msg += "the group size"
         log.error(msg)
         raise RuntimeError(msg)
