@@ -1,4 +1,4 @@
-# Design
+# Overview
 
 
 The TOAST framework contains:
@@ -14,9 +14,13 @@ a small Python script or notebook (some examples are included). Such scripts
 make use of TOAST functionality for distributing data and then call built-in or
 custom operators to simulate and / or process the timestream data.
 
+## Data Distribution
+
+- Domain decomposition
 
 
-## Detector Flags
+
+## Data Quality Flags
 
 Detector data can be "flagged" or cut for a variety of reasons. Sometimes a flag
 indicates that the data is corrupted in some way and should not be used. In
@@ -24,3 +28,5 @@ other cases, flags are used to classify data with particular properties. For
 example, samples crossing a planet or while the telescope is in a turnaround.
 TOAST supports flags that can be applied for an entire detector within an
 observation, and also flags for individual detector samples.
+
+## Pointing Model
