@@ -48,7 +48,11 @@ nav:
       - design/parallelism.md
       #- design/workflows.md
   - API Reference: reference.md
-  - For Developers: develop.md
+  - For Developers:
+      - develop/index.md
+      #- develop/layout.md
+      #- develop/contributing.md
+      #- develop/deployment.md
 
 markdown_extensions:
   - pymdownx.arithmatex:
