@@ -416,6 +416,7 @@ class SSOPatch(Patch):
         el_min=0,
         el_max=np.pi / 2,
         elevations=None,
+        offset_from_sso=None, #(xi, eta)
     ):
         self.name = name
         self.weight = weight
@@ -426,11 +427,14 @@ class SSOPatch(Patch):
         self.el_max = el_max
         self.el_max0 = el_max
         self.parse_elevations(elevations)
+        self.offset_from_sso = offset_from_sso
         try:
             self.body = getattr(ephem, name)()
         except:
             raise RuntimeError("Failed to initialize {} from pyEphem".format(name))
         self.corners = None
+        if (self.offset_from_sso is not None) and len(self.offset_from_sso)!=2:
+            raise RuntimeError("Specified a sso offset but it is the wrong size")
         return
 
     def update(self, observer):
@@ -439,6 +443,13 @@ class SSOPatch(Patch):
         """
         self.body.compute(observer)
         ra, dec = self.body.ra, self.body.dec
+        if self.offset_from_sso:
+            xi_off = self.offset_from_sso[0]
+            eta_off = self.offset_from_sso[1]
+            az_newcen = xi_off + self.body.az
+            el_newcen = eta_off + self.body.alt
+            ra, dec = observer.radec_of(az_newcen, el_newcen)
+
         # Synthesize 8 corners around the center
         phi = ra
         theta = dec
@@ -2894,6 +2905,11 @@ where YEAR, MONTH and DAY are integers. END days are inclusive""",
         help="Fixed observing elevations in a comma-separated list.",
     )
     parser.add_argument(
+        "--offset-from-sso-deg",
+        required=False,
+        help="Fixed offset to sso_patches as a comma-separated list xi, eta.",
+    )
+    parser.add_argument(
         "--partial-scans",
         required=False,
         action="store_true",
@@ -3008,6 +3024,7 @@ def parse_patch_sso(args, parts):
         el_min=args.el_min_deg * degree,
         el_max=args.el_max_deg * degree,
         elevations=args.elevations_deg,
+        offset_from_sso=args.offset_from_sso_deg,
     )
     return patch
 
