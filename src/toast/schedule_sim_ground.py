@@ -2652,7 +2652,7 @@ instead of the concise 11-field schedule""",
     --patch name,weight,lon,lat,radius (center and radius)
     --patch name,weight,lon_min,lat_max,lon_max,lat_min (rectangle)
     --patch name,weight,lon1,lat1,lon2,lat2,...,lonN,latN (polygon, N>=3)
-    --patch name,SSO,weight,radius,xi_off,eta_off (Solar System Object)
+    --patch name,SSO,weight,radius,eta_off,xi_off (Solar System Object, last two optional offset for pointingnat specific place on fp)
     --patch name,COOLER,weight,power,hold_time_min_h,hold_time_max_h,
             cycle_time_h,az,el (Cooler cycle)
     --patch name,HORIZONTAL,weight,azmin,azmax,el,scantime_min
