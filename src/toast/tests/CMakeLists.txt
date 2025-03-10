@@ -22,6 +22,7 @@ install(FILES
     pixels.py
     weather.py
     noise.py
+    ops_accum_obs.py
     ops_sim_satellite.py
     ops_sim_ground.py
     ops_sim_tod_noise.py

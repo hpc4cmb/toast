@@ -1062,7 +1062,7 @@ def create_fake_beam_alm(
     x, y, z = hp.pix2vec(nside, pix, nest=False)
     sigma_z = fwhm_x.to_value(u.radian) / np.sqrt(8 * np.log(2))
     sigma_y = fwhm_y.to_value(u.radian) / np.sqrt(8 * np.log(2))
-    beam = np.exp(-((z**2 / 2 / sigma_z**2 + y**2 / 2 / sigma_y**2)))
+    beam = np.exp(-(z**2 / 2 / sigma_z**2 + y**2 / 2 / sigma_y**2))
     beam[x < 0] = 0
     beam_map = np.zeros([3, npix])
     beam_map[0] = beam
@@ -1201,6 +1201,8 @@ def create_ground_data(
     turnarounds_invalid=False,
     single_group=False,
     flagged_pixels=True,
+    no_det_data=False,
+    no_det_flags=False,
 ):
     """Create a data object with a simple ground sim.
 
@@ -1298,6 +1300,10 @@ def create_ground_data(
         sim_ground.turnaround_mask = 1 + 2
     else:
         sim_ground.turnaround_mask = 2
+    if no_det_data:
+        sim_ground.det_data = None
+    if no_det_flags:
+        sim_ground.det_flags = None
     sim_ground.apply(data)
 
     if flagged_pixels:

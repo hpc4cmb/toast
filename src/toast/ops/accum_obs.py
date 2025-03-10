@@ -244,6 +244,8 @@ class AccumulateObservation(Operator):
 
         # The observation we are working with
         the_obs = data.obs[0]
+        msg = f"Accumulating observation {the_obs.name}"
+        log.info_rank(msg, comm=data.comm.comm_group)
 
         # Check inputs for consistency and create any map domain objects that do not
         # yet exist.
@@ -261,7 +263,7 @@ class AccumulateObservation(Operator):
             obs_pixel_dist = f"{self.name}_{self.pixel_dist}"
 
             # Pipeline to accumulate a single observation
-            accum_pipe = self._create_pipeline(data[obs_pixel_dist])
+            accum_pipe = self._create_pipeline(obs_pixel_dist)
 
             # Run the pipeline to accumulate the products for this observation,
             # but do not call "finalize" on the pipeline, which syncs data products.
@@ -364,12 +366,13 @@ class AccumulateObservation(Operator):
 
         n_value = self._n_stokes()
 
-        for map_object, nval, map_units in [
-            (self.hits, 1, u.dimensionless_unscaled),
-            (self.zmap, n_value, self.det_data_units),
+        for map_object, map_dt, nval, map_units in [
+            (self.hits, np.int64, 1, u.dimensionless_unscaled),
+            (self.zmap, np.float64, n_value, 1.0 / self.det_data_units),
             (
                 self.inverse_covariance,
-                n_value * (n_value + 1) / 2,
+                np.float64,
+                n_value * (n_value + 1) // 2,
                 1.0 / (self.det_data_units**2),
             ),
         ]:
@@ -382,7 +385,7 @@ class AccumulateObservation(Operator):
             if map_object not in data:
                 data[map_object] = PixelData(
                     data[self.pixel_dist],
-                    np.float64,
+                    map_dt,
                     n_value=nval,
                     units=map_units,
                 )
@@ -394,7 +397,7 @@ class AccumulateObservation(Operator):
             if obs_object not in data:
                 data[obs_object] = PixelData(
                     data[obs_pixel_dist],
-                    np.float64,
+                    map_dt,
                     n_value=nval,
                     units=map_units,
                 )
@@ -566,7 +569,7 @@ class AccumulateObservation(Operator):
             return
 
         # Before writing out the data, we sync it.
-        accum_pipe.finalize()
+        accum_pipe.finalize(data)
 
         # If we are using a WCS projection, there will be a copy of wcs in the
         # pixel distribution object.
@@ -627,8 +630,10 @@ class AccumulateObservation(Operator):
                 data[map_object].sync_alltoallv()
             else:
                 data[map_object].sync_allreduce()
-
-        # Cleanup per-observation objects
+            # Cleanup per-observation objects
+            obs_object = f"{self.name}_{map_object}"
+            if obs_object in data:
+                del data[obs_object]
 
         # Invert the total covariance
         if self.covariance is not None:
@@ -636,6 +641,10 @@ class AccumulateObservation(Operator):
             data[self.covariance] = data[self.inverse_covariance].duplicate()
             # Update units
             data[self.covariance].update_units(1.0 / (self.det_data_units**2))
+            # Create inverse condition number
+            data[self.rcond] = PixelData(
+                data[self.covariance].distribution, np.float64, n_value=1
+            )
             # Invert in place
             covariance_invert(
                 data[self.covariance],

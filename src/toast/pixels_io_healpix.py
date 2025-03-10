@@ -548,7 +548,7 @@ def write_healpix_hdf5(
         # No luck, write serially from root process
         if use_mpi:
             # MPI is enabled, but we are not using it.  Warn the user.
-            log.warning_rank(
+            log.debug_rank(
                 f"h5py not built with MPI support.  Writing {path} in serial mode.",
                 comm=dist.comm,
             )

@@ -42,7 +42,7 @@ from .noise_model import DefaultNoiseModel, FitNoiseModel, FlagNoiseFit
 from .noise_weight import NoiseWeight
 from .obsmat import ObsMat, coadd_observation_matrix
 from .operator import Operator
-from .pipeline import Pipeline
+from .pipeline import Pipeline, PipelineLoader
 from .pixels_healpix import PixelsHealpix
 from .pixels_wcs import PixelsWCS
 from .pointing import BuildPixelDistribution
