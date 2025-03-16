@@ -45,13 +45,13 @@ nav:
       - design/overview.md
       - design/data_model.md
       - design/process_model.md
+      - design/pointing_weights.ipynb
       - design/parallelism.md
       #- design/workflows.md
   - API Reference:
       - reference/global.md
       - reference/instrument.md
       - reference/data.md
-      - reference/pointing_weights.ipynb
       - reference/simulation.md
       - reference/reduction.md
       - reference/tod_io.md
