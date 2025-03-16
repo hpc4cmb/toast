@@ -1,11 +1,10 @@
-# Code Reference
+# Global Settings
 
-## Global Settings
+The toast module has several global settings that can be configured at runtime
+with environment variables or by explicitly calling functions in the package.
 
 ::: toast
 
-## Data Containers
+## Accelerator Use
 
-### Observation
-
-::: toast.observation.Observation
+TOAST supports the use of JAX for offloading some operations.  To enable this...
