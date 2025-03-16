@@ -54,7 +54,10 @@ nav:
       - reference/pointing_weights.ipynb
       - reference/simulation.md
       - reference/reduction.md
+      - reference/tod_io.md
+      - reference/map_domain.md
       - reference/workflow.md
+      - reference/cli_tools.md
   - For Developers:
       - develop/index.md
       #- develop/layout.md
