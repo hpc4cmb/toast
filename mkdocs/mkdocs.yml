@@ -18,6 +18,7 @@ plugins:
             show_root_heading: true
             heading_level: 3
             parameter_headings: false
+            members: true
             show_object_full_path: false
             show_symbol_type_heading: true
             show_symbol_type_toc: true
