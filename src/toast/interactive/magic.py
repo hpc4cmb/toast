@@ -7,10 +7,10 @@
 from argparse import ArgumentParser
 
 from IPython.core.magic import (
-    Magics, 
-    magics_class, 
+    Magics,
+    magics_class,
     line_magic,
-    cell_magic, 
+    cell_magic,
     line_cell_magic,
     needs_local_scope,
 )
@@ -42,6 +42,7 @@ class ToastMagics(Magics):
             threads=args.threads,
             nice=args.nice,
             auto_mpi=args.auto,
+            shell=self.shell,
         )
 
 

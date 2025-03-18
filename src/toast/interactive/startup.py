@@ -8,7 +8,7 @@ import os
 from IPython.core.extensions import ExtensionManager
 
 
-def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False):
+def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
     """Attempt to start up ipyparallel with mpi4py and OpenMP.
 
     Args:
@@ -21,7 +21,6 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False):
         (int):  The number of processes started.
 
     """
-    cores = procs * threads
     print(f"Using {procs} processes with {threads} threads each.")
 
     os.environ["OMP_NUM_THREADS"] = f"{threads}"
@@ -34,7 +33,7 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False):
             client = cluster.start_and_connect_sync()
             client.block = True
             if nice:
-                # Optionally nice the individual processes if running on a 
+                # Optionally nice the individual processes if running on a
                 # shared node.
                 if procs > 1:
                     import psutil
@@ -42,14 +41,17 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False):
                         20 if psutil.POSIX else psutil.IDLE_PRIORITY_CLASS
                     )
             # Optionally enable automatic use of MPI
-            if auto_mpi:
-                pass
-            # We can turn on automatic use of MPI with:
-            # %autopx
-        except:
+            if auto_mpi and shell is not None:
+                # Turn on automatic use of MPI
+                shell.run_line_magic("autopx")
+        except Exception:
             procs = 1
-            print(f"Failed to start ipyparallel cluster, using one process.")
+            print("Failed to start ipyparallel cluster, using one process.")
     extmanager = ExtensionManager()
-    _ = extmanager.load_extension("wurlitzer")
+    try:
+        _ = extmanager.load_extension("wurlitzer")
+    except Exception:
+        # Must be running outside IPython shell
+        pass
     return procs
 

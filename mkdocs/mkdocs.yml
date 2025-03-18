@@ -24,6 +24,8 @@ plugins:
             show_symbol_type_toc: true
   - mkdocs-jupyter:
       execute: true
+      kernel_name: python3
+      allow_errors: false
       include_source: true
 
 nav:
