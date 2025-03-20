@@ -2,7 +2,7 @@
 <!-- Generator: Adobe Illustrator 24.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
 
 <svg
-   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
    sodipodi:docname="det_frame.svg"
    id="svg338"
    xml:space="preserve"
@@ -11,7 +11,7 @@
    y="0px"
    x="0px"
    version="1.1"
-   inkscape:export-filename="/home/kisner/sync/thing/git/toast/hwp_algebra/det_frame.png"
+   inkscape:export-filename="det_frame.png"
    inkscape:export-xdpi="300"
    inkscape:export-ydpi="300"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -441,15 +441,17 @@
    inkscape:pagecheckerboard="0"
    showgrid="false"
    inkscape:zoom="1.1526292"
-   inkscape:cx="389.54417"
-   inkscape:cy="164.40673"
-   inkscape:window-width="1856"
-   inkscape:window-height="928"
-   inkscape:window-x="5"
-   inkscape:window-y="120"
+   inkscape:cx="391.71314"
+   inkscape:cy="172.64876"
+   inkscape:window-width="1440"
+   inkscape:window-height="832"
+   inkscape:window-x="0"
+   inkscape:window-y="0"
    inkscape:window-maximized="0"
    inkscape:current-layer="svg338"
-   inkscape:snap-nodes="false" />
+   inkscape:snap-nodes="false"
+   inkscape:showpageshadow="2"
+   inkscape:deskcolor="#d1d1d1" />
 <text
    font-family="HelveticaNeue-Medium"
    font-size="18px"
