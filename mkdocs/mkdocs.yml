@@ -10,20 +10,23 @@ theme:
 
 plugins:
   - search
+  - autorefs
   - mkdocstrings:
       handlers:
         python:
           options:
             docstring_style: google
             show_root_heading: true
-            heading_level: 3
+            heading_level: 2
             parameter_headings: false
             members: true
+            filters:
+            - "!^_[^_]"
             show_object_full_path: false
             show_symbol_type_heading: true
             show_symbol_type_toc: true
   - mkdocs-jupyter:
-      execute: true
+      execute: false
       kernel_name: python3
       allow_errors: false
       include_source: true
@@ -68,6 +71,8 @@ nav:
       #- develop/deployment.md
 
 markdown_extensions:
+  - toc:
+      toc_depth: 2
   - pymdownx.arithmatex:
       generic: true
   - admonition

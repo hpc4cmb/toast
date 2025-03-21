@@ -6,3 +6,6 @@ or more HDF5 files.
 ::: toast.ops.SaveHDF5
 ::: toast.ops.LoadHDF5
 
+::: toast.ops.SaveSpt3g
+::: toast.ops.LoadSpt3g
+

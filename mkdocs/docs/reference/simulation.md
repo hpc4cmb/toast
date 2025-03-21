@@ -42,9 +42,75 @@ Generating schedules for a satellite is conceptually simpler due to the constrai
 
 ::: toast.schedule_sim_satellite.create_satellite_schedule
 
+### Creating Observations
+
+::: toast.ops.SimGround
+::: toast.ops.SimSatellite
+
 ## Sky Signals
 
+These operators generate detector data containing sources of power from outside the Earth's atmosphere.
 
+::: toast.ops.SimDipole
+
+### Beam-Convolved Sky
+
+::: toast.ops.SimConviqt
+::: toast.ops.SimTEBConviqt
+::: toast.ops.SimWeightedConviqt
+::: toast.ops.SimTotalconvolve
+
+### Scanning a Healpix Map
+
+::: toast.ops.ScanHealpixMap
+::: toast.ops.ScanHealpixMask
+::: toast.ops.InterpolateHealpixMap
+
+### Scanning a WCS Projected Map
+
+::: toast.ops.ScanWCSMap
+::: toast.ops.ScanWCSMask
+
+### Scanning an Arbitrary Map
+
+::: toast.ops.ScanMap
+::: toast.ops.ScanMask
+::: toast.ops.ScanScale
+
+### Point Sources
+
+::: toast.ops.SimCatalog
+::: toast.ops.SimSSO
+
+## Terrestrial Signals
+
+These operators generate detector signal from the Earth's atmosphere and other sources of power outside a ground-based telescope.
+
+::: toast.ops.WeatherModel
+::: toast.ops.SimAtmosphere
+
+::: toast.ops.SimScanSynchronousSignal
 
 ## Instrument Signals
+
+These operators simulate instrumental effects from sources of power inside the telescope and receiver.
+
+::: toast.ops.DefaultNoiseModel
+::: toast.ops.ElevationNoise
+::: toast.ops.SimNoise
+::: toast.ops.CommonModeNoise
+
+::: toast.ops.TimeConstant
+
+::: toast.ops.InjectCosmicRays
+
+::: toast.ops.GainDrifter
+::: toast.ops.GainScrambler
+
+::: toast.ops.PerturbHWP
+<!-- Port HWPSS sim from sotodlib -->
+
+::: toast.ops.CrossTalk
+
+::: toast.ops.YieldCut
 

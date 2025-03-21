@@ -5,3 +5,4 @@ mkdocs-material
 mkdocs-jupyter
 nbconvert
 wurlitzer
+sympy
