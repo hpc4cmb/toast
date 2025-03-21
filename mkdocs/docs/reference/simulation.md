@@ -80,7 +80,7 @@ These operators generate detector data containing sources of power from outside 
 ### Point Sources
 
 ::: toast.ops.SimCatalog
-::: toast.ops.SimSSO
+<!--  ::: toast.ops.SimSSO -->
 
 ## Terrestrial Signals
 
@@ -108,6 +108,7 @@ These operators simulate instrumental effects from sources of power inside the t
 ::: toast.ops.GainScrambler
 
 ::: toast.ops.PerturbHWP
+
 <!-- Port HWPSS sim from sotodlib -->
 
 ::: toast.ops.CrossTalk

@@ -63,7 +63,7 @@
 ## Scan Strategy Characterization
 
 ::: toast.ops.CadenceMap
-::: toast.ops.Crosslinking
+::: toast.ops.CrossLinking
 
 ## Noise Estimation
 
