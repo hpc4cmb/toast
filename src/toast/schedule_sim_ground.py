@@ -400,8 +400,8 @@ class SSOPatch(Patch):
         el_min=0,
         el_max=np.pi / 2,
         elevations=None,
-        offset_eta=0, 
-        offset_xi=0
+        eta_off=0, 
+        xi_off=0,
     ):
         self.name = name
         self.weight = weight
@@ -411,8 +411,18 @@ class SSOPatch(Patch):
         self.el_min = el_min
         self.el_max = el_max
         self.el_max0 = el_max
-        self.offset_eta = offset_eta
-        self.offset_xi = offset_xi
+        #Offseting the source by:
+        self.eta_off = eta_off
+        self.xi_off = xi_off
+        theta_off = np.arcsin(np.sqrt(self.eta_off**2+self.xi_off**2))
+        phi_off = np.arctan2(self.xi_off, self.eta_off)
+        #Quaternions
+        rot_bore_off = qa.mult(qa.rotation(ZAXIS, phi_off), qa.rotation(YAXIS, theta_off))
+        vec_bore_off = qa.rotate(rot_bore_off, ZAXIS)
+        #Offset on sky relative to boresight
+        tht_rot, phi_rot = hp.vec2dir(vec_bore_off)
+        self.az_off = np.sin(tht_rot)*np.cos(phi_rot)
+        self.el_off = np.sin(tht_rot)*np.sin(phi_rot)
         self.parse_elevations(elevations)
         try:
             self.body = getattr(ephem, name)()
@@ -427,10 +437,9 @@ class SSOPatch(Patch):
         """
         self.body.compute(observer)
         ra, dec = self.body.ra, self.body.dec
-        if self.offset_eta !=0 or self.offset_xi !=0:
-            delta_az = -self.offset_xi*np.cos(self.body.alt)
-            delta_el = self.offset_eta
-            ra, dec = observer.radec_of(self.body.az+delta_az, self.body.alt+delta_el)
+        print(np.degrees(self.body.az), np.degrees(self.body.alt))
+        if self.eta_off != 0 or self.xi_off != 0:
+            ra, dec = observer.radec_of(self.body.az-self.az_off, self.body.alt-self.el_off)
 
         # Synthesize 8 corners around the center
         phi = ra
@@ -2766,7 +2775,7 @@ instead of the concise 11-field schedule""",
     --patch name,weight,lon,lat,radius (center and radius)
     --patch name,weight,lon_min,lat_max,lon_max,lat_min (rectangle)
     --patch name,weight,lon1,lat1,lon2,lat2,...,lonN,latN (polygon, N>=3)
-    --patch name,SSO,weight,radius,eta_off,xi_off (Solar System Object, last two optional offset for pointingnat specific place on fp)
+    --patch name,SSO,weight,radius[,eta_off,xi_off] (Solar System Object, last two optional offset for pointing at specific place on fp)
     --patch name,COOLER,weight,power,hold_time_min_h,hold_time_max_h,
             cycle_time_h,az,el (Cooler cycle)
     --patch name,HORIZONTAL,weight,azmin,azmax,el,scantime_min
@@ -3120,12 +3129,12 @@ def parse_patch_sso(args, parts):
     weight = float(parts[2])
     radius = float(parts[3]) * degree
     if len(parts)==6:
-        offset_eta = float(parts[4])
-        offset_xi = float(parts[5])
-        log.info(f"SSO targeting offset by {offset_eta}, {offset_xi}")
+        eta_off = float(parts[4])
+        xi_off = float(parts[5])
+        log.info(f"SSO targeting offset by {eta_off}, {xi_off}")
     else:
-        offset_eta = 0
-        offset_xi = 0
+        eta_off = 0
+        xi_off = 0
         
     patch = SSOPatch(
         name,
@@ -3134,8 +3143,8 @@ def parse_patch_sso(args, parts):
         el_min=args.el_min_deg * degree,
         el_max=args.el_max_deg * degree,
         elevations=args.elevations_deg,
-        offset_eta = offset_eta,
-        offset_xi = offset_xi,
+        eta_off = eta_off,
+        xi_off = xi_off,
     )
     return patch
 
