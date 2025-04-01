@@ -60,7 +60,7 @@ toast::CholmodCommon::CholmodCommon() {
         chcommon->print = 1;          // Minimal verbosity
     }
     chcommon->itype = CHOLMOD_INT;    // All integer arrays are int
-    chcommon->dtype = CHOLMOD_DOUBLE; // All float arrays are double
+    // chcommon->dtype = CHOLMOD_DOUBLE; // All float arrays are double
     chcommon->final_ll = 1;           // The factorization is LL', not LDL'
 }
 
