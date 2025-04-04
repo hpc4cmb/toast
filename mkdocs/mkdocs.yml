@@ -1,0 +1,84 @@
+site_name: TOAST
+
+theme:
+  name: "material"
+  logo: toast_logo_small.png
+  favicon: toast_logo_small.png
+  features:
+    - navigation.expand
+    - navigation.path
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_root_heading: true
+            heading_level: 2
+            parameter_headings: false
+            members: true
+            filters:
+            - "!^_[^_]"
+            show_object_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+  - mkdocs-jupyter:
+      execute: false
+      kernel_name: python3
+      allow_errors: false
+      include_source: true
+
+nav:
+  - Introduction: index.md
+  - Installation: install.md
+  - Tutorials:
+      - tutorials/index.md
+      #- tutorials/interactive.ipynb
+      - tutorials/data_model.ipynb
+      #- tutorials/tod_ops.ipynb
+      #- tutorials/mapmaking.ipynb
+      #- tutorials/sim_instrument.ipynb
+      #- tutorials/sim_sky.ipynb
+  - Recipes:
+      - recipes/index.md
+      #- recipes/configuration.md
+      #- recipes/experiments.md
+      #- recipes/abstractions.md
+  - Design:
+      - design/overview.md
+      - design/data_model.md
+      - design/process_model.md
+      - design/pointing_weights.ipynb
+      - design/parallelism.md
+      #- design/workflows.md
+  - API Reference:
+      - reference/global.md
+      - reference/instrument.md
+      - reference/data.md
+      - reference/simulation.md
+      - reference/reduction.md
+      - reference/tod_io.md
+      - reference/map_domain.md
+      - reference/workflow.md
+      - reference/cli_tools.md
+  - For Developers:
+      - develop/index.md
+      #- develop/layout.md
+      #- develop/contributing.md
+      #- develop/deployment.md
+
+markdown_extensions:
+  - toc:
+      toc_depth: 2
+  - pymdownx.arithmatex:
+      generic: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js

@@ -166,6 +166,7 @@ install(DIRECTORY
 
 # Process the sub directories
 add_subdirectory(config)
+add_subdirectory(interactive)
 add_subdirectory(io)
 add_subdirectory(accelerator)
 add_subdirectory(tests)

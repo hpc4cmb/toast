@@ -163,3 +163,17 @@ Here is a picture of what data each process would have.  The global process numb
 shown as well as the rank within the group:
 
 ![image](_static/toast_data_dist.png)
+
+(pixel:)=
+## Distributed Map Domain Objects
+
+
+(pixel:dist)=
+### Pixel Distribution
+
+
+(pixel:data)=
+### Pixel Data
+
+
+

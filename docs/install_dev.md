@@ -1,3 +1,4 @@
+
 (install:dev)=
 # Developer Installation
 
@@ -24,6 +25,49 @@ Atmosphere simulation | SuiteSparse and [libaatm](https://github.com/hpc4cmb/lib
 MADAM mapmaking operator | [libmadam](https://github.com/hpc4cmb/libmadam)
 Conviqt beam convolution operator | [libconviqt](https://github.com/hpc4cmb/libconviqt)
 Totalconvolve beam convolution operator | [ducc0](https://pypi.org/project/ducc0)
+
+
+## Using Conda
+
+One of the easiest ways to setup a development environment is to create a conda environment and install all the toast dependencies.  Begin by installing or setting up your conda base environment as described in the user installation guide [here](install:user:forge) or [here](install:user:anaconda).
+
+Next, decide on the name of your conda env used for development.  For this example, we will use the name `toastdev`.  To set up this environment you can run the included script:
+
+    cd toast
+    ./platforms/conda_dev_setup.sh toastdev
+
+Now, we will use the conda tools to build toast in "development mode".  The compiled extension is built in place and the git source tree will be placed in the python search path:
+
+    cd toast
+    conda activate toastdev
+    ./platforms/conda_dev.sh
+
+Now you can activate the conda env and use the toast git checkout directly.  Any changes you make to the python source will show up immediately.  If you change the C++ source, you will need to re-run the `conda_dev.sh` script to rebuild the compiled extension.
+
+
+    bash Miniforge3-Linux-x86_64.sh -b -f -p $HOME/software/condabase
+
+    source $HOME/software/condabase/etc/profile.d/conda.sh
+    conda activate
+    #conda update --yes -n base conda
+    conda update --yes -n base --all
+
+    conda create -n toastdev conda-build cmake psutil cython pytest fftw libaatm suitesparse tomlkit traitlets h5py astropy ephem healpy pshmem coverage pytest coveralls pytest-cov
+
+    conda activate toastdev
+
+    conda install gcc_linux-64 gxx_linux-64
+    OR
+    conda install compilers
+
+    pip install pixell
+
+    ./dev_build.sh
+
+    NERSC:
+    MPICC="cc -shared" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
+
+
 
 ## Installing Build Dependencies
 
@@ -148,6 +192,9 @@ to install these packages:
 
 ## Install Optional Dependencies
 
+conda install jupyter-notebook wurlitzer ipywidgets plotly python-kaleido
+
+pip install plotly-resampler
 
 
 ## Installing TOAST with CMake

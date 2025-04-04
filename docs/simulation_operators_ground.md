@@ -1,4 +1,4 @@
-
+(ops:sim_ground)=
 # Simulated Ground-Based Observing
 
 Simulating observing with a ground-based telescope also consists of
