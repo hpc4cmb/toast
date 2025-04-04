@@ -400,6 +400,8 @@ class SSOPatch(Patch):
         el_min=0,
         el_max=np.pi / 2,
         elevations=None,
+        offset_eta=0, 
+        offset_xi=0
     ):
         self.name = name
         self.weight = weight
@@ -409,6 +411,8 @@ class SSOPatch(Patch):
         self.el_min = el_min
         self.el_max = el_max
         self.el_max0 = el_max
+        self.offset_eta = offset_eta
+        self.offset_xi = offset_xi
         self.parse_elevations(elevations)
         try:
             self.body = getattr(ephem, name)()
@@ -423,6 +427,11 @@ class SSOPatch(Patch):
         """
         self.body.compute(observer)
         ra, dec = self.body.ra, self.body.dec
+        if self.offset_eta !=0 or self.offset_xi !=0:
+            delta_az = -self.offset_xi*np.cos(self.body.alt)
+            delta_el = self.offset_eta
+            ra, dec = observer.radec_of(self.body.az+delta_az, self.body.alt+delta_el)
+
         # Synthesize 8 corners around the center
         phi = ra
         theta = dec
@@ -2743,7 +2752,7 @@ instead of the concise 11-field schedule""",
     --patch name,weight,lon,lat,radius (center and radius)
     --patch name,weight,lon_min,lat_max,lon_max,lat_min (rectangle)
     --patch name,weight,lon1,lat1,lon2,lat2,...,lonN,latN (polygon, N>=3)
-    --patch name,SSO,weight,radius (Solar System Object)
+    --patch name,SSO,weight,radius,eta_off,xi_off (Solar System Object, last two optional offset for pointingnat specific place on fp)
     --patch name,COOLER,weight,power,hold_time_min_h,hold_time_max_h,
             cycle_time_h,az,el (Cooler cycle)
     --patch name,HORIZONTAL,weight,azmin,azmax,el,scantime_min
@@ -3096,6 +3105,14 @@ def parse_patch_sso(args, parts):
     name = parts[0]
     weight = float(parts[2])
     radius = float(parts[3]) * degree
+    if len(parts)==6:
+        offset_eta = float(parts[4])
+        offset_xi = float(parts[5])
+        log.info(f"SSO targeting offset by {offset_eta}, {offset_xi}")
+    else:
+        offset_eta = 0
+        offset_xi = 0
+        
     patch = SSOPatch(
         name,
         weight,
@@ -3103,6 +3120,8 @@ def parse_patch_sso(args, parts):
         el_min=args.el_min_deg * degree,
         el_max=args.el_max_deg * degree,
         elevations=args.elevations_deg,
+        offset_eta = offset_eta,
+        offset_xi = offset_xi,
     )
     return patch
 
