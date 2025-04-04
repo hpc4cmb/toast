@@ -9,9 +9,10 @@ from ..utils import Logger
 # ---------------------------------------------------------------------------
 # RECORDING CLASS
 
-use_debug_assert = ("TOAST_LOGLEVEL" in os.environ) and (
-    os.environ["TOAST_LOGLEVEL"] in ["DEBUG", "VERBOSE"]
-)
+use_debug_assert = False
+# use_debug_assert = ("TOAST_LOGLEVEL" in os.environ) and (
+#     os.environ["TOAST_LOGLEVEL"] in ["DEBUG", "VERBOSE"]
+# )
 """
 Assert is used only if `TOAST_LOGLEVEL` is set to `DEBUG`.
 """

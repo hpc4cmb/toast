@@ -160,7 +160,9 @@ class StokesWeights(Operator):
             view = self.detector_pointing.view
 
         # Expand detector pointing
-        self.detector_pointing.apply(data, detectors=detectors, use_accel=use_accel)
+        self.detector_pointing.apply(
+            data, detectors=detectors, use_accel=use_accel, **kwargs
+        )
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -257,6 +259,8 @@ class StokesWeights(Operator):
                     bool(self.IAU),
                     impl=implementation,
                     use_accel=use_accel,
+                    obs_name=ob.name,
+                    **kwargs,
                 )
             else:
                 stokes_weights_I(
@@ -266,6 +270,8 @@ class StokesWeights(Operator):
                     cal,
                     impl=implementation,
                     use_accel=use_accel,
+                    obs_name=ob.name,
+                    **kwargs,
                 )
         return
 
@@ -296,6 +302,7 @@ class StokesWeights(Operator):
             ImplementationType.COMPILED,
             ImplementationType.NUMPY,
             ImplementationType.JAX,
+            ImplementationType.OPENCL,
         ]
 
     def _supports_accel(self):

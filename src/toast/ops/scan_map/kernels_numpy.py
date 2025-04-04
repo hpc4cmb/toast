@@ -24,6 +24,7 @@ def scan_map_numpy(
     should_subtract=False,
     should_scale=False,
     use_accel=False,
+    **kwargs,
 ):
     nmap = weights.shape[-1]
     local_map = mapdata.reshape((-1, nmap))

@@ -9,7 +9,12 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops
-from ..accelerator import ImplementationType, accel_data_table, accel_enabled
+from ..accelerator import (
+    ImplementationType,
+    accel_data_table,
+    accel_enabled,
+    accel_wait,
+)
 from ..observation import default_values as defaults
 from ..templates import AmplitudesMap, Offset
 from ..utils import rate_from_times
@@ -135,9 +140,11 @@ class TemplateOffsetTest(MPITestCase):
         }
 
         data.accel_create(data_names)
-        data.accel_update_device(data_names)
+        events = data.accel_update_device(data_names)
+        accel_wait(events)
         amps.accel_create("Offset")
-        amps.accel_update_device()
+        events = amps.accel_update_device()
+        accel_wait(events)
 
         # Project.
         for det in tmpl.detectors():
@@ -149,8 +156,10 @@ class TemplateOffsetTest(MPITestCase):
             for ob in data.obs:
                 tmpl.project_signal(det, amps, use_accel=True)
 
-        data.accel_update_host(data_names)
-        amps.accel_update_host()
+        events = data.accel_update_host(data_names)
+        accel_wait(events)
+        events = amps.accel_update_host()
+        accel_wait(events)
 
         # Verify
         for ob in data.obs:

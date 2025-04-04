@@ -6,11 +6,14 @@ import numpy as np
 
 from ... import qarray as qa
 from ..._libtoast import pointing_detector as libtoast_pointing_detector
-from ...accelerator import ImplementationType, kernel, use_accel_jax
+from ...accelerator import ImplementationType, kernel, use_accel_jax, use_accel_opencl
 from .kernels_numpy import pointing_detector_numpy
 
 if use_accel_jax:
     from .kernels_jax import pointing_detector_jax
+
+if use_accel_opencl:
+    from .kernels_opencl import pointing_detector_opencl
 
 
 @kernel(impl=ImplementationType.DEFAULT)
@@ -23,6 +26,7 @@ def pointing_detector(
     shared_flags,
     shared_flag_mask,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel for computing detector quaternion pointing.
 
@@ -54,5 +58,5 @@ def pointing_detector(
 
 
 @kernel(impl=ImplementationType.COMPILED, name="pointing_detector")
-def pointing_detector_compiled(*args, use_accel=False):
+def pointing_detector_compiled(*args, use_accel=False, **kwargs):
     return libtoast_pointing_detector(*args, use_accel)

@@ -9,7 +9,7 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops as ops
-from ..accelerator import ImplementationType
+from ..accelerator import ImplementationType, accel_enabled, accel_wait
 from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ._helpers import (
@@ -230,5 +230,73 @@ class ScanMapTest(MPITestCase):
                         self.assertTrue(ob.detdata["mask_flags"][det, i] == 1)
                     else:
                         self.assertTrue(ob.detdata["mask_flags"][det, i] == 0)
+
+        close_data(data)
+
+    def test_scan_pipeline(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm)
+
+        # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky pixel values locally
+        create_fake_sky(data, "pixel_dist", "fake_map")
+        map_data = data["fake_map"]
+
+        # Scan map into timestreams
+        scanner = ops.ScanMap(
+            det_data=defaults.det_data,
+            pixels=pixels.pixels,
+            weights=weights.weights,
+            map_key="fake_map",
+        )
+
+        # Stage data if needed
+        if accel_enabled:
+            data.accel_create(scanner.requires())
+            events = data.accel_update_device(scanner.requires())
+            accel_wait(events)
+
+        kernel_state = {"state": None}
+        scanner.apply(data, use_accel=accel_enabled, **kernel_state)
+
+        # Copy back if needed
+        if accel_enabled:
+            events = data.accel_update_host(scanner.provides())
+            accel_wait(events)
+
+        # Manual check of the projection of map values to timestream
+        for ob in data.obs:
+            for det in ob.select_local_detectors(
+                flagmask=defaults.det_mask_invalid
+            ):
+                wt = ob.detdata[weights.weights][det]
+                local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
+                    ob.detdata[pixels.pixels][det]
+                )
+                for i in range(ob.n_local_samples):
+                    if local_pix[i] < 0:
+                        continue
+                    val = 0.0
+                    for j in range(3):
+                        val += (
+                            wt[i, j] * map_data.data[local_sm[i], local_pix[i], j]
+                        )
+                    np.testing.assert_almost_equal(
+                        val, ob.detdata[defaults.det_data][det, i]
+                    )
 
         close_data(data)

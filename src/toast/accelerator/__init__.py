@@ -15,9 +15,11 @@ from .accel import (
     accel_data_update_device,
     accel_data_update_host,
     accel_enabled,
+    accel_wait,
     accel_get_device,
     use_accel_jax,
     use_accel_omp,
+    use_accel_opencl,
     use_hybrid_pipelines,
 )
 from .kernel_registry import ImplementationType, kernel

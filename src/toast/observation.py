@@ -864,16 +864,54 @@ class Observation(MutableMapping):
             None
 
         """
+        log = Logger.get()
         for key in names["detdata"]:
             self.detdata.accel_create(key)
         for key in names["shared"]:
             self.shared.accel_create(key)
         for key in names["intervals"]:
             self.intervals.accel_create(key)
-        for key, val in self._internal.items():
+        for key in names["meta"]:
+            if key not in self._internal:
+                msg = f"{self.name}['{key}'] does not exist, not creating "
+                msg += "on accelerator"
+                log.debug(msg)
+                continue
+            val = self._internal[key]
             if isinstance(val, AcceleratorObject):
                 if not val.accel_exists():
                     val.accel_create()
+
+    def accel_delete(self, names):
+        """Delete a set of data objects on the device.
+
+        This takes a dictionary with the same format as those used by the Operator
+        provides() and requires() methods.
+
+        Args:
+            names (dict):  Dictionary of lists.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        for key in names["detdata"]:
+            self.detdata.accel_delete(key)
+        for key in names["shared"]:
+            self.shared.accel_delete(key)
+        for key in names["intervals"]:
+            self.intervals.accel_delete(key)
+        for key in names["meta"]:
+            if key not in self._internal:
+                msg = f"{self.name}['{key}'] does not exist, not deleting "
+                msg += "on accelerator"
+                log.debug(msg)
+                continue
+            val = self._internal[key]
+            if isinstance(val, AcceleratorObject):
+                if val.accel_exists():
+                    val.accel_delete()
 
     def accel_update_device(self, names):
         """Copy data objects to the device.
@@ -885,19 +923,36 @@ class Observation(MutableMapping):
             names (dict):  Dictionary of lists.
 
         Returns:
-            None
+            (list):  The events
 
         """
+        log = Logger.get()
+        events = list()
         for key in names["detdata"]:
-            self.detdata.accel_update_device(key)
+            evs = self.detdata.accel_update_device(key)
+            if evs is not None:
+                events.extend(evs)
         for key in names["shared"]:
-            self.shared.accel_update_device(key)
+            evs = self.shared.accel_update_device(key)
+            if evs is not None:
+                events.extend(evs)
         for key in names["intervals"]:
-            self.intervals.accel_update_device(key)
-        for key, val in self._internal.items():
+            evs = self.intervals.accel_update_device(key)
+            if evs is not None:
+                events.extend(evs)
+        for key in names["meta"]:
+            if key not in self._internal:
+                msg = f"{self.name}['{key}'] does not exist, not updating "
+                msg += "accelerator copy"
+                log.debug(msg)
+                continue
+            val = self._internal[key]
             if isinstance(val, AcceleratorObject):
                 if not val.accel_in_use():
-                    val.accel_update_device()
+                    evs = val.accel_update_device()
+                    if evs is not None:
+                        events.extend(evs)
+        return events
 
     def accel_update_host(self, names):
         """Copy data objects from the device.
@@ -909,19 +964,36 @@ class Observation(MutableMapping):
             names (dict):  Dictionary of lists.
 
         Returns:
-            None
+            (list):  The events
 
         """
+        log = Logger.get()
+        events = list()
         for key in names["detdata"]:
-            self.detdata.accel_update_host(key)
+            evs = self.detdata.accel_update_host(key)
+            if evs is not None:
+                events.extend(evs)
         for key in names["shared"]:
-            self.shared.accel_update_host(key)
+            evs = self.shared.accel_update_host(key)
+            if evs is not None:
+                events.extend(evs)
         for key in names["intervals"]:
-            self.intervals.accel_update_host(key)
-        for key, val in self._internal.items():
+            evs = self.intervals.accel_update_host(key)
+            if evs is not None:
+                events.extend(evs)
+        for key in names["meta"]:
+            if key not in self._internal:
+                msg = f"{self.name}['{key}'] does not exist, not updating "
+                msg += "host copy"
+                log.debug(msg)
+                continue
+            val = self._internal[key]
             if isinstance(val, AcceleratorObject):
                 if val.accel_in_use():
-                    val.accel_update_host()
+                    evs = val.accel_update_host()
+                    if evs is not None:
+                        events.extend(evs)
+        return events
 
     def accel_clear(self):
         self.detdata.accel_clear()

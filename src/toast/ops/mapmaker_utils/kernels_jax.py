@@ -11,7 +11,7 @@ from ...jax.maps import imap
 from ...jax.mutableArray import MutableJaxArray
 from ...utils import AlignedF64, AlignedI64, Logger
 
-# ----------------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------
 # build_noise_weighted
 
 
@@ -209,6 +209,7 @@ def build_noise_weighted_jax(
     shared_flags,
     shared_flag_mask,
     use_accel,
+    **kwargs,
 ):
     """
     Args:
@@ -302,7 +303,9 @@ cov_accum_diag_hits_inner = jax.jit(
 
 
 @kernel(impl=ImplementationType.JAX, name="cov_accum_diag_hits")
-def cov_accum_diag_hits_jax(nsub, nsubpix, nnz, submap, subpix, hits, use_accel):
+def cov_accum_diag_hits_jax(
+    nsub, nsubpix, nnz, submap, subpix, hits, use_accel, **kwargs
+):
     """
     Accumulate hit map.
     This uses a pointing matrix to accumulate the local pieces of the hit map.
@@ -389,7 +392,7 @@ cov_accum_diag_invnpp_inner = jax.jit(
 
 @kernel(impl=ImplementationType.JAX, name="cov_accum_diag_invnpp")
 def cov_accum_diag_invnpp_jax(
-    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp, use_accel
+    nsub, nsubpix, nnz, submap, subpix, weights, scale, invnpp, use_accel, **kwargs
 ):
     """
     Accumulate block diagonal noise covariance.

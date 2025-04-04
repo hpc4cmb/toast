@@ -21,6 +21,7 @@ from .accelerator import (
     accel_enabled,
     use_accel_jax,
     use_accel_omp,
+    use_accel_opencl,
 )
 from .intervals import IntervalList
 from .mpi import MPI, comm_equivalent
@@ -334,14 +335,6 @@ class DetectorData(AcceleratorObject):
         are no longer being used and you are about to delete the object.
 
         """
-        # first delete potential GPU data
-        if self.accel_exists():
-            log = Logger.get()
-            msg = "clear() of DetectorData which is staged to accelerator- "
-            msg += "Deleting device copy."
-            log.verbose(msg)
-            self.accel_delete()
-        # then apply clear
         if hasattr(self, "_data"):
             del self._data
             self._data = None
@@ -377,6 +370,7 @@ class DetectorData(AcceleratorObject):
                 self[d, :] = 0
 
     def __del__(self):
+        super().__del__()
         self.clear()
 
     def _det_axis_view(self, key):
@@ -604,7 +598,7 @@ class DetectorData(AcceleratorObject):
             # object and use that.
             return False
         else:
-            if use_accel_omp:
+            if use_accel_omp or use_accel_opencl:
                 return accel_data_present(self._raw, self._accel_name)
             elif use_accel_jax:
                 return accel_data_present(self._data)
@@ -612,7 +606,8 @@ class DetectorData(AcceleratorObject):
                 return False
 
     def _accel_create(self, zero_out=False):
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
+            print(f"DD create {self._accel_name}")
             self._raw = accel_data_create(
                 self._raw, self._accel_name, zero_out=zero_out
             )
@@ -621,24 +616,32 @@ class DetectorData(AcceleratorObject):
 
     def _accel_update_device(self):
         if use_accel_omp:
-            self._raw = accel_data_update_device(self._raw, self._accel_name)
+            _ = accel_data_update_device(self._raw, self._accel_name)
         elif use_accel_jax:
             self._data = accel_data_update_device(self._data)
+        elif use_accel_opencl:
+            dev_data = accel_data_update_device(self._raw, self._accel_name)
+            print(f"DD update device {self._accel_name}, evs={dev_data.events}")
+            return dev_data.events
 
     def _accel_update_host(self):
         if use_accel_omp:
-            self._raw = accel_data_update_host(self._raw, self._accel_name)
+            _ = accel_data_update_host(self._raw, self._accel_name)
         elif use_accel_jax:
             self._data = accel_data_update_host(self._data)
+        elif use_accel_opencl:
+            evs = accel_data_update_host(self._raw, self._accel_name)
+            print(f"DD update host {self._accel_name}, evs={evs}")
+            return evs
 
     def _accel_delete(self):
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
             self._raw = accel_data_delete(self._raw, self._accel_name)
         elif use_accel_jax:
             self._data = accel_data_delete(self._data)
 
     def _accel_reset(self):
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
             accel_data_reset(self._raw, self._accel_name)
         elif use_accel_jax:
             self._data = accel_data_reset(self._data)
@@ -978,7 +981,7 @@ class DetDataManager(MutableMapping):
         log.verbose(
             f"DetDataMgr {key} type = {type(self._internal[key])} accel_update_device"
         )
-        self._internal[key].accel_update_device()
+        return self._internal[key].accel_update_device()
 
     def accel_update_host(self, key):
         """Copy the named detector data from the accelerator.
@@ -996,7 +999,7 @@ class DetDataManager(MutableMapping):
         log.verbose(
             f"DetDataMgr {key} type = {type(self._internal[key])} accel_update_host"
         )
-        self._internal[key].accel_update_host()
+        return self._internal[key].accel_update_host()
 
     def accel_delete(self, key):
         """Delete the named detector data from the accelerator.
@@ -1577,7 +1580,7 @@ class SharedDataManager(MutableMapping):
             log.error(msg)
             raise RuntimeError(msg)
 
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
             result = accel_data_present(self._internal[key].shdata._flat, key)
         elif use_accel_jax:
             result = accel_data_present(self._internal[key].shdata.data)
@@ -1644,7 +1647,7 @@ class SharedDataManager(MutableMapping):
             raise RuntimeError(msg)
 
         log.verbose(f"SharedDataMgr {key} accel_create")
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
             _ = accel_data_create(self._internal[key].shdata._flat, key)
         elif use_accel_jax:
             self._internal[key].shdata.data = MutableJaxArray(
@@ -1680,14 +1683,18 @@ class SharedDataManager(MutableMapping):
             raise RuntimeError(msg)
 
         log.verbose(f"SharedDataMgr {key} accel_update_device")
+        ret = None
         if use_accel_omp:
             _ = accel_data_update_device(self._internal[key].shdata._flat, key)
         elif use_accel_jax:
             self._internal[key].shdata.data = MutableJaxArray(
                 self._internal[key].shdata.data
             )
-
+        elif use_accel_opencl:
+            dev_data = accel_data_update_device(self._internal[key].shdata._flat, key)
+            ret = dev_data.events
         self._accel_used[key] = True
+        return ret
 
     def accel_update_host(self, key):
         """Copy the named shared data from the accelerator to the host.
@@ -1718,14 +1725,17 @@ class SharedDataManager(MutableMapping):
             raise RuntimeError(msg)
 
         log.verbose(f"SharedDataMgr {key} accel_update_host")
-        if use_accel_omp:
+        ret = None
+        if use_accel_omp or use_accel_opencl:
             _ = accel_data_update_host(self._internal[key].shdata._flat, key)
         elif use_accel_jax:
             self._internal[key].shdata.data = accel_data_update_host(
                 self._internal[key].shdata.data
             )
-
+        elif use_accel_opencl:
+            ret = accel_data_update_host(self._internal[key].shdata._flat, key)
         self._accel_used[key] = False
+        return ret
 
     def accel_delete(self, key):
         """Delete the named data object on the device
@@ -1750,7 +1760,7 @@ class SharedDataManager(MutableMapping):
             raise RuntimeError(msg)
 
         log.verbose(f"SharedDataMgr {key} accel_delete")
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
             _ = accel_data_delete(self._internal[key].shdata._flat, key)
         elif use_accel_jax:
             self._internal[key].shdata.data = accel_data_delete(
@@ -1772,7 +1782,7 @@ class SharedDataManager(MutableMapping):
         for key in self._internal:
             if self.accel_exists(key):
                 log.verbose(f"SharedDataMgr {key} accel_delete")
-                if use_accel_omp:
+                if use_accel_omp or use_accel_opencl:
                     _ = accel_data_delete(self._internal[key].shdata._flat, key)
                 elif use_accel_jax:
                     self._internal[key].shdata.data = accel_data_delete(
@@ -2292,7 +2302,7 @@ class IntervalsManager(MutableMapping):
             return
         log = Logger.get()
         log.verbose(f"IntervalsManager {key} accel_update_device")
-        self[key].accel_update_device()
+        return self[key].accel_update_device()
 
     def accel_update_host(self, key):
         """Copy the named interval list from the accelerator.
@@ -2308,7 +2318,7 @@ class IntervalsManager(MutableMapping):
             return
         log = Logger.get()
         log.verbose(f"IntervalsManager {key} accel_update_host")
-        self[key].accel_update_host()
+        return self[key].accel_update_host()
 
     def accel_delete(self, key):
         """Delete the named interval list from the accelerator.

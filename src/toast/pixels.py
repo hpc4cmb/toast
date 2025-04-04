@@ -20,9 +20,12 @@ from .accelerator import (
     accel_enabled,
     use_accel_jax,
     use_accel_omp,
+    use_accel_opencl,
 )
 from .dist import distribute_uniform
 from .mpi import MPI
+if use_accel_opencl:
+    from .opencl import OpenCL
 from .timing import GlobalTimers, Timer, function_timer
 from .utils import (
     AlignedF32,
@@ -56,7 +59,7 @@ class PixelDistribution(AcceleratorObject):
     """
 
     def __init__(self, n_pix=None, n_submap=1000, local_submaps=None, comm=None):
-        super().__init__()
+        super().__init__(constant=True)
         self._n_pix = n_pix
         self._n_submap = n_submap
         if self._n_submap > self._n_pix:
@@ -124,6 +127,7 @@ class PixelDistribution(AcceleratorObject):
                 del self._glob2loc
 
     def __del__(self):
+        super().__del__()
         self.clear()
 
     @property
@@ -398,16 +402,29 @@ class PixelDistribution(AcceleratorObject):
         return self._alltoallv_info
 
     def _accel_exists(self):
+        if not hasattr(self, "_glob2loc"):
+            return False
         return accel_data_present(self._glob2loc, self._accel_name)
 
     def _accel_create(self):
         self._glob2loc = accel_data_create(self._glob2loc, self._accel_name)
 
     def _accel_update_device(self):
-        self._glob2loc = accel_data_update_device(self._glob2loc, self._accel_name)
+        if use_accel_omp:
+            _ = accel_data_update_device(self._glob2loc, self._accel_name)
+        elif use_accel_jax:
+            self._glob2loc = accel_data_update_device(self._glob2loc, self._accel_name)
+        elif use_accel_opencl:
+            dev_data = accel_data_update_device(self._glob2loc, self._accel_name)
+            return dev_data.events
 
     def _accel_update_host(self):
-        self._glob2loc = accel_data_update_host(self._glob2loc, self._accel_name)
+        if use_accel_omp:
+            _ = accel_data_update_host(self._glob2loc, self._accel_name)
+        elif use_accel_jax:
+            self._glob2loc = accel_data_update_host(self._glob2loc, self._accel_name)
+        elif use_accel_opencl:
+            return accel_data_update_host(self._glob2loc, self._accel_name)
 
     def _accel_reset(self):
         accel_data_reset(self._glob2loc, self._accel_name)
@@ -528,8 +545,7 @@ class PixelData(AcceleratorObject):
             # we keep the attribute to avoid errors in _accel_exists
             self.data = None
         if hasattr(self, "raw"):
-            if self.accel_exists():
-                self.accel_delete()
+            super().__del__()
             if self.raw is not None:
                 self.raw.clear()
             del self.raw
@@ -1163,7 +1179,9 @@ class PixelData(AcceleratorObject):
         return
 
     def _accel_exists(self):
-        if use_accel_omp:
+        if not self._dist.accel_exists():
+            return False
+        if use_accel_omp or use_accel_opencl:
             return accel_data_present(self.raw, self._accel_name)
         elif use_accel_jax:
             return accel_data_present(self.data)
@@ -1171,31 +1189,48 @@ class PixelData(AcceleratorObject):
             return False
 
     def _accel_create(self, zero_out=False):
-        if use_accel_omp:
+        if not self._dist.accel_exists():
+            self._dist.accel_create()
+        if use_accel_omp or use_accel_opencl:
             self.raw = accel_data_create(self.raw, self._accel_name, zero_out=zero_out)
         elif use_accel_jax:
             self.data = accel_data_create(self.data, zero_out=zero_out)
 
     def _accel_update_device(self):
+        dist_ret = self._dist.accel_update_device()
         if use_accel_omp:
-            self.raw = accel_data_update_device(self.raw, self._accel_name)
+            _ = accel_data_update_device(self.raw, self._accel_name)
         elif use_accel_jax:
             self.data = accel_data_update_device(self.data)
+        elif use_accel_opencl:
+            dev_data = accel_data_update_device(self.raw, self._accel_name)
+            evs = list(dev_data.events)
+            if dist_ret is not None:
+                evs.extend(dist_ret)
+            return evs
 
     def _accel_update_host(self):
+        dist_ret = self._dist.accel_update_host()
         if use_accel_omp:
-            self.raw = accel_data_update_host(self.raw, self._accel_name)
+            _ = accel_data_update_host(self.raw, self._accel_name)
         elif use_accel_jax:
             self.data = accel_data_update_host(self.data)
+        elif use_accel_opencl:
+            evs = accel_data_update_host(self.raw, self._accel_name)
+            if evs is None:
+                evs = list()
+            if dist_ret is not None:
+                evs.extend(dist_ret)
+            return evs
 
     def _accel_reset(self):
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
             accel_data_reset(self.raw, self._accel_name)
         elif use_accel_jax:
             accel_data_reset(self.data)
 
     def _accel_delete(self):
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
             self.raw = accel_data_delete(self.raw, self._accel_name)
         elif use_accel_jax:
             self.data = accel_data_delete(self.data)

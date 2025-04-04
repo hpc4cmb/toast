@@ -10,11 +10,14 @@ from ..._libtoast import ops_scan_map_float32 as libtoast_scan_map_float32
 from ..._libtoast import ops_scan_map_float64 as libtoast_scan_map_float64
 from ..._libtoast import ops_scan_map_int32 as libtoast_scan_map_int32
 from ..._libtoast import ops_scan_map_int64 as libtoast_scan_map_int64
-from ...accelerator import ImplementationType, kernel, use_accel_jax
+from ...accelerator import ImplementationType, kernel, use_accel_jax, use_accel_opencl
 from .kernels_numpy import scan_map_numpy
 
 if use_accel_jax:
     from .kernels_jax import scan_map_jax
+
+if use_accel_opencl:
+    from .kernels_opencl import scan_map_opencl
 
 
 @kernel(impl=ImplementationType.DEFAULT)
@@ -34,6 +37,7 @@ def scan_map(
     should_subtract,
     should_scale,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel for scanning a map into timestreams.
 
@@ -83,7 +87,7 @@ def scan_map(
 
 
 @kernel(impl=ImplementationType.COMPILED, name="scan_map")
-def scan_map_compiled(*args, use_accel=False):
+def scan_map_compiled(*args, use_accel=False, **kwargs):
     return libtoast_scan_map(*args, use_accel)
 
 

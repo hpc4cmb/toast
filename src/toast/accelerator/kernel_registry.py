@@ -18,6 +18,7 @@ class ImplementationType(IntEnum):
     COMPILED = 1
     NUMPY = 2
     JAX = 3
+    OPENCL = 4
 
 
 registry = dict()

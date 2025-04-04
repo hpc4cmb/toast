@@ -12,7 +12,7 @@ from astropy import units as u
 
 from .. import ops as ops
 from .. import templates
-from ..accelerator import accel_enabled
+from ..accelerator import accel_enabled, accel_wait
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
@@ -167,9 +167,12 @@ class MapmakerTest(MPITestCase):
             data.accel_create(pixels.requires())
             data.accel_create(weights.requires())
             data.accel_create(mapper.requires())
-            data.accel_update_device(pixels.requires())
-            data.accel_update_device(weights.requires())
-            data.accel_update_device(mapper.requires())
+            events = data.accel_update_device(pixels.requires())
+            accel_wait(events)
+            events = data.accel_update_device(weights.requires())
+            accel_wait(events)
+            events = data.accel_update_device(mapper.requires())
+            accel_wait(events)
 
         binner.full_pointing = True
         mapper.name = "test2"

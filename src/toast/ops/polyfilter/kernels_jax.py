@@ -85,7 +85,9 @@ filter_poly2D_coeffs = jax.jit(filter_poly2D_coeffs, static_argnames="ngroup")
 
 
 @kernel(impl=ImplementationType.JAX, name="filter_poly2D")
-def filter_poly2D_jax(det_groups, templates, signals, masks, coeff, use_accel):
+def filter_poly2D_jax(
+    det_groups, templates, signals, masks, coeff, use_accel, **kwargs
+):
     """
     Solves for 2D polynomial coefficients at each sample.
 
@@ -171,7 +173,9 @@ filter_polynomial_interval = jax.jit(
 
 
 @kernel(impl=ImplementationType.JAX, name="filter_polynomial")
-def filter_polynomial_jax(order, flags, signals_list, starts, stops, use_accel):
+def filter_polynomial_jax(
+    order, flags, signals_list, starts, stops, use_accel, **kwargs
+):
     """
     Fit and subtract a polynomial from one or more signals.
 

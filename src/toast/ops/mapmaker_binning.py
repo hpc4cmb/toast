@@ -276,6 +276,9 @@ class BinMap(Operator):
             log.verbose("  BinMap running pipeline")
         pipe_out = accum.apply(data, detectors=detectors)
 
+        good_pix = data[self.binned].data != 0
+        print(f"Binned zmap = {data[self.binned].data[good_pix]}")
+
         # print("Binned zmap = ", data[self.binned].data)
 
         # Optionally, store the noise-weighted map

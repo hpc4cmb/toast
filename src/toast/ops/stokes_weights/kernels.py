@@ -7,20 +7,23 @@ import numpy as np
 from ... import qarray as qa
 from ..._libtoast import stokes_weights_I as libtoast_stokes_weights_I
 from ..._libtoast import stokes_weights_IQU as libtoast_stokes_weights_IQU
-from ...accelerator import ImplementationType, kernel, use_accel_jax
+from ...accelerator import ImplementationType, kernel, use_accel_jax, use_accel_opencl
 from .kernels_numpy import stokes_weights_I_numpy, stokes_weights_IQU_numpy
 
 if use_accel_jax:
     from .kernels_jax import stokes_weights_I_jax, stokes_weights_IQU_jax
 
+if use_accel_opencl:
+    from .kernels_opencl import stokes_weights_I_opencl, stokes_weights_IQU_opencl
+
 
 @kernel(impl=ImplementationType.COMPILED, name="stokes_weights_I")
-def stokes_weights_I_compiled(*args, use_accel=False):
+def stokes_weights_I_compiled(*args, use_accel=False, **kwargs):
     return libtoast_stokes_weights_I(*args, use_accel)
 
 
 @kernel(impl=ImplementationType.COMPILED, name="stokes_weights_IQU")
-def stokes_weights_IQU_compiled(*args, use_accel=False):
+def stokes_weights_IQU_compiled(*args, use_accel=False, **kwargs):
     return libtoast_stokes_weights_IQU(*args, use_accel)
 
 
@@ -31,6 +34,7 @@ def stokes_weights_I(
     intervals,
     cal,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel for computing trivial intensity-only Stokes pointing weights.
 
@@ -67,6 +71,7 @@ def stokes_weights_IQU(
     cal,
     IAU,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel for computing the I/Q/U Stokes pointing weights.
 

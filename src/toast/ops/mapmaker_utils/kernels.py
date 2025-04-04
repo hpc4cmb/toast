@@ -8,7 +8,7 @@ import numpy as np
 from ..._libtoast import build_noise_weighted as libtoast_build_noise_weighted
 from ..._libtoast import cov_accum_diag_hits as libtoast_cov_accum_diag_hits
 from ..._libtoast import cov_accum_diag_invnpp as libtoast_cov_accum_diag_invnpp
-from ...accelerator import ImplementationType, kernel, use_accel_jax
+from ...accelerator import ImplementationType, kernel, use_accel_jax, use_accel_opencl
 from .kernels_numpy import (
     build_noise_weighted_numpy,
     cov_accum_diag_hits_numpy,
@@ -22,19 +22,22 @@ if use_accel_jax:
         cov_accum_diag_invnpp_jax,
     )
 
+if use_accel_opencl:
+    from .kernels_opencl import build_noise_weighted_opencl
+
 
 @kernel(impl=ImplementationType.COMPILED, name="build_noise_weighted")
-def build_noise_weighted_compiled(*args, use_accel=False):
+def build_noise_weighted_compiled(*args, use_accel=False, **kwargs):
     return libtoast_build_noise_weighted(*args, use_accel)
 
 
 @kernel(impl=ImplementationType.COMPILED, name="cov_accum_diag_hits")
-def cov_accum_diag_hits_compiled(*args, use_accel=False):
+def cov_accum_diag_hits_compiled(*args, use_accel=False, **kwargs):
     return libtoast_cov_accum_diag_hits(*args, use_accel)
 
 
 @kernel(impl=ImplementationType.COMPILED, name="cov_accum_diag_invnpp")
-def cov_accum_diag_invnpp_compiled(*args, use_accel=False):
+def cov_accum_diag_invnpp_compiled(*args, use_accel=False, **kwargs):
     return libtoast_cov_accum_diag_invnpp(*args, use_accel)
 
 
@@ -56,6 +59,7 @@ def build_noise_weighted(
     shared_flags,
     shared_flag_mask,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel for accumulating the noise weighted map.
 
@@ -115,6 +119,7 @@ def cov_accum_diag_invnpp(
     scale,
     invnpp,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel for accumulating the inverse diagonal pixel noise covariance.
 
@@ -158,6 +163,7 @@ def cov_accum_diag_hits(
     subpix,
     hits,
     use_accel=False,
+    **kwargs,
 ):
     """Kernel for accumulating the hits.
 

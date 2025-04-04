@@ -53,9 +53,11 @@ if use_mpi is None:
                 use_mpi = False
 
 # Assign each process to an accelerator device
-from .accelerator import accel_assign_device, use_accel_jax, use_accel_omp
+from .accelerator import (
+    accel_assign_device, use_accel_jax, use_accel_omp, use_accel_opencl
+)
 
-if use_accel_omp or use_accel_jax:
+if use_accel_omp or use_accel_jax or use_accel_opencl:
     node_procs = 1
     node_rank = 0
     accel_gb = 2.0

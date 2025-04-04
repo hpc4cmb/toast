@@ -5,6 +5,8 @@
 import os
 import time
 
+from collections import deque
+
 import numpy as np
 import numpy.testing as nt
 
@@ -20,9 +22,11 @@ from ..accelerator import (
     accel_data_update_device,
     accel_data_update_host,
     accel_enabled,
+    accel_wait,
     kernel,
     use_accel_jax,
     use_accel_omp,
+    use_accel_opencl,
 )
 from ..data import Data
 from ..observation import default_values as defaults
@@ -36,6 +40,12 @@ if use_accel_jax:
     import jax
 
     from ..jax.mutableArray import MutableJaxArray, _zero_out_jitted
+
+if use_accel_opencl:
+    import pyopencl
+
+    from ..opencl import OpenCL, get_kernel_deps, add_kernel_deps
+    from pyopencl.elementwise import ElementwiseKernel
 
 
 @trait_docs
@@ -52,15 +62,32 @@ class AccelOperator(ops.Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
+    def _exec(self, data, detectors=None, use_accel=None, state=None, **kwargs):
         for ob in data.obs:
             if use_accel:
                 # Base class has checked that data listed in our requirements
                 # is present.
                 if use_accel_omp:
-                    # Call compiled code that uses OpenMP target offload to work with this data.
+                    # Call compiled code that uses OpenMP target offload to work
+                    # with this data.
                     test_accel_op_buffer(ob.detdata[self.det_data].data)
                     test_accel_op_array(ob.detdata[self.det_data].data)
+                elif use_accel_opencl:
+                    # Run a simple elementwise kernel on this
+                    ocl = OpenCL()
+                    ctx = ocl.context()
+                    dev_data = ocl.mem(ob.detdata[self.det_data].data, "signal")
+                    wait_for = get_kernel_deps(state, ob.name)
+                    print(f"Exec wait_for = {wait_for}")
+                    kern = ElementwiseKernel(
+                        ctx,
+                        "double * data",
+                        "data[i] *= 4.0",
+                        "test_kern",
+                    )
+                    ev = kern(dev_data, wait_for=wait_for)
+                    print(f"Exec kernel ev = {ev}")
+                    add_kernel_deps(state, ob.name, ev)
                 else:
                     ob.detdata[self.det_data].data[:] *= 4
             else:
@@ -76,6 +103,14 @@ class AccelOperator(ops.Operator):
 
     def _provides(self):
         return {"detdata": [self.det_data]}
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+            ImplementationType.OPENCL,
+        ]
 
     def _supports_accel(self):
         return True
@@ -120,6 +155,10 @@ class AcceleratorTest(MPITestCase):
         def awesome_jax(foo, use_accel=False):
             print(f"JAX (accel={use_accel}):  {foo}")
 
+        @kernel(ImplementationType.OPENCL, name="my_kernel")
+        def awesome_opencl(foo, use_accel=False):
+            print(f"OPENCL (accel={use_accel}):  {foo}")
+
         bar = "yes"
         my_kernel(bar, impl=ImplementationType.DEFAULT)
         my_kernel(bar, impl=ImplementationType.NUMPY)
@@ -127,9 +166,29 @@ class AcceleratorTest(MPITestCase):
         my_kernel(bar, impl=ImplementationType.COMPILED, use_accel=True)
         my_kernel(bar, impl=ImplementationType.JAX)
         my_kernel(bar, impl=ImplementationType.JAX, use_accel=True)
+        my_kernel(bar, impl=ImplementationType.OPENCL)
+        my_kernel(bar, impl=ImplementationType.OPENCL, use_accel=True)
+
+    def test_opencl_info(self):
+        if not use_accel_opencl:
+            if self.rank == 0:
+                print("Not running with OpenCL support, skipping")
+            return
+        ocl = OpenCL()
+        ocl.info()
+        buf = np.zeros(100, dtype=np.float64)
+        if ocl.n_gpu > 0:
+            ocl.mem_create(buf, device_type="gpu")
+        if ocl.n_cpu > 0:
+            ocl.mem_create(buf, device_type="cpu")
+        ocl.mem_dump()
+        if ocl.n_cpu > 0:
+            ocl.mem_remove(buf, device_type="cpu")
+        if ocl.n_gpu > 0:
+            ocl.mem_remove(buf, device_type="gpu")
 
     def test_memory(self):
-        if not (use_accel_omp or use_accel_jax):
+        if not (use_accel_omp or use_accel_jax or use_accel_opencl):
             if self.rank == 0:
                 print("Not running with accelerator support- skipping memory test")
             return
@@ -146,7 +205,11 @@ class AcceleratorTest(MPITestCase):
         # Copy to device
         for tname, buffer in data.items():
             buffer = accel_data_create(buffer)
-            buffer = accel_data_update_device(buffer)
+            if use_accel_opencl:
+                dev_buffer = accel_data_update_device(buffer)
+                accel_wait(dev_buffer.events)
+            else:
+                buffer = accel_data_update_device(buffer)
             data[tname] = buffer
 
         # Check that it is present
@@ -159,7 +222,11 @@ class AcceleratorTest(MPITestCase):
 
         # Update device copy
         for tname, buffer in data.items():
-            data[tname] = accel_data_update_device(buffer)
+            if use_accel_opencl:
+                dev_buffer = accel_data_update_device(buffer)
+                accel_wait(dev_buffer.events)
+            else:
+                data[tname] = accel_data_update_device(buffer)
 
         # Reset host copy
         for tname, buffer in data.items():
@@ -169,7 +236,11 @@ class AcceleratorTest(MPITestCase):
 
         # Update host copy from device
         for tname, buffer in data.items():
-            data[tname] = accel_data_update_host(buffer)
+            if use_accel_opencl:
+                events = accel_data_update_host(buffer)
+                accel_wait(events)
+            else:
+                data[tname] = accel_data_update_host(buffer)
 
         # Check Values
         for tname, buffer in data.items():
@@ -184,7 +255,7 @@ class AcceleratorTest(MPITestCase):
             self.assertFalse(accel_data_present(buffer))
 
     def test_data_stage(self):
-        if not (use_accel_omp or use_accel_jax):
+        if not (use_accel_omp or use_accel_jax or use_accel_opencl):
             if self.rank == 0:
                 print("Not running with accelerator support- skipping data stage test")
             return
@@ -251,7 +322,10 @@ class AcceleratorTest(MPITestCase):
 
         # Copy data to device
         data.accel_create(dnames)
-        data.accel_update_device(dnames)
+        events = data.accel_update_device(dnames)
+        print(f"events = {events}", flush=True)
+        for obsname, obsevs in events.items():
+            accel_wait(obsevs)
 
         # Clear host buffers (should not impact device data)
         if not use_accel_jax:
@@ -285,7 +359,9 @@ class AcceleratorTest(MPITestCase):
         #             print(ob.shared[name])
 
         # Copy back from device
-        data.accel_update_host(dnames)
+        events = data.accel_update_host(dnames)
+        for obsname, obsevs in events.items():
+            accel_wait(obsevs)
 
         # print("Check original:")
         # for ob in check_data.obs:
@@ -317,8 +393,9 @@ class AcceleratorTest(MPITestCase):
 
         # Now go and shrink the detector buffers
 
-        data.accel_create(dnames)
-        data.accel_update_device(dnames)
+        events = data.accel_update_device(dnames)
+        for obsname, obsevs in events.items():
+            accel_wait(obsevs)
 
         for check, ob in zip(check_data.obs, data.obs):
             for itp, (tname, tp) in enumerate(self.types.items()):
@@ -327,14 +404,24 @@ class AcceleratorTest(MPITestCase):
                     # This will set the host copy to zero and invalidate the device copy
                     ob.detdata[name].change_detectors(ob.local_detectors[0:2])
                     check.detdata[name].change_detectors(check.local_detectors[0:2])
-                    ob.detdata[name].accel_update_host()
+                    if use_accel_opencl:
+                        events = ob.detdata[name].accel_update_host()
+                        accel_wait(events)
+                    else:
+                        _ = ob.detdata[name].accel_update_host()
                     # Reset host copy
                     ob.detdata[name][:] = itp + 1
                     check.detdata[name][:] = itp + 1
                     # Update device copy
-                    ob.detdata[name].accel_update_device()
+                    if use_accel_opencl:
+                        events = ob.detdata[name].accel_update_device()
+                        accel_wait(events)
+                    else:
+                        _ = ob.detdata[name].accel_update_device()
 
-        data.accel_update_host(dnames)
+        events = data.accel_update_host(dnames)
+        for obsname, obsevs in events.items():
+            accel_wait(obsevs)
 
         # Compare
         for check, ob in zip(check_data.obs, data.obs):
@@ -351,7 +438,7 @@ class AcceleratorTest(MPITestCase):
         close_data(data)
 
     def test_operator_stage(self):
-        if not (use_accel_omp or use_accel_jax):
+        if not (use_accel_omp or use_accel_jax or use_accel_opencl):
             if self.rank == 0:
                 print("Not running with accelerator support- skipping operator test")
             return
@@ -368,13 +455,25 @@ class AcceleratorTest(MPITestCase):
 
         # Stage the data
         data.accel_create(accel_op.requires())
-        data.accel_update_device(accel_op.requires())
+        events = data.accel_update_device(accel_op.requires())
+        print(f"Start events = {events}")
+        # for obsname, obsevs in events.items():
+        #     accel_wait(obsevs)
+        state = dict()
+        for obsname, obsevs in events.items():
+            add_kernel_deps(state, obsname, obsevs)
 
         # Run with staged data
-        accel_op.apply(data, use_accel=True)
+        accel_op.apply(data, use_accel=True, state=state)
+
+        # Wait
+        for obsname, obsevs in state.items():
+            accel_wait(obsevs)
 
         # Copy out
-        data.accel_update_host(accel_op.provides())
+        events = data.accel_update_host(accel_op.provides())
+        for obsname, obsevs in events.items():
+            accel_wait(obsevs)
 
         # Check
         for ob in data.obs:
@@ -467,10 +566,21 @@ class AcceleratorTest(MPITestCase):
                 self.data = accel_data_create(self.data)
 
             def _accel_update_device(self):
-                self.data = accel_data_update_device(self.data)
+                ret = None
+                if use_accel_opencl:
+                    dev_data = accel_data_update_device(self.data)
+                    ret = dev_data.events
+                else:
+                    self.data = accel_data_update_device(self.data)
+                return ret
 
             def _accel_update_host(self):
-                self.data = accel_data_update_host(self.data)
+                ret = None
+                if use_accel_opencl:
+                    ret = accel_data_update_host(self.data)
+                else:
+                    self.data = accel_data_update_host(self.data)
+                return ret
 
             def _accel_delete(self):
                 self.data = accel_data_delete(self.data)

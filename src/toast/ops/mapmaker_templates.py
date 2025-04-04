@@ -8,7 +8,7 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from ..accelerator import ImplementationType
+from ..accelerator import ImplementationType, accel_wait
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
@@ -287,7 +287,8 @@ class TemplateMatrix(Operator):
                 # The output template amplitudes exist on host, but are not yet
                 # staged to the accelerator.
                 data[self.amplitudes].accel_create(self.name)
-                data[self.amplitudes].accel_update_device()
+                events = data[self.amplitudes].accel_update_device()
+                accel_wait(events)
 
             for d in all_dets:
                 for tmpl in self.templates:
@@ -353,14 +354,16 @@ class TemplateMatrix(Operator):
         if self.transpose:
             # move amplitudes to host as sync is CPU only
             if use_accel:
-                data[self.amplitudes].accel_update_host()
+                events = data[self.amplitudes].accel_update_host()
+                accel_wait(events)
             # Synchronize the result
             for tmpl in self.templates:
                 if tmpl.enabled:
                     data[self.amplitudes][tmpl.name].sync()
             # move amplitudes back to GPU as it is NOT finalize's job to move data to host
             if use_accel:
-                data[self.amplitudes].accel_update_device()
+                events = data[self.amplitudes].accel_update_device()
+                accel_wait(events)
         # Set the internal initialization to False, so that we are ready to process
         # completely new data sets.
         return
@@ -898,6 +901,12 @@ class SolveAmplitudes(Operator):
         )
 
         solver_cov.apply(self._data, detectors=self._detectors)
+
+        good_hits = self._data[self.solver_hits_name].data != 0
+        print(f"Solve hits = {self._data[self.solver_hits_name].data[good_hits]}")
+
+        good_pix = self._data[self.solver_cov_name].data != 0
+        print(f"Solve covariance = {self._data[self.solver_cov_name].data[good_pix]}")
 
         self._memreport.prefix = "After constructing covariance and hits"
         self._memreport.apply(self._data)

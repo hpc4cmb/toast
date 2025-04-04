@@ -15,6 +15,7 @@ from .accelerator import (
     accel_data_update_host,
     use_accel_jax,
     use_accel_omp,
+    use_accel_opencl,
 )
 from .timing import function_timer
 from .utils import Logger
@@ -41,8 +42,11 @@ def build_interval_dtype():
         }
     )
 
-
-interval_dtype = build_interval_dtype()
+if use_accel_opencl:
+    import pyopencl as cl
+    interval_dtype = cl.tools.get_or_register_dtype("Interval", build_interval_dtype())
+else:
+    interval_dtype = build_interval_dtype()
 
 
 class IntervalList(Sequence, AcceleratorObject):
@@ -357,7 +361,7 @@ class IntervalList(Sequence, AcceleratorObject):
         )
 
     def _accel_exists(self):
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
             return accel_data_present(self.data, self._accel_name)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
@@ -366,7 +370,7 @@ class IntervalList(Sequence, AcceleratorObject):
             return False
 
     def _accel_create(self):
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
             self.data = accel_data_create(self.data, self._accel_name)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
@@ -374,24 +378,33 @@ class IntervalList(Sequence, AcceleratorObject):
             self.data = INTERVALS_JAX(self.data)
 
     def _accel_update_device(self):
+        ret = None
         if use_accel_omp:
-            self.data = accel_data_update_device(self.data, self._accel_name)
+            _ = accel_data_update_device(self.data, self._accel_name)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
             # NOTE: this call is timed at the INTERVALS_JAX level
             self.data = INTERVALS_JAX(self.data)
+        elif use_accel_opencl:
+            dev_data = accel_data_update_device(self.data, self._accel_name)
+            ret = dev_data.events
+        return ret
 
     def _accel_update_host(self):
+        ret = None
         if use_accel_omp:
-            self.data = accel_data_update_host(self.data, self._accel_name)
+            _ = accel_data_update_host(self.data, self._accel_name)
         elif use_accel_jax:
             # specialised for the INTERVALS_JAX dtype
             # this moves the data back into a numpy array
             # NOTE: this call is timed at the INTERVALS_JAX level
             self.data = self.data.to_host()
+        elif use_accel_opencl:
+            ret = accel_data_update_host(self.data, self._accel_name)
+        return ret
 
     def _accel_delete(self):
-        if use_accel_omp:
+        if use_accel_omp or use_accel_opencl:
             self.data = accel_data_delete(self.data, self._accel_name)
         elif use_accel_jax and self._accel_exists():
             # Ensures data has been properly reset
