@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -17,12 +17,13 @@ from ..observation import default_values as defaults
 from ..timing import GlobalTimers
 from ..timing import dump as dump_timers
 from ..timing import gather_timers
-from ..vis import set_matplotlib_backend
+from ..vis import set_matplotlib_backend, plot_healpix_maps
 from .helpers import (
     close_data,
     create_fake_healpix_scanned_tod,
     create_outdir,
     create_satellite_data,
+    create_ground_data,
 )
 from .mpi import MPITestCase
 
@@ -38,13 +39,23 @@ class MapmakerTest(MPITestCase):
         self.obs_per_group = self.total_obs
         if self.comm is not None and self.comm.size >= 2:
             self.obs_per_group = self.total_obs // 2
+        if (
+            ("CONDA_BUILD" in os.environ)
+            or ("CIBUILDWHEEL" in os.environ)
+            or ("CI" in os.environ)
+        ):
+            self.make_plots = False
+        else:
+            self.make_plots = True
+        # Additional debugging
+        self.extra_debug = False
 
-    def test_offset(self):
+    def test_offset_satellite(self):
         if sys.platform.lower() == "darwin":
-            print(f"WARNING:  Skipping test_offset on MacOS")
+            print("WARNING:  Skipping test_offset on MacOS")
             return
 
-        testdir = os.path.join(self.outdir, "offset")
+        testdir = os.path.join(self.outdir, "offset_satellite")
         if self.comm is None or self.comm.rank == 0:
             os.makedirs(testdir)
 
@@ -81,9 +92,9 @@ class MapmakerTest(MPITestCase):
             map_key=map_key,
             fwhm=30.0 * u.arcmin,
             lmax=3 * pixels.nside,
-            I_scale=0.001,
-            Q_scale=0.0001,
-            U_scale=0.0001,
+            I_scale=0.01,
+            Q_scale=0.001,
+            U_scale=0.001,
             det_data=defaults.det_data,
         )
 
@@ -175,6 +186,185 @@ class MapmakerTest(MPITestCase):
 
         close_data(data)
 
+    def test_offset_ground(self):
+        if sys.platform.lower() == "darwin":
+            print("WARNING:  Skipping test_offset on MacOS")
+            return
+
+        testdir = os.path.join(self.outdir, "offset_ground")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
+        # Create a fake ground data set for testing
+
+        data = create_ground_data(self.comm)
+
+        # Create some sky signal timestreams.
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+            view="scanning",
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.01,
+            Q_scale=0.001,
+            U_scale=0.001,
+            det_data=defaults.det_data,
+        )
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(
+            detdata=[detpointing.quats, pixels.pixels, weights.weights]
+        )
+        delete_pointing.apply(data)
+        pixels.create_dist = None
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data=defaults.det_data
+        )
+        sim_noise.apply(data)
+
+        # Copy the data for later use
+        ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
+
+        # Set up binning operator for solving
+        binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        # Set up template matrix with just an offset template.
+
+        # Use a long baseline length, which we will truncate to the scanning
+        # interval.
+        step_seconds = 3600.0
+        tmpl = templates.Offset(
+            times=defaults.times,
+            noise_model=default_model.noise_model,
+            step_time=step_seconds * u.second,
+        )
+
+        tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        # Map maker
+        mapper = ops.MapMaker(
+            name="test1",
+            det_data=defaults.det_data,
+            binning=binner,
+            template_matrix=tmatrix,
+            solve_rcond_threshold=1.0e-1,
+            map_rcond_threshold=1.0e-1,
+            write_hits=True,
+            write_map=True,
+            write_cov=False,
+            write_rcond=False,
+            keep_solver_products=False,
+            keep_final_products=False,
+            output_dir=testdir,
+        )
+
+        # Make the map
+        mapper.apply(data)
+
+        # Check that we can also run in full-memory mode
+        tmatrix.reset()
+        mapper.reset_pix_dist = True
+        pixels.apply(data)
+        weights.apply(data)
+
+        use_accel = None
+        if accel_enabled() and (
+            pixels.supports_accel()
+            and weights.supports_accel()
+            and mapper.supports_accel()
+        ):
+            use_accel = True
+            data.accel_create(pixels.requires())
+            data.accel_create(weights.requires())
+            data.accel_create(mapper.requires())
+            data.accel_update_device(pixels.requires())
+            data.accel_update_device(weights.requires())
+            data.accel_update_device(mapper.requires())
+
+        binner.full_pointing = True
+        mapper = ops.MapMaker(
+            name="test2",
+            det_data=defaults.det_data,
+            binning=binner,
+            template_matrix=tmatrix,
+            solve_rcond_threshold=1.0e-1,
+            map_rcond_threshold=1.0e-1,
+            write_hits=True,
+            write_map=True,
+            write_cov=False,
+            write_rcond=False,
+            keep_solver_products=True,
+            keep_final_products=False,
+            output_dir=testdir,
+        )
+        mapper.apply(data, use_accel=use_accel)
+
+        # Write offset amplitudes
+        oamps = data[f"{mapper.name}_solve_amplitudes"][tmpl.name]
+        oroot = os.path.join(testdir, f"{mapper.name}_offset")
+        tmpl.write(oamps, oroot)
+
+        # Plot some results
+        if data.comm.world_rank == 0 and self.make_plots:
+            for ob in data.obs:
+                oamp_file = f"{oroot}_{ob.name}.h5"
+                if os.path.isfile(oamp_file):
+                    templates.offset.plot(
+                        oamp_file,
+                        compare={
+                            x: ob.detdata["input"][x, :] for x in ob.local_detectors
+                        },
+                        out=f"{oroot}_{ob.name}",
+                    )
+            hit_file = os.path.join(testdir, f"{mapper.name}_hits.fits")
+            map_file = os.path.join(testdir, f"{mapper.name}_map.fits")
+            plot_healpix_maps(
+                hitfile=hit_file,
+                mapfile=map_file,
+                truth=skyfile,
+                range_I=(-0.05, 0.05),
+                range_Q=(-0.005, 0.005),
+                range_U=(-0.005, 0.005),
+                gnomview=True,
+                gnomres=3.0,
+                image_format="png",
+            )
+
+        close_data(data)
+
     def test_compare_madam_noprior(self):
         if not ops.madam.available():
             print("libmadam not available, skipping destriping comparison")
@@ -217,9 +407,9 @@ class MapmakerTest(MPITestCase):
             map_key=map_key,
             fwhm=30.0 * u.arcmin,
             lmax=3 * pixels.nside,
-            I_scale=0.001,
-            Q_scale=0.0001,
-            U_scale=0.0001,
+            I_scale=0.01,
+            Q_scale=0.001,
+            U_scale=0.001,
             det_data=defaults.det_data,
         )
 
@@ -250,14 +440,7 @@ class MapmakerTest(MPITestCase):
 
         # Set up template matrix with just an offset template.
 
-        # Use 1/10 of an observation as the baseline length.  Make it not evenly
-        # divisible in order to test handling of the final amplitude.
-        ob_time = (
-            data.obs[0].shared[defaults.times][-1]
-            - data.obs[0].shared[defaults.times][0]
-        )
-        # step_seconds = float(int(ob_time / 10.0))
-        step_seconds = 5.0
+        step_seconds = 10.0
         tmpl = templates.Offset(
             times=defaults.times,
             noise_model=default_model.noise_model,
@@ -274,7 +457,7 @@ class MapmakerTest(MPITestCase):
 
         # Map maker
         mapper = ops.MapMaker(
-            name="toastmap",
+            name="toast",
             det_data=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
@@ -308,7 +491,6 @@ class MapmakerTest(MPITestCase):
 
         toast_hit_path = os.path.join(testdir, f"{mapper.name}_hits.fits")
         toast_map_path = os.path.join(testdir, f"{mapper.name}_map.fits")
-        toast_mask_path = os.path.join(testdir, f"{mapper.name}_solve_rcond_mask.fits")
 
         # Now run Madam on the same data and compare
 
@@ -361,7 +543,6 @@ class MapmakerTest(MPITestCase):
 
         madam_hit_path = os.path.join(testdir, "madam_hmap.fits")
         madam_map_path = os.path.join(testdir, "madam_map.fits")
-        madam_mask_path = os.path.join(testdir, "madam_mask.fits")
 
         fail = False
 
@@ -371,7 +552,7 @@ class MapmakerTest(MPITestCase):
             for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 input_signal = ob.detdata["input_signal"][det]
                 madam_signal = ob.detdata["madam_cleaned"][det]
-                toast_signal = ob.detdata["toastmap_cleaned"][det]
+                toast_signal = ob.detdata["toast_cleaned"][det]
                 madam_base = input_signal - madam_signal
                 toast_base = input_signal - toast_signal
                 diff_base = madam_base - toast_base
@@ -432,71 +613,69 @@ class MapmakerTest(MPITestCase):
             madam_hits = hp.read_map(madam_hit_path, field=None, nest=True)
             diff_hits = toast_hits - madam_hits
 
-            outfile = os.path.join(testdir, "madam_hits.png")
-            hp.mollview(madam_hits, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
-            outfile = os.path.join(testdir, "toast_hits.png")
-            hp.mollview(toast_hits, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
-            outfile = os.path.join(testdir, "diff_hits.png")
-            hp.mollview(diff_hits, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
-
-            # Compare masks
-
-            toast_mask = hp.read_map(toast_mask_path, field=None, nest=True)
-            madam_mask = hp.read_map(madam_mask_path, field=None, nest=True)
-
-            # Madam uses 1=good, 0=bad, Toast uses 0=good, non-zero=bad:
-            tgood = toast_mask == 0
-            toast_mask[:] = 0
-            toast_mask[tgood] = 1
-            diff_mask = toast_mask - madam_mask[0]
-
-            outfile = os.path.join(testdir, "madam_mask.png")
-            hp.mollview(madam_mask[0], xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
-            outfile = os.path.join(testdir, "toast_mask.png")
-            hp.mollview(toast_mask, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
-            outfile = os.path.join(testdir, "diff_mask.png")
-            hp.mollview(diff_mask, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
+            if self.make_plots:
+                outfile = os.path.join(testdir, "madam_hits.png")
+                hp.mollview(madam_hits, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+                outfile = os.path.join(testdir, "toast_hits.png")
+                hp.mollview(toast_hits, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+                outfile = os.path.join(testdir, "diff_hits.png")
+                hp.mollview(diff_hits, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
 
             # Compare maps
 
+            if self.make_plots:
+                plot_healpix_maps(
+                    hitfile=toast_hit_path,
+                    mapfile=toast_map_path,
+                    truth=skyfile,
+                    range_I=(-0.05, 0.05),
+                    range_Q=(-0.005, 0.005),
+                    range_U=(-0.005, 0.005),
+                    gnomview=True,
+                    gnomres=3.0,
+                    image_format="png",
+                )
+                plot_healpix_maps(
+                    hitfile=madam_hit_path,
+                    mapfile=madam_map_path,
+                    truth=skyfile,
+                    range_I=(-0.05, 0.05),
+                    range_Q=(-0.005, 0.005),
+                    range_U=(-0.005, 0.005),
+                    gnomview=True,
+                    gnomres=3.0,
+                    image_format="png",
+                )
+
             toast_map = hp.read_map(toast_map_path, field=None, nest=True)
             madam_map = hp.read_map(madam_map_path, field=None, nest=True)
-            # Set madam unhit pixels to zero
-            for stokes, ststr in zip(range(3), ["I", "Q", "U"]):
-                good = madam_map[stokes] != hp.UNSEEN
-                diff_map = toast_map[stokes] - madam_map[stokes]
 
-                outfile = os.path.join(testdir, "madam_map_{}.png".format(ststr))
-                hp.mollview(madam_map[stokes], xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
-                outfile = os.path.join(testdir, "toast_map_{}.png".format(ststr))
-                hp.mollview(toast_map[stokes], xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
-                outfile = os.path.join(testdir, "diff_map_{}.png".format(ststr))
-                hp.mollview(diff_map, xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
+            good = madam_hits > 0
+            bad = np.logical_not(good)
+            diff_map = toast_map - madam_map
+            diff_map[:, bad] = np.nan
+
+            for stokes, ststr in zip(range(3), ["I", "Q", "U"]):
+                if self.make_plots:
+                    outfile = os.path.join(testdir, "diff_map_{}.png".format(ststr))
+                    hp.gnomview(diff_map[stokes], xsize=1600, nest=True)
+                    plt.savefig(outfile)
+                    plt.close()
 
                 if not np.allclose(
-                    toast_map[stokes][good], madam_map[stokes][good], rtol=0.01
+                    toast_map[stokes][good],
+                    madam_map[stokes][good],
+                    rtol=0.01,
+                    atol=1.0e-5,
                 ):
-                    print(
-                        f"FAIL: max {ststr} diff = {np.max(np.absolute(diff_map[good]))}"
-                    )
+                    max_diff = np.max(np.absolute(diff_map[stokes][good]))
+                    print(f"FAIL: max {ststr} diff = {max_diff}", flush=True)
                     fail = True
 
         if data.comm.comm_world is not None:
@@ -548,9 +727,9 @@ class MapmakerTest(MPITestCase):
             map_key=map_key,
             fwhm=30.0 * u.arcmin,
             lmax=3 * pixels.nside,
-            I_scale=0.001,
-            Q_scale=0.0001,
-            U_scale=0.0001,
+            I_scale=0.01,
+            Q_scale=0.001,
+            U_scale=0.001,
             det_data=defaults.det_data,
         )
 
@@ -579,24 +758,22 @@ class MapmakerTest(MPITestCase):
 
         # Set up template matrix with just an offset template.
 
-        # Use 1/10 of an observation as the baseline length.  Make it not evenly
-        # divisible in order to test handling of the final amplitude.
-        ob_time = (
-            data.obs[0].shared[defaults.times][-1]
-            - data.obs[0].shared[defaults.times][0]
-        )
-        # step_seconds = float(int(ob_time / 10.0))
-        step_seconds = 5.0
+        step_seconds = 2.0
+        dbg_dir = None
+        if self.make_plots and self.extra_debug:
+            dbg_dir = testdir
         tmpl = templates.Offset(
             times=defaults.times,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
             precond_width=1,
-            # debug_plots=testdir,
+            debug_plots=dbg_dir,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        ops.Copy(detdata=[(defaults.det_data, "input_signal")]).apply(data)
 
         gt = GlobalTimers.get()
         gt.stop_all()
@@ -604,18 +781,25 @@ class MapmakerTest(MPITestCase):
 
         # Map maker
         mapper = ops.MapMaker(
-            name="toastmap",
+            name="toast",
             det_data=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
             solve_rcond_threshold=1.0e-4,
             map_rcond_threshold=1.0e-4,
-            iter_max=50,
+            iter_max=100,
+            output_dir=testdir,
             write_hits=False,
             write_map=False,
             write_cov=False,
             write_rcond=False,
             keep_final_products=True,
+            write_solver_products=True,
+            save_cleaned=True,
+            overwrite_cleaned=False,
+            copy_groups=2,
+            purge_det_data=True,
+            restore_det_data=True,
         )
 
         # Make the map
@@ -627,8 +811,8 @@ class MapmakerTest(MPITestCase):
             dump_timers(alltimers, out)
 
         # Outputs
-        toast_hits = "toastmap_hits"
-        toast_map = "toastmap_map"
+        toast_hits = "toast_hits"
+        toast_map = "toast_map"
 
         # Write map to disk so we can load the whole thing on one process.
 
@@ -644,7 +828,7 @@ class MapmakerTest(MPITestCase):
         pars = {}
         pars["kfirst"] = "T"
         pars["basis_order"] = 0
-        pars["iter_max"] = 50
+        pars["iter_max"] = 100
         pars["base_first"] = step_seconds
         pars["fsample"] = sample_rate
         pars["nside_map"] = pixels.nside
@@ -675,6 +859,7 @@ class MapmakerTest(MPITestCase):
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
+            det_out="madam_cleaned",
         )
 
         # Generate persistent pointing
@@ -689,6 +874,82 @@ class MapmakerTest(MPITestCase):
 
         fail = False
 
+        # Compare local destriped TOD on every process
+
+        for ob in data.obs:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
+                input_signal = ob.detdata["input_signal"][det]
+                madam_signal = ob.detdata["madam_cleaned"][det]
+                toast_signal = ob.detdata["toast_cleaned"][det]
+                madam_base = input_signal - madam_signal
+                toast_base = input_signal - toast_signal
+                diff_base = madam_base - toast_base
+                in_rms = np.std(input_signal)
+
+                if self.make_plots:
+                    set_matplotlib_backend()
+                    import matplotlib.pyplot as plt
+
+                    dbg_root = os.path.join(
+                        testdir, f"base_{ob.name}_{data.comm.world_rank}_{det}"
+                    )
+                    if self.extra_debug:
+                        np.savetxt(f"{dbg_root}_signal.txt", input_signal)
+                        np.savetxt(f"{dbg_root}_madam.txt", madam_base)
+                        np.savetxt(f"{dbg_root}_toast.txt", toast_base)
+                        np.savetxt(f"{dbg_root}_diff.txt", diff_base)
+
+                    fig = plt.figure(figsize=(12, 12), dpi=72)
+                    ax = fig.add_subplot(2, 1, 1, aspect="auto")
+                    ax.plot(
+                        np.arange(len(input_signal)),
+                        input_signal,
+                        c="black",
+                        label="Input",
+                    )
+                    ax.plot(
+                        np.arange(len(madam_base)),
+                        madam_base,
+                        c="green",
+                        label="Madam",
+                    )
+                    ax.plot(
+                        np.arange(len(toast_base)),
+                        toast_base,
+                        c="red",
+                        label="Toast",
+                    )
+                    ax.legend(loc=1)
+
+                    ax = fig.add_subplot(2, 1, 2, aspect="auto")
+                    ax.plot(
+                        np.arange(len(madam_base)),
+                        madam_base,
+                        c="green",
+                        label="Madam",
+                    )
+                    ax.plot(
+                        np.arange(len(toast_base)),
+                        toast_base,
+                        c="red",
+                        label="Toast",
+                    )
+                    ax.legend(loc=1)
+
+                    plt.title("Baseline Comparison")
+                    savefile = f"{dbg_root}.pdf"
+                    plt.savefig(savefile)
+                    plt.close()
+
+                if not np.allclose(
+                    toast_base, madam_base, rtol=0.2, atol=1.0e-2 * in_rms
+                ):
+                    msg = f"FAIL: {det} diff : in_rms = {in_rms}, "
+                    msg += f"PtP = {np.ptp(diff_base)}, "
+                    msg += f"mean = {np.mean(diff_base)}"
+                    print(msg, flush=True)
+                    fail = True
+
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
             import matplotlib.pyplot as plt
@@ -699,72 +960,68 @@ class MapmakerTest(MPITestCase):
             madam_hits = hp.read_map(madam_hit_path, field=None, nest=True)
             diff_hits = toast_hits - madam_hits
 
-            outfile = os.path.join(testdir, "madam_hits.png")
-            hp.mollview(madam_hits, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
-            outfile = os.path.join(testdir, "toast_hits.png")
-            hp.mollview(toast_hits, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
-            outfile = os.path.join(testdir, "diff_hits.png")
-            hp.mollview(diff_hits, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
+            if self.make_plots:
+                outfile = os.path.join(testdir, "madam_hits.png")
+                hp.mollview(madam_hits, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+                outfile = os.path.join(testdir, "toast_hits.png")
+                hp.mollview(toast_hits, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+                outfile = os.path.join(testdir, "diff_hits.png")
+                hp.mollview(diff_hits, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
 
             # Compare maps
 
-            input_map = hp.read_map(
-                os.path.join(testdir, "input_map.fits"), field=None, nest=True
-            )
+            if self.make_plots:
+                plot_healpix_maps(
+                    hitfile=toast_hit_path,
+                    mapfile=toast_map_path,
+                    truth=skyfile,
+                    range_I=(-0.05, 0.05),
+                    range_Q=(-0.005, 0.005),
+                    range_U=(-0.005, 0.005),
+                    gnomview=True,
+                    gnomres=3.0,
+                    image_format="png",
+                )
+                plot_healpix_maps(
+                    hitfile=madam_hit_path,
+                    mapfile=madam_map_path,
+                    truth=skyfile,
+                    range_I=(-0.05, 0.05),
+                    range_Q=(-0.005, 0.005),
+                    range_U=(-0.005, 0.005),
+                    gnomview=True,
+                    gnomres=3.0,
+                    image_format="png",
+                )
+
             toast_map = hp.read_map(toast_map_path, field=None, nest=True)
             madam_map = hp.read_map(madam_map_path, field=None, nest=True)
 
-            # Set madam unhit pixels to zero
+            good = madam_hits > 0
+            bad = np.logical_not(good)
+            diff_map = toast_map - madam_map
+            diff_map[:, bad] = np.nan
+
             for stokes, ststr in zip(range(3), ["I", "Q", "U"]):
-                mask = hp.mask_bad(madam_map[stokes])
-                madam_map[stokes][mask] = 0.0
-                input_map[stokes][mask] = 0.0
-                diff_map = toast_map[stokes] - madam_map[stokes]
-                madam_diff_truth = madam_map[stokes] - input_map[stokes]
-                toast_diff_truth = toast_map[stokes] - input_map[stokes]
-
-                print("diff map {} has rms {}".format(ststr, np.std(diff_map)))
-                print(
-                    "toast-truth map {} has rms {}".format(
-                        ststr, np.std(toast_diff_truth)
-                    )
-                )
-                print(
-                    "madam-truth map {} has rms {}".format(
-                        ststr, np.std(madam_diff_truth)
-                    )
-                )
-
-                outfile = os.path.join(testdir, "madam_map_{}.png".format(ststr))
-                hp.mollview(madam_map[stokes], xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
-                outfile = os.path.join(testdir, "toast_map_{}.png".format(ststr))
-                hp.mollview(toast_map[stokes], xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
-                outfile = os.path.join(testdir, "diff_map_{}.png".format(ststr))
-                hp.mollview(diff_map, xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
-                outfile = os.path.join(testdir, "madam_diff_truth_{}.png".format(ststr))
-                hp.mollview(madam_diff_truth, xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
-                outfile = os.path.join(testdir, "toast_diff_truth_{}.png".format(ststr))
-                hp.mollview(toast_diff_truth, xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
+                if self.make_plots:
+                    outfile = os.path.join(testdir, "diff_map_{}.png".format(ststr))
+                    hp.gnomview(diff_map[stokes], xsize=1600, nest=True)
+                    plt.savefig(outfile)
+                    plt.close()
 
                 if not np.allclose(
-                    toast_map[stokes], madam_map[stokes], atol=0.1, rtol=0.05
+                    toast_map[stokes][good],
+                    madam_map[stokes][good],
+                    atol=0.1,
+                    rtol=0.05,
                 ):
+                    print(f"FAIL on diag pre {ststr}", flush=True)
                     fail = True
 
         if data.comm.comm_world is not None:
@@ -852,24 +1109,22 @@ class MapmakerTest(MPITestCase):
 
         # Set up template matrix with just an offset template.
 
-        # Use 1/10 of an observation as the baseline length.  Make it not evenly
-        # divisible in order to test handling of the final amplitude.
-        ob_time = (
-            data.obs[0].shared[defaults.times][-1]
-            - data.obs[0].shared[defaults.times][0]
-        )
-        # step_seconds = float(int(ob_time / 10.0))
-        step_seconds = 5.0
+        step_seconds = 2.0
+        dbg_dir = None
+        if self.make_plots and self.extra_debug:
+            dbg_dir = testdir
         tmpl = templates.Offset(
             times=defaults.times,
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
             precond_width=10,
-            # debug_plots=testdir,
+            debug_plots=dbg_dir,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        ops.Copy(detdata=[(defaults.det_data, "input_signal")]).apply(data)
 
         gt = GlobalTimers.get()
         gt.stop_all()
@@ -877,18 +1132,25 @@ class MapmakerTest(MPITestCase):
 
         # Map maker
         mapper = ops.MapMaker(
-            name="toastmap",
+            name="toast",
             det_data=defaults.det_data,
             binning=binner,
             template_matrix=tmatrix,
             solve_rcond_threshold=1.0e-4,
             map_rcond_threshold=1.0e-4,
             iter_max=50,
+            output_dir=testdir,
             write_hits=False,
             write_map=False,
             write_cov=False,
             write_rcond=False,
             keep_final_products=True,
+            write_solver_products=True,
+            save_cleaned=True,
+            overwrite_cleaned=False,
+            copy_groups=2,
+            purge_det_data=True,
+            restore_det_data=True,
         )
 
         # Make the map
@@ -900,8 +1162,8 @@ class MapmakerTest(MPITestCase):
             dump_timers(alltimers, out)
 
         # Outputs
-        toast_hits = "toastmap_hits"
-        toast_map = "toastmap_map"
+        toast_hits = "toast_hits"
+        toast_map = "toast_map"
 
         # Write map to disk so we can load the whole thing on one process.
 
@@ -917,7 +1179,7 @@ class MapmakerTest(MPITestCase):
         pars = {}
         pars["kfirst"] = "T"
         pars["basis_order"] = 0
-        pars["iter_max"] = 50
+        pars["iter_max"] = 100
         pars["base_first"] = step_seconds
         pars["fsample"] = sample_rate
         pars["nside_map"] = pixels.nside
@@ -948,6 +1210,7 @@ class MapmakerTest(MPITestCase):
             pixel_pointing=pixels,
             stokes_weights=weights,
             noise_model="noise_model",
+            det_out="madam_cleaned",
         )
 
         # Generate persistent pointing
@@ -962,6 +1225,82 @@ class MapmakerTest(MPITestCase):
 
         fail = False
 
+        # Compare local destriped TOD on every process
+
+        for ob in data.obs:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
+                input_signal = ob.detdata["input_signal"][det]
+                madam_signal = ob.detdata["madam_cleaned"][det]
+                toast_signal = ob.detdata["toast_cleaned"][det]
+                madam_base = input_signal - madam_signal
+                toast_base = input_signal - toast_signal
+                diff_base = madam_base - toast_base
+                in_rms = np.std(input_signal)
+
+                if self.make_plots:
+                    set_matplotlib_backend()
+                    import matplotlib.pyplot as plt
+
+                    dbg_root = os.path.join(
+                        testdir, f"base_{ob.name}_{data.comm.world_rank}_{det}"
+                    )
+                    if self.extra_debug:
+                        np.savetxt(f"{dbg_root}_signal.txt", input_signal)
+                        np.savetxt(f"{dbg_root}_madam.txt", madam_base)
+                        np.savetxt(f"{dbg_root}_toast.txt", toast_base)
+                        np.savetxt(f"{dbg_root}_diff.txt", diff_base)
+
+                    fig = plt.figure(figsize=(12, 12), dpi=72)
+                    ax = fig.add_subplot(2, 1, 1, aspect="auto")
+                    ax.plot(
+                        np.arange(len(input_signal)),
+                        input_signal,
+                        c="black",
+                        label="Input",
+                    )
+                    ax.plot(
+                        np.arange(len(madam_base)),
+                        madam_base,
+                        c="green",
+                        label="Madam",
+                    )
+                    ax.plot(
+                        np.arange(len(toast_base)),
+                        toast_base,
+                        c="red",
+                        label="Toast",
+                    )
+                    ax.legend(loc=1)
+
+                    ax = fig.add_subplot(2, 1, 2, aspect="auto")
+                    ax.plot(
+                        np.arange(len(madam_base)),
+                        madam_base,
+                        c="green",
+                        label="Madam",
+                    )
+                    ax.plot(
+                        np.arange(len(toast_base)),
+                        toast_base,
+                        c="red",
+                        label="Toast",
+                    )
+                    ax.legend(loc=1)
+
+                    plt.title("Baseline Comparison")
+                    savefile = f"{dbg_root}.pdf"
+                    plt.savefig(savefile)
+                    plt.close()
+
+                if not np.allclose(
+                    toast_base, madam_base, rtol=0.2, atol=1.0e-2 * in_rms
+                ):
+                    msg = f"FAIL: {det} diff : in_rms = {in_rms}, "
+                    msg += f"PtP = {np.ptp(diff_base)}, "
+                    msg += f"mean = {np.mean(diff_base)}"
+                    print(msg, flush=True)
+                    fail = True
+
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
             import matplotlib.pyplot as plt
@@ -972,59 +1311,68 @@ class MapmakerTest(MPITestCase):
             madam_hits = hp.read_map(madam_hit_path, field=None, nest=True)
             diff_hits = toast_hits - madam_hits
 
-            outfile = os.path.join(testdir, "madam_hits.png")
-            hp.mollview(madam_hits, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
-            outfile = os.path.join(testdir, "toast_hits.png")
-            hp.mollview(toast_hits, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
-            outfile = os.path.join(testdir, "diff_hits.png")
-            hp.mollview(diff_hits, xsize=1600, nest=True)
-            plt.savefig(outfile)
-            plt.close()
+            if self.make_plots:
+                outfile = os.path.join(testdir, "madam_hits.png")
+                hp.mollview(madam_hits, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+                outfile = os.path.join(testdir, "toast_hits.png")
+                hp.mollview(toast_hits, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
+                outfile = os.path.join(testdir, "diff_hits.png")
+                hp.mollview(diff_hits, xsize=1600, nest=True)
+                plt.savefig(outfile)
+                plt.close()
 
             # Compare maps
 
-            input_map = hp.read_map(
-                os.path.join(testdir, "input_map.fits"), field=None, nest=True
-            )
+            if self.make_plots:
+                plot_healpix_maps(
+                    hitfile=toast_hit_path,
+                    mapfile=toast_map_path,
+                    truth=skyfile,
+                    range_I=(-0.05, 0.05),
+                    range_Q=(-0.005, 0.005),
+                    range_U=(-0.005, 0.005),
+                    gnomview=True,
+                    gnomres=3.0,
+                    image_format="png",
+                )
+                plot_healpix_maps(
+                    hitfile=madam_hit_path,
+                    mapfile=madam_map_path,
+                    truth=skyfile,
+                    range_I=(-0.05, 0.05),
+                    range_Q=(-0.005, 0.005),
+                    range_U=(-0.005, 0.005),
+                    gnomview=True,
+                    gnomres=3.0,
+                    image_format="png",
+                )
+
             toast_map = hp.read_map(toast_map_path, field=None, nest=True)
             madam_map = hp.read_map(madam_map_path, field=None, nest=True)
-            # Set madam unhit pixels to zero
+
+            good = madam_hits > 0
+            bad = np.logical_not(good)
+            diff_map = toast_map - madam_map
+            diff_map[:, bad] = np.nan
+
             for stokes, ststr in zip(range(3), ["I", "Q", "U"]):
-                mask = hp.mask_bad(madam_map[stokes])
-                madam_map[stokes][mask] = 0.0
-                input_map[stokes][mask] = 0.0
-                diff_map = toast_map[stokes] - madam_map[stokes]
-                madam_diff_truth = madam_map[stokes] - input_map[stokes]
-                toast_diff_truth = toast_map[stokes] - input_map[stokes]
-                # print("diff map {} has rms {}".format(ststr, np.std(diff_map)))
-                outfile = os.path.join(testdir, "madam_map_{}.png".format(ststr))
-                hp.mollview(madam_map[stokes], xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
-                outfile = os.path.join(testdir, "toast_map_{}.png".format(ststr))
-                hp.mollview(toast_map[stokes], xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
-                outfile = os.path.join(testdir, "diff_map_{}.png".format(ststr))
-                hp.mollview(diff_map, xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
-                outfile = os.path.join(testdir, "madam_diff_truth_{}.png".format(ststr))
-                hp.mollview(madam_diff_truth, xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
-                outfile = os.path.join(testdir, "toast_diff_truth_{}.png".format(ststr))
-                hp.mollview(toast_diff_truth, xsize=1600, nest=True)
-                plt.savefig(outfile)
-                plt.close()
+                if self.make_plots:
+                    outfile = os.path.join(testdir, "diff_map_{}.png".format(ststr))
+                    hp.gnomview(diff_map[stokes], xsize=1600, nest=True)
+                    plt.savefig(outfile)
+                    plt.close()
 
                 if not np.allclose(
-                    toast_map[stokes], madam_map[stokes], atol=0.1, rtol=0.05
+                    toast_map[stokes][good],
+                    madam_map[stokes][good],
+                    atol=0.1,
+                    rtol=0.05,
                 ):
+                    print(f"FAIL on band pre {ststr}", flush=True)
                     fail = True
 
         if data.comm.comm_world is not None:

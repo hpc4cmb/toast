@@ -204,6 +204,7 @@ class TemplateMatrix(Operator):
                     continue
                 if tmpl.view is None:
                     tmpl.view = self.view
+                tmpl.det_data = self.det_data
                 tmpl.det_data_units = self.det_data_units
                 tmpl.det_mask = self.det_mask
                 tmpl.det_flags = self.det_flags
@@ -766,7 +767,7 @@ class SolveAmplitudes(Operator):
         if self.mc_mode:
             # Shortcut, just verified that our flags exist
             self._log.info_rank(
-                f"{self._log_prefix} MC mode, reusing flags for solver", comm=comm
+                f"{self._log_prefix} MC mode, reusing flags for solver", comm=self._comm
             )
             return
 
@@ -834,7 +835,7 @@ class SolveAmplitudes(Operator):
         if self.mc_mode:
             # Shortcut, verify that our covariance and other products exist.
             if self.binning.pixel_dist not in self._data:
-                msg = f"MC mode, pixel distribution "
+                msg = "MC mode, pixel distribution "
                 msg += f"'{self.binning.pixel_dist}' does not exist"
                 self._log.error(msg)
                 raise RuntimeError(msg)
@@ -933,6 +934,7 @@ class SolveAmplitudes(Operator):
         )
 
         # Initialize the template matrix
+        self.template_matrix.reset()
         self.template_matrix.det_data = self.det_data
         self.template_matrix.det_data_units = self._det_data_units
         self.template_matrix.det_flags = self.solver_flags
