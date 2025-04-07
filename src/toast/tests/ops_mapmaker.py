@@ -23,6 +23,7 @@ from .helpers import (
     create_fake_healpix_scanned_tod,
     create_outdir,
     create_satellite_data,
+    create_ground_data,
 )
 from .mpi import MPITestCase
 
@@ -39,12 +40,12 @@ class MapmakerTest(MPITestCase):
         if self.comm is not None and self.comm.size >= 2:
             self.obs_per_group = self.total_obs // 2
 
-    def test_offset(self):
+    def test_offset_satellite(self):
         if sys.platform.lower() == "darwin":
-            print(f"WARNING:  Skipping test_offset on MacOS")
+            print("WARNING:  Skipping test_offset on MacOS")
             return
 
-        testdir = os.path.join(self.outdir, "offset")
+        testdir = os.path.join(self.outdir, "offset_satellite")
         if self.comm is None or self.comm.rank == 0:
             os.makedirs(testdir)
 
@@ -121,6 +122,136 @@ class MapmakerTest(MPITestCase):
             - data.obs[0].shared[defaults.times][0]
         )
         step_seconds = float(int(ob_time / 10.0))
+        tmpl = templates.Offset(
+            times=defaults.times,
+            noise_model=default_model.noise_model,
+            step_time=step_seconds * u.second,
+        )
+
+        tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        # Map maker
+        mapper = ops.MapMaker(
+            name="test1",
+            det_data=defaults.det_data,
+            binning=binner,
+            template_matrix=tmatrix,
+            solve_rcond_threshold=1.0e-1,
+            map_rcond_threshold=1.0e-1,
+            write_hits=False,
+            write_map=True,
+            write_cov=False,
+            write_rcond=False,
+            keep_solver_products=False,
+            keep_final_products=False,
+            output_dir=testdir,
+        )
+
+        # Make the map
+        mapper.apply(data)
+
+        # Check that we can also run in full-memory mode
+        tmatrix.reset()
+        mapper.reset_pix_dist = True
+        pixels.apply(data)
+        weights.apply(data)
+
+        use_accel = None
+        if accel_enabled() and (
+            pixels.supports_accel()
+            and weights.supports_accel()
+            and mapper.supports_accel()
+        ):
+            use_accel = True
+            data.accel_create(pixels.requires())
+            data.accel_create(weights.requires())
+            data.accel_create(mapper.requires())
+            data.accel_update_device(pixels.requires())
+            data.accel_update_device(weights.requires())
+            data.accel_update_device(mapper.requires())
+
+        binner.full_pointing = True
+        mapper.name = "test2"
+        mapper.apply(data, use_accel=use_accel)
+
+        close_data(data)
+
+    def test_offset_ground(self):
+        if sys.platform.lower() == "darwin":
+            print("WARNING:  Skipping test_offset on MacOS")
+            return
+
+        testdir = os.path.join(self.outdir, "offset_ground")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
+        # Create a fake ground data set for testing
+
+        data = create_ground_data(self.comm)
+
+        # Create some sky signal timestreams.
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(
+            detdata=[detpointing.quats, pixels.pixels, weights.weights]
+        )
+        delete_pointing.apply(data)
+        pixels.create_dist = None
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data=defaults.det_data
+        )
+        sim_noise.apply(data)
+
+        # Set up binning operator for solving
+        binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        # Set up template matrix with just an offset template.
+
+        # Use a long baseline length, which we will truncate to the scanning
+        # interval.
+        step_seconds = 3600.0
         tmpl = templates.Offset(
             times=defaults.times,
             noise_model=default_model.noise_model,
@@ -593,7 +724,7 @@ class MapmakerTest(MPITestCase):
             step_time=step_seconds * u.second,
             use_noise_prior=True,
             precond_width=1,
-            # debug_plots=testdir,
+            debug_plots=testdir,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
@@ -611,6 +742,7 @@ class MapmakerTest(MPITestCase):
             solve_rcond_threshold=1.0e-4,
             map_rcond_threshold=1.0e-4,
             iter_max=50,
+            output_dir=testdir,
             write_hits=False,
             write_map=False,
             write_cov=False,
@@ -865,8 +997,8 @@ class MapmakerTest(MPITestCase):
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
-            precond_width=10,
-            # debug_plots=testdir,
+            precond_width=2,
+            debug_plots=testdir,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
@@ -884,6 +1016,7 @@ class MapmakerTest(MPITestCase):
             solve_rcond_threshold=1.0e-4,
             map_rcond_threshold=1.0e-4,
             iter_max=50,
+            output_dir=testdir,
             write_hits=False,
             write_map=False,
             write_cov=False,
