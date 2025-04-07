@@ -1,0 +1,8 @@
+mkdocs
+mkdocstrings
+mkdocstrings-python
+mkdocs-material
+mkdocs-jupyter
+nbconvert
+wurlitzer
+sympy

@@ -1,7 +1,0 @@
-# These packages are needed for building the documentation, in addition
-# to the packages needed to install toast, and prior to running
-# setup.py to parse to full set of requirements.
-cmake
-jupyter-book
-wurlitzer
-sphinx-autoapi
