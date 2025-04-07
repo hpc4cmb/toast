@@ -1,0 +1,60 @@
+name:  Deploy Documentation
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update_docs:
+    name: Build and Deploy Documentation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Conda Base
+        run: |
+          sudo rm -rf /usr/share/miniconda \
+            && sudo rm -rf /usr/local/miniconda \
+            && curl -SL -o miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh \
+            && bash miniforge.sh -b -f -p ~/conda \
+            && source ~/conda/etc/profile.d/conda.sh \
+            && conda activate base \
+            && conda update -n base --yes conda
+
+      - name: Create Build Env
+        run: |
+          source ~/conda/etc/profile.d/conda.sh \
+            && ./platforms/conda_dev_setup.sh docs
+
+      - name: Install Package
+        run: |
+          source ~/conda/etc/profile.d/conda.sh \
+            && conda activate docs \
+            && ./platforms/conda.sh \
+            && python3 -c 'import toast'
+
+      - name: Install Doc Dependencies
+        run: |
+          source ~/conda/etc/profile.d/conda.sh \
+            && conda activate docs \
+            && conda install --yes --file docs/doc_requirements.txt \
+            && pip install mkdocs-print-site-plugin \
+            && git config user.name 'github-actions[bot]' \
+            && git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Deploy Docs
+        run: |
+          source ~/conda/etc/profile.d/conda.sh \
+            && conda activate docs \
+            && cd docs \
+            && mkdocs gh-deploy --force

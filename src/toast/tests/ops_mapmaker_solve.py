@@ -14,14 +14,14 @@ from ..observation import default_values as defaults
 from ..ops.mapmaker_solve import SolverLHS, SolverRHS
 from ..templates import AmplitudesMap, Offset
 from ..vis import set_matplotlib_backend
-from ._helpers import close_data, create_outdir, create_satellite_data
+from .helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
 class MapmakerSolveTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
 
     def test_rhs(self):

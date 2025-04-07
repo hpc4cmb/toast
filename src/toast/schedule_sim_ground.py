@@ -724,15 +724,15 @@ class WeightedHorizontalPatch(HorizontalPatch):
 class SiderealPatch(HorizontalPatch):
 
     def __init__(
-            self,
-            name,
-            weight,
-            azmin,
-            azmax,
-            el,
-            siderealtime_start,
-            siderealtime_stop,
-            scantime,
+        self,
+        name,
+        weight,
+        azmin,
+        azmax,
+        el,
+        siderealtime_start,
+        siderealtime_stop,
+        scantime,
     ):
         self.name = name
         self.weight = weight
@@ -1375,7 +1375,10 @@ def get_constant_elevation(
                     (
                         patch.name,
                         "el < el_min ({:.2f} < {:.2f}) rising = {}, partial = {}".format(
-                            np.degrees(el), np.degrees(patch.el_min), rising, partial_scan
+                            np.degrees(el),
+                            np.degrees(patch.el_min),
+                            rising,
+                            partial_scan,
                         ),
                     )
                 )
@@ -1389,7 +1392,10 @@ def get_constant_elevation(
                     (
                         patch.name,
                         "el > el_max ({:.2f} > {:.2f}) rising = {}, partial = {}".format(
-                            np.degrees(el), np.degrees(patch.el_max), rising, partial_scan
+                            np.degrees(el),
+                            np.degrees(patch.el_max),
+                            rising,
+                            partial_scan,
                         ),
                     )
                 )
@@ -1418,7 +1424,9 @@ def get_constant_elevation_pole(
         not_visible.append(
             (
                 patch.name,
-                "el < el_min ({:.2f} < {:.2f})".format(np.degrees(el), np.degrees(el_min)),
+                "el < el_min ({:.2f} < {:.2f})".format(
+                    np.degrees(el), np.degrees(el_min)
+                ),
             )
         )
         el = None
@@ -1426,7 +1434,9 @@ def get_constant_elevation_pole(
         not_visible.append(
             (
                 patch.name,
-                "el > el_max ({:.2f} > {:.2f})".format(np.degrees(el), np.degrees(el_max)),
+                "el > el_max ({:.2f} > {:.2f})".format(
+                    np.degrees(el), np.degrees(el_max)
+                ),
             )
         )
         el = None
@@ -1473,7 +1483,9 @@ def scan_patch(
     if isinstance(patch, HorizontalPatch) or isinstance(patch, MaxDepthPatch):
         # No corners.  Simply scan for the requested time
         if isinstance(patch, MaxDepthPatch):
-            azs, els = patch.corner_coordinates(observer)  # Make sure azimuth ranges are up to date
+            azs, els = patch.corner_coordinates(
+                observer
+            )  # Make sure azimuth ranges are up to date
         if rising and not patch.rising:
             return False, azmins, azmaxs, aztimes, t
         if check_sun_el(t, observer, sun, sun_el_max, args, not_visible):
@@ -3180,7 +3192,7 @@ def parse_patch_sidereal(args, parts):
     azmin = float(parts[3]) * degree
     azmax = float(parts[4]) * degree
     el = float(parts[5]) * degree
-    siderealtime_start =(float(parts[6]) % 180) * degree
+    siderealtime_start = (float(parts[6]) % 180) * degree
     siderealtime_stop = (float(parts[7]) % 180) * degree
     scantime = float(parts[8])
     patch = SiderealPatch(
@@ -3221,7 +3233,12 @@ def parse_patch_max_depth(args, parts, observer):
     throw = float(parts[6]) * degree
     scantime = float(parts[7])
     patch = MaxDepthPatch(
-        name, weight, patch_center, radius, throw, scantime,
+        name,
+        weight,
+        patch_center,
+        radius,
+        throw,
+        scantime,
         el_min=args.el_min_deg * degree,
         el_max=args.el_max_deg * degree,
         el_step=args.el_step_deg * degree,
@@ -3493,7 +3510,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
         moon_avoidance_color = "gray"
         alpha = 0.5
         avoidance_alpha = 0.01
-        sun_step = int(86400 * .25)
+        sun_step = int(86400 * 0.25)
         moon_step = int(86400 * 0.1)
         for iplot, coord in enumerate("CEG"):
             scoord = {"C": "Equatorial", "E": "Ecliptic", "G": "Galactic"}[coord]

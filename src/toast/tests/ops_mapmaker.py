@@ -20,7 +20,7 @@ from ..timing import GlobalTimers
 from ..timing import dump as dump_timers
 from ..timing import gather_timers
 from ..vis import set_matplotlib_backend
-from ._helpers import (
+from .helpers import (
     close_data,
     create_fake_healpix_scanned_tod,
     create_outdir,
@@ -32,7 +32,7 @@ from .mpi import MPITestCase
 class MapmakerTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
         # We want to hold the number of observations fixed, so that we can compare
         # results across different concurrencies.

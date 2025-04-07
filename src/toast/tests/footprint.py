@@ -12,14 +12,14 @@ from astropy import units as u
 
 from .. import ops
 from ..footprint import footprint_distribution
-from ._helpers import create_outdir
+from .helpers import create_outdir
 from .mpi import MPITestCase
 
 
 class FootprintTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.wcs_proj_dims = (1000, 500)
         self.nside = 128
         self.nside_submap = 16

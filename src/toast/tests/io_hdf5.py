@@ -15,14 +15,14 @@ from ..data import Data
 from ..io import load_hdf5, save_hdf5
 from ..mpi import MPI
 from ..observation_data import DetectorData
-from ._helpers import close_data, create_ground_data, create_outdir
+from .helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
 
 class IoHdf5Test(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def create_data(self, split=False):
         # Create fake observing of a small patch.  Use a multifrequency

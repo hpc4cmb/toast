@@ -283,7 +283,7 @@ def add_config_args(parser, conf, section, ignore=list(), prefix="", separator="
     return
 
 
-def args_update_config(args, conf, useropts, section, prefix="", separator="\."):
+def args_update_config(args, conf, useropts, section, prefix="", separator=r"\."):
     """Override options in a config dictionary from args namespace.
 
     Args:

@@ -14,7 +14,7 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import (
+from .helpers import (
     close_data,
     create_outdir,
     create_satellite_data,
@@ -26,7 +26,7 @@ from .mpi import MPITestCase
 class SimGainTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def test_linear_drift(self):
         # Create a fake satellite data set for testing

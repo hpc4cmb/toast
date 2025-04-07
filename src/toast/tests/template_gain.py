@@ -12,14 +12,14 @@ from .. import ops
 from ..observation import default_values as defaults
 from ..templates import GainTemplate
 from ..utils import rate_from_times
-from ._helpers import close_data, create_outdir, create_satellite_data
+from .helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
 class TemplateGainTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
 
     def test_gainfit(self):

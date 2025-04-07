@@ -27,7 +27,8 @@ void init_math_sf(py::module & m) {
             toast::vsin(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the Sine for an array of float64 values.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -61,7 +62,8 @@ void init_math_sf(py::module & m) {
             toast::vcos(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the Cosine for an array of float64 values.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -99,7 +101,8 @@ void init_math_sf(py::module & m) {
             toast::vsincos(info_in.size, inraw, sinoutraw, cosoutraw);
             return;
         }, py::arg("in"), py::arg("sinout"), py::arg(
-            "cosout"), R"(
+            "cosout"),
+        R"(
         Compute the sine and cosine for an array of float64 values.
 
         The results are stored in the output buffers.  To guarantee SIMD
@@ -138,7 +141,8 @@ void init_math_sf(py::module & m) {
             toast::vatan2(info_x.size, yraw, xraw, angraw);
             return;
         }, py::arg("y"), py::arg("x"), py::arg(
-            "ang"), R"(
+            "ang"),
+        R"(
         Compute the arctangent of the y and x values.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -173,7 +177,8 @@ void init_math_sf(py::module & m) {
             toast::vsqrt(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the sqrt an array of float64 values.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -207,7 +212,8 @@ void init_math_sf(py::module & m) {
             toast::vrsqrt(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the inverse sqrt an array of float64 values.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -241,7 +247,8 @@ void init_math_sf(py::module & m) {
             toast::vexp(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute e^x for an array of float64 values.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -275,7 +282,8 @@ void init_math_sf(py::module & m) {
             toast::vlog(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the natural log of an array of float64 values.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -311,7 +319,8 @@ void init_math_sf(py::module & m) {
             toast::vfast_sin(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the Sine for an array of float64 values.
 
         "Fast" version:  this function may run much faster than the
@@ -349,7 +358,8 @@ void init_math_sf(py::module & m) {
             toast::vfast_cos(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the Cosine for an array of float64 values.
 
         "Fast" version:  this function may run much faster than the
@@ -392,7 +402,8 @@ void init_math_sf(py::module & m) {
             toast::vfast_sincos(info_in.size, inraw, sinoutraw, cosoutraw);
             return;
         }, py::arg("in"), py::arg("sinout"), py::arg(
-            "cosout"), R"(
+            "cosout"),
+        R"(
         Compute the sine and cosine for an array of float64 values.
 
         "Fast" version:  this function may run much faster than the
@@ -435,7 +446,8 @@ void init_math_sf(py::module & m) {
             toast::vfast_atan2(info_x.size, yraw, xraw, angraw);
             return;
         }, py::arg("y"), py::arg("x"), py::arg(
-            "ang"), R"(
+            "ang"),
+        R"(
         Compute the arctangent of the y and x values.
 
         "Fast" version:  this function may run much faster than the
@@ -474,7 +486,8 @@ void init_math_sf(py::module & m) {
             toast::vfast_sqrt(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the sqrt an array of float64 values.
 
         "Fast" version:  this function may run much faster than the
@@ -512,7 +525,8 @@ void init_math_sf(py::module & m) {
             toast::vfast_rsqrt(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the inverse sqrt an array of float64 values.
 
         "Fast" version:  this function may run much faster than the
@@ -550,7 +564,8 @@ void init_math_sf(py::module & m) {
             toast::vfast_exp(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute e^x for an array of float64 values.
 
         "Fast" version:  this function may run much faster than the
@@ -588,7 +603,8 @@ void init_math_sf(py::module & m) {
             toast::vfast_log(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the natural log of an array of float64 values.
 
         "Fast" version:  this function may run much faster than the
@@ -626,7 +642,8 @@ void init_math_sf(py::module & m) {
             toast::vfast_erfinv(info_in.size, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the inverse error function for an array of float64 values.
 
         "Fast" version:  this function may run much faster than the

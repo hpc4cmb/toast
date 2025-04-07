@@ -5,11 +5,11 @@
 import datetime
 import os
 from collections import OrderedDict
+from importlib import resources
 
 import h5py
 import numpy as np
 from astropy import units as u
-from importlib import resources
 
 from . import rng as rng
 from .timing import function_timer

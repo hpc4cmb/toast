@@ -23,6 +23,7 @@ from .gainscrambler import GainScrambler
 from .groundfilter import GroundFilter
 from .hwpfilter import HWPFilter
 from .hwpss_model import HWPSynchronousModel
+from .interpolate_healpix import InterpolateHealpixMap
 from .load_hdf5 import LoadHDF5
 from .load_spt3g import LoadSpt3g
 from .madam import Madam, madam_params_from_mapmaker
@@ -51,7 +52,6 @@ from .reset import Reset
 from .run_spt3g import RunSpt3g
 from .save_hdf5 import SaveHDF5
 from .save_spt3g import SaveSpt3g
-from .interpolate_healpix import InterpolateHealpixMap
 from .scan_healpix import ScanHealpixMap, ScanHealpixMask
 from .scan_map import ScanMap, ScanMask, ScanScale
 from .scan_wcs import ScanWCSMap, ScanWCSMask

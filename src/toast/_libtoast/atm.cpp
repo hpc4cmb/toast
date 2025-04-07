@@ -11,7 +11,8 @@ void init_atm(py::module & m) {
     m.def("atm_absorption_coefficient", &toast::atm_get_absorption_coefficient,
           py::arg("altitude"), py::arg("temperature"), py::arg("pressure"),
           py::arg("pwv"), py::arg(
-              "freq"), R"(
+              "freq"),
+          R"(
             Compute the absorption coefficient.
 
             Args:
@@ -29,7 +30,8 @@ void init_atm(py::module & m) {
     m.def("atm_atmospheric_loading", &toast::atm_get_atmospheric_loading,
           py::arg("altitude"), py::arg("temperature"), py::arg("pressure"),
           py::arg("pwv"), py::arg(
-              "freq"), R"(
+              "freq"),
+          R"(
             Return the equivalent blackbody temperature in Kelvin.
 
             Args:
@@ -57,7 +59,8 @@ void init_atm(py::module & m) {
               return ret;
           }, py::arg("altitude"), py::arg("temperature"), py::arg("pressure"),
           py::arg("pwv"), py::arg("freqmin"), py::arg("freqmax"), py::arg(
-              "nfreq"), R"(
+              "nfreq"),
+          R"(
             Compute a vector of absorption coefficients.
 
             Args:
@@ -86,7 +89,8 @@ void init_atm(py::module & m) {
               return ret;
           }, py::arg("altitude"), py::arg("temperature"), py::arg("pressure"),
           py::arg("pwv"), py::arg("freqmin"), py::arg("freqmax"), py::arg(
-              "nfreq"), R"(
+              "nfreq"),
+          R"(
             Compute a vector of equivalent blackbody temperatures.
 
             Args:

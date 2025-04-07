@@ -270,11 +270,11 @@ class GroundSchedule(object):
 
     @function_timer
     def read(
-            self,
-            schedule_file,
-            file_split=None,
-            comm=None,
-            field_separator="|",
+        self,
+        schedule_file,
+        file_split=None,
+        comm=None,
+        field_separator="|",
     ):
         """Load a ground observing schedule from a file.
 

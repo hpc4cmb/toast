@@ -48,7 +48,8 @@ void init_pixels(py::module & m) {
     // to mean invalid pixels.
     m.def("global_to_local", &global_to_local <int64_t>, py::arg("global_pixels"),
           py::arg("npix_submap"), py::arg(
-              "global2local"), R"(
+              "global2local"),
+          R"(
         Convert global pixel indices to local submaps and pixels within the submap.
 
         Args:

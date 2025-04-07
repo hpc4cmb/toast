@@ -396,7 +396,8 @@ void init_io_compression_flac(py::module & m) {
 
             return py::make_tuple(py::cast(bytes), py::cast(offsets));
         }, py::arg("data"), py::arg(
-            "level"), R"(
+            "level"),
+        R"(
         Compress 2D 32bit integer data with FLAC.
 
         Each row of the input is compressed separately, and the byte offset
@@ -452,7 +453,8 @@ void init_io_compression_flac(py::module & m) {
 
             return py::cast(output);
         }, py::arg("data"), py::arg(
-            "offsets"), R"(
+            "offsets"),
+        R"(
         Decompress FLAC bytes into 2D 32bit integer data.
 
         The array of bytes is decompressed and returned.
@@ -504,7 +506,8 @@ void init_io_compression_flac(py::module & m) {
 
             return py::cast(bytes);
         }, py::arg("data"), py::arg(
-            "level"), R"(
+            "level"),
+        R"(
         Compress 1D 32bit integer data with FLAC.
 
         The 1D array is compressed and the byte array is returned.
@@ -555,7 +558,8 @@ void init_io_compression_flac(py::module & m) {
 
             return py::cast(output);
         }, py::arg(
-            "data"), R"(
+            "data"),
+        R"(
         Decompress FLAC bytes into 1D 32bit integer data.
 
         The array of bytes is decompressed and returned.

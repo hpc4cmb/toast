@@ -12,9 +12,8 @@ from astropy import units as u
 from .. import ops as ops
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
-from ._helpers import (
+from .helpers import (
     close_data,
-    create_fake_mask,
     create_fake_healpix_scanned_tod,
     create_outdir,
     create_satellite_data,
@@ -25,7 +24,7 @@ from .mpi import MPITestCase
 class InterpolateHealpixTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
 
     def test_interpolate(self):

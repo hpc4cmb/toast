@@ -15,7 +15,7 @@ from ..data import Data
 from ..mpi import MPI, Comm
 from ..observation import default_values as defaults
 from ..traits import Float, trait_docs
-from ._helpers import close_data, create_outdir, create_satellite_data
+from .helpers import create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
@@ -75,7 +75,7 @@ class CheckRMS(ops.Operator):
 class LoaderTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def create_data(self, rms=1.0):
         # Create a fake dataset, but delete any detector data

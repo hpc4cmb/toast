@@ -257,7 +257,7 @@ void toast::vfast_sin(int n, double const * ang, double * sinout) {
     int i;
     double eps = std::numeric_limits <float>::epsilon();
 
-    # pragma \
+    # pragma\
     omp parallel for default(shared) private(i, sx, sx2, ssign, quot, rem, x, quad, rang) schedule(static)
     for (i = 0; i < n; i++) {
         rang = ang[i];
@@ -332,7 +332,7 @@ void toast::vfast_cos(int n, double const * ang, double * cosout) {
     int i;
     double eps = std::numeric_limits <float>::epsilon();
 
-    # pragma \
+    # pragma\
     omp parallel for default(shared) private(i, cx, cx2, csign, quot, rem, x, quad, rang) schedule(static)
     for (i = 0; i < n; i++) {
         rang = ang[i];
@@ -409,7 +409,7 @@ void toast::vfast_sincos(int n, double const * ang, double * sinout,
     int i;
     double eps = std::numeric_limits <float>::epsilon();
 
-    # pragma \
+    # pragma\
     omp parallel for default(shared) private(i, sx, cx, sx2, cx2, ssign, csign, quot, rem, x, quad, rang) schedule(static)
     for (i = 0; i < n; i++) {
         rang = ang[i];
@@ -494,7 +494,7 @@ void toast::vfast_atan2(int n, double const * y, double const * x,
     int region;
     int sign;
 
-    # pragma \
+    # pragma\
     omp parallel for default(shared) private(i, r, r2, complement, region, sign) schedule(static)
     for (i = 0; i < n; i++) {
         r = y[i] / x[i];

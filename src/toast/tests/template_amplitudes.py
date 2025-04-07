@@ -12,14 +12,14 @@ from .. import ops
 from ..dist import distribute_uniform
 from ..templates import Amplitudes, AmplitudesMap
 from ..utils import rate_from_times
-from ._helpers import create_comm, create_outdir
+from .helpers import create_comm, create_outdir
 from .mpi import MPITestCase
 
 
 class TemplateTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
 
     def test_amplitudes_disjoint(self):

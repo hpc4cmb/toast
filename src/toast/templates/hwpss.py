@@ -12,10 +12,10 @@ from scipy.linalg import eigvalsh, lu_factor, lu_solve
 
 from ..data import Data
 from ..hwp_utils import (
-    hwpss_sincos_buffer,
-    hwpss_compute_coeff_covariance,
-    hwpss_compute_coeff,
     hwpss_build_model,
+    hwpss_compute_coeff,
+    hwpss_compute_coeff_covariance,
+    hwpss_sincos_buffer,
 )
 from ..mpi import MPI
 from ..observation import default_values as defaults

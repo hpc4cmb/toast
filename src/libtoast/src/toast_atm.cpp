@@ -55,12 +55,12 @@ toast::CholmodCommon::CholmodCommon() {
 
     if (atm_verbose()) {
         // TK: What is the cost of this level?  Do we need another more verbose switch?
-        chcommon->print = 3;          // Default verbosity
+        chcommon->print = 3;       // Default verbosity
     } else {
-        chcommon->print = 1;          // Minimal verbosity
+        chcommon->print = 1;       // Minimal verbosity
     }
-    chcommon->itype = CHOLMOD_INT;    // All integer arrays are int
-    chcommon->final_ll = 1;           // The factorization is LL', not LDL'
+    chcommon->itype = CHOLMOD_INT; // All integer arrays are int
+    chcommon->final_ll = 1;        // The factorization is LL', not LDL'
 }
 
 toast::CholmodCommon::~CholmodCommon() {

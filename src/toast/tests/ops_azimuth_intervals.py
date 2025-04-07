@@ -15,20 +15,24 @@ from ..instrument_sim import fake_hexagon_focalplane
 from ..mpi import MPI, Comm
 from ..observation import Observation
 from ..observation import default_values as defaults
+from ..ops.sim_ground_utils import scan_between
 from ..pixels_io_healpix import write_healpix_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..vis import set_matplotlib_backend
-from ..ops.sim_ground_utils import scan_between
-
-from ._helpers import close_data, create_comm, create_outdir, create_ground_telescope
+from .helpers import (
+    close_data,
+    create_comm,
+    create_ground_telescope,
+    create_outdir,
+)
 from .mpi import MPITestCase
 
 
 class AzimuthIntervalsTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def create_fake_data(self):
         np.random.seed(123456)

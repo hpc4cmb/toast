@@ -13,7 +13,7 @@ from .. import qarray as qa
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import (
+from .helpers import (
     close_data,
     create_fake_beam_alm,
     create_fake_sky_alm,
@@ -27,7 +27,7 @@ class SimConviqtTest(MPITestCase):
     def setUp(self):
         np.random.seed(777)
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
         self.nside = 32
         self.lmax = 128

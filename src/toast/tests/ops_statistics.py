@@ -12,14 +12,14 @@ from astropy import units as u
 from .. import ops as ops
 from ..observation import default_values as defaults
 from ..vis import set_matplotlib_backend
-from ._helpers import close_data, create_outdir, create_satellite_data
+from .helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
 class StatisticsTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def test_statistics(self):
         # Create a fake satellite data set for testing

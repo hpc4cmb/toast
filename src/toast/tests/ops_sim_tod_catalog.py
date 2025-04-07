@@ -4,18 +4,17 @@
 
 import os
 
-import tomlkit
 import healpy as hp
 import numpy as np
+import tomlkit
 from astropy import units as u
 
 from .. import ops as ops
 from ..observation import default_values as defaults
 from ..vis import set_matplotlib_backend
-from ._helpers import (
-    close_data,
-    create_outdir,
+from .helpers import (
     create_ground_data,
+    create_outdir,
 )
 from .mpi import MPITestCase
 
@@ -24,7 +23,7 @@ class SimCatalogTest(MPITestCase):
     def setUp(self):
         np.random.seed(777)
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
         self.rank = 0
         if self.comm is not None:

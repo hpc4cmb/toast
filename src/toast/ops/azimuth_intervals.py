@@ -16,7 +16,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
-from ..utils import Environment, Logger, rate_from_times, flagged_noise_fill
+from ..utils import Environment, Logger, flagged_noise_fill, rate_from_times
 from ..vis import set_matplotlib_backend
 from .flag_intervals import FlagIntervals
 from .operator import Operator

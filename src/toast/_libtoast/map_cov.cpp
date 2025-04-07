@@ -54,7 +54,8 @@ void init_map_cov(py::module & m) {
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg("weights"), py::arg("scale"), py::arg("tod"),
           py::arg("invnpp"), py::arg("hits"), py::arg(
-              "zmap"), R"(
+              "zmap"),
+          R"(
         Accumulate block diagonal noise products
 
         This uses a pointing matrix and timestream data to accumulate the local pieces
@@ -112,7 +113,8 @@ void init_map_cov(py::module & m) {
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg(
               "hits"), py::arg(
-              "use_accel"), R"(
+              "use_accel"),
+          R"(
         Accumulate hit map.
 
         This uses a pointing matrix to accumulate the local pieces of the hit map.
@@ -168,7 +170,8 @@ void init_map_cov(py::module & m) {
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg("weights"), py::arg("scale"), py::arg(
               "invnpp"), py::arg(
-              "use_accel"), R"(
+              "use_accel"),
+          R"(
         Accumulate block diagonal noise covariance.
 
         This uses a pointing matrix to accumulate the local pieces
@@ -233,7 +236,8 @@ void init_map_cov(py::module & m) {
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("submap"),
           py::arg("subpix"), py::arg("weights"), py::arg("scale"), py::arg("tod"),
           py::arg(
-              "zmap"), R"(
+              "zmap"),
+          R"(
         Accumulate the noise weighted map.
 
         This uses a pointing matrix and timestream data to accumulate the local pieces
@@ -295,7 +299,8 @@ void init_map_cov(py::module & m) {
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("data"),
           py::arg("cond"), py::arg("threshold"), py::arg(
-              "invert"), R"(
+              "invert"),
+          R"(
         Compute the condition number and optionally invert a covariance.
 
         This performs and eigendecomposition of the covariance at each pixel and
@@ -342,7 +347,8 @@ void init_map_cov(py::module & m) {
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("data1"),
           py::arg(
-              "data2"), R"(
+              "data2"),
+          R"(
         Multiply two block diagonal covariances.
 
         This multiplies the covariances within each corresponding pixel in the two
@@ -394,7 +400,8 @@ void init_map_cov(py::module & m) {
               return;
           }, py::arg("nsub"), py::arg("nsubpix"), py::arg("nnz"), py::arg("mat"),
           py::arg(
-              "vec"), R"(
+              "vec"),
+          R"(
         Apply a covariance to a vector at each pixel.
 
         This does a matrix-vector multiply at each pixel.

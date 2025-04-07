@@ -63,8 +63,8 @@ static double const DEG2RAD = 1.74532925199432957692e-2;
 
 
 // Macro to return the current source location.
-#define TOAST_HERE() \
-    std::make_pair(std::string(__FILE__), int(__LINE__))
+#define TOAST_HERE()\
+        std::make_pair(std::string(__FILE__), int(__LINE__))
 
 std::string format_here(std::pair <std::string, int> const & here);
 

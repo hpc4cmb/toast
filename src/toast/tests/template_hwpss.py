@@ -12,10 +12,10 @@ from .. import ops
 from ..accelerator import ImplementationType, accel_enabled
 from ..atm import available_atm
 from ..hwp_utils import (
-    hwpss_sincos_buffer,
-    hwpss_compute_coeff_covariance,
-    hwpss_compute_coeff,
     hwpss_build_model,
+    hwpss_compute_coeff,
+    hwpss_compute_coeff_covariance,
+    hwpss_sincos_buffer,
 )
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
@@ -24,8 +24,8 @@ from ..templates import Fourier2D, Hwpss, Offset
 from ..templates.hwpss import plot as hwpssplot
 from ..templates.offset import plot as offplot
 from ..utils import rate_from_times
-from ..vis import plot_noise_estim
-from ._helpers import (
+from ..vis import plot_healpix_maps, plot_noise_estim, plot_wcs_maps
+from .helpers import (
     close_data,
     create_fake_healpix_scanned_tod,
     create_fake_wcs_scanned_tod,
@@ -34,8 +34,6 @@ from ._helpers import (
     create_satellite_data,
     fake_hwpss,
     fake_hwpss_data,
-    plot_healpix_maps,
-    plot_wcs_maps,
 )
 from .mpi import MPITestCase
 
@@ -43,7 +41,7 @@ from .mpi import MPITestCase
 class TemplateHwpssTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.nside = 64
         np.random.seed(123456)
         if (

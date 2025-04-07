@@ -1247,37 +1247,38 @@ void init_ops_pixels_healpix(py::module & m) {
                     }
                 }
 
-                # pragma omp target data map(    \
-                to : raw_pixel_index[0 : n_det], \
-                raw_quat_index[0 : n_det],       \
-                n_pix_submap,                    \
-                nside,                           \
-                factor,                          \
-                nest,                            \
-                n_view,                          \
-                n_det,                           \
-                n_samp,                          \
-                shared_flag_mask,                \
-                use_flags                        \
-                )                                \
+                # pragma omp target data map(\
+                to : raw_pixel_index[0 : n_det],\
+                raw_quat_index[0 : n_det],\
+                n_pix_submap,\
+                nside,\
+                factor,\
+                nest,\
+                n_view,\
+                n_det,\
+                n_samp,\
+                shared_flag_mask,\
+                use_flags\
+                )\
                 map(tofrom : raw_hsub[0 : n_submap])
                 {
                     if (nest) {
-                        # pragma omp target teams distribute parallel for collapse(3) \
-                        schedule(static,1)                                            \
-                        is_device_ptr(                                                \
-                        dev_pixels,                                                   \
-                        dev_quats,                                                    \
-                        dev_flags,                                                    \
-                        dev_intervals,                                                \
-                        dev_utab                                                      \
+                        # pragma omp target teams distribute parallel for collapse(3)\
+                        schedule(static,1)\
+                        is_device_ptr(\
+                        dev_pixels,\
+                        dev_quats,\
+                        dev_flags,\
+                        dev_intervals,\
+                        dev_utab\
                         )
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 for (int64_t isamp = 0; isamp < max_interval_size;
                                      isamp++) {
                                     // Adjust for the actual start of the interval
-                                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+                                    int64_t adjusted_isamp = isamp +
+                                                             dev_intervals[iview].first;
 
                                     // Check if the value is out of range for the
                                     // current interval
@@ -1306,21 +1307,22 @@ void init_ops_pixels_healpix(py::module & m) {
                             }
                         }
                     } else {
-                        # pragma omp target teams distribute parallel for collapse(3) \
-                        schedule(static,1)                                            \
-                        is_device_ptr(                                                \
-                        dev_pixels,                                                   \
-                        dev_quats,                                                    \
-                        dev_flags,                                                    \
-                        dev_intervals,                                                \
-                        dev_utab                                                      \
+                        # pragma omp target teams distribute parallel for collapse(3)\
+                        schedule(static,1)\
+                        is_device_ptr(\
+                        dev_pixels,\
+                        dev_quats,\
+                        dev_flags,\
+                        dev_intervals,\
+                        dev_utab\
                         )
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 for (int64_t isamp = 0; isamp < max_interval_size;
                                      isamp++) {
                                     // Adjust for the actual start of the interval
-                                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+                                    int64_t adjusted_isamp = isamp +
+                                                             dev_intervals[iview].first;
 
                                     // Check if the value is out of range for the
                                     // current interval

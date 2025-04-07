@@ -12,14 +12,14 @@ from .. import qarray as qa
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import close_data, create_ground_data, create_outdir
+from .helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
 
 class SSSTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def test_sss(self):
         rank = 0

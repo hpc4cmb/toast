@@ -19,14 +19,14 @@ from ..instrument_sim import (
     hex_layout,
 )
 from ..io import H5File
-from ._helpers import create_outdir
+from .helpers import create_outdir
 from .mpi import MPITestCase
 
 
 class InstrumentTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.xieta_space = np.pi / 6
 
     def plot_positions(self, outfile, theta, phi, psi):

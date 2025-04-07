@@ -15,11 +15,10 @@ from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
-from ._helpers import (
+from .helpers import (
     close_data,
     create_outdir,
     create_satellite_data,
-    fake_flags,
 )
 from .mpi import MPITestCase
 
@@ -29,7 +28,7 @@ XAXIS, YAXIS, ZAXIS = np.eye(3)
 class TimeConstantTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         if (
             ("CONDA_BUILD" in os.environ)
             or ("CIBUILDWHEEL" in os.environ)

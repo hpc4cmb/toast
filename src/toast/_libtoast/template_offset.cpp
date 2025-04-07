@@ -79,21 +79,21 @@ void init_template_offset(py::module & m) {
                     }
                 }
 
-                # pragma omp target data map( \
-                to : n_view,                  \
-                n_samp,                       \
-                data_index,                   \
-                step_length,                  \
-                amp_offset,                   \
-                amp_view_off[0 : n_view]      \
+                # pragma omp target data map(\
+                to : n_view,\
+                n_samp,\
+                data_index,\
+                step_length,\
+                amp_offset,\
+                amp_view_off[0 : n_view]\
                 )
                 {
-                    # pragma omp target teams distribute parallel for collapse(2) \
-                    is_device_ptr(                                                \
-                    dev_amplitudes,                                               \
-                    dev_amp_flags,                                                \
-                    dev_det_data,                                                 \
-                    dev_intervals                                                 \
+                    # pragma omp target teams distribute parallel for collapse(2)\
+                    is_device_ptr(\
+                    dev_amplitudes,\
+                    dev_amp_flags,\
+                    dev_det_data,\
+                    dev_intervals\
                     )
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
@@ -224,25 +224,25 @@ void init_template_offset(py::module & m) {
                     }
                 }
 
-                # pragma omp target data map( \
-                to : n_view,                  \
-                n_samp,                       \
-                data_index,                   \
-                flag_index,                   \
-                step_length,                  \
-                amp_offset,                   \
-                amp_view_off[0 : n_view],     \
-                use_flags                     \
+                # pragma omp target data map(\
+                to : n_view,\
+                n_samp,\
+                data_index,\
+                flag_index,\
+                step_length,\
+                amp_offset,\
+                amp_view_off[0 : n_view],\
+                use_flags\
                 )
                 {
                     // TODO the paralelism can likely be improved on this function
-                    # pragma omp target teams distribute collapse(2) \
-                    is_device_ptr(                                   \
-                    dev_amplitudes,                                  \
-                    dev_amp_flags,                                   \
-                    dev_det_data,                                    \
-                    dev_det_flags,                                   \
-                    dev_intervals                                    \
+                    # pragma omp target teams distribute collapse(2)\
+                    is_device_ptr(\
+                    dev_amplitudes,\
+                    dev_amp_flags,\
+                    dev_det_data,\
+                    dev_det_flags,\
+                    dev_intervals\
                     )
                     for (int64_t iview = 0; iview < n_view; iview++) {
                         for (
@@ -273,9 +273,11 @@ void init_template_offset(py::module & m) {
                                 double contrib = 0.0;
                                 # pragma omp parallel for reduction(+ : contrib)
                                 for (int64_t i = 0; i < max_step_length; i++) {
-                                    int64_t d = data_index * n_samp + adjusted_isamp + i;
+                                    int64_t d = data_index * n_samp + adjusted_isamp +
+                                                i;
                                     if (use_flags) {
-                                        int64_t f = flag_index * n_samp + adjusted_isamp + i;
+                                        int64_t f = flag_index * n_samp +
+                                                    adjusted_isamp + i;
                                         uint8_t check = dev_det_flags[f] & flag_mask;
                                         if (check == 0) {
                                             contrib += dev_det_data[d];
@@ -366,12 +368,12 @@ void init_template_offset(py::module & m) {
 
                 # pragma omp target data map(to : n_amp)
                 {
-                    # pragma omp target teams distribute parallel for \
-                    is_device_ptr(                                    \
-                    dev_amp_in,                                       \
-                    dev_amp_out,                                      \
-                    dev_amp_flags,                                    \
-                    dev_offset_var                                    \
+                    # pragma omp target teams distribute parallel for\
+                    is_device_ptr(\
+                    dev_amp_in,\
+                    dev_amp_out,\
+                    dev_amp_flags,\
+                    dev_offset_var\
                     )
                     for (int64_t iamp = 0; iamp < n_amp; iamp++) {
                         if (dev_amp_flags[iamp] == 0) {

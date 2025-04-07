@@ -14,14 +14,14 @@ from ..mpi import MPI
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ._helpers import close_data, create_outdir, create_satellite_data
+from .helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
 class MapmakerUtilsTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
         self.mix_coeff = np.random.uniform(low=-1.0, high=1.0, size=1000)
 

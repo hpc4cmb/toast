@@ -49,7 +49,8 @@ void init_fod_psd(py::module & m) {
           }, py::arg("x"), py::arg("y"), py::arg("good"), py::arg("lagmax"),
           py::arg("sums"), py::arg("hits"), py::arg("all_sums"),
           py::arg(
-              "symmetric"), R"(
+              "symmetric"),
+          R"(
         Accumulate the time domain covariance between two vectors.
 
         Args:
@@ -104,7 +105,8 @@ void init_fod_psd(py::module & m) {
               return;
           }, py::arg("x"), py::arg("good"), py::arg("lagmax"),
           py::arg("sums"), py::arg("hits"), py::arg(
-              "all_sums"), R"(
+              "all_sums"),
+          R"(
         Accumulate the time domain covariance.
 
         Args:

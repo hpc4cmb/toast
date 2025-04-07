@@ -21,7 +21,8 @@ void init_math_rng(py::module & m) {
             return;
         }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
         py::arg("counter2"), py::arg(
-            "data"), R"(
+            "data"),
+        R"(
         Generate random unsigned 64bit integers.
 
         The provided input array is populated with values.  The dtype of the
@@ -55,7 +56,8 @@ void init_math_rng(py::module & m) {
             return;
         }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
         py::arg("counter2"), py::arg(
-            "data"), R"(
+            "data"),
+        R"(
         Generate uniform randoms on the interval [0.0, 1.0].
 
         The provided input array is populated with values.  The dtype of the
@@ -89,7 +91,8 @@ void init_math_rng(py::module & m) {
             return;
         }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
         py::arg("counter2"), py::arg(
-            "data"), R"(
+            "data"),
+        R"(
         Generate uniform randoms on the interval [-1.0, 1.0].
 
         The provided input array is populated with values.  The dtype of the
@@ -123,7 +126,8 @@ void init_math_rng(py::module & m) {
             return;
         }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
         py::arg("counter2"), py::arg(
-            "data"), R"(
+            "data"),
+        R"(
         Generate samples from a unit-variance gaussian distribution.
 
         The provided input array is populated with values.  The dtype of the
@@ -186,7 +190,8 @@ void init_math_rng(py::module & m) {
             return out;
         }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
         py::arg("counter2"), py::arg(
-            "lengths"), R"(
+            "lengths"),
+        R"(
         Generate multiple streams of random unsigned 64bit integers.
 
         The streams may be arbitrary lengths with arbitrary starting
@@ -252,7 +257,8 @@ void init_math_rng(py::module & m) {
             return out;
         }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
         py::arg("counter2"), py::arg(
-            "lengths"), R"(
+            "lengths"),
+        R"(
         Generate multiple streams of uniform randoms on interval [0.0, 1.0].
 
         The streams may be arbitrary lengths with arbitrary starting
@@ -318,7 +324,8 @@ void init_math_rng(py::module & m) {
             return out;
         }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
         py::arg("counter2"), py::arg(
-            "lengths"), R"(
+            "lengths"),
+        R"(
         Generate multiple streams of uniform randoms on interval [-1.0, 1.0].
 
         The streams may be arbitrary lengths with arbitrary starting
@@ -383,7 +390,8 @@ void init_math_rng(py::module & m) {
             return out;
         }, py::arg("key1"), py::arg("key2"), py::arg("counter1"),
         py::arg("counter2"), py::arg(
-            "lengths"), R"(
+            "lengths"),
+        R"(
         Generate multiple streams from unit-variance gaussian distributions.
 
         The streams may be arbitrary lengths with arbitrary starting

@@ -4,8 +4,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-"""This script converts HEALPiX maps between FITS and HDF5
-"""
+"""This script converts HEALPiX maps between FITS and HDF5"""
 
 import argparse
 import os

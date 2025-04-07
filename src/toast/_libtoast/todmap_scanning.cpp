@@ -55,7 +55,8 @@ void register_scan_map(py::module & m, char const * name) {
           }, py::arg("npix_submap"), py::arg("nmap"), py::arg("submap"),
           py::arg("subpix"),
           py::arg("mapdata"), py::arg("weights"), py::arg(
-              "tod"), R"(
+              "tod"),
+          R"(
         Sample a map into a timestream.
 
         This uses a local piece of a distributed map and the local pointing matrix
@@ -110,7 +111,8 @@ void register_fast_scanning(py::module & m, char const * name) {
                                         nw, rawmapdata);
               return;
           }, py::arg("tod"), py::arg("pix"), py::arg("weights"), py::arg(
-              "mapdata"), R"(
+              "mapdata"),
+          R"(
         Scan global maps into timestreams.
 
         Args:

@@ -13,13 +13,13 @@ import json
 import math
 import os
 from datetime import datetime
+from importlib import resources
 
 import healpy
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy import units as u
 from astropy.table import QTable
-from importlib import resources
 
 import toast
 import toast.ops

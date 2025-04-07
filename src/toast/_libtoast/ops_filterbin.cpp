@@ -276,9 +276,12 @@ void expand_matrix(py::array_t <double> compressed_matrix,
 void build_template_covariance(std::vector <int64_t> & starts,
                                std::vector <int64_t> & stops,
                                std::vector <py::array_t <double,
-                                                         py::array::c_style | py::array::forcecast> > & templates,
+                                                         py::array::c_style |
+                                                         py::array::forcecast> > &
+                               templates,
                                py::array_t <double,
-                                            py::array::c_style | py::array::forcecast> good,
+                                            py::array::c_style |
+                                            py::array::forcecast> good,
                                py::array_t <double,
                                             py::array::c_style |
                                             py::array::forcecast> template_covariance) {
@@ -410,13 +413,24 @@ void build_template_covariance(std::vector <int64_t> & starts,
 // }
 
 void accumulate_observation_matrix(py::array_t <double,
-                                                py::array::c_style | py::array::forcecast> c_obs_matrix,
-                                   py::array_t <int64_t, py::array::c_style | py::array::forcecast> c_pixels,
-                                   py::array_t <double, py::array::c_style | py::array::forcecast> weights,
-                                   py::array_t <double, py::array::c_style | py::array::forcecast> templates,
+                                                py::array::c_style |
+                                                py::array::forcecast> c_obs_matrix,
+                                   py::array_t <int64_t,
+                                                py::array::c_style |
+                                                py::array::forcecast> c_pixels,
                                    py::array_t <double,
-                                                py::array::c_style | py::array::forcecast> template_covariance,
-                                   py::array_t <unsigned char, py::array::c_style | py::array::forcecast> good_fit,
+                                                py::array::c_style |
+                                                py::array::forcecast> weights,
+                                   py::array_t <double,
+                                                py::array::c_style |
+                                                py::array::forcecast> templates,
+                                   py::array_t <double,
+                                                py::array::c_style |
+                                                py::array::forcecast>
+                                   template_covariance,
+                                   py::array_t <unsigned char,
+                                                py::array::c_style |
+                                                py::array::forcecast> good_fit,
                                    py::array_t <unsigned char,
                                                 py::array::c_style |
                                                 py::array::forcecast> good_bin) {

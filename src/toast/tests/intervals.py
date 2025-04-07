@@ -8,10 +8,6 @@ import numpy.testing as nt
 from ..intervals import IntervalList, interval_dtype
 from .mpi import MPITestCase
 
-# from ..tod.interval import intervals_to_chunklist
-#
-# from ..tod.sim_interval import regular_intervals
-
 
 class IntervalTest(MPITestCase):
     def setUp(self):

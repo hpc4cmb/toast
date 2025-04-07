@@ -16,18 +16,18 @@ from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..vis import (
-    set_matplotlib_backend,
     plot_healpix_maps,
-    plot_wcs_maps,
     plot_noise_estim,
+    plot_wcs_maps,
+    set_matplotlib_backend,
 )
-from ._helpers import (
+from .helpers import (
     close_data,
+    create_fake_healpix_scanned_tod,
     create_ground_data,
     create_outdir,
     fake_flags,
     fake_hwpss,
-    create_fake_healpix_scanned_tod,
 )
 from .mpi import MPITestCase
 
@@ -35,7 +35,7 @@ from .mpi import MPITestCase
 class ExampleGroundTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
         if (
             ("CONDA_BUILD" in os.environ)
@@ -356,8 +356,8 @@ class ExampleGroundTest(MPITestCase):
     ):
         if not self.make_plots:
             return
-        import matplotlib.pyplot as plt
         import matplotlib.patches as mpatches
+        import matplotlib.pyplot as plt
 
         # Every process will plot its first local detector
         selected_dets = obs.select_local_detectors(selection=dets, flagmask=det_mask)

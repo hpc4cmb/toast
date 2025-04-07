@@ -9,8 +9,8 @@ import healpy as hp
 import numpy as np
 import tomlkit
 import traitlets
-from astropy.stats import gaussian_fwhm_to_sigma
 from astropy import units as u
+from astropy.stats import gaussian_fwhm_to_sigma
 from scipy.constants import c, h, k
 from scipy.interpolate import RectBivariateSpline
 from scipy.signal import fftconvolve
@@ -23,7 +23,6 @@ from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger, unit_conversion
 from .operator import Operator
-
 
 # Only the following keys will be parsed in the source catalog.
 # Not all are required

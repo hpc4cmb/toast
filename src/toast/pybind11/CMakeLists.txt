@@ -10,7 +10,7 @@ if(NOT CMAKE_VERSION VERSION_LESS "3.27")
   cmake_policy(GET CMP0148 _pybind11_cmp0148)
 endif()
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.20)
 
 # The `cmake_minimum_required(VERSION 3.5...3.29)` syntax does not work with
 # some versions of VS that have a patched CMake 3.11. This forces us to emulate

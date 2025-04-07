@@ -636,7 +636,7 @@ void OmpManager::reset(void * buffer, size_t nbytes, std::string const & name) {
 
     # pragma omp target data map(to: nbytes)
     {
-        # pragma \
+        # pragma\
         omp target teams distribute parallel for default(shared) is_device_ptr(dev_buffer)
         for (size_t i = 0; i < nbytes; ++i) {
             ((uint8_t *)dev_buffer)[i] = 0;
@@ -1097,7 +1097,8 @@ void init_accelerator(py::module & m) {
             auto & omgr = OmpManager::get();
             omgr.dump();
             return;
-        }, R"(
+        },
+        R"(
         Dump the current device table.
 
         Returns:
@@ -1128,7 +1129,7 @@ void init_accelerator(py::module & m) {
             double * dev_raw = omgr.device_ptr(raw);
 
             #ifdef HAVE_OPENMP_TARGET
-            # pragma \
+            # pragma\
             omp target teams distribute parallel for is_device_ptr(dev_raw) collapse(2)
             for (int64_t i = 0; i < n_det; i++) {
                 for (int64_t j = 0; j < n_samp; j++) {
@@ -1154,7 +1155,7 @@ void init_accelerator(py::module & m) {
             double * dev_raw = omgr.device_ptr(raw);
 
             #ifdef HAVE_OPENMP_TARGET
-            # pragma \
+            # pragma\
             omp target teams distribute parallel for is_device_ptr(dev_raw) collapse(2)
             for (size_t i = 0; i < n_det; i++) {
                 for (size_t j = 0; j < n_samp; j++) {

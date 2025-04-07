@@ -4,8 +4,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-"""This does some simple tests of the TOAST runtime environment.
-"""
+"""This does some simple tests of the TOAST runtime environment."""
 
 import argparse
 import sys
