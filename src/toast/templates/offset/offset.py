@@ -487,27 +487,48 @@ class Offset(Template):
                             # not invert "M" and solve M x = b using the Cholesky
                             # decomposition of M (*not* M^{-1}).
                             icenter = noisefilter.size // 2
-                            wband = min(self.precond_width, icenter)
-                            precond_width = max(
-                                wband, min(self.precond_width, n_amp_view)
-                            )
-                            preconditioner = np.zeros(
-                                [precond_width, n_amp_view], dtype=np.float64
-                            )
-                            if detnoise != 0:
-                                preconditioner[0, :] = 1.0 / offsetvar_slice
-                            preconditioner[:wband, :] += np.repeat(
-                                noisefilter[icenter : icenter + wband, np.newaxis],
-                                n_amp_view,
-                                1,
-                            )
-                            lower = True
-                            preconditioner = scipy.linalg.cholesky_banded(
-                                preconditioner,
-                                overwrite_ab=True,
-                                lower=lower,
-                                check_finite=True,
-                            )
+                            try_width = self.precond_width
+
+                            good_cholesky = False
+                            while not good_cholesky:
+                                wband = min(try_width, icenter)
+                                precond_width = max(
+                                    wband, min(try_width, n_amp_view)
+                                )
+                                preconditioner = np.zeros(
+                                    [precond_width, n_amp_view], dtype=np.float64
+                                )
+                                if detnoise != 0:
+                                    preconditioner[0, :] = 1.0 / offsetvar_slice
+                                preconditioner[:wband, :] += np.repeat(
+                                    noisefilter[icenter : icenter + wband, np.newaxis],
+                                    n_amp_view,
+                                    1,
+                                )
+                                lower = True
+                                try:
+                                    preconditioner = scipy.linalg.cholesky_banded(
+                                        preconditioner,
+                                        overwrite_ab=True,
+                                        lower=lower,
+                                        check_finite=True,
+                                    )
+                                    good_cholesky = True
+                                except scipy.linalg.LinAlgError:
+                                    if try_width < icenter and try_width < n_amp_view:
+                                        # Still room to increase the band width
+                                        try_width *= 2
+                                        msg = f"obs {ob.name}, det {det}, view {ivw} "
+                                        msg += " scipy cholesky_banded fail, increasing"
+                                        msg += f" width to {try_width}"
+                                        log.debug(msg)
+                                    else:
+                                        # Width is now the size of the data interval
+                                        msg = f"obs {ob.name}, det {det}, view {ivw} "
+                                        msg += " scipy cholesky_banded fail with max "
+                                        msg += "width of {try_width}"
+                                        log.error(msg)
+                                        raise RuntimeError(msg)
                             if self.debug_plots is not None:
                                 axprec.plot(
                                     np.arange(len(preconditioner)),

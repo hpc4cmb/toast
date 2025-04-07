@@ -595,7 +595,7 @@ class MapmakerTest(MPITestCase):
             step_time=step_seconds * u.second,
             use_noise_prior=True,
             precond_width=1,
-            # debug_plots=testdir,
+            debug_plots=testdir,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
@@ -613,6 +613,7 @@ class MapmakerTest(MPITestCase):
             solve_rcond_threshold=1.0e-4,
             map_rcond_threshold=1.0e-4,
             iter_max=50,
+            output_dir=testdir,
             write_hits=False,
             write_map=False,
             write_cov=False,
@@ -867,8 +868,8 @@ class MapmakerTest(MPITestCase):
             noise_model=default_model.noise_model,
             step_time=step_seconds * u.second,
             use_noise_prior=True,
-            precond_width=10,
-            # debug_plots=testdir,
+            precond_width=2,
+            debug_plots=testdir,
         )
 
         tmatrix = ops.TemplateMatrix(templates=[tmpl])
@@ -886,6 +887,7 @@ class MapmakerTest(MPITestCase):
             solve_rcond_threshold=1.0e-4,
             map_rcond_threshold=1.0e-4,
             iter_max=50,
+            output_dir=testdir,
             write_hits=False,
             write_map=False,
             write_cov=False,
