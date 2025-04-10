@@ -44,6 +44,7 @@ install(FILES
     ops_scan_map.py
     ops_interpolate_healpix.py
     ops_scan_healpix.py
+    ops_scan_healpix_detector.py
     ops_scan_wcs.py
     ops_madam.py
     ops_gainscrambler.py
