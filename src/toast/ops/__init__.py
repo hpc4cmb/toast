@@ -53,6 +53,7 @@ from .run_spt3g import RunSpt3g
 from .save_hdf5 import SaveHDF5
 from .save_spt3g import SaveSpt3g
 from .scan_healpix import ScanHealpixMap, ScanHealpixMask
+from .scan_healpix_detector import ScanHealpixDetectorMap
 from .scan_map import ScanMap, ScanMask, ScanScale
 from .scan_wcs import ScanWCSMap, ScanWCSMask
 from .signal_diff_noise_model import SignalDiffNoiseModel

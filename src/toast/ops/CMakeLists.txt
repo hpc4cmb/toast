@@ -32,6 +32,7 @@ install(FILES
     pointing.py
     interpolate_healpix.py
     scan_healpix.py
+    scan_healpix_detector.py
     scan_wcs.py
     mapmaker_binning.py
     mapmaker_solve.py
