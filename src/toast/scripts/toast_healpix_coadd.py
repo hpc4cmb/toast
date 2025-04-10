@@ -134,7 +134,9 @@ def main():
             continue
         log.info(f"{prefix}Loading file {ifile + 1} / {nfile} : {infile_map}")
         inmap = read_healpix(infile_map, None, nest=True, dtype=float)
-        log.info_rank(f"{prefix}Loaded {infile_map} {inmap.shape} in", timer=timer1, comm=None)
+        log.info_rank(
+            f"{prefix}Loaded {infile_map} {inmap.shape} in", timer=timer1, comm=None
+        )
         if nnz is None:
             nnz, npix = inmap.shape
             hit_pixels = np.zeros(npix, dtype=bool)
@@ -170,9 +172,7 @@ def main():
 
         if os.path.isfile(infile_invcov):
             log.info(f"{prefix}Loading {infile_invcov}")
-            invcov = read_healpix(
-                infile_invcov, None, nest=True, dtype=float
-            )
+            invcov = read_healpix(infile_invcov, None, nest=True, dtype=float)
             if nnz2 is None:
                 nnz2, npix_test = invcov.shape
             good = invcov[0] != 0

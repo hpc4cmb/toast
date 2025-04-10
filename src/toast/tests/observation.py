@@ -17,12 +17,11 @@ from ..mpi import MPI, Comm
 from ..observation import DetectorData, Observation
 from ..observation import default_values as defaults
 from ..observation import set_default_values
-from ._helpers import (
+from .helpers import (
     close_data,
     create_ground_data,
     create_outdir,
     create_satellite_empty,
-    fake_flags,
 )
 from .mpi import MPITestCase
 
@@ -30,7 +29,7 @@ from .mpi import MPITestCase
 class ObservationTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
         self.dets = ["d00", "d01", "d02", "d03"]
         self.shapes = [(10,), (10, 4), (10, 3, 2)]

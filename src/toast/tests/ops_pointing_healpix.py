@@ -13,14 +13,14 @@ from .._libtoast import pixels_healpix, stokes_weights_IQU
 from ..accelerator import ImplementationType, accel_enabled
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
-from ._helpers import close_data, create_outdir, create_satellite_data
+from .helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
 class PointingHealpixTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def test_pointing_matrix_bounds(self):
         nside = 64

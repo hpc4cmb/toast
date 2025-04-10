@@ -535,7 +535,7 @@ void toast::qa_mult(size_t np, double const * p, size_t nq,
 void toast::qa_slerp(size_t n_time, size_t n_targettime,
                      double const * time, double const * targettime,
                      double const * q_in, double * q_interp) {
-    #pragma \
+    #pragma\
     omp parallel default(none) shared(n_time, n_targettime, time, targettime, q_in, q_interp)
     {
         double diff;

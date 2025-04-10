@@ -157,8 +157,8 @@ void toast::FFTPlanReal1DCUFFT::exec() {
 void toast::FFTPlanReal1DCUFFT::complexToHalfcomplex(const int64_t length,
                                                      const int64_t nbBatch,
                                                      double * batchedComplexInputs[],
-                                                     double * batchedHalfcomplexOutputs[])
-{
+                                                     double * batchedHalfcomplexOutputs
+                                                     []) {
     const int64_t half = length / 2;
     const bool is_even = (length % 2) == 0;
 
@@ -217,11 +217,11 @@ void toast::FFTPlanReal1DCUFFT::halfcomplexToComplex(const int64_t length,
         # pragma omp parallel for schedule(static)
         for (int64_t i = 1; i < half; i++) {
             // real
-            batchedHComplexOutputs[batchId][2 * i] = \
+            batchedHComplexOutputs[batchId][2 * i] =\
                 batchedHalfcomplexInputs[batchId][i];
 
             // imag
-            batchedHComplexOutputs[batchId][2 * i + 1] = \
+            batchedHComplexOutputs[batchId][2 * i + 1] =\
                 batchedHalfcomplexInputs[batchId][length - i];
         }
 

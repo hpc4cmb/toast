@@ -16,7 +16,7 @@ from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
-from ._helpers import (
+from .helpers import (
     close_data,
     create_fake_healpix_scanned_tod,
     create_ground_data,
@@ -32,7 +32,7 @@ XAXIS, YAXIS, ZAXIS = np.eye(3)
 class PolyFilterTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
 
     def test_polyfilter(self):

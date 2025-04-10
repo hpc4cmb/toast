@@ -3,7 +3,6 @@
 
 install(FILES
     __init__.py
-    _helpers.py
     runner.py
     mpi.py
     env.py
@@ -85,3 +84,5 @@ install(FILES
     ops_fill_gaps.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )
+
+add_subdirectory(helpers)

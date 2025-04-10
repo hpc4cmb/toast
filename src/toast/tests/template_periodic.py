@@ -18,16 +18,14 @@ from ..templates import Fourier2D, Offset, Periodic
 from ..templates.offset import plot as offplot
 from ..templates.periodic import plot as perplot
 from ..utils import rate_from_times
-from ..vis import plot_noise_estim
-from ._helpers import (
+from ..vis import plot_healpix_maps, plot_noise_estim, plot_wcs_maps
+from .helpers import (
     close_data,
     create_fake_healpix_scanned_tod,
     create_fake_wcs_scanned_tod,
     create_ground_data,
     create_outdir,
     create_satellite_data,
-    plot_healpix_maps,
-    plot_wcs_maps,
 )
 from .mpi import MPITestCase
 
@@ -35,7 +33,7 @@ from .mpi import MPITestCase
 class TemplatePeriodicTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.nside = 64
         np.random.seed(123456)
         if (

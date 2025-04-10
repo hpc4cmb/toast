@@ -9,16 +9,16 @@ import traitlets
 from astropy import units as u
 
 from ..hwp_utils import (
-    hwpss_sincos_buffer,
-    hwpss_compute_coeff_covariance,
-    hwpss_compute_coeff,
     hwpss_build_model,
+    hwpss_compute_coeff,
+    hwpss_compute_coeff_covariance,
+    hwpss_sincos_buffer,
 )
 from ..intervals import regular_intervals
 from ..mpi import MPI, flatten
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Int, Quantity, Unicode, Float, trait_docs
+from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger, flagged_noise_fill
 from .operator import Operator
 

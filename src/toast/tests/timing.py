@@ -9,7 +9,7 @@ import time
 import numpy as np
 
 from ..timing import GlobalTimers, Timer, dump, function_timer, gather_timers
-from ._helpers import create_outdir
+from .helpers import create_outdir
 from .mpi import MPITestCase
 
 
@@ -23,7 +23,7 @@ def fibonacci(n):
 class TimingTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def test_single(self):
         incr = 200
@@ -37,12 +37,12 @@ class TimingTest(MPITestCase):
         tm.report_elapsed("Test timer elapsed")
         tm.stop()
         try:
-            elapsed = tm.elapsed_seconds("This should raise since timer is stopped...")
-        except:
+            elapsed = tm.elapsed_seconds()
+        except RuntimeError:
             print("Successful exception:  elapsed_seconds() from a stopped timer")
         try:
             tm.report_elapsed("This should raise since timer is stopped...")
-        except:
+        except RuntimeError:
             print("Successful exception:  report_elapsed() for a stopped timer")
         np.testing.assert_almost_equal(tm.seconds(), elapsed, decimal=prec)
         np.testing.assert_almost_equal(tm.seconds(), dincr, decimal=prec)
@@ -52,7 +52,7 @@ class TimingTest(MPITestCase):
         time.sleep(dincr)
         try:
             tm.report("This should raise since timer not stopped...")
-        except:
+        except RuntimeError:
             print("Successful exception:  report running timer")
         self.assertTrue(tm.is_running())
         tm.stop()
@@ -69,18 +69,12 @@ class TimingTest(MPITestCase):
         gt = GlobalTimers.get()
         tnames = ["timer1", "timer2", "timer3"]
         for nm in tnames:
-            try:
-                gt.stop(nm)
-                tm.report("This should raise since timer not started...")
-            except:
-                print("Successful exception:  stop an already stopped timer")
-        for nm in tnames:
             gt.start(nm)
         for nm in tnames:
             self.assertTrue(gt.is_running(nm))
             try:
                 s = gt.seconds(nm)
-            except:
+            except RuntimeError:
                 print("Successful exception:  seconds() on running timer")
         gt.stop_all()
         gt.clear_all()

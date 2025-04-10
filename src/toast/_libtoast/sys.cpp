@@ -39,7 +39,8 @@ void init_sys(py::module & m) {
         )")
     .def("set_log_level", &toast::Environment::set_log_level,
          py::arg(
-             "level"), R"(
+             "level"),
+         R"(
             Set the Logging level.
 
             Args:
@@ -80,7 +81,8 @@ void init_sys(py::module & m) {
         )")
     .def("set_threads", &toast::Environment::set_threads,
          py::arg(
-             "nthread"), R"(
+             "nthread"),
+         R"(
             Set the number of threads in use.
 
             Args:
@@ -93,7 +95,8 @@ void init_sys(py::module & m) {
     .def("set_acc", &toast::Environment::set_acc,
          py::arg("n_acc_device"), py::arg("n_acc_proc_per_device"),
          py::arg(
-             "my_acc_device"), R"(
+             "my_acc_device"),
+         R"(
             Set the OpenACC device properties.
 
             Args:
@@ -114,7 +117,8 @@ void init_sys(py::module & m) {
              self.get_acc(&n_acc_device, &n_acc_proc_per_device, &my_acc_device);
              return py::make_tuple(n_acc_device, n_acc_proc_per_device,
                                    my_acc_device);
-         }, R"(
+         },
+         R"(
             Get the OpenACC device properties.
 
             Returns:
@@ -147,7 +151,8 @@ void init_sys(py::module & m) {
         )")
     .def(py::init <> ())
     .def(py::init <double, size_t> (), py::arg("init_time"), py::arg(
-             "init_calls"), R"(
+             "init_calls"),
+         R"(
            Create the timer with some initial state.
 
            Used mainly when pickling / communicating the timer.  The timer is created
@@ -185,7 +190,8 @@ void init_sys(py::module & m) {
              } else {
                  return self.seconds();
              }
-         }, R"(
+         },
+         R"(
             Return the elapsed seconds.
 
             Returns:
@@ -195,7 +201,8 @@ void init_sys(py::module & m) {
     .def("elapsed_seconds",
          [](toast::Timer const & self) {
              return self.elapsed_seconds();
-         }, R"(
+         },
+         R"(
             Return the elapsed seconds from a running timer without
             modifying the timer state.
 
@@ -210,7 +217,8 @@ void init_sys(py::module & m) {
              } else {
                  return self.calls();
              }
-         }, R"(
+         },
+         R"(
             Return the number of calls.
 
             Returns:
@@ -319,7 +327,8 @@ void init_sys(py::module & m) {
 
         )")
     .def("start", &toast::GlobalTimers::start, py::arg(
-             "name"), R"(
+             "name"),
+         R"(
             Start the specified timer.
 
             If the named timer does not exist, it is first created before
@@ -332,7 +341,8 @@ void init_sys(py::module & m) {
                 None
         )")
     .def("stop", &toast::GlobalTimers::stop, py::arg(
-             "name"), R"(
+             "name"),
+         R"(
             Stop the specified timer.
 
             The timer must already exist.
@@ -344,7 +354,8 @@ void init_sys(py::module & m) {
                 None
         )")
     .def("seconds", &toast::GlobalTimers::seconds, py::arg(
-             "name"), R"(
+             "name"),
+         R"(
             Get the elapsed time for a timer.
 
             The timer must be stopped.
@@ -356,7 +367,8 @@ void init_sys(py::module & m) {
                 (float): The elapsed time in seconds.
         )")
     .def("is_running", &toast::GlobalTimers::is_running, py::arg(
-             "name"), R"(
+             "name"),
+         R"(
             Is the specified timer running?
 
             Args:
@@ -387,7 +399,8 @@ void init_sys(py::module & m) {
                                                               cal));
              }
              return result;
-         }, R"(
+         },
+         R"(
             Stop all timers and return the current state.
 
             Returns:
@@ -416,7 +429,8 @@ void init_sys(py::module & m) {
     .def("verbose",
          (void (toast::Logger::*)(char const *)) & toast::Logger::verbose,
          py::arg(
-             "msg"), R"(
+             "msg"),
+         R"(
             Print a VERBOSE level message.
 
             Args:
@@ -429,7 +443,8 @@ void init_sys(py::module & m) {
     .def("debug",
          (void (toast::Logger::*)(char const *)) & toast::Logger::debug,
          py::arg(
-             "msg"), R"(
+             "msg"),
+         R"(
             Print a DEBUG level message.
 
             Args:
@@ -442,7 +457,8 @@ void init_sys(py::module & m) {
     .def("info",
          (void (toast::Logger::*)(char const *)) & toast::Logger::info,
          py::arg(
-             "msg"), R"(
+             "msg"),
+         R"(
             Print an INFO level message.
 
             Args:
@@ -455,7 +471,8 @@ void init_sys(py::module & m) {
     .def("warning",
          (void (toast::Logger::*)(char const *)) & toast::Logger::warning,
          py::arg(
-             "msg"), R"(
+             "msg"),
+         R"(
             Print a WARNING level message.
 
             Args:
@@ -468,7 +485,8 @@ void init_sys(py::module & m) {
     .def("error",
          (void (toast::Logger::*)(char const *)) & toast::Logger::error,
          py::arg(
-             "msg"), R"(
+             "msg"),
+         R"(
             Print an ERROR level message.
 
             Args:
@@ -481,7 +499,8 @@ void init_sys(py::module & m) {
     .def("critical",
          (void (toast::Logger::*)(char const *)) & toast::Logger::critical,
          py::arg(
-             "msg"), R"(
+             "msg"),
+         R"(
             Print a CRITICAL level message.
 
             Args:

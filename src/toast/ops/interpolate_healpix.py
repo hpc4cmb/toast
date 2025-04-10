@@ -2,13 +2,14 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
 import healpy as hp
+import numpy as np
 import traitlets
 from astropy import units as u
 from pshmem import MPIShared
 
 import toast.qarray as qa
+
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import read_healpix
 from ..timing import function_timer
@@ -213,7 +214,11 @@ class InterpolateHealpixMap(Operator):
                     ref = ob.detdata[det_data_key][det]
                     nside = hp.get_nside(map_value)
                     interp_pix, interp_weight = hp.pixelfunc.get_interp_weights(
-                        nside, theta, phi, nest=False, lonlat=False,
+                        nside,
+                        theta,
+                        phi,
+                        nest=False,
+                        lonlat=False,
                     )
                     sig = np.zeros_like(ref)
                     for inz, map_column in enumerate(map_value):

@@ -3,20 +3,17 @@
 # a BSD-style license that can be found in the LICENSE file.
 """Tools for generating fake sky maps."""
 
-import numpy as np
-import healpy as hp
-
-from astropy import units as u
 import astropy.io.fits as af
-
+import healpy as hp
+import numpy as np
+from astropy import units as u
 from scipy.ndimage import gaussian_filter
 
-from .. import ops
-from .. import rng
-from ..observation import default_values as defaults
-from ..pixels import PixelData
-from ..pixels_io_healpix import read_healpix_fits
-from ..pixels_io_wcs import read_wcs_fits
+from ... import ops, rng
+from ...observation import default_values as defaults
+from ...pixels import PixelData
+from ...pixels_io_healpix import read_healpix_fits
+from ...pixels_io_wcs import read_wcs_fits
 
 
 def create_fake_healpix_file(

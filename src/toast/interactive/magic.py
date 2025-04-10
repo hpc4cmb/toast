@@ -7,10 +7,10 @@ from argparse import ArgumentParser
 
 from IPython.core.magic import (
     Magics,
-    magics_class,
-    line_magic,
     cell_magic,
     line_cell_magic,
+    line_magic,
+    magics_class,
     needs_local_scope,
 )
 

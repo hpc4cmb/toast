@@ -5,7 +5,7 @@
 
 import numpy as np
 
-from ..observation import default_values as defaults
+from ...observation import default_values as defaults
 
 
 def fake_flags(

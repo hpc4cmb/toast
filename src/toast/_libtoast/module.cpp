@@ -67,7 +67,8 @@ PYBIND11_MODULE(_libtoast, m) {
             free(carg);
             return;
         }, py::arg(
-            "argv"), R"(
+            "argv"),
+        R"(
         Run serial compiled tests from the internal libtoast.
 
         Args:

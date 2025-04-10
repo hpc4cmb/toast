@@ -22,11 +22,10 @@ import numpy as np
 from astropy import units as u
 
 import toast
-from toast.mpi import MPI
-
 import toast.io
-import toast.schedule
 import toast.ops
+import toast.schedule
+from toast.mpi import MPI
 
 
 def main():

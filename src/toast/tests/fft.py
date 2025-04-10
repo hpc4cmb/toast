@@ -7,17 +7,17 @@ import os
 import numpy as np
 import scipy.signal
 
-from ..fft import r1d_backward, r1d_forward, convolve
+from ..fft import convolve, r1d_backward, r1d_forward
 from ..rng import random
 from ..vis import set_matplotlib_backend
-from ._helpers import create_outdir
+from .helpers import create_outdir
 from .mpi import MPITestCase
 
 
 class FFTTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.length = 65536
         self.input_one = random(self.length, counter=[0, 0], key=[0, 0])
         self.compare_one = np.copy(self.input_one)

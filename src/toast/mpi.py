@@ -114,8 +114,8 @@ class Comm(object):
     """Class which represents a two-level hierarchy of MPI communicators.
 
     A Comm object splits the full set of processes into groups of size
-    "group".  If group_size does not divide evenly into the size of the given
-    communicator, then those processes remain idle.
+    `groupsize`.  If groupsize does not divide evenly into the size of the given
+    communicator, then some processes remain idle.
 
     A Comm object stores several MPI communicators:  The "world" communicator
     given here, which contains all processes to consider, a "group"
@@ -137,7 +137,7 @@ class Comm(object):
 
     Args:
         world (mpi4py.MPI.Comm): the MPI communicator containing all processes.
-        group (int): the size of each process group.
+        groupsize (int): the size of each process group.
 
     """
 

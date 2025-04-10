@@ -20,7 +20,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_inv(nquat, raw);
             return;
         }, py::arg(
-            "data"), R"(
+            "data"),
+        R"(
         Invert the array of quaternions.
 
         The operation is done in place.  To guarantee SIMD vectorization, the
@@ -53,7 +54,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_amplitude(nquat, 4, 4, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the amplitude (norm) of the input quaternions.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -88,7 +90,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_normalize(nquat, 4, 4, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Normalize a quaternion array.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -113,7 +116,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_normalize_inplace(nquat, 4, 4, raw);
             return;
         }, py::arg(
-            "data"), R"(
+            "data"),
+        R"(
         Normalize a quaternion array in place.
 
         The data is modified in place.  To guarantee SIMD vectorization, the
@@ -153,7 +157,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_rotate(nquat, qinraw, nvec, vinraw, voutraw);
             return;
         }, py::arg("q_in"), py::arg("v_in"), py::arg(
-            "v_out"), R"(
+            "v_out"),
+        R"(
         Rotate vectors with quaternions.
 
         The number of quaternions and vectors passed in should either be
@@ -199,7 +204,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_mult(np, pinraw, nq, qinraw, outraw);
             return;
         }, py::arg("p_in"), py::arg("q_in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Multiply quaternion arrays.
 
         The number of quaternions in both input arrays should either be
@@ -250,7 +256,8 @@ void init_math_qarray(py::module & m) {
                             qoutraw);
             return;
         }, py::arg("time"), py::arg("targettime"), py::arg("q_in"), py::arg(
-            "q_out"), R"(
+            "q_out"),
+        R"(
         Spherical Linear Interpolation of quaternions.
 
         For input quaternions at the given times, interpolate these to the
@@ -291,7 +298,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_exp(nin, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the exponential of a quaternion array.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -327,7 +335,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_ln(nin, inraw, outraw);
             return;
         }, py::arg("in"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Compute the natural log of a quaternion array.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -367,7 +376,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_pow(nin, npw, pwraw, inraw, outraw);
             return;
         }, py::arg("in"), py::arg("pw"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Raise a quaternion array to a real power.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -411,7 +421,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_from_axisangle(naxis, axisraw, nang, angleraw, outraw);
             return;
         }, py::arg("axis"), py::arg("angle"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Create quaternions from axis / angle information.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -453,7 +464,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_to_axisangle(nang, qinraw, axisraw, angleraw);
             return;
         }, py::arg("q_in"), py::arg("axis"), py::arg(
-            "angle"), R"(
+            "angle"),
+        R"(
         Convert quaternions into axis / angle representation.
 
         The results are stored in the output buffers.  To guarantee SIMD
@@ -492,7 +504,8 @@ void init_math_qarray(py::module & m) {
             }
             return;
         }, py::arg("q_in"), py::arg(
-            "mat"), R"(
+            "mat"),
+        R"(
         Convert quaternions into rotation matrices.
 
         The results are stored in the output buffers.  To guarantee SIMD
@@ -530,7 +543,8 @@ void init_math_qarray(py::module & m) {
             }
             return;
         }, py::arg("mat"), py::arg(
-            "q_out"), R"(
+            "q_out"),
+        R"(
         Convert rotation matrices into quaternions.
 
         The results are stored in the output buffer.  To guarantee SIMD
@@ -571,7 +585,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_from_vectors(nv1, v1raw, v2raw, outraw);
             return;
         }, py::arg("vec1"), py::arg("vec2"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Create quaternions from two vectors.
 
         Each output quaternion describes the rotation from vec1 to vec2.
@@ -655,7 +670,8 @@ void init_math_qarray(py::module & m) {
             }
             return;
         }, py::arg("theta"), py::arg("phi"), py::arg("psi"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Create quaternions from ISO spherical coordinate rotations.
 
         The theta, phi, psi angles describe standard ZYZ rotations:  a phi rotation
@@ -768,7 +784,8 @@ void init_math_qarray(py::module & m) {
 
             return;
         }, py::arg("q"), py::arg("theta"), py::arg("phi"), py::arg(
-            "psi"), R"(
+            "psi"),
+        R"(
         Convert quaternions to ISO spherical coordinates.
 
         The theta, phi, psi angles describe standard ZYZ rotations:  a phi rotation
@@ -819,7 +836,8 @@ void init_math_qarray(py::module & m) {
             return;
         }, py::arg("theta"), py::arg("phi"), py::arg("pa"), py::arg("out"),
         py::arg(
-            "IAU") = false, R"(
+            "IAU") = false,
+        R"(
         Create quaternions from spherical coordinates and position angle.
 
         The theta angle is measured down from the North pole and phi is
@@ -874,7 +892,8 @@ void init_math_qarray(py::module & m) {
             return;
         }, py::arg("q_in"), py::arg("theta"), py::arg("phi"), py::arg("pa"),
         py::arg(
-            "IAU") = false, R"(
+            "IAU") = false,
+        R"(
         Convert quaternions to spherical coordinates and position angle.
 
         The theta angle is measured down from the North pole and phi is
@@ -923,7 +942,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_from_position(ntheta, thetaraw, phiraw, outraw);
             return;
         }, py::arg("theta"), py::arg("phi"), py::arg(
-            "out"), R"(
+            "out"),
+        R"(
         Create quaternions from spherical coordinates.
 
         The theta angle is measured down from the North pole and phi is
@@ -968,7 +988,8 @@ void init_math_qarray(py::module & m) {
             toast::qa_to_position(ntheta, qinraw, thetaraw, phiraw);
             return;
         }, py::arg("q_in"), py::arg("theta"), py::arg(
-            "phi"), R"(
+            "phi"),
+        R"(
         Convert quaternions to spherical coordinates.
 
         The theta angle is measured down from the North pole and phi is

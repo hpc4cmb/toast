@@ -9,10 +9,10 @@ import traitlets
 from astropy import units as u
 from scipy.optimize import Bounds, curve_fit, least_squares
 
+from ..mpi import flatten
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
-from ..mpi import flatten
 from ..timing import Timer, function_timer
 from ..traits import Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger

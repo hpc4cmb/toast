@@ -12,14 +12,13 @@ import numpy as np
 from astropy import units as u
 from astropy.table import vstack as table_vstack
 
-from .. import ops
-from ..data import Data
-from ..instrument import Focalplane, GroundSite, Telescope
-from ..instrument_sim import fake_hexagon_focalplane
-from ..observation import default_values as defaults
-from ..schedule import GroundSchedule
-from ..schedule_sim_ground import run_scheduler
-
+from ... import ops
+from ...data import Data
+from ...instrument import Focalplane, GroundSite, Telescope
+from ...instrument_sim import fake_hexagon_focalplane
+from ...observation import default_values as defaults
+from ...schedule import GroundSchedule
+from ...schedule_sim_ground import run_scheduler
 from .utils import create_comm
 
 

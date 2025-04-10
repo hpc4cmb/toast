@@ -105,7 +105,7 @@ void register_ops_scan_map(py::module & m, char const * name) {
               int dev = omgr.get_device();
               bool offload = (!omgr.device_is_host()) && use_accel;
 
-// This is used to return the actual shape of each buffer
+              // This is used to return the actual shape of each buffer
               std::vector <int64_t> temp_shape(3);
 
               int32_t * raw_pixel_index = extract_buffer <int32_t> (
@@ -122,7 +122,7 @@ void register_ops_scan_map(py::module & m, char const * name) {
                   weight_index, "weight_index", 1, temp_shape, {n_det}
               );
 
-// Handle the case of either 2 or 3 dims
+              // Handle the case of either 2 or 3 dims
               auto winfo = weights.request();
               double * raw_weights;
               int64_t nnz;
@@ -180,38 +180,39 @@ void register_ops_scan_map(py::module & m, char const * name) {
                       }
                   }
 
-                  # pragma omp target data map(          \
-                  to : raw_weight_index[0 : n_det],      \
-                  raw_pixel_index[0 : n_det],            \
-                  raw_data_index[0 : n_det],             \
-                  raw_global2local[0 : n_global_submap], \
-                  n_view,                                \
-                  n_det,                                 \
-                  n_samp,                                \
-                  max_interval_size,                     \
-                  nnz,                                   \
-                  n_pix_submap,                          \
-                  data_scale,                            \
-                  should_scale,                          \
-                  should_subtract,                       \
-                  should_zero                            \
+                  # pragma omp target data map(\
+                  to : raw_weight_index[0 : n_det],\
+                  raw_pixel_index[0 : n_det],\
+                  raw_data_index[0 : n_det],\
+                  raw_global2local[0 : n_global_submap],\
+                  n_view,\
+                  n_det,\
+                  n_samp,\
+                  max_interval_size,\
+                  nnz,\
+                  n_pix_submap,\
+                  data_scale,\
+                  should_scale,\
+                  should_subtract,\
+                  should_zero\
                   )
                   {
-                      # pragma omp target teams distribute parallel for collapse(3) \
-                      schedule(static,1)                                            \
-                      is_device_ptr(                                                \
-                      dev_pixels,                                                   \
-                      dev_weights,                                                  \
-                      dev_det_data,                                                 \
-                      dev_intervals,                                                \
-                      dev_mapdata                                                   \
+                      # pragma omp target teams distribute parallel for collapse(3)\
+                      schedule(static,1)\
+                      is_device_ptr(\
+                      dev_pixels,\
+                      dev_weights,\
+                      dev_det_data,\
+                      dev_intervals,\
+                      dev_mapdata\
                       )
                       for (int64_t idet = 0; idet < n_det; idet++) {
                           for (int64_t iview = 0; iview < n_view; iview++) {
                               for (int64_t isamp = 0; isamp < max_interval_size;
                                    isamp++) {
                                   // adjust for the actual start of the interval
-                                  int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+                                  int64_t adjusted_isamp = isamp +
+                                                           dev_intervals[iview].first;
 
                                   // check if the value is out of range for the current
                                   // interval

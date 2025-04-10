@@ -9,7 +9,7 @@ import numpy.testing as nt
 
 from ..mpi import MPILock, MPIShared
 from ..utils import Environment
-from ._helpers import create_comm
+from .helpers import create_comm
 from .mpi import MPITestCase
 
 

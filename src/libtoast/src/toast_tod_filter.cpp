@@ -34,7 +34,7 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
     double fzero = 0.0;
     double fone = 1.0;
 
-    #pragma \
+    #pragma\
     omp parallel for schedule(static) default(none) shared(order, signals, flags, n, nsignal, starts, stops, nscan, norder_max, upper, lower, notrans, trans, fzero, fone)
     for (size_t iscan = 0; iscan < nscan; ++iscan) {
         int64_t start = starts[iscan];
@@ -164,7 +164,7 @@ void toast::bin_proj(double * signal, double * templates,
         proj[row] = 0;
     }
 
-    #pragma \
+    #pragma\
     omp parallel for schedule(static) default(none) shared(proj, templates, signal, good, ntemplate, nsample)
     for (size_t row = 0; row < ntemplate; ++row) {
         double * ptemplate = templates + row * nsample;
@@ -184,7 +184,7 @@ void toast::bin_invcov(double * templates, uint8_t * good, double * invcov,
         }
     }
 
-    #pragma \
+    #pragma\
     omp parallel default(none) shared(invcov, templates, good, ntemplate, nsample)
     {
         int nthread = 1;
@@ -231,7 +231,7 @@ void toast::chebyshev(double * x, double * templates, size_t start_order,
     const size_t buflen = 1000;
     size_t nbuf = nsample / buflen + 1;
 
-    #pragma omp parallel for schedule(static) default(none) \
+    #pragma omp parallel for schedule(static) default(none)\
     shared(x, templates, start_order, stop_order, nsample, nbuf)
     for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
         size_t istart = ibuf * buflen;
@@ -286,7 +286,7 @@ void toast::legendre(double * x, double * templates, size_t start_order,
     const size_t buflen = 1000;
     size_t nbuf = nsample / buflen + 1;
 
-    #pragma omp parallel for schedule(static) default(none) \
+    #pragma omp parallel for schedule(static) default(none)\
     shared(x, templates, start_order, stop_order, nsample, nbuf)
     for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
         size_t istart = ibuf * buflen;
@@ -335,7 +335,7 @@ void toast::add_templates(double * signal, double * templates, double * coeff,
     const size_t buflen = 1000;
     size_t nbuf = nsample / buflen + 1;
 
-    #pragma \
+    #pragma\
     omp parallel for schedule(static) default(none) shared(signal, templates, coeff, nsample, ntemplate, nbuf)
     for (size_t ibuf = 0; ibuf < nbuf; ++ibuf) {
         size_t istart = ibuf * buflen;

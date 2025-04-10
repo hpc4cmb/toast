@@ -15,11 +15,11 @@ from ..accelerator import ImplementationType, accel_enabled
 from ..intervals import IntervalList, interval_dtype
 from ..observation import default_values as defaults
 from ..vis import plot_projected_quats
-from ._helpers import (
+from .helpers import (
     close_data,
+    create_ground_data,
     create_outdir,
     create_satellite_data,
-    create_ground_data,
 )
 from .mpi import MPITestCase
 
@@ -27,7 +27,7 @@ from .mpi import MPITestCase
 class PointingDetectorTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         if (
             ("CONDA_BUILD" in os.environ)
             or ("CIBUILDWHEEL" in os.environ)

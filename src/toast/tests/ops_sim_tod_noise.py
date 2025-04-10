@@ -13,14 +13,14 @@ from .. import rng as rng
 from ..noise import Noise
 from ..ops.sim_tod_noise import sim_noise_timestream
 from ..vis import set_matplotlib_backend
-from ._helpers import close_data, create_outdir, create_satellite_data
+from .helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
 
 class SimNoiseTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.oversample = 2
         self.nmc = 100
 

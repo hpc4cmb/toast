@@ -1,10 +1,10 @@
 # Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
-"""Tools for starting up interactive sessions.
-"""
+"""Tools for starting up interactive sessions."""
 
 import os
+
 from IPython.core.extensions import ExtensionManager
 
 
@@ -28,6 +28,7 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
     if procs > 1:
         try:
             import ipyparallel as ipp
+
             ipp.bind_kernel()
             cluster = ipp.Cluster(engines="mpi", n=procs)
             client = cluster.start_and_connect_sync()
@@ -37,6 +38,7 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
                 # shared node.
                 if procs > 1:
                     import psutil
+
                     psutil.Process().nice(
                         20 if psutil.POSIX else psutil.IDLE_PRIORITY_CLASS
                     )
@@ -54,4 +56,3 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
         # Must be running outside IPython shell
         pass
     return procs
-

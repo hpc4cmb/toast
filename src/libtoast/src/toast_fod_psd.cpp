@@ -25,9 +25,9 @@ void toast::fod_autosums(int64_t n, double const * x, uint8_t const * good,
         }
     }
 
-    #pragma                                            \
-    omp parallel for default(none)                     \
-    shared(n, gd, lagmax, xgood, sums, hits, all_sums) \
+    #pragma\
+    omp parallel for default(none)\
+    shared(n, gd, lagmax, xgood, sums, hits, all_sums)\
     schedule(static, 100)
     for (int64_t lag = 0; lag < lagmax; ++lag) {
         int64_t j = lag;
@@ -65,9 +65,9 @@ void toast::fod_crosssums(int64_t n, double const * x, double const * y,
         }
     }
 
-    #pragma                                                              \
-    omp parallel for default(none)                                       \
-    shared(n, gd, lagmax, xgood, ygood, sums, hits, all_sums, symmetric) \
+    #pragma\
+    omp parallel for default(none)\
+    shared(n, gd, lagmax, xgood, ygood, sums, hits, all_sums, symmetric)\
     schedule(static, 100)
     for (int64_t lag = 0; lag < lagmax; ++lag) {
         int64_t i, j;

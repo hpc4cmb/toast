@@ -226,7 +226,8 @@ void init_tod_filter(py::module & m) {
               if (ntemplate != info_proj.size) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
-                  o << "templates and proj must have consistent sizes, not " << ntemplate << ", " << info_proj.size;
+                  o << "templates and proj must have consistent sizes, not " <<
+            ntemplate << ", " << info_proj.size;
                   log.error(o.str().c_str());
                   throw std::runtime_error(o.str().c_str());
               }
@@ -263,7 +264,8 @@ void init_tod_filter(py::module & m) {
               if (ntemplate * ntemplate != info_invcov.size) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
-                  o << "templates and invcov must have consistent sizes, not " << ntemplate << ", " << info_invcov.size;
+                  o << "templates and invcov must have consistent sizes, not " <<
+            ntemplate << ", " << info_invcov.size;
                   log.error(o.str().c_str());
                   throw std::runtime_error(o.str().c_str());
               }
@@ -364,7 +366,8 @@ void init_tod_filter(py::module & m) {
           }, py::arg("order"), py::arg("flags"), py::arg("signals"), py::arg("starts"),
           py::arg(
               "stops"), py::arg(
-              "use_accel"), R"(
+              "use_accel"),
+          R"(
         Fit and subtract a polynomial from one or more signals.
 
         Args:
@@ -393,7 +396,7 @@ void init_tod_filter(py::module & m) {
               py::buffer_info info_signals = signals.request();
               py::buffer_info info_coeff = coeff.request();
 
-// Check dimensions
+              // Check dimensions
               if (info_signals.ndim != 2) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
@@ -448,12 +451,14 @@ void init_tod_filter(py::module & m) {
                             o.str().c_str());
               }
               int32_t ngroup = info_coeff.shape[1];
-              int32_t * raw_detgroups = reinterpret_cast <int32_t *> (info_detgroups.ptr);
+              int32_t * raw_detgroups =
+                  reinterpret_cast <int32_t *> (info_detgroups.ptr);
               for (int32_t i = 0; i < ndet; ++i) {
                   if (raw_detgroups[i] >= ngroup) {
                       auto log = toast::Logger::get();
                       std::ostringstream o;
-                      o << "det " << i << ": group " << raw_detgroups[i] << " invalid for " << ngroup << " groups";
+                      o << "det " << i << ": group " << raw_detgroups[i] <<
+                " invalid for " << ngroup << " groups";
                       log.error(o.str().c_str());
                       throw std::runtime_error(o.str().c_str());
                   }
@@ -471,7 +476,8 @@ void init_tod_filter(py::module & m) {
           py::arg("masks"),
           py::arg(
               "coeff"), py::arg(
-              "use_accel"), R"(
+              "use_accel"),
+          R"(
         Solves for 2D polynomial coefficients at each sample.
 
         Args:

@@ -1,13 +1,13 @@
 # Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
-"""Utilities useful in interactive sessions."""
+"""Utilities useful in synthetic tests."""
 
 import os
 
 import numpy as np
 
-from ..mpi import Comm
+from ...mpi import Comm
 
 
 def create_outdir(mpicomm, topdir=None, subdir=None):
@@ -32,10 +32,7 @@ def create_outdir(mpicomm, topdir=None, subdir=None):
     if subdir is not None:
         retdir = os.path.join(topdir, subdir)
     if (mpicomm is None) or (mpicomm.rank == 0):
-        if not os.path.isdir(topdir):
-            os.mkdir(topdir)
-        if not os.path.isdir(retdir):
-            os.mkdir(retdir)
+        os.makedirs(retdir, exist_ok=True)
     if mpicomm is not None:
         mpicomm.barrier()
     return retdir

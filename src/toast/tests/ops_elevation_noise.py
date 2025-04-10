@@ -11,14 +11,14 @@ from astropy import units as u
 from .. import ops as ops
 from ..data import Data
 from ..mpi import MPI
-from ._helpers import close_data, create_ground_data, create_outdir
+from .helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
 
 class ElevationNoiseTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def test_create_new(self):
         rank = 0

@@ -142,7 +142,7 @@ void toast::rng_multi_dist_uint64(size_t nstream,
                                   uint64_t const * counter1,
                                   uint64_t const * counter2,
                                   uint64_t ** data) {
-    #pragma omp parallel for schedule(dynamic) default(none) shared(nstream, \
+    #pragma omp parallel for schedule(dynamic) default(none) shared(nstream,\
     ndata, key1, key2, counter1, counter2, data)
     for (size_t s = 0; s < nstream; ++s) {
         toast::rng_dist_uint64(ndata[s], key1[s], key2[s],
@@ -164,7 +164,7 @@ void toast::rng_multi_dist_uniform_01(size_t nstream,
                                       uint64_t const * counter1,
                                       uint64_t const * counter2,
                                       double ** data) {
-    #pragma omp parallel for schedule(dynamic) default(none) shared(nstream, \
+    #pragma omp parallel for schedule(dynamic) default(none) shared(nstream,\
     ndata, key1, key2, counter1, counter2, data)
     for (size_t s = 0; s < nstream; ++s) {
         toast::rng_dist_uniform_01(ndata[s], key1[s], key2[s],
@@ -186,7 +186,7 @@ void toast::rng_multi_dist_uniform_11(size_t nstream,
                                       uint64_t const * counter1,
                                       uint64_t const * counter2,
                                       double ** data) {
-    #pragma omp parallel for schedule(dynamic) default(none) shared(nstream, \
+    #pragma omp parallel for schedule(dynamic) default(none) shared(nstream,\
     ndata, key1, key2, counter1, counter2, data)
     for (size_t s = 0; s < nstream; ++s) {
         toast::rng_dist_uniform_11(ndata[s], key1[s], key2[s],
@@ -208,7 +208,7 @@ void toast::rng_multi_dist_normal(size_t nstream,
                                   uint64_t const * counter1,
                                   uint64_t const * counter2,
                                   double ** data) {
-    #pragma omp parallel for schedule(dynamic) default(none) shared(nstream, \
+    #pragma omp parallel for schedule(dynamic) default(none) shared(nstream,\
     ndata, key1, key2, counter1, counter2, data)
     for (size_t s = 0; s < nstream; ++s) {
         toast::rng_dist_normal(ndata[s], key1[s], key2[s],

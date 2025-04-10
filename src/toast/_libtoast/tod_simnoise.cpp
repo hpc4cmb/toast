@@ -37,7 +37,8 @@ void init_tod_simnoise(py::module & m) {
           py::arg("obsindx"), py::arg("detindx"), py::arg("rate"),
           py::arg("firstsamp"), py::arg("oversample"), py::arg("freq"),
           py::arg("psd"), py::arg(
-              "noise"), R"(
+              "noise"),
+          R"(
         Generate a noise timestream, given a starting RNG state.
 
         Use the RNG parameters to generate unit-variance Gaussian samples
@@ -106,7 +107,8 @@ void init_tod_simnoise(py::module & m) {
               if ((info_psd.shape[0] != ndet) || (info_noise.shape[0] != ndet)) {
                   auto log = toast::Logger::get();
                   std::ostringstream o;
-                  o << "first dimension of psds and noise should match length of detindices.";
+                  o <<
+            "first dimension of psds and noise should match length of detindices.";
                   log.error(o.str().c_str());
                   throw std::runtime_error(o.str().c_str());
               }
@@ -134,7 +136,8 @@ void init_tod_simnoise(py::module & m) {
           py::arg("obsindx"), py::arg("rate"),
           py::arg("firstsamp"), py::arg("oversample"), py::arg("detindices"),
           py::arg("freq"), py::arg("psds"), py::arg(
-              "noise"), R"(
+              "noise"),
+          R"(
         Generate multiple noise timestreams in parallel.
 
         Use the RNG parameters to generate unit-variance Gaussian samples

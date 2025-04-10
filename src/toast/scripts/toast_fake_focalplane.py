@@ -4,8 +4,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-"""Generate a focalplane file compatible with the example workflows.
-"""
+"""Generate a focalplane file compatible with the example workflows."""
 
 import argparse
 import sys

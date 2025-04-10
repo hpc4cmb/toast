@@ -240,34 +240,35 @@ void init_ops_stokes_weights(py::module & m) {
                     }
                 }
 
-                # pragma omp target data map(     \
-                to : raw_weight_index[0 : n_det], \
-                raw_quat_index[0 : n_det],        \
-                raw_epsilon[0 : n_det],           \
-                raw_gamma[0 : n_det],             \
-                raw_cal[0 : n_det],               \
-                U_sign,                           \
-                n_view,                           \
-                n_det,                            \
-                n_samp,                           \
-                max_interval_size                 \
+                # pragma omp target data map(\
+                to : raw_weight_index[0 : n_det],\
+                raw_quat_index[0 : n_det],\
+                raw_epsilon[0 : n_det],\
+                raw_gamma[0 : n_det],\
+                raw_cal[0 : n_det],\
+                U_sign,\
+                n_view,\
+                n_det,\
+                n_samp,\
+                max_interval_size\
                 )
                 {
                     if (!use_hwp) {
                         // No HWP
-                        # pragma omp target teams distribute parallel for collapse(3) \
-                        schedule(static,1)                                            \
-                        is_device_ptr(                                                \
-                        dev_weights,                                                  \
-                        dev_quats,                                                    \
-                        dev_intervals                                                 \
+                        # pragma omp target teams distribute parallel for collapse(3)\
+                        schedule(static,1)\
+                        is_device_ptr(\
+                        dev_weights,\
+                        dev_quats,\
+                        dev_intervals\
                         )
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 for (int64_t isamp = 0; isamp < max_interval_size;
                                      isamp++) {
                                     // adjust for the actual start of the interval
-                                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+                                    int64_t adjusted_isamp = isamp +
+                                                             dev_intervals[iview].first;
 
                                     // check if the value is out of range for the
                                     // current interval
@@ -292,20 +293,21 @@ void init_ops_stokes_weights(py::module & m) {
                         }
                     } else {
                         // We have a HWP
-                        # pragma omp target teams distribute parallel for collapse(3) \
-                        schedule(static,1)                                            \
-                        is_device_ptr(                                                \
-                        dev_weights,                                                  \
-                        dev_quats,                                                    \
-                        dev_hwp,                                                      \
-                        dev_intervals                                                 \
+                        # pragma omp target teams distribute parallel for collapse(3)\
+                        schedule(static,1)\
+                        is_device_ptr(\
+                        dev_weights,\
+                        dev_quats,\
+                        dev_hwp,\
+                        dev_intervals\
                         )
                         for (int64_t idet = 0; idet < n_det; idet++) {
                             for (int64_t iview = 0; iview < n_view; iview++) {
                                 for (int64_t isamp = 0; isamp < max_interval_size;
                                      isamp++) {
                                     // adjust for the actual start of the interval
-                                    int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+                                    int64_t adjusted_isamp = isamp +
+                                                             dev_intervals[iview].first;
 
                                     // check if the value is out of range for the
                                     // current interval
@@ -446,25 +448,27 @@ void init_ops_stokes_weights(py::module & m) {
                     }
                 }
 
-                # pragma omp target data map(     \
-                to : raw_weight_index[0 : n_det], \
-                n_view,                           \
-                n_det,                            \
-                n_samp,                           \
-                raw_cal[0 : n_det]                \
+                # pragma omp target data map(\
+                to : raw_weight_index[0 : n_det],\
+                n_view,\
+                n_det,\
+                n_samp,\
+                raw_cal[0 : n_det]\
                 )
                 {
-                    # pragma omp target teams distribute parallel for collapse(3) \
-                    schedule(static,1)                                            \
-                    is_device_ptr(                                                \
-                    dev_weights,                                                  \
-                    dev_intervals                                                 \
+                    # pragma omp target teams distribute parallel for collapse(3)\
+                    schedule(static,1)\
+                    is_device_ptr(\
+                    dev_weights,\
+                    dev_intervals\
                     )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+                            for (int64_t isamp = 0; isamp < max_interval_size;
+                                 isamp++) {
                                 // Adjust for the actual start of the interval
-                                int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+                                int64_t adjusted_isamp = isamp +
+                                                         dev_intervals[iview].first;
 
                                 // Check if the value is out of range for the current
                                 // interval

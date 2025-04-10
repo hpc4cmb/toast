@@ -10,7 +10,7 @@ import numpy.testing as nt
 
 from .. import ops as ops
 from ..weather import SimWeather, Weather
-from ._helpers import create_ground_data
+from .helpers import create_ground_data
 from .mpi import MPITestCase
 
 

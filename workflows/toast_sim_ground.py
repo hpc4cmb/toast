@@ -25,8 +25,6 @@ an interactive python session.
 
 """
 
-import toast
-
 import argparse
 import datetime
 import os

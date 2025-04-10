@@ -17,12 +17,11 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import (
+from .helpers import (
     close_data,
     create_fake_healpix_scanned_tod,
     create_ground_data,
     create_outdir,
-    create_satellite_data,
     fake_flags,
 )
 from .mpi import MPITestCase
@@ -79,7 +78,7 @@ def plot_noise_estim_compare(
 class NoiseEstimTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
 
     def test_algorithm(self):

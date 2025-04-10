@@ -1070,7 +1070,7 @@ def plot_focalplane(
     this function, so that it is only imported when the function is actually called.
 
     Args:
-        focalplane (Focalplane):  The focalplane to plot. Single focalplane of 
+        focalplane (Focalplane):  The focalplane to plot. Single focalplane of
             a list of focalplanes.
         width (Quantity):  Width of plot.
         height (Quantity):  Height of plot.
@@ -1100,7 +1100,9 @@ def plot_focalplane(
     elif isinstance(focalplane, list):
         fp_list = focalplane
     else:
-        raise RuntimeError("focalplane has to a Focalplane instance or a list of focalplane instances.")
+        raise RuntimeError(
+            "focalplane has to a Focalplane instance or a list of focalplane instances."
+        )
 
     if outfile is not None:
         set_matplotlib_backend(backend="pdf")
@@ -1252,7 +1254,7 @@ def plot_focalplane(
                 fc=detcolor,
                 ec=detcolor,
                 length_includes_head=True,
-        )
+            )
 
     # Draw a "mini" coordinate axes for reference
     xmini = -0.8 * half_width

@@ -18,9 +18,11 @@ class TOASTenvTest : public ::testing::Test {
 
         ~TOASTenvTest() {}
 
-        virtual void SetUp() {}
+        virtual void SetUp() {
+        }
 
-        virtual void TearDown() {}
+        virtual void TearDown() {
+        }
 };
 
 class TOASTutilsTest : public ::testing::Test {
@@ -30,9 +32,11 @@ class TOASTutilsTest : public ::testing::Test {
 
         ~TOASTutilsTest() {}
 
-        virtual void SetUp() {}
+        virtual void SetUp() {
+        }
 
-        virtual void TearDown() {}
+        virtual void TearDown() {
+        }
 };
 
 
@@ -44,7 +48,8 @@ class TOASTqarrayTest : public ::testing::Test {
         ~TOASTqarrayTest() {}
 
         virtual void SetUp();
-        virtual void TearDown() {}
+        virtual void TearDown() {
+        }
 
         toast::AlignedVector <double> q1;
         toast::AlignedVector <double> q1inv;
@@ -68,7 +73,8 @@ class TOASTrngTest : public ::testing::Test {
         ~TOASTrngTest() {}
 
         virtual void SetUp();
-        virtual void TearDown() {}
+        virtual void TearDown() {
+        }
 
         static const int64_t size;
         static const uint64_t counter[];
@@ -123,9 +129,11 @@ class TOASThealpixTest : public ::testing::Test {
 
         ~TOASThealpixTest() {}
 
-        virtual void SetUp() {}
+        virtual void SetUp() {
+        }
 
-        virtual void TearDown() {}
+        virtual void TearDown() {
+        }
 };
 
 
@@ -136,9 +144,11 @@ class TOASTfftTest : public ::testing::Test {
 
         ~TOASTfftTest() {}
 
-        virtual void SetUp() {}
+        virtual void SetUp() {
+        }
 
-        virtual void TearDown() {}
+        virtual void TearDown() {
+        }
 
         void runbatch(int64_t nbatch,
                       toast::FFTPlanReal1D::pshr forward,
@@ -156,9 +166,11 @@ class TOASTcovTest : public ::testing::Test {
 
         ~TOASTcovTest() {}
 
-        virtual void SetUp() {}
+        virtual void SetUp() {
+        }
 
-        virtual void TearDown() {}
+        virtual void TearDown() {
+        }
 
         static const int64_t nsm;
         static const int64_t npix;
@@ -190,9 +202,11 @@ class TOASTpolyfilterTest : public ::testing::Test {
 
         ~TOASTpolyfilterTest() {}
 
-        virtual void SetUp() {}
+        virtual void SetUp() {
+        }
 
-        virtual void TearDown() {}
+        virtual void TearDown() {
+        }
 
         static const int64_t order, n;
 };

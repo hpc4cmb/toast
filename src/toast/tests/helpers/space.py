@@ -3,23 +3,22 @@
 # a BSD-style license that can be found in the LICENSE file.
 """Tools for creating fake satellite instruments."""
 
-from datetime import datetime
 import re
+from datetime import datetime
 
-import numpy as np
 import healpy as hp
+import numpy as np
 from astropy import units as u
 from astropy.table import Column
 
-from .. import ops
-from .. import qarray as qa
-from ..data import Data
-from ..instrument import Focalplane, SpaceSite, Telescope
-from ..instrument_sim import fake_boresight_focalplane, fake_hexagon_focalplane
-from ..observation import default_values as defaults
-from ..observation import Observation
-from ..schedule_sim_satellite import create_satellite_schedule
-
+from ... import ops
+from ... import qarray as qa
+from ...data import Data
+from ...instrument import Focalplane, SpaceSite, Telescope
+from ...instrument_sim import fake_boresight_focalplane, fake_hexagon_focalplane
+from ...observation import Observation
+from ...observation import default_values as defaults
+from ...schedule_sim_satellite import create_satellite_schedule
 from .utils import create_comm
 
 

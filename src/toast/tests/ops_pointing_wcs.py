@@ -16,15 +16,14 @@ from ..data import Data
 from ..observation import Observation
 from ..observation import default_values as defaults
 from ..pixels_io_wcs import write_wcs_fits
-from ..vis import set_matplotlib_backend
-from ._helpers import (
+from ..vis import plot_wcs_maps, set_matplotlib_backend
+from .helpers import (
     close_data,
     create_boresight_telescope,
     create_comm,
     create_fake_wcs_scanned_tod,
     create_ground_data,
     create_outdir,
-    plot_wcs_maps,
 )
 from .mpi import MPITestCase
 
@@ -32,7 +31,7 @@ from .mpi import MPITestCase
 class PointingWCSTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.proj_dims = (1000, 500)
         # For debugging, change this to True
         self.write_extra = False

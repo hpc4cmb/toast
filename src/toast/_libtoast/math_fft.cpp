@@ -20,7 +20,8 @@ void init_math_fft(py::module & m) {
         m, "FFTPlanReal1D")
     .def_static("create", &toast::FFTPlanReal1D::create, py::arg("length"),
                 py::arg("n"), py::arg("type"), py::arg("dir"), py::arg(
-                    "scale"), R"(
+                    "scale"),
+                R"(
         Create FFT plan for one dimensional real transforms.
 
         The plan is valid for a particular length and for a batch of a
@@ -122,7 +123,8 @@ void init_math_fft(py::module & m) {
         )")
     .def("cache", &toast::FFTPlanReal1DStore::cache, py::arg("length"),
          py::arg(
-             "n"),  R"(
+             "n"),
+         R"(
             Add a plan to the store.
 
             This adds a forward and reverse "fast" plan to the global cache.
@@ -137,7 +139,8 @@ void init_math_fft(py::module & m) {
         )")
     .def("forward", &toast::FFTPlanReal1DStore::forward, py::arg("length"),
          py::arg(
-             "n"),  R"(
+             "n"),
+         R"(
             Retrieve a plan from the store.
 
             A forward plan of the specified length and number of buffers is
@@ -154,7 +157,8 @@ void init_math_fft(py::module & m) {
     .def("backward", &toast::FFTPlanReal1DStore::backward,
          py::arg("length"),
          py::arg(
-             "n"),  R"(
+             "n"),
+         R"(
             Retrieve a plan from the store.
 
             A backward plan of the specified length and number of buffers is

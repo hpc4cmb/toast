@@ -12,7 +12,7 @@ from .. import ops as ops
 from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..pixels_io_wcs import write_wcs_fits
-from ._helpers import (
+from .helpers import (
     close_data,
     create_fake_mask,
     create_fake_wcs_map,
@@ -25,7 +25,7 @@ from .mpi import MPITestCase
 class ScanWCSTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
 
     def test_wcs_fits(self):

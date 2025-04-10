@@ -424,8 +424,10 @@ class Amplitudes(AcceleratorObject):
             else:
                 # Need to compute our overlap with the global amplitude range.
                 send_buffer[:] = 0
-                if (self._global_last >= comm_offset) and self.local is not None and (
-                    self._global_first < comm_offset + n_comm
+                if (
+                    (self._global_last >= comm_offset)
+                    and self.local is not None
+                    and (self._global_first < comm_offset + n_comm)
                 ):
                     # We have some overlap
                     if self._local_ranges is not None:
@@ -511,8 +513,10 @@ class Amplitudes(AcceleratorObject):
                 # Shortcut if we have all global amplitudes locally
                 self.local[comm_offset : comm_offset + n_comm] = recv_buffer[:n_comm]
             else:
-                if (self._global_last >= comm_offset) and self.local is not None and (
-                    self._global_first < comm_offset + n_comm
+                if (
+                    (self._global_last >= comm_offset)
+                    and self.local is not None
+                    and (self._global_first < comm_offset + n_comm)
                 ):
                     self.local[local_selected] = recv_buffer[buffer_selected]
 
@@ -598,8 +602,10 @@ class Amplitudes(AcceleratorObject):
                 n_comm = n_total - comm_offset
             local[:] = self._mpicomm.size
 
-            if (self._global_last >= comm_offset) and self.local is not None and (
-                self._global_first < comm_offset + n_comm
+            if (
+                (self._global_last >= comm_offset)
+                and self.local is not None
+                and (self._global_first < comm_offset + n_comm)
             ):
                 # We have some overlap
                 if self._local_ranges is not None:
@@ -679,8 +685,10 @@ class Amplitudes(AcceleratorObject):
 
             self._mpicomm.Allreduce(local, assigned, op=MPI.MIN)
 
-            if (self._global_last >= comm_offset) and self.local is not None and (
-                self._global_first < comm_offset + n_comm
+            if (
+                (self._global_last >= comm_offset)
+                and self.local is not None
+                and (self._global_first < comm_offset + n_comm)
             ):
                 # Compute local dot product of just our assigned, unflagged elements
                 local_result += np.dot(

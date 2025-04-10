@@ -218,41 +218,43 @@ void init_ops_mapmaker_utils(py::module & m) {
                     }
                 }
 
-                # pragma omp target data map(          \
-                to : raw_weight_index[0 : n_det],      \
-                raw_pixel_index[0 : n_det],            \
-                raw_flag_index[0 : n_det],             \
-                raw_data_index[0 : n_det],             \
-                raw_det_scale[0 : n_det],              \
-                raw_global2local[0 : n_global_submap], \
-                n_view,                                \
-                n_det,                                 \
-                n_samp,                                \
-                max_interval_size,                     \
-                nnz,                                   \
-                n_pix_submap,                          \
-                det_flag_mask,                         \
-                shared_flag_mask,                      \
-                use_shared_flags,                      \
-                use_det_flags                          \
+                # pragma omp target data map(\
+                to : raw_weight_index[0 : n_det],\
+                raw_pixel_index[0 : n_det],\
+                raw_flag_index[0 : n_det],\
+                raw_data_index[0 : n_det],\
+                raw_det_scale[0 : n_det],\
+                raw_global2local[0 : n_global_submap],\
+                n_view,\
+                n_det,\
+                n_samp,\
+                max_interval_size,\
+                nnz,\
+                n_pix_submap,\
+                det_flag_mask,\
+                shared_flag_mask,\
+                use_shared_flags,\
+                use_det_flags\
                 )
                 {
-                    # pragma omp target teams distribute parallel for collapse(3) \
-                    schedule(static,1)                                            \
-                    is_device_ptr(                                                \
-                    dev_pixels,                                                   \
-                    dev_weights,                                                  \
-                    dev_det_data,                                                 \
-                    dev_det_flags,                                                \
-                    dev_intervals,                                                \
-                    dev_shared_flags,                                             \
-                    dev_zmap                                                      \
+                    # pragma omp target teams distribute parallel for collapse(3)\
+                    schedule(static,1)\
+                    is_device_ptr(\
+                    dev_pixels,\
+                    dev_weights,\
+                    dev_det_data,\
+                    dev_det_flags,\
+                    dev_intervals,\
+                    dev_shared_flags,\
+                    dev_zmap\
                     )
                     for (int64_t idet = 0; idet < n_det; idet++) {
                         for (int64_t iview = 0; iview < n_view; iview++) {
-                            for (int64_t isamp = 0; isamp < max_interval_size; isamp++) {
+                            for (int64_t isamp = 0; isamp < max_interval_size;
+                                 isamp++) {
                                 // Adjust for the actual start of the interval
-                                int64_t adjusted_isamp = isamp + dev_intervals[iview].first;
+                                int64_t adjusted_isamp = isamp +
+                                                         dev_intervals[iview].first;
 
                                 // Check if the value is out of range for the current
                                 // interval
@@ -297,7 +299,7 @@ void init_ops_mapmaker_utils(py::module & m) {
                     #ifdef _OPENMP
                     num_threads = omp_get_num_threads();
                     my_thread = omp_get_thread_num();
-                    #endif
+                    #endif // ifdef _OPENMP
 
                     int64_t n_thread_pix = (int64_t)(n_pix_submap / num_threads);
                     int64_t my_first_subpix = my_thread * n_thread_pix;
@@ -332,7 +334,8 @@ void init_ops_mapmaker_utils(py::module & m) {
 
                                 uint8_t shared_check = 0;
                                 if (use_shared_flags) {
-                                    shared_check = raw_shared_flags[isamp] & shared_flag_mask;
+                                    shared_check = raw_shared_flags[isamp] &
+                                                   shared_flag_mask;
                                 }
                                 if (shared_check != 0) {
                                     continue;
@@ -342,24 +345,31 @@ void init_ops_mapmaker_utils(py::module & m) {
                                     continue;
                                 }
 
-                                int64_t global_submap = (int64_t)(raw_pixels[off_p] / n_pix_submap);
+                                int64_t global_submap = (int64_t)(raw_pixels[off_p] /
+                                                                  n_pix_submap);
 
                                 int64_t local_submap = raw_global2local[global_submap];
 
-                                int64_t isubpix = raw_pixels[off_p] - global_submap * n_pix_submap;
+                                int64_t isubpix = raw_pixels[off_p] - global_submap *
+                                                  n_pix_submap;
 
-                                if (isubpix < my_first_subpix || isubpix >= my_last_subpix) {
+                                if ((isubpix < my_first_subpix) ||
+                                    (isubpix >= my_last_subpix)) {
                                     continue;
                                 }
 
-                                int64_t zoff = nnz * (local_submap * n_pix_submap + isubpix);
+                                int64_t zoff = nnz *
+                                               (local_submap * n_pix_submap + isubpix);
 
                                 int64_t off_wt = nnz * off_w;
 
-                                double scaled_data = raw_det_data[off_d] * raw_det_scale[idet];
+                                double scaled_data = raw_det_data[off_d] *
+                                                     raw_det_scale[idet];
 
                                 for (int64_t iweight = 0; iweight < nnz; iweight++) {
-                                    raw_zmap[zoff + iweight] += scaled_data * raw_weights[off_wt + iweight];
+                                    raw_zmap[zoff + iweight] += scaled_data *
+                                                                raw_weights[off_wt +
+                                                                            iweight];
                                 }
                             }
                         }

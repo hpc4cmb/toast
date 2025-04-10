@@ -29,7 +29,7 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..traits import Int, Unicode, trait_docs
 from ..utils import dtype_to_aligned
-from ._helpers import close_data, create_comm, create_outdir, create_satellite_data
+from .helpers import close_data, create_satellite_data
 from .mpi import MPITestCase
 
 if use_accel_jax:
@@ -84,7 +84,7 @@ class AccelOperator(ops.Operator):
 class AcceleratorTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        # self.outdir = create_outdir(self.comm, fixture_name)
+        # self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.rank = 0
         self.nproc = 1
         if self.comm is not None:

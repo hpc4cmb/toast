@@ -2,9 +2,9 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
-import healpy as hp
 import astropy.io.fits as af
+import healpy as hp
+import numpy as np
 
 from .pixels import PixelData, PixelDistribution
 from .pixels_io_healpix import read_healpix

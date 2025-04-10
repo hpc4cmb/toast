@@ -14,7 +14,7 @@ from ..dist import distribute_discrete, distribute_uniform
 from ..instrument import Session
 from ..mpi import MPI, Comm
 from ..observation import Observation
-from ._helpers import (
+from .helpers import (
     close_data,
     create_comm,
     create_ground_telescope,
@@ -28,7 +28,7 @@ from .mpi import MPITestCase
 class DataTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
         # Create one observation per group.
 

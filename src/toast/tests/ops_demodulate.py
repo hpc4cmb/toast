@@ -14,20 +14,19 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
-from ._helpers import (
+from .helpers import (
     close_data,
+    create_fake_healpix_scanned_tod,
     create_ground_data,
     create_outdir,
-    create_fake_healpix_scanned_tod,
 )
-
 from .mpi import MPITestCase
 
 
 class DemodulateTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
-        self.outdir = create_outdir(self.comm, fixture_name)
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def test_demodulate(self):
         nside = 128
