@@ -24,6 +24,9 @@ class ScanHealpixDetectorMap(Operator):
     """Operator which reads a HEALPix format map from disk and scans it
     to a timestream.
 
+    Detectors can be matched to different input maps through the use of
+    detector attributes such as pixel, wafer or optics tube.
+
     Each process loads and discards maps independently which may incur
     significant memory overhead.  At most one map per process is kept
     in memory.
@@ -37,7 +40,9 @@ class ScanHealpixDetectorMap(Operator):
     file = Unicode(
         None,
         allow_none=True,
-        help="Path to healpix FITS file.  Use ';' if providing multiple files",
+        help="Path to healpix FITS file.  Use ';' if providing multiple files.  "
+        "Any focalplane key listed in `focalplane_keys` can be used here and even "
+        "formatted. For example: {psi_pol:.0f}",
     )
 
     det_data = Unicode(
