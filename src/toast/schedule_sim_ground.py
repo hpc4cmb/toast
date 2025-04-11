@@ -2508,7 +2508,8 @@ def build_schedule(args, start_timestamp, stop_timestamp, patches, observer, sun
         visible, not_visible = get_visible(args, observer, patches, el_min)
 
         if len(visible) == 0:
-            log.debug(f"No patches visible at {to_UTC(t)}: {not_visible}")
+            tutc = to_UTC(t)
+            log.debug(f"No patches visible at {tutc}: {not_visible}")
             t = advance_time(t, args.time_step_s)
             continue
 

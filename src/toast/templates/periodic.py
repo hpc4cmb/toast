@@ -295,14 +295,14 @@ class Periodic(Template):
                 # We have some flags
                 bad = ob.detdata[self.flags].data[vw_slc] & self.flag_mask
             else:
-                bad = np.zeros(vw_len, dtype=bool)
+                bad = np.zeros(vw_len, dtype=np.uint8)
         else:
             vw_data = ob.shared[self.key].data[vw_slc]
             if self.flags is not None:
                 # We have some flags
                 bad = ob.shared[self.flags].data[vw_slc] & self.flag_mask
             else:
-                bad = np.zeros(vw_len, dtype=bool)
+                bad = np.zeros(vw_len, dtype=np.uint8)
         if det_flags and self.det_flags is not None:
             # We have some det flags
             bad |= ob.detdata[self.det_flags][flag_indx, vw_slc] & self.det_flag_mask

@@ -17,6 +17,7 @@ from .sky import (
     create_fake_wcs_file,
     create_fake_wcs_map,
     create_fake_wcs_scanned_tod,
+    fetch_nominal_cmb_cls,
 )
 from .space import (
     create_boresight_telescope,

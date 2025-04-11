@@ -1112,7 +1112,7 @@ class Offset(Template):
                             hflags.write_direct(v["flags"], dslice, hslice)
 
 
-def plot(amp_file, compare=dict(), out=None):
+def plot(amp_file, compare=dict(), out=None, xlim=None):
     """Plot an amplitude dump file.
 
     This loads an amplitude file and makes a set of plots.
@@ -1122,6 +1122,7 @@ def plot(amp_file, compare=dict(), out=None):
         compare (dict):  If specified, dictionary of per-detector timestreams
             to plot for comparison.
         out (str):  The output file.
+        xlim (tuple):  The X axis sample range to plot.
 
     Returns:
         None
@@ -1169,6 +1170,8 @@ def plot(amp_file, compare=dict(), out=None):
                 color="red",
                 label=f"{det} Offset Amplitudes",
             )
+            if xlim is not None:
+                ax.set_xlim(xlim)
             ax.set_xlabel("Sample Index")
             ax.set_ylabel("Amplitude")
             ax.legend(loc="best")

@@ -3,6 +3,10 @@
 # a BSD-style license that can be found in the LICENSE file.
 """Tools for generating fake sky maps."""
 
+import os
+import tempfile
+import urllib
+
 import astropy.io.fits as af
 import healpy as hp
 import numpy as np
@@ -585,3 +589,53 @@ def create_fake_beam_alm(
         return [blmT, blmP]
     else:
         return blm
+
+
+def fetch_nominal_cmb_cls(out_file=None):
+    """Retrieve some nominal angular power spectra for testing.
+
+    Do not use this function if you care about the details.  The goal of this function is just
+    to make it easy to synthesize realistic-looking CMB skies for testing.
+
+    Args:
+        out_file (str):  If not None save the file persistently at this location and load as
+            needed.  If None, download to a tempfile.
+
+    Returns:
+        (list):  The list of cls, suitable for use with healpy.synfast.
+
+    """
+    url_root = "https://irsa.ipac.caltech.edu/data/Planck/release_3/ancillary-data/cosmoparams/"
+    url_file = "COM_PowerSpect_CMB-base-plikHM-TTTEEE-lowl-lowE-lensing-minimum-theory_R3.01.txt"
+    url = f"{url_root}{url_file}"
+
+    def _parse_file(path):
+        raw = np.transpose(np.loadtxt(path, usecols=(0, 1, 2, 3, 4)))
+        # Get the first ell value
+        raw_start = raw[0][0]
+        pad_lines = int(raw_start)
+        ncl = pad_lines + len(raw[0])
+        # Build list of spectra
+        cl = list()
+        for spec in range(4):
+            dat = np.zeros(ncl, dtype=np.float32)
+            dat[pad_lines:] = raw[1 + spec]
+            cl.append(dat)
+        return cl
+
+    if out_file is None:
+        # Retrieve to a temp location
+        with tempfile.TemporaryDirectory as dir:
+            out_file = os.path.join(dir, url_file)
+            urllib.request.urlretrieve(url, out_file)
+            c_ell = _parse_file(out_file)
+    else:
+        # We are loading the file from a persistent location
+        if not os.path.isfile(out_file):
+            # Download it
+            urllib.request.urlretrieve(url, out_file)
+        c_ell = _parse_file(out_file)
+
+    return c_ell
+
+

@@ -7,6 +7,9 @@ import os
 
 from IPython.core.extensions import ExtensionManager
 
+from ..mpi import MPI
+from ..utils import Environment, Logger
+
 
 def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
     """Attempt to start up ipyparallel with mpi4py and OpenMP.
@@ -21,15 +24,13 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
         (int):  The number of processes started.
 
     """
-    print(f"Using {procs} processes with {threads} threads each.")
-
-    os.environ["OMP_NUM_THREADS"] = f"{threads}"
-
+    log = Logger.get()
+    env = Environment.get()
+    
     if procs > 1:
         try:
             import ipyparallel as ipp
 
-            ipp.bind_kernel()
             cluster = ipp.Cluster(engines="mpi", n=procs)
             client = cluster.start_and_connect_sync()
             client.block = True
@@ -55,4 +56,20 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
     except Exception:
         # Must be running outside IPython shell
         pass
-    return procs
+
+    if procs == 1:
+        rank = 0
+        comm = None
+    else:
+        comm = MPI.COMM_WORLD
+        rank = comm.rank
+
+    max_threads = env.max_threads()
+    if threads > max_threads:
+        msg = f"Requested threads per process ({threads}) exceeds"
+        msg += f" the maximum ({max_threads}).  Using {max_threads} instead."
+        log.warning_rank(msg, comm=comm)
+        threads = max_threads
+    env.set_threads(threads)
+
+    log.info_rank(f"Using {procs} processes with {threads} threads each.", comm=comm)
