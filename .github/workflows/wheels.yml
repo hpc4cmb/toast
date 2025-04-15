@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
   # FIXME:  Remove these lines once this workflow merged
   # to main branch.
-  pull_request:
-    branches:
-      - toast3
+  # pull_request:
+  #   branches:
+  #     - toast3
   release:
     types: [ published ]
 
