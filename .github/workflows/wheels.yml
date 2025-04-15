@@ -1,17 +1,16 @@
 
-name:  Test Binary Wheels
+name:  Binary Wheels
 
 on:
   workflow_dispatch:
   # FIXME:  Remove these lines once this workflow merged
   # to main branch.
-  # push:
-  #   branches:
-  #     - master
-  # pull_request:
-  #   branches:
-  #     - master
-  #     - toast3
+  pull_request:
+    branches:
+      - toast3
+  release:
+    types: [ published ]
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -154,5 +153,21 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels_cp${{ matrix.python }}-${{ matrix.builder }}_${{ matrix.arch }}
+          name: toast-cp${{ matrix.python }}-${{ matrix.builder }}_${{ matrix.arch }}
           path: ./wheelhouse/toast*cp${{ matrix.python }}-${{ matrix.builder }}*${{ matrix.arch }}*.whl
+
+  upload_pypi:
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          # Unpacks all artifacts into dist/
+          pattern: toast-*
+          path: dist
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
