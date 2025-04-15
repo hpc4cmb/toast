@@ -9,7 +9,7 @@
 # - MAKEJ
 # - CLEANUP (yes/no)
 
-aatm_version=1.0.9
+aatm_version=1.1.0
 aatm_dir=libaatm-${aatm_version}
 aatm_pkg=${aatm_dir}.tar.gz
 
