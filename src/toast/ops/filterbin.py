@@ -1426,19 +1426,20 @@ class FilterBin(Operator):
         else:
             write_map = self.write_map
             write_noiseweighted_map = self.write_noiseweighted_map
+        keep_final = self.keep_final_products
         for key, write, keep, force, rootname in [
-            (hits_name, self.write_hits and binned, False, False, self.name),
-            (rcond_name, self.write_rcond and binned, False, False, self.name),
+            (hits_name, self.write_hits and binned, keep_final, False, self.name),
+            (rcond_name, self.write_rcond and binned, keep_final, False, self.name),
             (
                 noiseweighted_map_name,
                 write_noiseweighted_map,
-                False,
+                keep_final,
                 True,
                 mc_root,
             ),
-            (map_name, write_map, False, True, mc_root),
-            (invcov_name, self.write_invcov and binned, False, False, self.name),
-            (cov_name, self.write_cov and binned, True, False, self.name),
+            (map_name, write_map, keep_final, True, mc_root),
+            (invcov_name, self.write_invcov and binned, keep_final, False, self.name),
+            (cov_name, self.write_cov and binned, keep_final, False, self.name),
         ]:
             if write:
                 product = key.replace(f"{self.name}_", "")
