@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2019-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -87,8 +87,11 @@ class GroundScan(Scan):
         start = self.start.isoformat(timespec="seconds")
         val = f"<GroundScan '{self.name}' "
         val += f"at {start} with El = {self.el}, Az {self.az_min} -- {self.az_max}, "
-        val += f"RA = {self.ra_min:.1f} < {self.ra_mean:.1f} < {self.ra_max:.1f}, "
-        val += f"Dec {self.dec_min:.1f} < {self.dec_mean:.1f} < {self.dec_max:.1f}>"
+        if self.ra_min is None:
+            val += f"RA, Dec = None, None>"
+        else:
+            val += f"RA = {self.ra_min:.1f} < {self.ra_mean:.1f} < {self.ra_max:.1f}, "
+            val += f"Dec {self.dec_min:.1f} < {self.dec_mean:.1f} < {self.dec_max:.1f}>"
         return val
 
     @function_timer
