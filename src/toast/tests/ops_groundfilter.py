@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -109,10 +109,10 @@ class GroundFilterTest(MPITestCase):
             az = ob.shared[defaults.azimuth].data * 100
             rightgoing = np.zeros(az.size, dtype=bool)
             for ival in ob.intervals[defaults.throw_leftright_interval]:
-                rightgoing[ival.first : ival.last + 1] = True
+                rightgoing[ival.first : ival.last] = True
             leftgoing = np.zeros(az.size, dtype=bool)
             for ival in ob.intervals[defaults.throw_rightleft_interval]:
-                leftgoing[ival.first : ival.last + 1] = True
+                leftgoing[ival.first : ival.last] = True
             rms[ob.name] = dict()
             for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask

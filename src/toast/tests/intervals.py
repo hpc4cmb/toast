@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -30,15 +30,15 @@ class IntervalTest(MPITestCase):
             dtype=interval_dtype,
         ).view(np.recarray)
         check_neg = [
-            (0.0, 1.0, 0, 1),
+            (0.0, 2.0, 0, 2),
         ]
         check_neg.extend(
             [
-                (float(10.0 * x + 6), float(10.0 * x + 11), (10 * x + 6), (10 * x + 11))
+                (float(10.0 * x + 5), float(10.0 * x + 12), (10 * x + 5), (10 * x + 12))
                 for x in range(9)
             ]
         )
-        check_neg.append((96.0, 99.0, 96, 99))
+        check_neg.append((95.0, 99.0, 95, 100))
         check_neg = np.array(check_neg, dtype=interval_dtype).view(np.recarray)
 
         itime = IntervalList(stamps, timespans=timespans)
@@ -57,18 +57,17 @@ class IntervalTest(MPITestCase):
     def test_simplify(self):
         stamps = np.arange(100, dtype=np.float64)
         boundaries = [10 * x for x in range(1, 9)]
-        ranges = [(x, x + 9) for x in boundaries]
-        check = np.array([(stamps[10], stamps[89], 10, 89)], dtype=interval_dtype).view(
+        ranges = [(x, x + 10) for x in boundaries]
+        check = np.array([(stamps[10], stamps[90], 10, 90)], dtype=interval_dtype).view(
             np.recarray
         )
         ival = IntervalList(stamps, samplespans=ranges)
-        # print("ival = ", ival)
         ival.simplify()
-        # print("simple ival = ", ival)
         self.assertTrue(ival[0] == check[0])
 
     def test_bitwise(self):
-        stamps = np.arange(100, dtype=np.float64)
+        nsample = 100
+        stamps = np.arange(nsample, dtype=np.float64)
         raw = np.array(
             [
                 (float(10.0 * x + 2), float(10.0 * x + 5), (10 * x + 2), (10 * x + 5))
@@ -81,15 +80,12 @@ class IntervalTest(MPITestCase):
 
         full = ival | neg
         full.simplify()
-        # print("full = ", full)
-        check = np.array([(stamps[0], stamps[-1], 0, 99)], dtype=interval_dtype).view(
+        check = np.array([(stamps[0], stamps[-1], 0, nsample)], dtype=interval_dtype).view(
             np.recarray
         )
-        # print(f"check = {check}")
         self.assertTrue(full[0] == check)
 
         empty = ival & neg
-        # print("empty = ", empty)
 
         rawshift = np.array(
             [
@@ -133,11 +129,9 @@ class IntervalTest(MPITestCase):
         )
 
         test = ival & shifted
-        # print("bit and = ", test)
         self.assertTrue(test == and_check)
 
         test = ival | shifted
-        # print("bit or = ", test)
         self.assertTrue(test == or_check)
 
     def test_union(self):
@@ -162,7 +156,7 @@ class IntervalTest(MPITestCase):
     #     intrvls = regular_intervals(
     #         self.nint, self.start, self.first, self.rate, self.duration, self.gap
     #     )
-    #     totsamp = self.nint * (intrvls[0].last - intrvls[0].first + 1)
+    #     totsamp = self.nint * (intrvls[0].last - intrvls[0].first)
     #     totsamp += self.nint * (intrvls[1].first - intrvls[0].last - 1)
     #     sizes = intervals_to_chunklist(intrvls, totsamp, startsamp=self.first + 10)
     #     # for it in intrvls:
@@ -181,7 +175,7 @@ class IntervalTest(MPITestCase):
     #
     #     for it in intrvls:
     #         # print(it.first," ",it.last," ",it.start," ",it.stop)
-    #         check += it.last - it.first + 1
+    #         check += it.last - it.first
     #
     #     nt.assert_equal(check, goodsamp)
     #     return

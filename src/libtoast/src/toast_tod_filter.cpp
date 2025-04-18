@@ -1,5 +1,5 @@
 
-// Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
@@ -40,9 +40,9 @@ void toast::filter_polynomial(int64_t order, size_t n, uint8_t * flags,
         int64_t start = starts[iscan];
         int64_t stop = stops[iscan];
         if (start < 0) start = 0;
-        if (stop > n - 1) stop = n - 1;
+        if (stop > n) stop = n;
         if (stop < start) continue;
-        int scanlen = stop - start + 1;
+        int scanlen = stop - start;
 
         int ngood = 0;
         for (size_t i = 0; i < scanlen; ++i) {

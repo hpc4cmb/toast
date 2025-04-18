@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -499,7 +499,7 @@ class PixelsWCS(Operator):
                     self.pixels, sample_shape=(), dtype=np.int64, detectors=dets
                 )
 
-            view_slices = [slice(x.first, x.last + 1, 1) for x in ob.intervals[view]]
+            view_slices = [slice(x.first, x.last, 1) for x in ob.intervals[view]]
 
             # Do we already have pointing for all requested detectors?
             if exists:

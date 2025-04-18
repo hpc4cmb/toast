@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -792,7 +792,7 @@ class FilterBin(Operator):
             for name in self.leftright_interval, self.rightleft_interval:
                 mask = np.zeros(phase.size, dtype=bool)
                 for ival in obs.intervals[name]:
-                    mask[ival.first : ival.last + 1] = True
+                    mask[ival.first : ival.last] = True
                 masks.append(mask)
             for template in legendre_templates:
                 for mask in masks:
@@ -819,7 +819,7 @@ class FilterBin(Operator):
 
         for ival in intervals:
             istart = ival.first
-            istop = ival.last + 1
+            istop = ival.last
             # Trim flagged samples from both ends
             while istart < istop and bad[istart]:
                 istart += 1
@@ -827,7 +827,7 @@ class FilterBin(Operator):
                 istop -= 1
             if istop - istart < nfilter:
                 # Not enough samples to filter, flag this interval
-                shared_flags[ival.first : ival.last + 1] |= self.filter_flag_mask
+                shared_flags[ival.first : ival.last] |= self.filter_flag_mask
                 continue
             wbin = 2 / (istop - istart)
             phase = (np.arange(istop - istart) + 0.5) * wbin - 1

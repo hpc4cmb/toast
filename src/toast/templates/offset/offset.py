@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -1023,13 +1023,15 @@ class Offset(Template):
                     for ivw, vw in enumerate(ob.intervals[self.view]):
                         n_amp_view = self._obs_views[iob][ivw]
                         for istep in range(n_amp_view):
-                            amp_first.append(vw.first + istep * step_length)
+                            istart = vw.first + istep * step_length
+                            amp_first.append(istart)
+                            amp_start.append(ob.shared[self.times].data[istart])
                             if istep == n_amp_view - 1:
-                                amp_last.append(vw.last)
+                                istop = vw.last
                             else:
-                                amp_last.append(vw.first + (istep + 1) * step_length)
-                            amp_start.append(ob.shared[self.times].data[amp_first[-1]])
-                            amp_stop.append(ob.shared[self.times].data[amp_last[-1]])
+                                istop = vw.first + (istep + 1) * step_length
+                            amp_last.append(istop)
+                            amp_stop.append(ob.shared[self.times].data[istop - 1])
                     props["amp_first"] = np.array(amp_first, dtype=np.int64)
                     props["amp_last"] = np.array(amp_last, dtype=np.int64)
                     props["amp_start"] = np.array(amp_start, dtype=np.float64)
@@ -1149,7 +1151,7 @@ def plot(amp_file, compare=dict(), out=None):
         fig_height = 4
         fig_dpi = 100
 
-        x_samples = np.arange(amp_first[0], amp_last[-1] + 1, 1)
+        x_samples = np.arange(amp_first[0], amp_last[-1], 1)
 
         for idet, det in enumerate(det_list):
             outfile = f"{out}_{det}.pdf"

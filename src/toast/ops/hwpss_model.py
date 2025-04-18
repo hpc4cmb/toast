@@ -880,13 +880,13 @@ class HWPSynchronousModel(Operator):
             # Use the specified interval list for the chunks.  Cut any
             # chunks that are tiny.
             for intr in obs.intervals[self.chunk_view]:
-                ch_size = intr.last - intr.first + 1
+                ch_size = intr.last - intr.first
                 ch_mid = intr.first + ch_size // 2
                 if ch_size > 10 * self.harmonics:
                     chunks.append(
                         {
                             "start": intr.first,
-                            "end": intr.last + 1,
+                            "end": intr.last,
                             "time": reltime[ch_mid],
                         }
                     )
@@ -909,7 +909,7 @@ class HWPSynchronousModel(Operator):
         if self.chunk_view is not None:
             not_modelled = np.ones_like(shared_flags)
             for intr in obs.intervals[self.chunk_view]:
-                not_modelled[intr.first : intr.last + 1] = 0
+                not_modelled[intr.first : intr.last] = 0
             shared_flags |= not_modelled
 
         # Per-detector flags.  We merge in the shared flags to these since the

@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2023-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -293,11 +293,11 @@ class AzimuthIntervals(Operator):
                     vel_switch = np.array(vel_switch)
 
                     stable_times = [
-                        (stamps[x[0]], stamps[x[1] - 1])
+                        (stamps[x[0]], stamps[x[1]])
                         for x in zip(begin_stable, end_stable)
                     ]
                     throw_times = [
-                        (stamps[x[0]], stamps[x[1] - 1])
+                        (stamps[x[0]], stamps[x[1]])
                         for x in zip(begin_throw, end_throw)
                     ]
 

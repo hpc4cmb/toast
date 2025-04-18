@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -240,7 +240,7 @@ class GroundFilter(Operator):
             for name in self.leftright_interval, self.rightleft_interval:
                 mask = np.zeros(phase.size, dtype=bool)
                 for ival in obs.intervals[name]:
-                    mask[ival.first : ival.last + 1] = True
+                    mask[ival.first : ival.last] = True
                 masks.append(mask)
             for template in legendre_templates:
                 for mask in masks:

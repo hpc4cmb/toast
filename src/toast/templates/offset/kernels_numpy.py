@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -39,8 +39,8 @@ def offset_add_to_signal_numpy(
     """
     offset = amp_offset
     for interval, view_offset in zip(intervals, n_amp_views):
-        samples = slice(interval.first, interval.last + 1, 1)
-        sampidx = np.arange(0, interval.last - interval.first + 1, dtype=np.int64)
+        samples = slice(interval.first, interval.last, 1)
+        sampidx = np.arange(0, interval.last - interval.first, dtype=np.int64)
         amp_idx = sampidx // step_length
         amp_vals = np.array([amplitudes[offset + x] for x in amp_idx])
         amp_flags = np.array([amplitude_flags[offset + x] for x in amp_idx])
@@ -86,10 +86,10 @@ def offset_project_signal_numpy(
     """
     offset = amp_offset
     for interval, view_offset in zip(intervals, n_amp_views):
-        samples = slice(interval.first, interval.last + 1, 1)
+        samples = slice(interval.first, interval.last, 1)
         ampidx = (
             offset
-            + np.arange(0, interval.last - interval.first + 1, dtype=np.int64)
+            + np.arange(0, interval.last - interval.first, dtype=np.int64)
             // step_length
         )
         ddata = det_data[data_index][samples]

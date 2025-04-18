@@ -32,8 +32,7 @@ class INTERVALS_JAX:
         elif intervals.size == 0:
             return 1
         else:
-            # end+1 as TOAST intervals are inclusive
-            return 1 + np.max(intervals.last - intervals.first)
+            return np.max(intervals.last - intervals.first)
 
     @function_timer
     def to_host(self):

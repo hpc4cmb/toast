@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -95,7 +95,7 @@ class View(Sequence):
         self.obj = obj
         self.key = key
         # Compute a list of slices for these intervals
-        self.slices = [slice(x.first, x.last + 1, 1) for x in self.obj.intervals[key]]
+        self.slices = [slice(x.first, x.last, 1) for x in self.obj.intervals[key]]
         self.detdata = DetDataView(obj, self.slices)
         self.shared = SharedView(obj, self.slices)
 

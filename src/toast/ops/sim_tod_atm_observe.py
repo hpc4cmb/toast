@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -566,7 +566,7 @@ class ObserveAtmosphere(Operator):
         timestamps = ob.shared[times].data
         tmin = int(timestamps[first])
         tmax = int(timestamps[last])
-        slc = slice(first, last + 1, 1)
+        slc = slice(first, last, 1)
 
         ddata = None
         if raw is not None:

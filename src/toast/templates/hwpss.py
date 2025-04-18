@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2023-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -202,7 +202,7 @@ class Hwpss(Template):
             if self.view is not None:
                 # Flag samples outside the valid intervals
                 for vw in self._obs_outview[iob]:
-                    vw_slc = slice(vw.first, vw.last + 1, 1)
+                    vw_slc = slice(vw.first, vw.last, 1)
                     flags[vw_slc] = 1
             coeff = amplitudes.local[amp_offset : amp_offset + self._n_coeff]
             model = hwpss_build_model(
@@ -234,7 +234,7 @@ class Hwpss(Template):
             if self.view is not None:
                 # Flag samples outside the valid intervals
                 for vw in self._obs_outview[iob]:
-                    vw_slc = slice(vw.first, vw.last + 1, 1)
+                    vw_slc = slice(vw.first, vw.last, 1)
                     flags[vw_slc] = 1
             if self.det_flags is not None:
                 flags |= ob.detdata[self.det_flags][detector] & self.det_flag_mask

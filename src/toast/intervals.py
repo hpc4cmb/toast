@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -65,6 +65,7 @@ class IntervalList(Sequence, AcceleratorObject):
         super().__init__()
         self.timestamps = timestamps
         if intervals is not None:
+            # Construct intervals using timespans from the provided intervals
             if timespans is not None or samplespans is not None:
                 raise RuntimeError(
                     "If constructing from intervals, other spans should be None"
@@ -73,39 +74,43 @@ class IntervalList(Sequence, AcceleratorObject):
                 self.data = np.zeros(0, dtype=interval_dtype).view(np.recarray)
             else:
                 timespans = [(x.start, x.stop) for x in intervals]
-                indices = self._find_indices(timespans)
+                indices, times = self._find_indices(timespans)
                 self.data = np.array(
                     [
-                        (self.timestamps[x[0]], self.timestamps[x[1]], x[0], x[1])
-                        for x in indices
+                        (time[0], time[1], ind[0], ind[1])
+                        for (time, ind) in zip(times, indices)
                     ],
                     dtype=interval_dtype,
                 ).view(np.recarray)
         elif timespans is not None:
+            # Construct intervals using provided timespans
             if samplespans is not None:
                 raise RuntimeError("Cannot construct from both time and sample spans")
             if len(timespans) == 0:
                 self.data = np.zeros(0, dtype=interval_dtype).view(np.recarray)
             else:
-                # Construct intervals from time ranges
+                timespans = np.vstack(timespans)
                 for i in range(len(timespans) - 1):
+                    if np.isclose(timespans[i][1], timespans[i + 1][0], rtol=1e-12):
+                        # Force nearly equal timestamps to match
+                        timespans[i][1] = timespans[i + 1][0]
                     if timespans[i][1] > timespans[i + 1][0]:
                         raise RuntimeError("Timespans must be sorted and disjoint")
-                indices = self._find_indices(timespans)
+                indices, times = self._find_indices(timespans)
                 self.data = np.array(
                     [
-                        (self.timestamps[x[0]], self.timestamps[x[1]], x[0], x[1])
-                        for x in indices
+                        (time[0], time[1], ind[0], ind[1])
+                        for (time, ind) in zip(times, indices)
                     ],
                     dtype=interval_dtype,
                 ).view(np.recarray)
         elif samplespans is not None:
+            # Construct intervals from sample ranges
             if len(samplespans) == 0:
                 self.data = np.zeros(0, dtype=interval_dtype).view(np.recarray)
             else:
-                # Construct intervals from sample ranges
                 for i in range(len(samplespans) - 1):
-                    if samplespans[i][1] >= samplespans[i + 1][0]:
+                    if samplespans[i][1] > samplespans[i + 1][0]:
                         raise RuntimeError("Sample spans must be sorted and disjoint")
                 builder = list()
                 for first, last in samplespans:
@@ -113,33 +118,53 @@ class IntervalList(Sequence, AcceleratorObject):
                         continue
                     if first < 0:
                         first = 0
-                    if last >= len(self.timestamps):
-                        last = len(self.timestamps) - 1
-                    builder.append((timestamps[first], timestamps[last], first, last))
+                    if last > len(self.timestamps):
+                        last = len(self.timestamps)
+                    builder.append(
+                        (self._sample_time(first), self._sample_time(last), first, last)
+                    )
                 self.data = np.array(builder, dtype=interval_dtype).view(np.recarray)
         else:
             # No data yet
             self.data = np.zeros(0, dtype=interval_dtype).view(np.recarray)
 
+    def _sample_time(self, sample):
+        nsample = len(self.timestamps)
+        if sample < 0 or sample > nsample:
+            msg = f"Invalid sample index: {sample} not in [0, {nsample}]"
+            raise RuntimeError(msg)
+        if sample == nsample:
+            # Handle the end of the timestamps differently
+            return self.timestamps[sample - 1]
+        else:
+            return self.timestamps[sample]
+
     def _find_indices(self, timespans):
-        start_indx = np.searchsorted(
-            self.timestamps, [x[0] for x in timespans], side="left"
+        # Each interval covers all samples where the sample time meets:
+        # interval.start <= self.timestamps AND self.timestamps < self.timestamps
+        # (open-ended interval)
+        # with one exception: if the interval ends at the last timestamp, the
+        # corresponding sample is included (closed interval)
+        start_time, stop_time = np.vstack(timespans).T
+        # Cut out timespans that do not overlap with the available timestamps
+        good = np.logical_and(
+            start_time < self.timestamps[-1], stop_time > self.timestamps[0]
         )
-        stop_indx = np.searchsorted(
-            self.timestamps, [x[1] for x in timespans], side="right"
-        )
-        stop_indx -= 1
-        # Remove accidental overlap caused by timespan boundary occurring
-        # exactly over a time stamp.
-        for i in range(start_indx.size - 1):
-            if stop_indx[i] == start_indx[i + 1]:
-                stop_indx[i] -= 1
-        out = list()
-        for start, stop in zip(start_indx, stop_indx):
-            if stop < 0 or start >= len(self.timestamps):
-                continue
-            out.append((start, stop))
-        return out
+        start_time = start_time[good]
+        stop_time = stop_time[good]
+        start_indx = np.searchsorted(self.timestamps, start_time, side="left")
+        stop_indx = np.searchsorted(self.timestamps, stop_time, side="left")
+        # Include the last sample where the stop time matches the last time stamp
+        nsample = len(self.timestamps)
+        stop_indx[stop_indx == nsample - 1] = nsample
+        times = list()
+        samples = list()
+        for start, stop, first, last in zip(
+                start_time, stop_time, start_indx, stop_indx
+        ):
+            times.append((start, stop))
+            samples.append((first, last))
+        return samples, times
 
     def __getitem__(self, key):
         return self.data[key]
@@ -168,9 +193,10 @@ class IntervalList(Sequence, AcceleratorObject):
             return False
         if len(self.timestamps) != len(other.timestamps):
             return False
-        if not np.isclose(self.timestamps[0], other.timestamps[0]) or not np.isclose(
-            self.timestamps[-1], other.timestamps[-1]
-        ):
+        # Comparing timestamps with default tolerances to np.isclose
+        # is always True.  Must use sufficiently tight tolerances
+        if not np.isclose(self.timestamps[0], other.timestamps[0], rtol=1e-12) \
+           or not np.isclose( self.timestamps[-1], other.timestamps[-1], rtol=1e-12):
             return False
         for s, o in zip(self.data, other.data):
             if s.first != o.first:
@@ -188,20 +214,25 @@ class IntervalList(Sequence, AcceleratorObject):
         propose = list()
         first = self.data[0].first
         last = self.data[0].last
+        start = self.data[0].start
+        stop = self.data[0].stop
         for i in range(1, len(self.data)):
             cur_first = self.data[i].first
             cur_last = self.data[i].last
-            if cur_first == last + 1:
+            cur_start = self.data[i].start
+            cur_stop = self.data[i].stop
+            if cur_first == last:
                 # This interval is contiguous with the previous one
                 last = cur_last
+                stop = cur_stop
             else:
                 # There is a gap
-                propose.append(
-                    (self.timestamps[first], self.timestamps[last], first, last)
-                )
+                propose.append((start, stop, first, last))
                 first = cur_first
                 last = cur_last
-        propose.append((self.timestamps[first], self.timestamps[last], first, last))
+                start = cur_start
+                stop = cur_stop
+        propose.append((start, stop, first, last))
         if len(propose) < len(self.data):
             # Need to update
             self.data = np.array(propose, dtype=interval_dtype).view(np.recarray)
@@ -212,31 +243,24 @@ class IntervalList(Sequence, AcceleratorObject):
         neg = list()
         # Handle range before first interval
         if not np.isclose(self.timestamps[0], self.data[0].start):
-            last = self.data[0].first - 1
-            neg.append((self.timestamps[0], self.timestamps[last], 0, last))
+            neg.append((self.timestamps[0], self.data[0].start, 0, self.data[0].first))
         for i in range(len(self.data) - 1):
             # Handle gaps between intervals
             cur_last = self.data[i].last
+            cur_stop = self.data[i].stop
             next_first = self.data[i + 1].first
+            next_start = self.data[i + 1].start
             if next_first != cur_last + 1:
                 # There are some samples in between
-                neg.append(
-                    (
-                        self.timestamps[cur_last + 1],
-                        self.timestamps[next_first - 1],
-                        cur_last + 1,
-                        next_first - 1,
-                    )
-                )
+                neg.append((cur_stop, next_start, cur_last, next_first))
         # Handle range after last interval
         if not np.isclose(self.timestamps[-1], self.data[-1].stop):
-            first = self.data[-1].last + 1
             neg.append(
                 (
-                    self.timestamps[first],
+                    self.data[-1].stop,
                     self.timestamps[-1],
-                    first,
-                    len(self.timestamps) - 1,
+                    self.data[-1].last,
+                    len(self.timestamps),
                 )
             )
         return IntervalList(
@@ -263,11 +287,13 @@ class IntervalList(Sequence, AcceleratorObject):
 
         # Walk both sequences, building up the intersection.
         while (curself < len(self.data)) and (curother < len(other)):
-            low = max(self.data[curself].first, other[curother].first)
-            high = min(self.data[curself].last, other[curother].last)
-            if low <= high:
-                result.append((self.timestamps[low], self.timestamps[high], low, high))
-            if self.data[curself].last < other[curother].last:
+            start = max(self.data[curself].start, other[curother].start)
+            stop = min(self.data[curself].stop, other[curother].stop)
+            if start < stop:
+                low = max(self.data[curself].first, other[curother].first)
+                high = min(self.data[curself].last, other[curother].last)
+                result.append((start, stop, low, high))
+            if self.data[curself].stop < other[curother].stop:
                 curself += 1
             else:
                 curother += 1
@@ -296,6 +322,8 @@ class IntervalList(Sequence, AcceleratorObject):
         result = list()
         res_first = None
         res_last = None
+        res_start = None
+        res_stop = None
         curself = 0
         curother = 0
 
@@ -303,19 +331,19 @@ class IntervalList(Sequence, AcceleratorObject):
         done_self = False
         done_other = False
         while (not done_self) or (not done_other):
-            next = None
+            next_ = None
             if done_self:
-                next = other[curother]
+                next_ = other[curother]
                 curother += 1
             elif done_other:
-                next = self.data[curself]
+                next_ = self.data[curself]
                 curself += 1
             else:
                 if self.data[curself].first < other[curother].first:
-                    next = self.data[curself]
+                    next_ = self.data[curself]
                     curself += 1
                 else:
-                    next = other[curother]
+                    next_ = other[curother]
                     curother += 1
             if curself >= len(self.data):
                 done_self = True
@@ -323,33 +351,36 @@ class IntervalList(Sequence, AcceleratorObject):
                 done_other = True
 
             if res_first is None:
-                res_first = next.first
-                res_last = next.last
+                res_first = next_.first
+                res_last = next_.last
+                res_start = next_.start
+                res_stop = next_.stop
             else:
                 # We use '<' here instead of '<=', so that intervals which are next to
                 # each other (but not overlapping) are not combined.  If the combination
                 # is desired, the simplify() method can be used.
-                if next.first < res_last + 1:
+                if next_.first < res_last:
                     # We overlap last interval
-                    if next.last > res_last:
+                    if next_.last > res_last:
                         # This interval extends beyond the last interval
-                        res_last = next.last
+                        res_last = next_.last
+                        res_stop = next_.stop
                 else:
                     # We have a break, close out previous interval and start a new one
                     result.append(
                         (
-                            self.timestamps[res_first],
-                            self.timestamps[res_last],
+                            res_start,
+                            res_stop,
                             res_first,
                             res_last,
                         )
                     )
-                    res_first = next.first
-                    res_last = next.last
+                    res_first = next_.first
+                    res_last = next_.last
+                    res_start = next_.start
+                    res_stop = next_.stop
         # Close out final interval
-        result.append(
-            (self.timestamps[res_first], self.timestamps[res_last], res_first, res_last)
-        )
+        result.append((res_start, res_stop, res_first, res_last))
 
         return IntervalList(
             self.timestamps,
@@ -456,13 +487,13 @@ def regular_intervals(n, start, first, rate, duration, gap):
 
     for i in range(n):
         ifirst = first + i * totsamples
-        ilast = ifirst + dursamples - 1
+        ilast = ifirst + dursamples
         # The time span between interval starts (the first sample of one
         # interval to the first sample of the next) includes the one extra
         # sample time.
         istart = start + i * (totsamples * invrate)
-        # The stop time is the timestamp of the last valid sample (thus the -1).
-        istop = istart + ((dursamples - 1) * invrate)
+        # The stop time is the timestamp of the last sample
+        istop = istart + (dursamples * invrate)
         intervals.append((istart, istop, ifirst, ilast))
 
     return np.array(intervals, dtype=interval_dtype).view(np.recarray)

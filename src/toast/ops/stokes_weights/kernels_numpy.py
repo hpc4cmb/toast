@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -37,7 +37,7 @@ def stokes_weights_IQU_numpy(
         widx = weight_index[idet]
         eta = (1.0 - epsilon[idet]) / (1.0 + epsilon[idet])
         for vw in intervals:
-            samples = slice(vw.first, vw.last + 1, 1)
+            samples = slice(vw.first, vw.last, 1)
             vd = qa.rotate(quats[qidx][samples], zaxis)
             vo = qa.rotate(quats[qidx][samples], xaxis)
 
@@ -81,5 +81,5 @@ def stokes_weights_I_numpy(weight_index, weights, intervals, cal, use_accel):
     for idet in range(len(weight_index)):
         widx = weight_index[idet]
         for vw in intervals:
-            samples = slice(vw.first, vw.last + 1, 1)
+            samples = slice(vw.first, vw.last, 1)
             weights[widx][samples] = cal[idet]

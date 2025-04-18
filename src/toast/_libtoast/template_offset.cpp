@@ -1,5 +1,5 @@
 
-// Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
@@ -73,7 +73,7 @@ void init_template_offset(py::module & m) {
                 int64_t max_interval_size = 0;
                 for (int64_t iview = 0; iview < n_view; iview++) {
                     int64_t interval_size = raw_intervals[iview].last -
-                                            raw_intervals[iview].first + 1;
+                                            raw_intervals[iview].first;
                     if (interval_size > max_interval_size) {
                         max_interval_size = interval_size;
                     }
@@ -102,7 +102,7 @@ void init_template_offset(py::module & m) {
 
                             // Check if the value is out of range for the current
                             // interval
-                            if (adjusted_isamp > dev_intervals[iview].last) {
+                            if (adjusted_isamp >= dev_intervals[iview].last) {
                                 continue;
                             }
 
@@ -124,7 +124,7 @@ void init_template_offset(py::module & m) {
                     #pragma omp parallel for default(shared)
                     for (
                         int64_t isamp = raw_intervals[iview].first;
-                        isamp <= raw_intervals[iview].last;
+                        isamp < raw_intervals[iview].last;
                         isamp++
                     ) {
                         int64_t d = data_index * n_samp + isamp;
@@ -218,7 +218,7 @@ void init_template_offset(py::module & m) {
                 int64_t max_interval_size = 0;
                 for (int64_t iview = 0; iview < n_view; iview++) {
                     int64_t interval_size = raw_intervals[iview].last -
-                                            raw_intervals[iview].first + 1;
+                                            raw_intervals[iview].first;
                     if (interval_size > max_interval_size) {
                         max_interval_size = interval_size;
                     }
@@ -255,14 +255,14 @@ void init_template_offset(py::module & m) {
 
                             // Check if the value is out of range for the current
                             // interval
-                            if (adjusted_isamp > dev_intervals[iview].last) {
+                            if (adjusted_isamp >= dev_intervals[iview].last) {
                                 continue;
                             }
 
                             // Insure we do not go out of the current interval
                             int64_t max_step_length = std::min(
                                 step_length,
-                                dev_intervals[iview].last - adjusted_isamp + 1
+                                dev_intervals[iview].last - adjusted_isamp
                             );
 
                             int64_t amp = amp_offset + amp_view_off[iview] +
@@ -298,7 +298,7 @@ void init_template_offset(py::module & m) {
                     #pragma omp parallel for default(shared)
                     for (
                         int64_t isamp = raw_intervals[iview].first;
-                        isamp <= raw_intervals[iview].last;
+                        isamp < raw_intervals[iview].last;
                         isamp++
                     ) {
                         int64_t d = data_index * n_samp + isamp;

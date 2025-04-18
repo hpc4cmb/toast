@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -2133,7 +2133,7 @@ class IntervalsManager(MutableMapping):
                 # Create fake intervals
                 faketimes = -1.0 * np.ones(self._local_samples, dtype=np.float64)
                 self._internal[self.all_name] = IntervalList(
-                    faketimes, samplespans=[(0, self._local_samples - 1)]
+                    faketimes, samplespans=[(0, self._local_samples)]
                 )
             return self.all_name
         else:

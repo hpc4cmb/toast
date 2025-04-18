@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -542,7 +542,7 @@ class export_obs(object):
                 local_sets = list()
                 offset = 0
                 for intr in obs.intervals[self._data_export.frame_intervals]:
-                    chunk = intr.last - offset + 1
+                    chunk = intr.last - offset
                     local_sets.append([chunk])
                     offset += chunk
                 if offset != obs.n_local_samples:

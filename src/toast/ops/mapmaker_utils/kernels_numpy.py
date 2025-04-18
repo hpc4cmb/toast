@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -64,7 +64,7 @@ def build_noise_weighted_numpy(
         for interval in intervals:
             # get interval slices
             interval_start = interval.first
-            interval_end = interval.last + 1
+            interval_end = interval.last
             data_samples = det_data[d_index, interval_start:interval_end]
             pixel_samples = pixels[p_index, interval_start:interval_end]
             weights_sample = weights[w_index, interval_start:interval_end, :]

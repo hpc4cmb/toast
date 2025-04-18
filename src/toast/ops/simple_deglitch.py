@@ -1,4 +1,4 @@
-# Copyright (c) 2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -162,8 +162,8 @@ class SimpleDeglitch(Operator):
                     (det_flags & self.det_flag_mask) != 0,
                 )
                 for iview, view in enumerate(views):
-                    nsample = view.last - view.first + 1
-                    ind = slice(view.first, view.last + 1)
+                    nsample = view.last - view.first
+                    ind = slice(view.first, view.last)
                     sig_view = sig[ind].copy()
                     w = self.medfilt_kernel_size
                     if w > 0 and nsample > 2 * w:

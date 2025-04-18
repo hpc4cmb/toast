@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -31,7 +31,7 @@ class PointingHealpixTest(MPITestCase):
         )
         nsamp = phivec.size
         faketimes = -1.0 * np.ones(nsamp, dtype=np.float64)
-        intervals = IntervalList(faketimes, samplespans=[(0, nsamp - 1)])
+        intervals = IntervalList(faketimes, samplespans=[(0, nsamp)])
 
         eps = np.array([0.0])
         gamma = np.array([0.0])
@@ -118,7 +118,7 @@ class PointingHealpixTest(MPITestCase):
         zero_index = np.array([0], dtype=np.int32)
         zero_flags = np.zeros(nsamp, dtype=np.uint8)
         faketimes = -1.0 * np.ones(nsamp, dtype=np.float64)
-        intervals = IntervalList(faketimes, samplespans=[(0, nsamp - 1)])
+        intervals = IntervalList(faketimes, samplespans=[(0, nsamp)])
 
         pix = 49103
         theta, phi = hp.pix2ang(nside, pix, nest=nest)
@@ -180,7 +180,7 @@ class PointingHealpixTest(MPITestCase):
         zero_index = np.array([0], dtype=np.int32)
         zero_flags = np.zeros(nsamp, dtype=np.uint8)
         faketimes = -1.0 * np.ones(nsamp, dtype=np.float64)
-        intervals = IntervalList(faketimes, samplespans=[(0, nsamp - 1)])
+        intervals = IntervalList(faketimes, samplespans=[(0, nsamp)])
 
         pix = 49103
         theta, phi = hp.pix2ang(nside, pix, nest=nest)
@@ -363,7 +363,7 @@ class PointingHealpixTest(MPITestCase):
             times = obs.shared[defaults.times]
             nsample = len(times)
             intervals1 = np.array(
-                [(times[0], times[-1], 0, nsample - 1)], dtype=interval_dtype
+                [(times[0], times[-1], 0, nsample)], dtype=interval_dtype
             ).view(np.recarray)
             intervals2 = np.array(
                 [(times[0], times[nsample // 2], 0, nsample // 2)], dtype=interval_dtype

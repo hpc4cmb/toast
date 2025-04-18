@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -324,7 +324,7 @@ class ExampleGroundTest(MPITestCase):
             )
             scanning_samples = np.zeros(ob.n_local_samples, dtype=bool)
             for intr in ob.intervals["scanning"]:
-                scanning_samples[intr.first : intr.last + 1] = 1
+                scanning_samples[intr.first : intr.last] = 1
             for det in ob.select_local_detectors(flagmask=defaults.det_mask_nonscience):
                 good = np.logical_and(
                     ob.detdata[defaults.det_flags][det] == 0,

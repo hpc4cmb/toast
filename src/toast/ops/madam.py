@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -596,7 +596,7 @@ class Madam(Operator):
                 # and accumulate the number of samples.
                 for intvw in ob.intervals[self.view]:
                     interval_starts.append(nsamp_valid)
-                    nsamp_valid += intvw.last - intvw.first + 1
+                    nsamp_valid += intvw.last - intvw.first
             else:
                 interval_starts.append(nsamp_valid)
                 nsamp_valid += ob.n_local_samples

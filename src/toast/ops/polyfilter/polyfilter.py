@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -278,8 +278,8 @@ class PolyFilter2D(Operator):
 
             views = temp_ob.intervals[self.view]
             for iview, view in enumerate(views):
-                nsample = view.last - view.first + 1
-                vslice = slice(view.first, view.last + 1)
+                nsample = view.last - view.first
+                vslice = slice(view.first, view.last)
 
                 # Accumulate the linear regression templates
 
@@ -540,7 +540,7 @@ class PolyFilter(Operator):
                     local_stops.append(interval.last)
             else:
                 local_starts = [0]
-                local_stops = [obs.n_local_samples - 1]
+                local_stops = [obs.n_local_samples]
 
             local_starts = np.array(local_starts)
             local_stops = np.array(local_stops)
@@ -615,7 +615,7 @@ class PolyFilter(Operator):
                     shared_flags = np.array(obs.shared[self.shared_flags])
                     not_filtered = np.ones(shared_flags.size, dtype=bool)
                     for start, stop in zip(local_starts, local_stops):
-                        not_filtered[start : stop + 1] = False
+                        not_filtered[start : stop] = False
                     shared_flags[not_filtered] |= self.poly_flag_mask
                 obs.shared[self.shared_flags].set(shared_flags, fromrank=0)
             if obs.comm.comm_group is not None:

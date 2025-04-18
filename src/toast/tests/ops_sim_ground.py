@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -39,7 +39,7 @@ class SimGroundTest(MPITestCase):
             ring += 1
         self.npix = npix
         self.fp = fake_hexagon_focalplane(n_pix=npix)
-
+        
     def test_exec(self):
         # Slow sampling
         fp = fake_hexagon_focalplane(
@@ -172,7 +172,7 @@ class SimGroundTest(MPITestCase):
             plt.close()
 
         close_data(data)
-
+    
     def test_phase(self):
         # Slow sampling
         fp = fake_hexagon_focalplane(
@@ -244,9 +244,9 @@ class SimGroundTest(MPITestCase):
         good2 = np.zeros(az2.size, dtype=bool)
 
         for ival in data1.obs[0].intervals[defaults.scan_leftright_interval]:
-            good1[ival.first : ival.last + 1] = True
+            good1[ival.first : ival.last] = True
         for ival in data2.obs[0].intervals[defaults.scan_leftright_interval]:
-            good2[ival.first : ival.last + 1] = True
+            good2[ival.first : ival.last] = True
 
         step1 = np.median(np.diff(az1[good1]))
         step2 = np.median(np.diff(az2[good2]))

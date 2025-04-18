@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -22,6 +22,6 @@ def noise_weight_numpy(
         detector_weight = detector_weights[idet]
         for interval in intervals:
             interval_start = interval.first
-            interval_end = interval.last + 1
+            interval_end = interval.last
             # Multiply by the weight
             det_data[d_index, interval_start:interval_end] *= detector_weight

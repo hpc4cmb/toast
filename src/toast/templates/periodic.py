@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -117,7 +117,7 @@ class Periodic(Template):
             omin = None
             omax = None
             for vw in ob.intervals[self.view].data:
-                vw_slc = slice(vw.first, vw.last + 1, 1)
+                vw_slc = slice(vw.first, vw.last, 1)
                 good = slice(None)
                 if self.is_detdata_key:
                     vw_data = ob.detdata[self.key].data[vw_slc]
@@ -249,7 +249,7 @@ class Periodic(Template):
                 else:
                     flag_indx = None
                 for vw in ob.intervals[self.view].data:
-                    vw_slc = slice(vw.first, vw.last + 1, 1)
+                    vw_slc = slice(vw.first, vw.last, 1)
                     if self.is_detdata_key:
                         vw_data = ob.detdata[self.key].data[vw_slc]
                     else:
@@ -285,8 +285,8 @@ class Periodic(Template):
         self, det_indx, ob_indx, ob, view, flag_indx=None, det_flags=False
     ):
         """Get the flags and amplitude indices for one detector and view."""
-        vw_slc = slice(view.first, view.last + 1, 1)
-        vw_len = view.last - view.first + 1
+        vw_slc = slice(view.first, view.last, 1)
+        vw_len = view.last - view.first
         incr = self._obs_incr[ob_indx]
         # Determine good samples
         if self.is_detdata_key:
@@ -337,7 +337,7 @@ class Periodic(Template):
             det_indx = ob.detdata[self.det_data].indices([detector])[0]
             amps = amplitudes.local[amp_offset : amp_offset + nbins]
             for vw in ob.intervals[self.view].data:
-                vw_slc = slice(vw.first, vw.last + 1, 1)
+                vw_slc = slice(vw.first, vw.last, 1)
                 good, amp_indx = self._view_flags_and_index(
                     det_indx,
                     iob,
@@ -372,7 +372,7 @@ class Periodic(Template):
             else:
                 flag_indx = None
             for vw in ob.intervals[self.view].data:
-                vw_slc = slice(vw.first, vw.last + 1, 1)
+                vw_slc = slice(vw.first, vw.last, 1)
                 good, amp_indx = self._view_flags_and_index(
                     det_indx,
                     iob,

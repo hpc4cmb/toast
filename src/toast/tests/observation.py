@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -429,8 +429,8 @@ class ObservationTest(MPITestCase):
                 np.testing.assert_equal(ob.shared[sh], ob.view[None].shared[sh][0])
 
             # Test named views
-            good_slices = [slice(x.first, x.last + 1, 1) for x in ob.intervals["good"]]
-            bad_slices = [slice(x.first, x.last + 1, 1) for x in ob.intervals["bad"]]
+            good_slices = [slice(x.first, x.last, 1) for x in ob.intervals["good"]]
+            bad_slices = [slice(x.first, x.last, 1) for x in ob.intervals["bad"]]
 
             for dd in ["signal", "flags"]:
                 for vw, slc in zip(ob.view["good"].detdata[dd], good_slices):

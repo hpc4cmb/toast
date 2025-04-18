@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -29,7 +29,7 @@ def pixels_healpix_numpy(
         qidx = quat_index[idet]
         pidx = pixel_index[idet]
         for vw in intervals:
-            samples = slice(vw.first, vw.last + 1, 1)
+            samples = slice(vw.first, vw.last, 1)
             dir = qa.rotate(quats[qidx][samples], zaxis)
             pixels[pidx][samples] = hp.vec2pix(
                 nside,
