@@ -176,8 +176,8 @@ class BuildHitMap(Operator):
                 shared_flgs = [None for x in pix]
 
             # Process every data view
-            for pview, fview, shared_fview in zip(pix, flgs, shared_flgs):
-                for det in dets:
+            for det in dets:
+                for pview, fview, shared_fview in zip(pix, flgs, shared_flgs):
                     # Get local submap and pixels
                     local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
 
@@ -464,8 +464,8 @@ class BuildInverseCovariance(Operator):
                 shared_flgs = [None for x in wts]
 
             # Process every data view
-            for pview, wview, fview, shared_fview in zip(pix, wts, flgs, shared_flgs):
-                for det in dets:
+            for det in dets:
+                for pview, wview, fview, shared_fview in zip(pix, wts, flgs, shared_flgs):
                     # We require that the pointing matrix has the same number of
                     # non-zero elements for every detector and every observation.
                     # We check that here.
