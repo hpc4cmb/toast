@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -175,8 +175,8 @@ class BuildHitMap(Operator):
             else:
                 shared_flgs = [None for x in pix]
 
-            # Process every data view
             for det in dets:
+                # Process every data view
                 for pview, fview, shared_fview in zip(pix, flgs, shared_flgs):
                     # Get local submap and pixels
                     local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
@@ -463,8 +463,8 @@ class BuildInverseCovariance(Operator):
             else:
                 shared_flgs = [None for x in wts]
 
-            # Process every data view
             for det in dets:
+                # Process every data view
                 for pview, wview, fview, shared_fview in zip(pix, wts, flgs, shared_flgs):
                     # We require that the pointing matrix has the same number of
                     # non-zero elements for every detector and every observation.
