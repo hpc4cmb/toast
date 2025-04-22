@@ -141,7 +141,7 @@ class IntervalList(Sequence, AcceleratorObject):
 
     def _find_indices(self, timespans):
         # Each interval covers all samples where the sample time meets:
-        # interval.start <= self.timestamps AND self.timestamps < self.timestamps
+        # interval.start <= self.timestamps AND self.timestamps < interval.stop
         # (open-ended interval)
         # with one exception: if the interval ends at the last timestamp, the
         # corresponding sample is included (closed interval)
