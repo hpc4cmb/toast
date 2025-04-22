@@ -91,13 +91,19 @@ class SharedView(MutableMapping):
 class View(Sequence):
     """Class representing a list of views into any of the local observation data."""
 
-    def __init__(self, obj, key):
+    def __init__(self, obj, key, inverse=False):
         self.obj = obj
         self.key = key
         # Compute a list of slices for these intervals
-        self.slices = [slice(x.first, x.last, 1) for x in self.obj.intervals[key]]
+        if inverse:
+            self.slices = [slice(x.first, x.last, 1) for x in ~self.obj.intervals[key]]
+        else:
+            self.slices = [slice(x.first, x.last, 1) for x in self.obj.intervals[key]]
         self.detdata = DetDataView(obj, self.slices)
         self.shared = SharedView(obj, self.slices)
+
+    def __invert__(self):
+        return View(self.obj, self.key, inverse=True)
 
     def __getitem__(self, key):
         return self.slices[key]
@@ -137,22 +143,32 @@ class ViewManager(MutableMapping):
     # Mapping methods
 
     def __getitem__(self, key):
-        view_name = key
-        if view_name is None:
+        if key is None:
             # Make sure the fake internal intervals are created
             trigger = self.obj.intervals[None]
             view_name = self.obj.intervals.all_name
+            inverse = False
+        else:
+            if key.startswith("~"):
+                key = key[1:]
+                inverse = True
+            else:
+                inverse = False
+            view_name = key
         if view_name not in self.obj._views:
             # View does not yet exist, create it.
             if key is not None and key not in self.obj.intervals:
                 raise KeyError(
-                    "Observation does not have interval list named '{}'".format(key)
+                    f"Observation does not have interval list named '{key}'"
                 )
             self.obj._views[view_name] = View(self.obj, key)
             # Register deleter callback
             if key is not None:
                 self.obj.intervals.register_delete_callback(key, self.__delitem__)
-        return self.obj._views[view_name]
+        if inverse:
+            return ~self.obj._views[view_name]
+        else:
+            return self.obj._views[view_name]
 
     def __delitem__(self, key):
         del self.obj._views[key]

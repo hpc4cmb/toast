@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -7,7 +7,7 @@ import traitlets
 
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Int, List, Unicode, trait_docs
+from ..traits import Int, List, Unicode, trait_docs, Bool
 from ..utils import Environment, Logger
 from .operator import Operator
 
@@ -20,7 +20,8 @@ class FlagIntervals(Operator):
     with shared flags.  The view_mask trait is a list of tuples.  Each tuple contains
     the name of the view (i.e. interval) to apply and the bitmask to use for that
     view.  For each interval view, flag values in the shared_flags object are bitwise-
-    OR'd with the specified mask for samples in the view.
+    OR'd with the specified mask for samples in the view.  If the name of the view is
+    prefixed with '~' or '-', the bitmask is applied to all samples outside the view.
     """
 
     # Class traits
@@ -37,6 +38,10 @@ class FlagIntervals(Operator):
 
     shared_flag_bytes = Int(
         1, help="If creating shared key, use this many bytes per sample"
+    )
+
+    reset = Bool(
+        False, help="If True, flag bits are first set to 0 for the entire observation"
     )
 
     @traitlets.validate("shared_flag_bytes")
@@ -104,14 +109,16 @@ class FlagIntervals(Operator):
             new_flags = None
             if ob.comm_col_rank == 0:
                 new_flags = np.array(ob.shared[self.shared_flags])
+                if self.reset:
+                    for vname, vmask in self.view_mask:
+                        new_flags &= ~vmask
                 for vname, vmask in self.view_mask:
-                    if vname in ob.intervals:
-                        views = ob.view[vname]
-                        for vw in views:
+                    try:
+                        for vw in ob.view[vname]:
                             # Note that a View acts like a slice
                             new_flags[vw] |= vmask
-                    else:
-                        msg = f"Intervals '{vname}' does not exist in {ob.name}"
+                    except KeyError as e:
+                        msg = f"{e}; Intervals '{vname}' does not exist in {ob.name}"
                         msg += " skipping flagging"
                         log.warning(msg)
             ob.shared[self.shared_flags].set(new_flags, offset=(0,), fromrank=0)
