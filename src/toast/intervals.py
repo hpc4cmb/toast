@@ -242,7 +242,7 @@ class IntervalList(Sequence, AcceleratorObject):
             return
         neg = list()
         # Handle range before first interval
-        if not np.isclose(self.timestamps[0], self.data[0].start):
+        if not np.isclose(self.timestamps[0], self.data[0].start, rtol=1e-12):
             neg.append((self.timestamps[0], self.data[0].start, 0, self.data[0].first))
         for i in range(len(self.data) - 1):
             # Handle gaps between intervals
@@ -254,7 +254,7 @@ class IntervalList(Sequence, AcceleratorObject):
                 # There are some samples in between
                 neg.append((cur_stop, next_start, cur_last, next_first))
         # Handle range after last interval
-        if not np.isclose(self.timestamps[-1], self.data[-1].stop):
+        if not np.isclose(self.timestamps[-1], self.data[-1].stop, rtol=1e-12):
             neg.append(
                 (
                     self.data[-1].stop,
@@ -273,9 +273,8 @@ class IntervalList(Sequence, AcceleratorObject):
             raise RuntimeError(
                 "Cannot do AND operation on intervals with different timestamps"
             )
-        if not np.isclose(self.timestamps[0], other.timestamps[0]) or not np.isclose(
-            self.timestamps[-1], other.timestamps[-1]
-        ):
+        if not np.isclose(self.timestamps[0], other.timestamps[0], rtol=1e-12) \
+           or not np.isclose(self.timestamps[-1], other.timestamps[-1], rtol=1e-12):
             raise RuntimeError(
                 "Cannot do AND operation on intervals with different timestamps"
             )
@@ -308,9 +307,8 @@ class IntervalList(Sequence, AcceleratorObject):
             raise RuntimeError(
                 "Cannot do OR operation on intervals with different timestamps"
             )
-        if not np.isclose(self.timestamps[0], other.timestamps[0]) or not np.isclose(
-            self.timestamps[-1], other.timestamps[-1]
-        ):
+        if not np.isclose(self.timestamps[0], other.timestamps[0], rtol=1e-12) \
+           or not np.isclose(self.timestamps[-1], other.timestamps[-1], rtol=1e-12):
             raise RuntimeError(
                 "Cannot do OR operation on intervals with different timestamps"
             )

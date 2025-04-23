@@ -152,6 +152,25 @@ class IntervalTest(MPITestCase):
         ninterval12 = len(intervals12)
         assert ninterval1 + ninterval2 == ninterval12
 
+    def test_inverse(self):
+        # Form an interval list and its inverse and confirm that together
+        # they cover the entire observation
+        n = 100
+        stamps = np.arange(n, dtype=np.float64)
+        breaks = stamps[::10]
+        nbreak = len(breaks)
+        times1 = [(breaks[2 * i], breaks[2 * i + 1]) for i in range(nbreak // 2)]
+        intervals0 = IntervalList(stamps, timespans=times1)
+        intervals1 = ~intervals0
+        intervals2 = ~intervals1
+        included = np.zeros(n, dtype=int)
+        for ival in intervals1:
+            included[ival.first : ival.last] += 1
+        assert not np.all(included)
+        for ival in intervals2:
+            included[ival.first : ival.last] += 1
+        assert np.all(included == 1)
+
     # def test_tochunks(self):
     #     intrvls = regular_intervals(
     #         self.nint, self.start, self.first, self.rate, self.duration, self.gap

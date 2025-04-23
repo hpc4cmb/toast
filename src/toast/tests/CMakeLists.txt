@@ -9,6 +9,7 @@ install(FILES
     dist.py
     instrument.py
     intervals.py
+    ops_flag_intervals.py
     rng.py
     math_misc.py
     qarray.py

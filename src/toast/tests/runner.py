@@ -22,6 +22,7 @@ from . import footprint as test_footprint
 from . import healpix as test_healpix
 from . import instrument as test_instrument
 from . import intervals as test_intervals
+from . import ops_flag_intervals as test_ops_flag_intervals
 from . import io_compression as test_io_compression
 from . import io_hdf5 as test_io_hdf5
 from . import math_misc as test_math_misc
@@ -180,6 +181,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_qarray))
         suite.addTest(loader.loadTestsFromModule(test_noise))
         suite.addTest(loader.loadTestsFromModule(test_intervals))
+        suite.addTest(loader.loadTestsFromModule(test_ops_flag_intervals))
         suite.addTest(loader.loadTestsFromModule(test_instrument))
         suite.addTest(loader.loadTestsFromModule(test_pixels))
         suite.addTest(loader.loadTestsFromModule(test_weather))
