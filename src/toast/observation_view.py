@@ -8,6 +8,8 @@ from collections.abc import Mapping, MutableMapping, Sequence
 
 import numpy as np
 
+from .utils import Logger
+
 
 class DetDataView(MutableMapping):
     """Class that applies views to a DetDataManager instance."""
@@ -92,6 +94,7 @@ class View(Sequence):
     """Class representing a list of views into any of the local observation data."""
 
     def __init__(self, obj, key, inverse=False):
+        self.inverted_counter = 0
         self.obj = obj
         self.key = key
         # Compute a list of slices for these intervals
@@ -103,6 +106,18 @@ class View(Sequence):
         self.shared = SharedView(obj, self.slices)
 
     def __invert__(self):
+        """Return a new view that is the complement of the current view.
+
+        Repeatedly calling __invert__() and resynthesizing the inverse view is
+        inefficient.  Rather, the calling code should construct and save it.
+        """
+        self.inverted_counter += 1
+        if self.inverted_counter > 100:
+            log = Logger.get()
+            msg = f"The '{self.key}' view has been inverted {self.inverted_counter}"
+            msg += " times.  The calling code should probably store and reuse"
+            msg += " the view instead of synthesizing it repeatedly."
+            log.warning(msg)
         return View(self.obj, self.key, inverse=True)
 
     def __getitem__(self, key):

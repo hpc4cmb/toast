@@ -437,6 +437,11 @@ class ObservationTest(MPITestCase):
                     np.testing.assert_equal(ob.detdata[dd][:, slc], vw[:])
                 for vw, slc in zip(ob.view["bad"].detdata[dd], bad_slices):
                     np.testing.assert_equal(ob.detdata[dd][:, slc], vw[:])
+                # Test inverting views
+                for vw1, vw2 in zip(
+                        ob.view["good"].detdata[dd], ob.view["~bad"].detdata[dd]
+                ):
+                    np.testing.assert_equal(vw1[:], vw2[:])
 
             for sh in ["boresight_azel", "boresight_radec", "flags", "timestamps"]:
                 for vw, slc in zip(ob.view["good"].shared[sh], good_slices):

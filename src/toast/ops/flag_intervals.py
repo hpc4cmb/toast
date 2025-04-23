@@ -21,7 +21,7 @@ class FlagIntervals(Operator):
     the name of the view (i.e. interval) to apply and the bitmask to use for that
     view.  For each interval view, flag values in the shared_flags object are bitwise-
     OR'd with the specified mask for samples in the view.  If the name of the view is
-    prefixed with '~' or '-', the bitmask is applied to all samples outside the view.
+    prefixed with '~' the bitmask is applied to all samples outside the view.
     """
 
     # Class traits
