@@ -845,7 +845,8 @@ class MaxDepthPatch(Patch):
         return
 
     def el_range(self, observer, rising):
-        pass
+        self.update(observer)
+        return self.el, self.el
 
     def visible(
         self,
