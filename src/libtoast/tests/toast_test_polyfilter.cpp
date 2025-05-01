@@ -1,12 +1,11 @@
 
-// Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
 #include <toast_test.hpp>
 
 #include <cmath>
-
 
 using namespace std;
 using namespace toast;
@@ -35,7 +34,7 @@ TEST_F(TOASTpolyfilterTest, filter) {
     }
 
     int64_t starts[] = {0, n / 2};
-    int64_t stops[] = {n / 2 - 1, n - 1};
+    int64_t stops[] = {n / 2, n};
     size_t nscan = 2;
 
     double rms1start = 0, rms2start = 0, rms3start = 0;
@@ -100,7 +99,7 @@ TEST_F(TOASTpolyfilterTest, filter_with_flags) {
     }
 
     int64_t starts[] = {0, n / 2};
-    int64_t stops[] = {n / 2 - 1, n - 1};
+    int64_t stops[] = {n / 2, n};
     size_t nscan = 2;
 
     double rms1start = 0, rms2start = 0, rms3start = 0;
