@@ -183,7 +183,9 @@ class IntervalTest(MPITestCase):
         # Time ranges are open ended *unless* they fall exactly on a sample.
         # Here we set the ending time of each span to exactly the timestamp
         # of the final sample.
-        timespans = [(stamps[x[0]], stamps[x[1] - 1]) for x in samplespans]
+        timespans = [
+            (stamps[x[0]], stamps[min(x[1], stamps.size - 1)]) for x in samplespans
+        ]
         intr_times = IntervalList(stamps, timespans=timespans)
 
         self.assertTrue(intr_samples == intr_times)
