@@ -180,9 +180,8 @@ class IntervalTest(MPITestCase):
         samplespans = [(x * n_intr, x * n_intr + n_intr) for x in range(n_intr)]
         intr_samples = IntervalList(stamps, samplespans=samplespans)
 
-        # Time ranges are open ended *unless* they fall exactly on a sample.
-        # Here we set the ending time of each span to exactly the timestamp
-        # of the final sample.
+        # Time ranges are open ended *unless* the end time coincides
+        # with the observation end time.
         timespans = [
             (stamps[x[0]], stamps[min(x[1], stamps.size - 1)]) for x in samplespans
         ]
