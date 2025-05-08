@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -260,8 +260,10 @@ class Spt3gTest(MPITestCase):
         # Verify
         for ob, orig in zip(check_data.obs, original):
             if ob != orig:
-                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
-            self.assertTrue(ob == orig)
+                msg = f"-------- Proc {data.comm.world_rank} ---------\n{orig}"
+                msg += f"\nNOT EQUAL TO\n{ob}"
+                print(msg, flush=True)
+                self.assertTrue(False)
         close_data(data)
 
     def test_save_load_no_compression(self):
@@ -324,8 +326,10 @@ class Spt3gTest(MPITestCase):
         # Verify
         for ob, orig in zip(check_data.obs, data.obs):
             if ob != orig:
-                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
-            self.assertTrue(ob == orig)
+                msg = f"-------- Proc {data.comm.world_rank} ---------\n{orig}"
+                msg += f"\nNOT EQUAL TO\n{ob}"
+                print(msg, flush=True)
+                self.assertTrue(False)
         close_data(data)
 
     def test_run_g3pipe(self):

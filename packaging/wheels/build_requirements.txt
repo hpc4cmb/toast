@@ -5,8 +5,9 @@ scipy
 matplotlib
 psutil
 h5py
-pshmem>=1.1.0
+pshmem>=1.2.1
 pyyaml
 astropy
 healpy
 ephem
+spt3g

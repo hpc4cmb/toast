@@ -387,12 +387,17 @@ class export_obs_data(object):
             n_frames = 0
             first_set = obs.dist.samp_sets[obs.comm.group_rank].offset
             n_set = obs.dist.samp_sets[obs.comm.group_rank].n_elem
+            end_samp = obs.n_local_samples
             for sset in range(first_set, first_set + n_set):
-                for chunk in obs.dist.sample_sets[sset]:
+                for ichunk, chunk in enumerate(obs.dist.sample_sets[sset]):
+                    if offset + chunk >= end_samp:
+                        last_samp = end_samp - 1
+                    else:
+                        last_samp = offset + chunk
                     timespans.append(
                         (
-                            obs.shared[self._timestamp_names[0]][offset],
-                            obs.shared[self._timestamp_names[0]][offset + chunk - 1],
+                            float(obs.shared[self._timestamp_names[0]][offset]),
+                            float(obs.shared[self._timestamp_names[0]][last_samp]),
                         )
                     )
                     n_frames += 1
@@ -402,9 +407,13 @@ class export_obs_data(object):
             )
 
         output = list()
-        frame_view = obs.view[frame_intervals]
-        for ivw, tview in enumerate(frame_view.shared[self._timestamp_names[0]]):
-            msg = f"Create scan frame {obs.name}:{ivw} with fields:"
+        frame_intr = obs.intervals[frame_intervals]
+        for ivw, vw in enumerate(frame_intr):
+            tview = obs.shared[self._timestamp_names[0]].data[vw.first : vw.last]
+            frm_info = (
+                f"{obs.name}:{ivw} ({len(tview)} samples) {tview[0]} - {tview[-1]}"
+            )
+            msg = f"Create scan frame {frm_info} with fields:"
             msg += f"\n  shared:  {self._timestamp_names[1]}"
             nms = ", ".join([y for x, y, z in self._shared_names])
             msg += f", {nms}"
@@ -461,7 +470,7 @@ class export_obs_data(object):
                 tview = obs.view[frame_intervals].shared[self._timestamp_names[0]][ivw]
                 iframe = IntervalList(
                     obs.shared[self._timestamp_names[0]],
-                    timespans=[(tview[0], tview[-1])],
+                    samplespans=[(vw.first, vw.last)],
                 )
                 for ivl_key, ivl_val in self._interval_names:
                     frame[ivl_val] = export_intervals(

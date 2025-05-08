@@ -56,7 +56,7 @@ class IntervalList(Sequence, AcceleratorObject):
         timestamps (array):  Array of local sample times, required.
         intervals (list):  An existing IntervalsList or raw intervals array.
         timespans (list):  A list of tuples containing start and stop times.
-        samplespans (list):  A list of tuples containing first and last (inclusive)
+        samplespans (list):  A list of tuples containing first and last (exclusive)
             sample ranges.
 
     """
@@ -160,7 +160,7 @@ class IntervalList(Sequence, AcceleratorObject):
         times = list()
         samples = list()
         for start, stop, first, last in zip(
-                start_time, stop_time, start_indx, stop_indx
+            start_time, stop_time, start_indx, stop_indx
         ):
             times.append((start, stop))
             samples.append((first, last))
@@ -195,8 +195,9 @@ class IntervalList(Sequence, AcceleratorObject):
             return False
         # Comparing timestamps with default tolerances to np.isclose
         # is always True.  Must use sufficiently tight tolerances
-        if not np.isclose(self.timestamps[0], other.timestamps[0], rtol=1e-12) \
-           or not np.isclose( self.timestamps[-1], other.timestamps[-1], rtol=1e-12):
+        if not np.isclose(
+            self.timestamps[0], other.timestamps[0], rtol=1e-12
+        ) or not np.isclose(self.timestamps[-1], other.timestamps[-1], rtol=1e-12):
             return False
         for s, o in zip(self.data, other.data):
             if s.first != o.first:
@@ -273,8 +274,9 @@ class IntervalList(Sequence, AcceleratorObject):
             raise RuntimeError(
                 "Cannot do AND operation on intervals with different timestamps"
             )
-        if not np.isclose(self.timestamps[0], other.timestamps[0], rtol=1e-12) \
-           or not np.isclose(self.timestamps[-1], other.timestamps[-1], rtol=1e-12):
+        if not np.isclose(
+            self.timestamps[0], other.timestamps[0], rtol=1e-12
+        ) or not np.isclose(self.timestamps[-1], other.timestamps[-1], rtol=1e-12):
             raise RuntimeError(
                 "Cannot do AND operation on intervals with different timestamps"
             )
@@ -307,8 +309,9 @@ class IntervalList(Sequence, AcceleratorObject):
             raise RuntimeError(
                 "Cannot do OR operation on intervals with different timestamps"
             )
-        if not np.isclose(self.timestamps[0], other.timestamps[0], rtol=1e-12) \
-           or not np.isclose(self.timestamps[-1], other.timestamps[-1], rtol=1e-12):
+        if not np.isclose(
+            self.timestamps[0], other.timestamps[0], rtol=1e-12
+        ) or not np.isclose(self.timestamps[-1], other.timestamps[-1], rtol=1e-12):
             raise RuntimeError(
                 "Cannot do OR operation on intervals with different timestamps"
             )

@@ -80,9 +80,9 @@ class IntervalTest(MPITestCase):
 
         full = ival | neg
         full.simplify()
-        check = np.array([(stamps[0], stamps[-1], 0, nsample)], dtype=interval_dtype).view(
-            np.recarray
-        )
+        check = np.array(
+            [(stamps[0], stamps[-1], 0, nsample)], dtype=interval_dtype
+        ).view(np.recarray)
         self.assertTrue(full[0] == check)
 
         empty = ival & neg
@@ -143,7 +143,9 @@ class IntervalTest(MPITestCase):
         breaks = stamps[::10]
         nbreak = len(breaks)
         times1 = [(breaks[2 * i], breaks[2 * i + 1]) for i in range(nbreak // 2)]
-        times2 = [(breaks[2 * i + 1], breaks[2 * i + 2]) for i in range(nbreak // 2 - 1)]
+        times2 = [
+            (breaks[2 * i + 1], breaks[2 * i + 2]) for i in range(nbreak // 2 - 1)
+        ]
         intervals1 = IntervalList(stamps, timespans=times1)
         intervals2 = IntervalList(stamps, timespans=times2)
         ninterval1 = len(intervals1)

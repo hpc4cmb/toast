@@ -418,14 +418,15 @@ def global_interval_times(dist, intervals_manager, name, join=False):
 
     """
     ilist = [(x.start, x.stop, x.first, x.last) for x in intervals_manager[name]]
+    pstart = intervals_manager[name].timestamps[0]
     all_ilist = None
     if dist.comm_row is None:
-        all_ilist = [(ilist, dist.samps[dist.comm.group_rank].n_elem)]
+        all_ilist = [(ilist, dist.samps[dist.comm.group_rank].n_elem, pstart)]
     else:
         # Gather across the process row
         if dist.comm_col_rank == 0:
             all_ilist = dist.comm_row.gather(
-                (ilist, dist.samps[dist.comm.group_rank].n_elem), root=0
+                (ilist, dist.samps[dist.comm.group_rank].n_elem, pstart), root=0
             )
     del ilist
 
@@ -435,36 +436,51 @@ def global_interval_times(dist, intervals_manager, name, join=False):
         # the rank zero process of the observation is also the process with rank
         # zero along both the rows and columns.
         glist = list()
-        last_continue = False
-        last_start = 0
-        last_stop = 0
-        for pdata, pn in all_ilist:
+
+        prev = None
+        cur = None
+        last_pn = None
+        global_off = 0
+        for pdata, pn, pstrt in all_ilist:
             if len(pdata) == 0:
                 continue
             for start, stop, first, last in pdata:
-                if last_continue:
-                    if first == 0:
-                        last_stop = stop
-                    else:
-                        glist.append((last_start, last_stop))
-                        last_continue = False
-                        last_start = start
-                        last_stop = stop
-                else:
-                    last_start = start
-                    last_stop = stop
+                cur = [
+                    float(start),
+                    float(stop),
+                    int(global_off + first),
+                    int(global_off + last),
+                ]
+                if prev is None:
+                    # First global interval
+                    prev = cur
+                    continue
+                if last_pn is not None:
+                    # We are on a later process's data, see if we had any continuation
+                    # of interval from last process.
+                    if prev[3] == global_off:
+                        # The previous interval ended at the final sample on that
+                        # process.  This means that the timestamp of the final sample
+                        # was artificially truncated.
+                        if cur[2] == 0 and join:
+                            # The first interval on this process starts at sample zero,
+                            # and we are joining intervals across the process boundary.
+                            prev[1] = cur[1]
+                            prev[3] = cur[3]
+                            continue
+                        else:
+                            # We are keeping any break between processes, but use
+                            # the first start time on this process as the stop time of
+                            # the interval from the previous process.
+                            prev[1] = pstrt
+                glist.append((prev[0], prev[1]))
+                prev = cur
+            last_pn = pn
+            global_off += pn
 
-                if join:
-                    if last == pn - 1:
-                        last_continue = True
-                    else:
-                        glist.append((last_start, last_stop))
-                        last_continue = False
-                else:
-                    glist.append((last_start, last_stop))
-        if last_continue:
-            # add final range
-            glist.append((last_start, last_stop))
+        # Add final interval
+        if prev is not None:
+            glist.append((prev[0], prev[1]))
     return glist
 
 

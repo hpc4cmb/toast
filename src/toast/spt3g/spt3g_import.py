@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -149,7 +149,9 @@ def import_intervals(obs, name, times, g3obj):
     try:
         if isinstance(g3obj, c3g.IntervalsTime):
             for segment in g3obj.segments:
-                timespans.append((from_g3_time(segment[0]), from_g3_time(segment[1])))
+                timespans.append(
+                    (float(from_g3_time(segment[0])), float(from_g3_time(segment[1])))
+                )
     except AttributeError:
         # We don't have Intervals classes
         pass
@@ -159,10 +161,23 @@ def import_intervals(obs, name, times, g3obj):
             for seg in range(len(g3obj) // 2):
                 seg_start = g3obj[2 * seg]
                 seg_stop = g3obj[2 * seg + 1]
-                timespans.append((from_g3_time(seg_start), from_g3_time(seg_stop)))
-
-    ilist = IntervalList(obs.shared[times], timespans=timespans)
-    obs.intervals[name] |= ilist
+                timespans.append(
+                    (float(from_g3_time(seg_start)), float(from_g3_time(seg_stop)))
+                )
+    if len(timespans) > 0:
+        intr_info = f"{obs.name}:{name} ({len(timespans)} segments "
+        intr_info += f"({len(obs.shared[times])} samples)"
+        msg = f"Import frame intervals {intr_info}:"
+        msg += f"\n  ({timespans[0][0]}, {timespans[0][1]})"
+        if len(timespans) > 1:
+            msg += f", ({timespans[1][0]}, {timespans[1][1]}) ..."
+        log.verbose(msg)
+        ilist = IntervalList(obs.shared[times], timespans=timespans)
+        obs.intervals[name] |= ilist
+    else:
+        msg = f"Intervals {name}: g3obj not IntervalsTime or G3VectorTime,"
+        msg += " zero segments"
+        log.verbose(msg)
 
 
 class import_obs_meta(object):
