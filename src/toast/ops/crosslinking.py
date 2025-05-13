@@ -1,4 +1,4 @@
-# Copyright (c) 2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -31,7 +31,13 @@ class UniformNoise:
 
 @trait_docs
 class CrossLinking(Operator):
-    """Evaluate an ACT-style crosslinking map"""
+    """Evaluate an ACT-style crosslinking map
+
+    The result is a 3-component map that needs to be processed as
+      crosslinking = SQRT(map[1]**2 + map[2]**2) / map[0]
+    for the crosslinking statistic.  This is not done in the operator to allow
+    adding crosslinking maps together.
+    """
 
     # Class traits
 
