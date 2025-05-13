@@ -1,7 +1,8 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import healpy as hp
 import numpy as np
 import scipy.constants as constants
 from astropy import units as u
@@ -11,8 +12,18 @@ from .timing import function_timer
 from .utils import array_dot
 
 
+# A&A 643, A42 (2020) Table 11.
+# Amplitude = 3366.6 uK is converted to speed according to
+# r = amplitude / T_CMB
+# v = (r**2 + 2 * r) / (r**2 + 2 * r + 2) * c
+t_cmb = 2.72548 * u.Kelvin
+solar_speed = 370.08 * u.kilometer / u.second
+solar_gal_lat = 48.25 * u.degree
+solar_gal_lon = 263.99 * u.degree
+
+
 @function_timer
-def dipole(det_pointing, vel=None, solar=None, cmb=2.72548 * u.Kelvin, freq=0 * u.Hz):
+def dipole(det_pointing, vel=None, solar=None, cmb=t_cmb, freq=0 * u.Hz):
     """Compute a dipole timestream.
 
     This uses detector pointing, telescope velocity and the solar system
@@ -84,3 +95,36 @@ def dipole(det_pointing, vel=None, solar=None, cmb=2.72548 * u.Kelvin, freq=0 * 
         dipoletod = cmb_kelvin * (bt + fcor * bt**2)
 
     return dipoletod
+
+
+def dipole_map(nside, freq=0 * u.Hz, coord="G"):
+    # Compute the solar system velocity in galactic coordinates
+
+    solar_gal_theta = np.deg2rad(90.0 - solar_gal_lat.to_value(u.degree))
+    solar_gal_phi = np.deg2rad(solar_gal_lon.to_value(u.degree))
+
+    solar_speed_kms = solar_speed.to_value(u.kilometer / u.second)
+    solar_projected = solar_speed_kms * np.sin(solar_gal_theta)
+
+    sol_z = solar_speed_kms * np.cos(solar_gal_theta)
+    sol_x = solar_projected * np.cos(solar_gal_phi)
+    sol_y = solar_projected * np.sin(solar_gal_phi)
+    solar_gal_vel = np.array([sol_x, sol_y, sol_z])
+
+    # Rotate solar system velocity to desired coordinate frame
+
+    solar_vel = None
+    if coord == "G":
+        solar_vel = solar_gal_vel
+    else:
+        rotmat = hp.rotator.Rotator(coord=["G", self.coord]).mat
+        solar_vel = np.ravel(np.dot(rotmat, solar_gal_vel))
+
+    # Evaluate in each pixel
+
+    pix = np.arange(12 * nside**2)
+    theta, phi = hp.pix2ang(nside, pix)
+    quat = qa.from_iso_angles(theta, phi, np.zeros_like(theta))
+    dipo = dipole(quat, solar=solar_vel, freq=freq)
+
+    return dipo

@@ -8,7 +8,7 @@ import traitlets
 from astropy import units as u
 
 from .. import qarray as qa
-from ..dipole import dipole
+from .. import dipole
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Int, Quantity, Unicode, Unit, trait_docs
@@ -80,19 +80,21 @@ class SimDipole(Operator):
     )
 
     solar_speed = Quantity(
-        369.0 * u.kilometer / u.second,
+        dipole.solar_speed,
         help="Amplitude of the solarsystem barycenter velocity with respect to the CMB",
     )
 
     solar_gal_lat = Quantity(
-        48.26 * u.degree, help="Galactic latitude of direction of solarsystem motion"
+        dipole.solar_gal_lat,
+        help="Galactic latitude of direction of solarsystem motion",
     )
 
     solar_gal_lon = Quantity(
-        263.99 * u.degree, help="Galactic longitude of direction of solarsystem motion"
+        dipole.solar_gal_lon,
+        help="Galactic longitude of direction of solarsystem motion",
     )
 
-    cmb = Quantity(2.72548 * u.Kelvin, help="CMB monopole value")
+    cmb = Quantity(dipole.t_cmb, help="CMB monopole value")
 
     freq = Quantity(0 * u.Hz, help="Optional observing frequency")
 
@@ -198,7 +200,7 @@ class SimDipole(Operator):
                     quats = qa.mult(boresight, detquat)
 
                     # Compute the dipole timestream for this view and detector
-                    dipole_tod = dipole(
+                    dipole_tod = dipole.dipole(
                         quats,
                         vel=vel,
                         solar=sol,
