@@ -3194,8 +3194,8 @@ def parse_patch_sidereal(args, parts):
     azmin = float(parts[3]) * degree
     azmax = float(parts[4]) * degree
     el = float(parts[5]) * degree
-    siderealtime_start = (float(parts[6]) % 180) * degree
-    siderealtime_stop = (float(parts[7]) % 180) * degree
+    siderealtime_start = (float(parts[6]) % 360) * degree
+    siderealtime_stop = (float(parts[7]) % 360) * degree
     scantime = float(parts[8])
     patch = SiderealPatch(
         name, weight, azmin, azmax, el, siderealtime_start, siderealtime_stop, scantime
