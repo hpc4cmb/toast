@@ -400,7 +400,7 @@ class SSOPatch(Patch):
         el_min=0,
         el_max=np.pi / 2,
         elevations=None,
-        eta_off=0, 
+        eta_off=0,
         xi_off=0,
     ):
         self.name = name
@@ -411,16 +411,16 @@ class SSOPatch(Patch):
         self.el_min = el_min
         self.el_max = el_max
         self.el_max0 = el_max
-        #Offseting the source by:
+        # Offseting the source by:
         self.eta_off = eta_off
         self.xi_off = xi_off
         if self.eta_off != 0 or self.xi_off != 0:
-        # We assume the focal plane is always oriented with 
-        # (xi, eta) <-> (-x, -y) and eta is colinear with elevation
-        # We build the vector moving from the offset position to the boresight:
-            theta_off = np.arcsin(np.sqrt(self.eta_off**2+self.xi_off**2))
+            # We assume the focal plane is always oriented with
+            # (xi, eta) <-> (-x, -y) and eta is colinear with elevation
+            # We build the vector moving from the offset position to the boresight:
+            theta_off = np.arcsin(np.sqrt(self.eta_off**2 + self.xi_off**2))
             phi_off = np.arctan2(self.xi_off, self.eta_off)
-            self.patch_qoff = qa.from_iso_angles(theta_off, phi_off+np.pi, 0.)
+            self.patch_qoff = qa.from_iso_angles(theta_off, phi_off + np.pi, 0.0)
 
         self.parse_elevations(elevations)
         try:
@@ -437,11 +437,11 @@ class SSOPatch(Patch):
         self.body.compute(observer)
         ra, dec = self.body.ra, self.body.dec
         if self.eta_off != 0 or self.xi_off != 0:
-            body_qazel = qa.from_lonlat_angles(-self.body.az, self.body.alt, 0.)
-            #Compute the position of the patch center given the body's position. 
+            body_qazel = qa.from_lonlat_angles(-self.body.az, self.body.alt, 0.0)
+            # Compute the position of the patch center given the body's position.
             patch_qazel = qa.mult(body_qazel, self.patch_qoff)
             patch_lon, patch_el, _ = qa.to_lonlat_angles(patch_qazel)
-            #Convert to the celestial of the patch center
+            # Convert to the celestial of the patch center
             ra, dec = observer.radec_of(-patch_lon, patch_el)
 
         # Synthesize 8 corners around the center
@@ -3131,14 +3131,14 @@ def parse_patch_sso(args, parts):
     name = parts[0]
     weight = float(parts[2])
     radius = float(parts[3]) * degree
-    if len(parts)==6:
+    if len(parts) == 6:
         eta_off = float(parts[4]) * degree
         xi_off = float(parts[5]) * degree
         log.info(f"SSO targeting offset by {eta_off}, {xi_off}")
     else:
         eta_off = 0
         xi_off = 0
-        
+
     patch = SSOPatch(
         name,
         weight,
@@ -3146,8 +3146,8 @@ def parse_patch_sso(args, parts):
         el_min=args.el_min_deg * degree,
         el_max=args.el_max_deg * degree,
         elevations=args.elevations_deg,
-        eta_off = eta_off,
-        xi_off = xi_off,
+        eta_off=eta_off,
+        xi_off=xi_off,
     )
     return patch
 
