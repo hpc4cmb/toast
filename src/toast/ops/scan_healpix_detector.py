@@ -202,7 +202,11 @@ class ScanHealpixDetectorMap(Operator):
                             raise FileNotFoundError(msg)
                         current_map = np.atleast_2d(
                             read_healpix(
-                                current_file_name, None, nest=nest, dtype=np.float32
+                                current_file_name,
+                                None,
+                                nest=nest,
+                                dtype=np.float32,
+                                verbose=False,
                             )
                         )
                         nside_map = hp.get_nside(current_map)
