@@ -403,6 +403,29 @@ def step_el(
 
 
 @function_timer
+def simulate_stare(t_start, t_stop, rate, el, az):
+    """ Return times, azimuth, elevation and intervals for a stare """
+    samples = int((t_stop - t_start) * rate)
+    times = t_start + np.arange(samples) / rate
+    az_sample = np.zeros(samples) + az
+    el_sample = np.zeros(samples) + el
+    # FIXME: do we need a flag bit for stationary telescope?
+    return (
+        times,
+        az_sample,
+        el_sample,
+        az,
+        az,
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
+
+
+@function_timer
 def simulate_ces_scan(
     site,
     t_start,
@@ -423,6 +446,10 @@ def simulate_ces_scan(
     track_azimuth=False,
 ):
     """Simulate a constant elevation scan."""
+
+    if np.abs(az_min - az_max) < 1e-10:
+        # short circuit, this is a stare, not an azimuthal scan
+        return simulate_stare(t_start, t_stop, rate, el, az_min)
 
     # Begin by simulating one full scan with turnarounds at high sampling
     # It will be used to interpolate the full CES.
