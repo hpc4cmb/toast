@@ -451,6 +451,12 @@ class SimGround(Operator):
         off = 0
 
         for scan in self.schedule.scans:
+            # Check that the observation has valid samples
+            length = (scan.stop - scan.start).total_seconds()
+            if np.abs(length) < incr:
+                continue
+
+            # Compute sample indices relative to the global start time
             ffirst = rate * (scan.start - mission_start).total_seconds()
             first = int(ffirst)
             if ffirst - first > 1.0e-3 * incr:
@@ -954,15 +960,19 @@ class SimGround(Operator):
                 self.el_mod_step.to_value(u.radian),
             )
 
-        # When distributing data, ensure that each process has a whole number of
-        # complete scans.
-        scan_indices = np.searchsorted(
-            scan_times, [x[0] for x in ival_scan_leftright], side="left"
-        )
-        sample_sets.extend([[x] for x in scan_indices[1:] - scan_indices[:-1]])
-        remainder = len(scan_times) - scan_indices[-1]
-        if remainder > 0:
-            sample_sets.append([remainder])
+        if len(ival_scan_leftright) == 0:
+            # No subscans, cannot divide this observation
+            sample_sets.append([len(scan_times)])
+        else:
+            # When distributing data, ensure that each process has a whole number of
+            # complete scans.
+            scan_indices = np.searchsorted(
+                scan_times, [x[0] for x in ival_scan_leftright], side="left"
+            )
+            sample_sets.extend([[x] for x in scan_indices[1:] - scan_indices[:-1]])
+            remainder = len(scan_times) - scan_indices[-1]
+            if remainder > 0:
+                sample_sets.append([remainder])
 
         times.append(scan_times)
         az.append(scan_az_data)
@@ -1013,7 +1023,8 @@ class SimGround(Operator):
         if self.distribute_time:
             if samp_ranks > len(sample_sets):
                 if comm.group_rank == 0:
-                    msg = f"Group {comm.group} with {comm.group_size} processes cannot distribute {len(sample_sets)} sample sets."
+                    msg = f"Group {comm.group} with {comm.group_size} processes "
+                    msg += f"cannot distribute {len(sample_sets)} sample sets."
                     log.error(msg)
                     raise RuntimeError(msg)
 
