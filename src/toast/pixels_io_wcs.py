@@ -1,10 +1,11 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
 
 import astropy.io.fits as af
+import h5py
 import numpy as np
 from astropy import units as u
 
@@ -256,6 +257,114 @@ def write_wcs_fits(pix, path, comm_bytes=10000000, report_memory=False):
 
 
 @function_timer
+def write_wcs_hdf5(pix, path, comm_bytes=10000000, report_memory=False):
+    """Write pixel data to an HDF5 image
+
+    The data across all processes is assumed to be synchronized (the data for a given
+    submap shared between processes is identical).  The submap data is sent to the root
+    process which writes it out.
+
+    Args:
+        pix (PixelData): The distributed pixel object.
+        path (str): The path to the output FITS file.
+        comm_bytes (int): The approximate message size to use.
+        report_memory (bool): Report the amount of available memory on the root
+            node just before writing out the map.
+
+    Returns:
+        None
+
+    """
+    log = Logger.get()
+    timer = Timer()
+    timer.start()
+
+    # The distribution
+    dist = pix.distribution
+
+    # Check that we have WCS information
+    if not hasattr(dist, "wcs"):
+        raise RuntimeError("Pixel distribution does not have WCS information")
+
+    rank = 0
+    if dist.comm is not None:
+        rank = dist.comm.rank
+
+    image = collect_wcs_submaps(pix, comm_bytes=comm_bytes)
+
+    if rank == 0:
+        if os.path.isfile(path):
+            os.remove(path)
+        with h5py.File(path, "w") as hfile:
+            hfile["data"] = image
+            # Basic wcs header
+            header = dist.wcs.to_header(relax=True)
+            for key, value in header.items():
+                hfile[f"wcs/{key}"] = value
+            # Add units
+            hfile["bunit"] = str(pix.units)
+
+    del image
+    return
+
+
+@function_timer
+def broadcast_image(image, fscale, pix, comm_bytes):
+    """Broadcast image across the distributed pixel data
+
+    Args:
+        image (ndarray):  Root process has the image.
+            Unused on other processes.
+        fscale (float):  Root process has any necessary scaling.
+            Unused on other processes.
+        pix (PixelData): The distributed PixelData object.
+        comm_bytes (int): The approximate message size to use in bytes.
+    """
+    log = Logger.get()
+    dist = pix.distribution
+    rank = 0
+    if dist.comm is not None:
+        rank = dist.comm.rank
+
+    n_val_submap = dist.n_pix_submap * pix.n_value
+
+    if dist.comm is None:
+        # Single process, just copy into place
+        for sm in range(dist.n_submap):
+            if sm in dist.local_submaps:
+                loc = dist.global_submap_to_local[sm]
+                image_to_submap(dist, image, sm, pix.data[loc], scale=fscale)
+    else:
+        # One reader broadcasts
+        fscale = dist.comm.bcast(fscale, root=0)
+        comm_submap = pix.comm_nsubmap(comm_bytes)
+
+        buf = np.zeros(comm_submap * n_val_submap, dtype=pix.dtype)
+        view = buf.reshape(comm_submap, dist.n_pix_submap, pix.n_value)
+        submap_off = 0
+        ncomm = comm_submap
+        while submap_off < dist.n_submap:
+            if submap_off + ncomm > dist.n_submap:
+                ncomm = dist.n_submap - submap_off
+            if rank == 0:
+                # Fill the bcast buffer
+                for c in range(ncomm):
+                    image_to_submap(
+                        dist, image, (submap_off + c), view[c], scale=fscale
+                    )
+            # Broadcast
+            dist.comm.Bcast(buf, root=0)
+            # Copy these submaps into local data
+            for sm in range(submap_off, submap_off + ncomm):
+                if sm in dist.local_submaps:
+                    loc = dist.global_submap_to_local[sm]
+                    pix.data[loc, :, :] = view[sm - submap_off, :, :]
+            submap_off += comm_submap
+            buf.fill(0)
+    return
+
+
+@function_timer
 def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
     """Read and broadcast pixel data stored in a FITS image.
 
@@ -309,40 +418,65 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
                 f"Input file has {impix} pixel values instead of {tot_pix}"
             )
 
-    n_val_submap = dist.n_pix_submap * pix.n_value
+    broadcast_image(image, fscale, pix, comm_bytes)
 
-    if dist.comm is None:
-        # Single process, just copy into place
-        for sm in range(dist.n_submap):
-            if sm in dist.local_submaps:
-                loc = dist.global_submap_to_local[sm]
-                image_to_submap(dist, image, sm, pix.data[loc], scale=fscale)
-    else:
-        # One reader broadcasts
-        fscale = dist.comm.bcast(fscale, root=0)
-        comm_submap = pix.comm_nsubmap(comm_bytes)
+    return
 
-        buf = np.zeros(comm_submap * n_val_submap, dtype=pix.dtype)
-        view = buf.reshape(comm_submap, dist.n_pix_submap, pix.n_value)
-        submap_off = 0
-        ncomm = comm_submap
-        while submap_off < dist.n_submap:
-            if submap_off + ncomm > dist.n_submap:
-                ncomm = dist.n_submap - submap_off
-            if rank == 0:
-                # Fill the bcast buffer
-                for c in range(ncomm):
-                    image_to_submap(
-                        dist, image, (submap_off + c), view[c], scale=fscale
-                    )
-            # Broadcast
-            dist.comm.Bcast(buf, root=0)
-            # Copy these submaps into local data
-            for sm in range(submap_off, submap_off + ncomm):
-                if sm in dist.local_submaps:
-                    loc = dist.global_submap_to_local[sm]
-                    pix.data[loc, :, :] = view[sm - submap_off, :, :]
-            submap_off += comm_submap
-            buf.fill(0)
+
+@function_timer
+def read_wcs_hdf5(pix, path, comm_bytes=10000000):
+    """Read and broadcast pixel data stored in a HDF5 image.
+
+    The root process opens the HDF5 file and broadcasts the data in units
+    of the submap size.
+
+    Args:
+        pix (PixelData): The distributed PixelData object.
+        path (str): The path to the HDF5 file.
+        comm_bytes (int): The approximate message size to use in bytes.
+
+    Returns:
+        None
+
+    """
+    log = Logger.get()
+    dist = pix.distribution
+    rank = 0
+    if dist.comm is not None:
+        rank = dist.comm.rank
+
+    image = None
+    fscale = 1.0
+    if rank == 0:
+        # Separately read the units.
+        with h5py.File(path, "r") as hfile:
+            if "bunit" in hfile:
+                bunit = hfile["bunit"][()].decode()
+                if bunit == "":
+                    funits = u.dimensionless_unscaled
+                else:
+                    funits = u.Unit(bunit)
+            else:
+                msg = f"Pixel data in {path} does not have BUNIT key.  "
+                msg += f"Assuming {pix.units}."
+                log.warning(msg)
+                funits = pix.units
+            if funits != pix.units:
+                scale = 1.0 * funits
+                scale.to(pix.units)
+                fscale = scale.value
+            image = np.array(hfile["data"][()])
+
+        # Check dimensions
+        impix = 1
+        for s in image.shape:
+            impix *= s
+        tot_pix = dist.n_pix * pix.n_value
+        if tot_pix != impix:
+            raise RuntimeError(
+                f"Input file has {impix} pixel values instead of {tot_pix}"
+            )
+
+    broadcast_image(image, fscale, pix, comm_bytes)
 
     return

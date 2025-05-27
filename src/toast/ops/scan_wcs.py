@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -8,7 +8,8 @@ from astropy import units as u
 
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_wcs import read_wcs_fits
+from ..pixels_io_healpix import filename_is_fits, filename_is_hdf5
+from ..pixels_io_wcs import read_wcs_fits, read_wcs_hdf5
 from ..timing import function_timer
 from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
@@ -32,7 +33,7 @@ class ScanWCSMap(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
-    file = Unicode(None, allow_none=True, help="Path to FITS file")
+    file = Unicode(None, allow_none=True, help="Path to FITS or HDF5 file")
 
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key for accumulating output"
@@ -149,7 +150,7 @@ class ScanWCSMap(Operator):
         elif self.stokes_weights.mode == "IQU":
             nnz = 3
         else:
-            msg = "Unknown Stokes weights mode '{}'".format(self.stokes_weights.mode)
+            msg = f"Unknown Stokes weights mode '{self.stokes_weights.mode}'"
             raise RuntimeError(msg)
 
         # Create our map to scan named after our own operator name.  Generally the
@@ -160,7 +161,13 @@ class ScanWCSMap(Operator):
             data[self.map_name] = PixelData(
                 dist, dtype=np.float32, n_value=nnz, units=self.det_data_units
             )
-            read_wcs_fits(data[self.map_name], self.file)
+            if filename_is_fits(self.file):
+                read_wcs_fits(data[self.map_name], self.file)
+            elif filename_is_hdf5(self.file):
+                read_wcs_hdf5(data[self.map_name], self.file)
+            else:
+                msg = f"Could not deduce file format for '{self.file}'"
+                raise RuntimeError(msg)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.

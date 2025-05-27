@@ -19,7 +19,8 @@ install(FILES
     config.py
     observation.py
     timing.py
-    pixels.py
+    pixels_healpix.py
+    pixels_wcs.py
     weather.py
     noise.py
     ops_sim_satellite.py

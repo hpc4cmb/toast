@@ -78,7 +78,8 @@ from . import ops_statistics as test_ops_statistics
 from . import ops_stokes_weights as test_ops_stokes_weights
 from . import ops_time_constant as test_ops_time_constant
 from . import ops_yield_cut as test_ops_yield_cut
-from . import pixels as test_pixels
+from . import pixels_healpix as test_pixels_healpix
+from . import pixels_wcs as test_pixels_wcs
 from . import qarray as test_qarray
 from . import rng as test_rng
 from . import template_amplitudes as test_template_amplitudes
@@ -183,7 +184,8 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_intervals))
         suite.addTest(loader.loadTestsFromModule(test_ops_flag_intervals))
         suite.addTest(loader.loadTestsFromModule(test_instrument))
-        suite.addTest(loader.loadTestsFromModule(test_pixels))
+        suite.addTest(loader.loadTestsFromModule(test_pixels_healpix))
+        suite.addTest(loader.loadTestsFromModule(test_pixels_wcs))
         suite.addTest(loader.loadTestsFromModule(test_weather))
         suite.addTest(loader.loadTestsFromModule(test_footprint))
 
