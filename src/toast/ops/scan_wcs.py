@@ -124,9 +124,10 @@ class ScanWCSMap(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        # Check that the file is set
-        if self.file is None:
-            raise RuntimeError("You must set the file trait before calling exec()")
+        for trait in ("file", "pixel_pointing", "stokes_weights"):
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
 
         # Construct the pointing distribution if it does not already exist
 
@@ -142,16 +143,7 @@ class ScanWCSMap(Operator):
         if not isinstance(dist, PixelDistribution):
             raise RuntimeError("The pixel_dist must be a PixelDistribution instance")
 
-        # Use the pixel odistribution and pointing configuration to allocate our
-        # map data and read it in.
-        nnz = None
-        if self.stokes_weights is None or self.stokes_weights.mode == "I":
-            nnz = 1
-        elif self.stokes_weights.mode == "IQU":
-            nnz = 3
-        else:
-            msg = f"Unknown Stokes weights mode '{self.stokes_weights.mode}'"
-            raise RuntimeError(msg)
+        nnz = len(self.stokes_weights.mode)
 
         # Create our map to scan named after our own operator name.  Generally the
         # files on disk are stored as float32, but even if not there is no real benefit

@@ -12,6 +12,7 @@ from astropy import units as u
 from .mpi import MPI, use_mpi
 from .timing import Timer, function_timer
 from .utils import Logger, memreport
+from .pixels_io_healpix import filename_is_fits, filename_is_hdf5
 
 
 def submap_to_image(dist, submap, sdata, image):
@@ -448,9 +449,9 @@ def read_wcs_hdf5(pix, path, comm_bytes=10000000):
     image = None
     fscale = 1.0
     if rank == 0:
-        # Separately read the units.
         with h5py.File(path, "r") as hfile:
             if "bunit" in hfile:
+                # Separately read the units.
                 bunit = hfile["bunit"][()].decode()
                 if bunit == "":
                     funits = u.dimensionless_unscaled
@@ -480,3 +481,38 @@ def read_wcs_hdf5(pix, path, comm_bytes=10000000):
     broadcast_image(image, fscale, pix, comm_bytes)
 
     return
+
+
+@function_timer
+def read_wcs(filename, *args, **kwargs):
+    """Read a FITS or HDF5 WCS map serially.
+
+    This reads the file into simple numpy arrays on the calling process.
+    Units in the file are ignored.
+
+    Args:
+        filename (str):  The path to the file.
+
+    Returns:
+        (tuple):  The map data and optionally header.
+
+    """
+
+    filename = filename.strip()
+
+    if filename_is_fits(filename):
+        # Load a FITS format image
+        with af.open(filename, mode="readonly") as hdul:
+            image = np.array(hdul[0].data)
+    elif filename_is_hdf5(filename):
+        # Load an HDF5 format image
+        with h5py.File(filename, "r") as hfile:
+            image = np.array(hfile["data"][()])
+    else:
+        msg = f"Could not ascertain file type for '{filename}'"
+        raise RuntimeError(msg)
+    image = np.atleast_3d(image)
+    # The image is row-major and needs to be transposed for flat pixel
+    # numbering
+    image = image.transpose((0, 2, 1))
+    return image
