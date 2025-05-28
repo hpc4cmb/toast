@@ -56,6 +56,7 @@ from .scan_healpix import ScanHealpixMap, ScanHealpixMask
 from .scan_healpix_detector import ScanHealpixDetectorMap
 from .scan_map import ScanMap, ScanMask, ScanScale
 from .scan_wcs import ScanWCSMap, ScanWCSMask
+from .scan_wcs_detector import ScanWCSDetectorMap
 from .signal_diff_noise_model import SignalDiffNoiseModel
 from .sim_catalog import SimCatalog
 from .sim_cosmic_rays import InjectCosmicRays

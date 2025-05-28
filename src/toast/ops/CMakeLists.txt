@@ -34,6 +34,7 @@ install(FILES
     scan_healpix.py
     scan_healpix_detector.py
     scan_wcs.py
+    scan_wcs_detector.py
     mapmaker_binning.py
     mapmaker_solve.py
     mapmaker_templates.py
