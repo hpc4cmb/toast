@@ -614,7 +614,7 @@ def filename_is_fits(filename):
 
 
 def filename_is_hdf5(filename):
-    return filename.endswith((".hdf5", ".h5", ".H5"))
+    return filename.endswith((".hdf", ".hdf5", ".h5", ".H5"))
 
 
 @function_timer
