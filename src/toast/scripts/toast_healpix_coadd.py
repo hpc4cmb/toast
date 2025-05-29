@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -297,9 +297,13 @@ def main():
     last_pix = min(first_pix + npix_task, ngood)
     if first_pix < last_pix:
         my_npix = last_pix - first_pix
-        ind = slice(first_pix, last_pix)
-        my_map = noiseweighted_sum[:, ind].T.ravel().copy()
-        my_cov = invcov_sum[:, ind].T.ravel().copy()
+        cumulative_good = np.cumsum(good)
+        ifirst, ilast = np.searchsorted(cumulative_good, [first_pix, last_pix], side="right")
+        ind = slice(ifirst, ilast)
+        my_good = np.zeros_like(good)
+        my_good[ind] = good[ind]
+        my_map = noiseweighted_sum[:, my_good].T.ravel().copy()
+        my_cov = invcov_sum[:, my_good].T.ravel().copy()
         my_rcond = np.zeros(my_npix, dtype=float)
         log.debug(f"{prefix}Inverting {my_npix} pixels")
         cov_eigendecompose_diag(
@@ -338,7 +342,9 @@ def main():
             total_rcond = np.hstack(total_rcond)
             full_rcond = np.zeros(npix, dtype=dtype)
             full_rcond[good] = total_rcond
-            write_healpix(args.rcond, full_rcond, nest=True, dtype=dtype)
+            write_healpix(
+                args.rcond, full_rcond, nest=True, dtype=dtype, overwrite=True
+            )
             del full_rcond
             del total_rcond
             log.info_rank(f"Wrote {args.rcond}", timer=timer, comm=None)
@@ -347,7 +353,7 @@ def main():
             total_cov = np.hstack(total_cov)
             full_cov = np.zeros([nnz, npix])
             full_cov[:, good] = total_cov
-            write_healpix(args.cov, full_cov, nest=True, dtype=dtype)
+            write_healpix(args.cov, full_cov, nest=True, dtype=dtype, overwrite=True)
             del full_cov
             del total_cov
             log.info_rank(f"Wrote {args.cov}", timer=timer, comm=None)
@@ -355,7 +361,7 @@ def main():
         total_map = np.hstack(total_map)
         full_map = np.zeros([nnz, npix])
         full_map[:, good] = total_map
-        write_healpix(args.outmap, full_map, nest=True, dtype=dtype)
+        write_healpix(args.outmap, full_map, nest=True, dtype=dtype, overwrite=True)
         log.info_rank(f"Wrote {args.outmap}", timer=timer, comm=None)
 
     log.info_rank(f"Co-add done in", timer=timer0, comm=comm)
