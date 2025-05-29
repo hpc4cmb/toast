@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -554,7 +554,8 @@ class GenerateAtmosphere(Operator):
                 while istop < len(times) and times[istop] < tmax:
                     istop += 1
                 # Extend the scan to the next turnaround, if we have them
-                if self.turnaround_interval is not None:
+                if self.turnaround_interval is not None \
+                   and len(obs.intervals[self.turnaround_interval]) > 0:
                     iturn = 0
                     while iturn < len(obs.intervals[self.turnaround_interval]) - 1 and (
                         times[istop]
