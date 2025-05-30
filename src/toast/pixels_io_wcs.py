@@ -512,7 +512,4 @@ def read_wcs(filename, *args, **kwargs):
         msg = f"Could not ascertain file type for '{filename}'"
         raise RuntimeError(msg)
     image = np.atleast_3d(image)
-    # The image is row-major and needs to be transposed for flat pixel
-    # numbering
-    image = image.transpose((0, 2, 1))
     return image

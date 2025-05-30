@@ -390,11 +390,19 @@ class PixelsWCS(Operator):
             raise NotImplementedError("Only astropy conversion is currently supported")
 
         if self.fits_header is not None:
-            # with open(self.fits_header, "rb") as f:
-            #     header = af.Header.fromfile(f)
-            raise NotImplementedError(
-                "Initialization from a FITS header not yet finished"
-            )
+            with open(self.fits_header, "rb") as f:
+                header = af.Header.fromfile(f)
+                self.wcs = WCS(header=header)
+                self.wcs_shape = self.wcs.array_shape
+                self.pix_lon = self.wcs_shape[0]
+                self.pix_lat = self.wcs_shape[1]
+                self._n_pix = self.pix_lon * self.pix_lat
+                self._n_pix_submap = self._n_pix // self.submaps
+                if self._n_pix_submap * self.submaps < self._n_pix:
+                    self._n_pix_submap += 1
+                self._local_submaps = np.zeros(self.submaps, dtype=np.uint8)
+                self._done_wcs = True
+                self._done_auto = True
 
         if self.coord_frame == "AZEL":
             is_azimuth = True
