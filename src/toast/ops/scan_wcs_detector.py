@@ -143,8 +143,8 @@ class ScanWCSDetectorMap(Operator):
                 raise RuntimeError(msg)
 
         nnz = len(self.stokes_weights.mode)
-        wcs = self.pixel_pointing.wcs
-        wcs_shape = self.pixel_pointing.wcs_shape
+        wcs = None
+        wcs_shape = None
 
         # Loop over all observations and local detectors, sampling the appropriate maps
         last_file_name = None
@@ -169,6 +169,11 @@ class ScanWCSDetectorMap(Operator):
                 detector_properties = self._get_properties(ob, det)
                 # Get pointing
                 self.pixel_pointing.apply(ob_data, detectors=[det])
+                if wcs is None:
+                    # WCS is not available until the pixel pointing
+                    # operator is executed at least once
+                    wcs = self.pixel_pointing.wcs
+                    wcs_shape = self.pixel_pointing.wcs_shape
                 self.stokes_weights.apply(ob_data, detectors=[det])
                 pix = current_ob.detdata[self.pixel_pointing.pixels][det]
                 # Get pointing weights
