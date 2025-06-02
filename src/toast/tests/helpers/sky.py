@@ -16,8 +16,9 @@ from scipy.ndimage import gaussian_filter
 from ... import ops, rng
 from ...observation import default_values as defaults
 from ...pixels import PixelData
-from ...pixels_io_healpix import read_healpix_fits
-from ...pixels_io_wcs import read_wcs_fits
+from ...pixels_io_healpix import (filename_is_fits, filename_is_hdf5,
+                                  read_healpix_fits)
+from ...pixels_io_wcs import read_wcs_fits, read_wcs_hdf5, write_wcs
 
 
 def create_fake_healpix_file(
@@ -123,17 +124,7 @@ def create_fake_wcs_file(
         temp = np.random.normal(loc=0.0, scale=scale, size=(lat_dim, lon_dim))
         image[imap, :, :] = gaussian_filter(temp, sigma=(lat_fwhm, lon_fwhm))
 
-    # Basic wcs header
-    header = wcs.to_header(relax=True)
-    # Add map dimensions
-    header["NAXIS"] = image.ndim
-    for i, n in enumerate(image.shape[::-1]):
-        header[f"NAXIS{i + 1}"] = n
-    # Add units
-    header["BUNIT"] = str(units)
-    hdus = af.HDUList([af.PrimaryHDU(image.astype(np.float32), header)])
-    hdus.writeto(out_file)
-    del hdus
+    write_wcs(out_file, image, wcs, units)
     del image
 
 
@@ -243,7 +234,10 @@ def create_fake_wcs_map(
     if comm is not None:
         comm.barrier()
     pix = PixelData(pixel_dist, np.float64, n_value=3, units=units)
-    read_wcs_fits(pix, out_file)
+    if filename_is_fits(out_file):
+        read_wcs_fits(pix, out_file)
+    else:
+        read_wcs_hdf5(pix, out_file)
     return pix
 
 
@@ -637,5 +631,3 @@ def fetch_nominal_cmb_cls(out_file=None):
         c_ell = _parse_file(out_file)
 
     return c_ell
-
-

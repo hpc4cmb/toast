@@ -23,7 +23,7 @@ class ScanWCSDetectorTest(MPITestCase):
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
 
-    def test_wcs_fits(self):
+    def _test_wcs(self, suffix):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)
 
@@ -43,7 +43,7 @@ class ScanWCSDetectorTest(MPITestCase):
 
         pixel_names = np.unique(data.obs[0].telescope.focalplane.detector_data["pixel"])
 
-        wcs_file = os.path.join(self.outdir, "fake_fits_{pixel}.fits")
+        wcs_file = os.path.join(self.outdir, "fake_{pixel}." + suffix)
         # Create fake polarized sky signal independently for each pixel
         for i, pixel in enumerate(pixel_names):
             map_key = f"fake_map_{pixel}"
@@ -77,15 +77,16 @@ class ScanWCSDetectorTest(MPITestCase):
             for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 pixel = data.obs[0].telescope.focalplane[det]["pixel"]
                 det_data = f"det_data_{pixel}"
-                try:
-                    np.testing.assert_almost_equal(
-                        ob.detdata["test"][det],
-                        ob.detdata[det_data][det],
-                        decimal=5,
-                    )
-                except:
-                    import pdb
-
-                    pdb.set_trace()
+                np.testing.assert_almost_equal(
+                    ob.detdata["test"][det],
+                    ob.detdata[det_data][det],
+                    decimal=5,
+                )
 
         close_data(data)
+
+    def test_wcs_fits(self):
+        self._test_wcs("fits")
+
+    def test_wcs_hdf5(self):
+        self._test_wcs("hdf5")
