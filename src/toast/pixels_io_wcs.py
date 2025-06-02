@@ -10,9 +10,9 @@ import numpy as np
 from astropy import units as u
 
 from .mpi import MPI, use_mpi
+from .pixels_io_healpix import filename_is_fits, filename_is_hdf5
 from .timing import Timer, function_timer
 from .utils import Logger, memreport
-from .pixels_io_healpix import filename_is_fits, filename_is_hdf5
 
 
 def submap_to_image(dist, submap, sdata, image):
@@ -240,18 +240,7 @@ def write_wcs_fits(pix, path, comm_bytes=10000000, report_memory=False):
     image = collect_wcs_submaps(pix, comm_bytes=comm_bytes)
 
     if rank == 0:
-        if os.path.isfile(path):
-            os.remove(path)
-        # Basic wcs header
-        header = dist.wcs.to_header(relax=True)
-        # Add map dimensions
-        header["NAXIS"] = image.ndim
-        for i, n in enumerate(image.shape[::-1]):
-            header[f"NAXIS{i+1}"] = n
-        # Add units
-        header["BUNIT"] = str(pix.units)
-        hdus = af.HDUList([af.PrimaryHDU(image, header)])
-        hdus.writeto(path)
+        write_wcs(path, image, dist.wcs, pix.units)
 
     del image
     return
@@ -294,16 +283,7 @@ def write_wcs_hdf5(pix, path, comm_bytes=10000000, report_memory=False):
     image = collect_wcs_submaps(pix, comm_bytes=comm_bytes)
 
     if rank == 0:
-        if os.path.isfile(path):
-            os.remove(path)
-        with h5py.File(path, "w") as hfile:
-            hfile["data"] = image
-            # Basic wcs header
-            header = dist.wcs.to_header(relax=True)
-            for key, value in header.items():
-                hfile[f"wcs/{key}"] = value
-            # Add units
-            hfile["bunit"] = str(pix.units)
+        write_wcs(path, image, dist.wcs, pix.units)
 
     del image
     return
@@ -484,6 +464,49 @@ def read_wcs_hdf5(pix, path, comm_bytes=10000000):
 
 
 @function_timer
+def write_wcs(filename, image, wcs, units):
+    """Write a FITS or HDF5 WCS map on the calling process
+
+    Args:
+        filename (str):  The path to the file
+        image (ndarray): 2 or 3-dimensional image
+        wcs (astropy.WCS):  The World Coordinate System
+        units (str):  Image units
+
+    Returns:
+        None
+    """
+
+    filename = filename.strip()
+    if os.path.isfile(filename):
+        os.remove(filename)
+    # Basic wcs header
+    header = wcs.to_header(relax=True)
+
+    if filename_is_fits(filename):
+        # Add map dimensions
+        header["NAXIS"] = image.ndim
+        for i, n in enumerate(image.shape[::-1]):
+            header[f"NAXIS{i + 1}"] = n
+        # Add units
+        header["BUNIT"] = str(units)
+        hdus = af.HDUList([af.PrimaryHDU(image.astype(np.float32), header)])
+        hdus.writeto(filename)
+        del hdus
+    elif filename_is_hdf5(filename):
+        with h5py.File(filename, "w") as hfile:
+            hfile["data"] = image
+            for key, value in header.items():
+                hfile[f"wcs/{key}"] = value
+            # Add units
+            hfile["bunit"] = str(units)
+    else:
+        msg = f"Could not ascertain file type for '{filename}'"
+        raise RuntimeError(msg)
+    return
+
+
+@function_timer
 def read_wcs(filename, *args, **kwargs):
     """Read a FITS or HDF5 WCS map serially.
 
@@ -511,5 +534,5 @@ def read_wcs(filename, *args, **kwargs):
     else:
         msg = f"Could not ascertain file type for '{filename}'"
         raise RuntimeError(msg)
-    image = np.atleast_3d(image)
+    image = np.atleast_3d(image).transpose([0, 2, 1])
     return image
