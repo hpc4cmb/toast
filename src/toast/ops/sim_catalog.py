@@ -320,14 +320,6 @@ class SimCatalog(Operator):
         model = beam_dict["data"].copy()
         model /= np.amax(model)
 
-        # DEBUG begin
-        # These commands add a tail to the beam that points towards the horizon
-        # nx, ny = np.shape(model)
-        # nhalf = nx // 2
-        # w = 10
-        # model[nhalf - w : nhalf + w + 1, 0 : nhalf] = 1
-        # DEBUG end
-
         w = beam_dict["size"].to_value(u.rad) / 2
         n = beam_dict["npix"]
         x = np.linspace(-w, w, n)

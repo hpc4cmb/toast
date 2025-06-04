@@ -810,14 +810,6 @@ class GenerateAtmosphere(Operator):
                 vmax = comm.allreduce(vmax, op=MPI.MAX)
 
             for t, r, atmdata2d in my_snapshots:
-                # DEBUG begin
-                rms = np.std(atmdata2d)
-                print(
-                    f"DEBUG : rank = {rank}, t = {t}, r = {r}, "
-                    f"RMS = {rms}, real {realization}",
-                    flush=True,
-                )
-                # DEBUG end
                 plt.figure(figsize=[12, 4])
                 plt.imshow(
                     atmdata2d,
