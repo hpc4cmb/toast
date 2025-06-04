@@ -591,12 +591,6 @@ class PixelsWCS(Operator):
                     if self.create_dist is not None:
                         good = pixels >= 0
                         self._local_submaps[pixels[good] // self._n_pix_submap] = 1
-                        # DEBUG begin
-                    else:
-                        import pdb
-                        import matplotlib.pyplot as plt
-                        # pdb.set_trace()
-                        # DEBUG end
 
     def _finalize(self, data, **kwargs):
         if self.create_dist is not None:
@@ -608,13 +602,6 @@ class PixelsWCS(Operator):
                 submaps = np.arange(self.submaps, dtype=np.int64)[
                     self._local_submaps == 1
                 ]
-
-            # DEBUG begin
-            rank = 0
-            if data.comm.comm_world is not None:
-                rank = data.comm.comm_world.rank
-            print(f"rank={rank}. Creating WCS pixel distribution. n_submap={self.submaps}, local_submaps={submaps}", flush=True)
-            # DEBUG end
 
             data[self.create_dist] = PixelDistribution(
                 n_pix=self._n_pix,

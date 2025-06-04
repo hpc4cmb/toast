@@ -295,7 +295,7 @@ def broadcast_image(image, fscale, pix, comm_bytes):
                     pix.data[loc, :, :] = view[sm - submap_off, :, :]
             submap_off += comm_submap
             buf.fill(0)
-    print(f"rank={rank}: Broadcasted image. shape(image)={np.shape(image)}. shape(pix.data)={pix.data.shape}. Local RMS = {np.std(pix.data)}", flush=True)  # DEBUG
+
     return
 
 
@@ -456,7 +456,5 @@ def read_wcs(filename, units=False, extension=0, dtype=None):
         result = (image, funits)
     else:
         result = image
-
-    print(f"Loaded image from {filename}. RMS = {np.std(image)}", flush=True)  # DEBUG
 
     return result
