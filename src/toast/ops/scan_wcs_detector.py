@@ -134,6 +134,33 @@ class ScanWCSDetectorMap(Operator):
         self.map_name = "{}_map".format(self.name)
 
     @function_timer
+    def _get_map(self, filename, wcs_shape, nnz):
+        if filename != self.current_filename:
+            # Load a new map
+            if not os.path.isfile(filename):
+                msg = f"No such file: {filename}"
+                raise FileNotFoundError(msg)
+            # read_wcs() returns a 3D row-major map
+            self.current_map = read_wcs(filename, dtype=np.float32)
+            # Check for consistency
+            map_nnz = self.current_map.shape[0]
+            if map_nnz != nnz:
+                msg = f"Component mismatch: "
+                msg += f"NNZ({self.stokes_weights.name})={nnz} but "
+                msg += f"NNZ({filename})={map_nnz}"
+                raise ValueError(msg)
+            current_shape = self.current_map.shape[1:]
+            if current_shape != wcs_shape:
+                msg = f"Pixelization mismatch: "
+                msg += f"Shape({self.pixel_pointing.name})={wcs_shape} but "
+                msg += f"Shape({filename})={current_shape}"
+                raise ValueError(msg)
+            # Flatten each component map
+            self.current_map = self.current_map.reshape([nnz, -1])
+            self.current_filename = filename
+        return self.current_map
+
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
@@ -147,8 +174,7 @@ class ScanWCSDetectorMap(Operator):
         wcs_shape = None
 
         # Loop over all observations and local detectors, sampling the appropriate maps
-        last_file_name = None
-        current_map = None
+        self.current_filename = None
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
@@ -181,35 +207,13 @@ class ScanWCSDetectorMap(Operator):
 
                 # Load and sample the provided maps
                 file_name = self.file
-                current_file_name = file_name.format(**detector_properties)
-                if current_file_name != last_file_name:
-                    # Load a new map
-                    if not os.path.isfile(current_file_name):
-                        msg = f"No such file: {current_file_name}"
-                        raise FileNotFoundError(msg)
-                    current_map = read_wcs(current_file_name, dtype=np.float32)
-                    # Check for consistency
-                    current_shape = current_map.shape[1:]
-                    if wcs_shape != current_shape:
-                        msg = f"Pixelization mismatch: "
-                        msg += f"Shape({self.pixel_pointing.name})={wcs_shape} but "
-                        msg += f"Shape({current_file_name})={current_shape}"
-                        raise ValueError(msg)
-                    # Collapse each component map into a vector. Note that TOAST uses
-                    # column-major pixel numbers so we must transpose the map
-                    nmap, nx, ny = current_map.shape
-                    current_map = current_map.transpose([0, 2, 1])
-                    current_map = current_map.reshape([nmap, nx * ny])
-                    last_file_name = current_file_name
+                detector_file_name = file_name.format(**detector_properties)
+                detector_map = self._get_map(detector_file_name, wcs_shape, nnz)
                 ref = ob.detdata[self.det_data][det]
                 sig = np.zeros_like(ref)
                 # Apply appropriate weights to each stokes component.
-                # Will also work if weights are polarized but map is
-                # intensity-only
                 for i in range(nnz):
-                    sig += current_map[i][pix] * weights[i]
-                    if len(current_map) == 1:
-                        break
+                    sig += detector_map[i][pix] * weights[i]
                 if self.subtract:
                     ref -= sig
                 else:

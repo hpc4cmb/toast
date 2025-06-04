@@ -18,17 +18,18 @@ from .utils import Logger, memreport
 def submap_to_image(dist, submap, sdata, image):
     """Helper function to unpack our data into a 3D image.
 
-    This takes a single submap of data with flat pixels x n_values and unpacks
-    that into an ndarray with n_values x 2D pixels.  The images are column
-    major, like a FITS image:
+    This takes a single submap of data with flat pixels x n_values and
+    unpacks that into an ndarray with n_values x 2D pixels.  The images
+    are row major:
 
-        | OOXXXOO
-        | OOXXXOO
-        | OXXXOOO
-        V OXXXOOO
+        ------>
+        OOOOOOO
+        XXXXXXX
+        XXXXOOO
+        OOOOOOO
 
     So a submap covers a range of columns, and can start and end in the middle
-    of a column.
+    of a row.
 
     Args:
         dist (PixelDistribution):  The pixel dist
@@ -40,35 +41,29 @@ def submap_to_image(dist, submap, sdata, image):
         None
 
     """
-    imshape = image.shape
-    n_value = imshape[0]
-    n_rows = imshape[1]
-    n_cols = imshape[2]
+    n_value, n_row, n_col = image.shape
 
     # Global pixel range of this submap
     s_offset = submap * dist.n_pix_submap
     s_end = s_offset + dist.n_pix_submap
 
-    # Find which ndmap cols are covered by this submap
-    first_col = s_offset // n_rows
-    last_col = s_end // n_rows
-    if last_col >= n_cols:
-        last_col = n_cols - 1
+    # Find which ndmap rows are covered by this submap
+    first_row = s_offset // n_col
+    last_row = min(s_end // n_col + 1, n_row)
 
     # Loop over output rows and assign data
-    for ival in range(n_value):
-        for col in range(first_col, last_col + 1):
-            pix_offset = col * n_rows
-            row_offset = 0
-            if s_offset > pix_offset:
-                row_offset = s_offset - pix_offset
-            n_copy = n_rows - row_offset
-            if pix_offset + n_copy > s_end:
-                n_copy = s_end - pix_offset
-            sbuf_offset = pix_offset + row_offset - s_offset
-            image[ival, row_offset : row_offset + n_copy, col] = sdata[
-                sbuf_offset : sbuf_offset + n_copy, ival
-            ]
+    for row in range(first_row, last_row):
+        row_offset = row * n_col  # First pixel of this row
+        col_offset = 0  # Number of columns to skip on this row
+        if row_offset < s_offset:
+            col_offset = s_offset - row_offset
+        n_copy = n_col - col_offset
+        if row_offset + col_offset + n_copy > s_end:
+            n_copy = s_end - row_offset - col_offset
+        sbuf_offset = row_offset + col_offset - s_offset
+        image[:, row, col_offset : col_offset + n_copy] = sdata[
+            sbuf_offset : sbuf_offset + n_copy :
+        ].T
 
 
 def image_to_submap(dist, image, submap, sdata, scale=1.0):
@@ -88,10 +83,7 @@ def image_to_submap(dist, image, submap, sdata, scale=1.0):
         None
 
     """
-    imshape = image.shape
-    n_value = imshape[0]
-    n_row = imshape[1]
-    n_col = imshape[2]
+    n_value, n_row, n_col = image.shape
 
     # Global pixel range of this submap
     s_offset = submap * dist.n_pix_submap
@@ -99,28 +91,21 @@ def image_to_submap(dist, image, submap, sdata, scale=1.0):
 
     # Find which ndmap rows are covered by this submap
     first_row = s_offset // n_col
-    last_row = s_end // n_col
-    if last_row >= n_rows:
-        last_row = n_rows - 1
+    last_row = min(s_end // n_col + 1, n_row)
 
     # Loop over output rows and assign data
-    for ival in range(n_value):
-        for row in range(first_row, last_row + 1):
-            pix_offset = row * n_cols  # First pixel of this row
-            row_offset = 0  # Number of columns to skip on this row
-            if s_offset > pix_offset:
-                row_offset = s_offset - pix_offset
-            n_copy = n_cols - row_offset  # Number of columns to copy
-            if pix_offset + row_offset + n_copy > s_end:
-                n_copy = s_end - pix_offset - row_offset
-            sbuf_offset = pix_offset + row_offset - s_offset
-            try:
-                sdata[sbuf_offset : sbuf_offset + n_copy, ival] = (
-                    scale * image[ival, row_offset : row_offset + n_copy, col]
-                )
-            except:
-                import pdb
-                pdb.set_trace()
+    for row in range(first_row, last_row):
+        row_offset = row * n_col  # First pixel of this row
+        col_offset = 0  # Number of columns to skip on this row
+        if row_offset < s_offset:
+            col_offset = s_offset - row_offset
+        n_copy = n_col - col_offset  # Number of columns to copy
+        if row_offset + col_offset + n_copy > s_end:
+            n_copy = s_end - row_offset - col_offset
+        sbuf_offset = row_offset + col_offset - s_offset
+        sdata[sbuf_offset : sbuf_offset + n_copy, :] = (
+            scale * image[:, row, col_offset : col_offset + n_copy].T
+        )
 
 
 @function_timer
@@ -159,8 +144,7 @@ def collect_wcs_submaps(pix, comm_bytes=10000000):
         allowners = np.zeros_like(owners)
         dist.comm.Allreduce(owners, allowners, op=MPI.MIN)
 
-    # Create an image array for the output.  The FITS image data is column
-    # major, and so our numpy array has the order of axes swapped.
+    # Create an image array for the output.  WCS shape is (n_col, n_row)
     image = None
     image_shape = (pix.n_value, dist.wcs_shape[1], dist.wcs_shape[0])
     if rank == 0:
@@ -252,7 +236,6 @@ def write_wcs_parallel(
                 dtype = np.float32
             elif image.dtype == np.int32:
                 dtype = np.int32
-        image = image.transpose([0, 2, 1])
         write_wcs(path, image, dist.wcs, pix.units, dtype=dtype)
 
     del image
@@ -392,7 +375,8 @@ def write_wcs(filename, image, wcs, units, dtype=None):
         dtype = image.dtype
 
     # Row-major to column major
-    image = np.atleast_3d(image).transpose([0, 2, 1]).astype(dtype)
+    # image = np.atleast_3d(image).transpose([0, 2, 1]).astype(dtype)
+    image = np.atleast_3d(image).astype(dtype)
 
     if filename_is_fits(filename):
         # Add map dimensions
@@ -457,7 +441,8 @@ def read_wcs(filename, units=False, extension=0, dtype=None):
         raise RuntimeError(msg)
 
     # Column-major to row major
-    image = np.transpose(image, [0, 2, 1]).astype(dtype)
+    # image = np.transpose(image, [0, 2, 1]).astype(dtype)
+    image = np.atleast_3d(image).astype(dtype)
 
     # Optionally parse units
     if units:

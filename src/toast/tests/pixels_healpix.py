@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -60,24 +60,22 @@ class PixelTest(MPITestCase):
         )
         return dist
 
-    def _make_pixdata(self, dist, dtype, nnz):
+    def _make_pixdata(self, dist, dtype, nnz, zero=False):
         units = u.dimensionless_unscaled
         if dtype == np.float64 or dtype == np.float32:
             units = u.K
         pdata = PixelData(dist, dtype, n_value=nnz, units=units)
-        gl = list()
-        for sm in pdata.distribution.local_submaps:
-            for px in range(dist.n_pix_submap):
-                if sm * dist.n_pix_submap + px < dist.n_pix:
-                    gl.append(sm * dist.n_pix_submap + px)
-        gl = np.array(gl, dtype=np.int64)
-        subm, subpx = dist.global_pixel_to_submap(gl)
-        ploc = dist.global_pixel_to_local(gl)
-        ploc[:] *= 2
-        pdata.raw[ploc] = 1
-        for z in range(1, nnz):
-            ploc[:] += 1
-            pdata.raw[ploc] = 1
+        if not zero:
+            # Insert dummy values based on global pixel index
+            gl = list()
+            for sm in pdata.distribution.local_submaps:
+                for px in range(dist.n_pix_submap):
+                    if sm * dist.n_pix_submap + px < dist.n_pix:
+                        gl.append(sm * dist.n_pix_submap + px)
+            gl = np.array(gl, dtype=np.int64)
+            subm, subpx = dist.global_pixel_to_submap(gl)
+            for i in range(nnz):
+                pdata.data[subm, subpx, i] = gl * (i + 1)
         return pdata
 
     def test_data(self):
@@ -89,7 +87,6 @@ class PixelTest(MPITestCase):
                 dist = self._make_pixdist(nside, nsb, self.comm)
                 for tp in self.types:
                     pdata = self._make_pixdata(dist, tp, 2)
-                    pdata = PixelData(dist, tp, n_value=2)
 
                     other = PixelData(dist, tp, n_value=2)
                     other.raw[:] = pdata.raw[:]
@@ -152,8 +149,8 @@ class PixelTest(MPITestCase):
             for nsb in self.nsub:
                 dist = self._make_pixdist(nside, nsb, self.comm)
                 for tp in self.fitstypes:
-                    pdata = self._make_pixdata(dist, tp, 2)
-                    pdata = PixelData(dist, tp, n_value=6)
+                    n_value = 6
+                    pdata = self._make_pixdata(dist, tp, n_value)
                     fitsfile = os.path.join(
                         self.outdir,
                         "data_N{}_sub{}_type-{}.fits".format(
@@ -161,7 +158,7 @@ class PixelTest(MPITestCase):
                         ),
                     )
                     io.write_healpix_fits(pdata, fitsfile, nest=True)
-                    check = PixelData(dist, tp, n_value=6)
+                    check = self._make_pixdata(dist, tp, n_value, zero=True)
                     io.read_healpix_fits(check, fitsfile, nest=True)
                     nt.assert_equal(pdata.data, check.data)
                     if self.comm is None or self.comm.size == 1:
@@ -228,8 +225,8 @@ class PixelTest(MPITestCase):
             for nsb in self.nsub:
                 dist = self._make_pixdist(nside, nsb, self.comm)
                 for tp in self.fitstypes:
-                    pdata = self._make_pixdata(dist, tp, 2)
-                    pdata = PixelData(dist, tp, n_value=6)
+                    n_value = 6
+                    pdata = self._make_pixdata(dist, tp, n_value)
                     hdf5file = os.path.join(
                         self.outdir,
                         "data_N{}_sub{}_type-{}.h5".format(
@@ -237,7 +234,7 @@ class PixelTest(MPITestCase):
                         ),
                     )
                     io.write_healpix_hdf5(pdata, hdf5file, nest=True)
-                    check = PixelData(dist, tp, n_value=6)
+                    check = self._make_pixdata(dist, tp, n_value, zero=True)
                     io.read_healpix_hdf5(check, hdf5file, nest=True)
                     nt.assert_equal(pdata.data, check.data)
                     if self.comm is None or self.comm.rank == 0:
