@@ -13,7 +13,7 @@ from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
 from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
-from ..pixels_io_wcs import write_wcs_fits
+from ..pixels_io_wcs import write_wcs_parallel
 from ..templates import AmplitudesMap, Template
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, List, Unicode, Unit, trait_docs
@@ -564,7 +564,7 @@ class SolveAmplitudes(Operator):
         if self.write_solver_products:
             if is_pix_wcs:
                 fname = os.path.join(self.output_dir, f"{prod_key}.fits")
-                write_wcs_fits(self._data[prod_key], fname)
+                write_wcs_parallel(self._data[prod_key], fname)
             else:
                 if self.write_hdf5:
                     # Non-standard HDF5 output

@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -11,7 +11,7 @@ from astropy import units as u
 from .. import ops as ops
 from ..observation import default_values as defaults
 from ..pixels import PixelData
-from ..pixels_io_wcs import write_wcs_fits
+from ..pixels_io_wcs import write_wcs_parallel
 from .helpers import (
     close_data,
     create_fake_mask,
@@ -28,7 +28,7 @@ class ScanWCSTest(MPITestCase):
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
 
-    def test_wcs_fits(self):
+    def _test_wcs(self, suffix):
         # Create fake observing of a small patch
         data = create_ground_data(self.comm)
 
@@ -59,7 +59,7 @@ class ScanWCSTest(MPITestCase):
         weights.apply(data)
 
         # Create fake polarized sky signal
-        input_file = os.path.join(self.outdir, "fake.fits")
+        input_file = os.path.join(self.outdir, f"fake.{suffix}")
         map_key = "fake_map"
         data[map_key] = create_fake_wcs_map(
             input_file,
@@ -101,6 +101,13 @@ class ScanWCSTest(MPITestCase):
 
         close_data(data)
 
+    def test_wcs_fits(self):
+        self._test_wcs("fits")
+
+    def test_wcs_hdf5(self):
+        self._test_wcs("hdf5")
+
+
     def test_wcs_mask(self):
         # Create fake observing of a small patch
         data = create_ground_data(self.comm)
@@ -136,9 +143,9 @@ class ScanWCSTest(MPITestCase):
 
         # Write this to a file
         input_file = os.path.join(self.outdir, "fake_mask.fits")
-        write_wcs_fits(data["fake_mask"], input_file)
+        write_wcs_parallel(data["fake_mask"], input_file)
 
-        # Scan map into timestreams
+        # Scan mask into timestreams
         scanner = ops.ScanMask(
             det_flags=defaults.det_flags,
             det_flags_value=defaults.det_mask_invalid,
@@ -165,3 +172,4 @@ class ScanWCSTest(MPITestCase):
                 )
 
         close_data(data)
+

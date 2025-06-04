@@ -48,7 +48,7 @@ class PixelTest(MPITestCase):
             np.int8,
             np.uint8,
         ]
-        self.fitstypes = [np.float64, np.float32, np.int64, np.int32]
+        self.datatypes = [np.float64, np.float32, np.int64, np.int32]
 
     def tearDown(self):
         pass
@@ -92,22 +92,22 @@ class PixelTest(MPITestCase):
             pdata.raw[ploc] = 1
         return pdata
 
-    def test_io_fits(self):
+    def _test_io(self, suffix):
         np.random.seed(0)
         if self.comm is not None:
             np.random.seed(self.comm.rank)
         for nsb in self.nsub:
             dist = self._make_pixdist(nsb, self.comm)
-            for tp in self.fitstypes:
+            for tp in self.datatypes:
                 pdata = self._make_pixdata(dist, tp, 2)
                 pdata = PixelData(dist, tp, n_value=6)
-                fitsfile = os.path.join(
+                wcsfile = os.path.join(
                     self.outdir,
-                    "data_sub{}_type-{}.fits".format(nsb, np.dtype(tp).char),
+                    "data_sub{}_type-{}.{}".format(nsb, np.dtype(tp).char, suffix),
                 )
-                io.write_wcs_fits(pdata, fitsfile)
+                io.write_wcs_parallel(pdata, wcsfile)
                 check = PixelData(dist, tp, n_value=6)
-                io.read_wcs_fits(check, fitsfile)
+                io.read_wcs_parallel(check, wcsfile)
                 nt.assert_equal(pdata.data, check.data)
 
                 if not available_pixell:
@@ -132,12 +132,14 @@ class PixelTest(MPITestCase):
                         fdata[col] = fdata[col].reshape(self.wcs_shape)
                     serialfile = os.path.join(
                         self.outdir,
-                        "serial_sub{}_type-{}.fits".format(nsb, np.dtype(tp).char),
+                        "serial_sub{}_type-{}.{}".format(
+                            nsb, np.dtype(tp).char, suffix
+                        ),
                     )
                     emap = enmap.zeros((pdata.n_value,) + self.wcs_shape, wcs=self.wcs)
                     emap[:] = fdata
-                    enmap.write_map(serialfile, emap, fmt="fits")
-                    loaded = enmap.read_map(serialfile, fmt="fits")
+                    enmap.write_map(serialfile, emap, fmt=suffix)
+                    loaded = enmap.read_map(serialfile, fmt=suffix)
                     for lc, sm in enumerate(pdata.distribution.local_submaps):
                         global_offset = sm * pdata.distribution.n_pix_submap
                         n_check = pdata.distribution.n_pix_submap
@@ -151,7 +153,7 @@ class PixelTest(MPITestCase):
                                 pdata.data[lc, 0:n_check, col],
                             )
                     # Compare to file written with our own function
-                    loaded = enmap.read_map(fitsfile, fmt="fits")
+                    loaded = enmap.read_map(wcsfile, fmt=suffix)
                     for lc, sm in enumerate(pdata.distribution.local_submaps):
                         global_offset = sm * pdata.distribution.n_pix_submap
                         n_check = pdata.distribution.n_pix_submap
@@ -164,76 +166,9 @@ class PixelTest(MPITestCase):
                                 ],
                                 pdata.data[lc, 0:n_check, col],
                             )
+
+    def test_io_fits(self):
+        self._test_io("fits")
 
     def test_io_hdf5(self):
-        np.random.seed(0)
-        if self.comm is not None:
-            np.random.seed(self.comm.rank)
-        for nsb in self.nsub:
-            dist = self._make_pixdist(nsb, self.comm)
-            for tp in self.fitstypes:
-                pdata = self._make_pixdata(dist, tp, 2)
-                pdata = PixelData(dist, tp, n_value=6)
-                hdf5file = os.path.join(
-                    self.outdir,
-                    "data_sub{}_type-{}.h5".format(nsb, np.dtype(tp).char),
-                )
-                io.write_wcs_hdf5(pdata, hdf5file)
-                check = PixelData(dist, tp, n_value=6)
-                io.read_wcs_hdf5(check, hdf5file)
-                nt.assert_equal(pdata.data, check.data)
-
-                if not available_pixell:
-                    # No serial tests without pixell
-                    continue
-
-                if self.comm is None or self.comm.rank == 0:
-                    # Write out the data serially and compare
-                    fdata = list()
-                    for col in range(pdata.n_value):
-                        fdata.append(np.zeros(pdata.distribution.n_pix))
-                    for lc, sm in enumerate(pdata.distribution.local_submaps):
-                        global_offset = sm * pdata.distribution.n_pix_submap
-                        n_copy = pdata.distribution.n_pix_submap
-                        if global_offset + n_copy > pdata.distribution.n_pix:
-                            n_copy = pdata.distribution.n_pix - global_offset
-                        for col in range(pdata.n_value):
-                            fdata[col][global_offset : global_offset + n_copy] = (
-                                pdata.data[lc, 0:n_copy, col]
-                            )
-                    for col in range(pdata.n_value):
-                        fdata[col] = fdata[col].reshape(self.wcs_shape)
-                    serialfile = os.path.join(
-                        self.outdir,
-                        "serial_sub{}_type-{}.h5".format(nsb, np.dtype(tp).char),
-                    )
-                    emap = enmap.zeros((pdata.n_value,) + self.wcs_shape, wcs=self.wcs)
-                    emap[:] = fdata
-                    enmap.write_map(serialfile, emap, fmt="hdf")
-                    loaded = enmap.read_map(serialfile, fmt="hdf")
-                    for lc, sm in enumerate(pdata.distribution.local_submaps):
-                        global_offset = sm * pdata.distribution.n_pix_submap
-                        n_check = pdata.distribution.n_pix_submap
-                        if global_offset + n_check > pdata.distribution.n_pix:
-                            n_check = pdata.distribution.n_pix - global_offset
-                        for col in range(pdata.n_value):
-                            nt.assert_equal(
-                                loaded[col].ravel()[
-                                    global_offset : global_offset + n_check
-                                ],
-                                pdata.data[lc, 0:n_check, col],
-                            )
-                    # Compare to file written with our parallel function
-                    loaded = enmap.read_map(hdf5file, fmt="hdf")
-                    for lc, sm in enumerate(pdata.distribution.local_submaps):
-                        global_offset = sm * pdata.distribution.n_pix_submap
-                        n_check = pdata.distribution.n_pix_submap
-                        if global_offset + n_check > pdata.distribution.n_pix:
-                            n_check = pdata.distribution.n_pix - global_offset
-                        for col in range(pdata.n_value):
-                            nt.assert_equal(
-                                loaded[col].ravel()[
-                                    global_offset : global_offset + n_check
-                                ],
-                                pdata.data[lc, 0:n_check, col],
-                            )
+        self._test_io("hdf")

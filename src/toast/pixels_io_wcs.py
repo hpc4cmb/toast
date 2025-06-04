@@ -90,33 +90,37 @@ def image_to_submap(dist, image, submap, sdata, scale=1.0):
     """
     imshape = image.shape
     n_value = imshape[0]
-    n_rows = imshape[1]
-    n_cols = imshape[2]
+    n_row = imshape[1]
+    n_col = imshape[2]
 
     # Global pixel range of this submap
     s_offset = submap * dist.n_pix_submap
     s_end = s_offset + dist.n_pix_submap
 
     # Find which ndmap rows are covered by this submap
-    first_col = s_offset // n_rows
-    last_col = s_end // n_rows
-    if last_col >= n_cols:
-        last_col = n_cols - 1
+    first_row = s_offset // n_col
+    last_row = s_end // n_col
+    if last_row >= n_rows:
+        last_row = n_rows - 1
 
     # Loop over output rows and assign data
     for ival in range(n_value):
-        for col in range(first_col, last_col + 1):
-            pix_offset = col * n_rows
-            row_offset = 0
+        for row in range(first_row, last_row + 1):
+            pix_offset = row * n_cols  # First pixel of this row
+            row_offset = 0  # Number of columns to skip on this row
             if s_offset > pix_offset:
                 row_offset = s_offset - pix_offset
-            n_copy = n_rows - row_offset
-            if pix_offset + n_copy > s_end:
-                n_copy = s_end - pix_offset
+            n_copy = n_cols - row_offset  # Number of columns to copy
+            if pix_offset + row_offset + n_copy > s_end:
+                n_copy = s_end - pix_offset - row_offset
             sbuf_offset = pix_offset + row_offset - s_offset
-            sdata[sbuf_offset : sbuf_offset + n_copy, ival] = (
-                scale * image[ival, row_offset : row_offset + n_copy, col]
-            )
+            try:
+                sdata[sbuf_offset : sbuf_offset + n_copy, ival] = (
+                    scale * image[ival, row_offset : row_offset + n_copy, col]
+                )
+            except:
+                import pdb
+                pdb.set_trace()
 
 
 @function_timer
@@ -204,8 +208,10 @@ def collect_wcs_submaps(pix, comm_bytes=10000000):
 
 
 @function_timer
-def write_wcs_fits(pix, path, comm_bytes=10000000, report_memory=False):
-    """Write pixel data to a FITS image
+def write_wcs_parallel(
+        pix, path, comm_bytes=10000000, report_memory=False, single_precision=False
+):
+    """Write pixel data to a WCS image
 
     The data across all processes is assumed to be synchronized (the data for a given
     submap shared between processes is identical).  The submap data is sent to the root
@@ -213,7 +219,7 @@ def write_wcs_fits(pix, path, comm_bytes=10000000, report_memory=False):
 
     Args:
         pix (PixelData): The distributed pixel object.
-        path (str): The path to the output FITS file.
+        path (str): The path to the output WCS file (FITS or HDF5).
         comm_bytes (int): The approximate message size to use.
         report_memory (bool): Report the amount of available memory on the root
             node just before writing out the map.
@@ -240,50 +246,14 @@ def write_wcs_fits(pix, path, comm_bytes=10000000, report_memory=False):
     image = collect_wcs_submaps(pix, comm_bytes=comm_bytes)
 
     if rank == 0:
-        write_wcs(path, image, dist.wcs, pix.units)
-
-    del image
-    return
-
-
-@function_timer
-def write_wcs_hdf5(pix, path, comm_bytes=10000000, report_memory=False):
-    """Write pixel data to an HDF5 image
-
-    The data across all processes is assumed to be synchronized (the data for a given
-    submap shared between processes is identical).  The submap data is sent to the root
-    process which writes it out.
-
-    Args:
-        pix (PixelData): The distributed pixel object.
-        path (str): The path to the output FITS file.
-        comm_bytes (int): The approximate message size to use.
-        report_memory (bool): Report the amount of available memory on the root
-            node just before writing out the map.
-
-    Returns:
-        None
-
-    """
-    log = Logger.get()
-    timer = Timer()
-    timer.start()
-
-    # The distribution
-    dist = pix.distribution
-
-    # Check that we have WCS information
-    if not hasattr(dist, "wcs"):
-        raise RuntimeError("Pixel distribution does not have WCS information")
-
-    rank = 0
-    if dist.comm is not None:
-        rank = dist.comm.rank
-
-    image = collect_wcs_submaps(pix, comm_bytes=comm_bytes)
-
-    if rank == 0:
-        write_wcs(path, image, dist.wcs, pix.units)
+        dtype = None
+        if single_precision:
+            if image.dtype == np.float64:
+                dtype = np.float32
+            elif image.dtype == np.int32:
+                dtype = np.int32
+        image = image.transpose([0, 2, 1])
+        write_wcs(path, image, dist.wcs, pix.units, dtype=dtype)
 
     del image
     return
@@ -342,20 +312,20 @@ def broadcast_image(image, fscale, pix, comm_bytes):
                     pix.data[loc, :, :] = view[sm - submap_off, :, :]
             submap_off += comm_submap
             buf.fill(0)
+    print(f"rank={rank}: Broadcasted image. shape(image)={np.shape(image)}. shape(pix.data)={pix.data.shape}. Local RMS = {np.std(pix.data)}", flush=True)  # DEBUG
     return
 
 
 @function_timer
-def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
-    """Read and broadcast pixel data stored in a FITS image.
+def read_wcs_parallel(pix, path, comm_bytes=10000000, **kwargs):
+    """Read and broadcast pixel data stored in a WCS image.
 
-    The root process opens the FITS file and broadcasts the data in units
+    The root process reads the file and broadcasts the data in units
     of the submap size.
 
     Args:
         pix (PixelData): The distributed PixelData object.
-        path (str): The path to the FITS file.
-        ext (int, str): Then index or name of the FITS image extension to load.
+        path (str): The path to the WCS file (FITS or HDF5).
         comm_bytes (int): The approximate message size to use in bytes.
 
     Returns:
@@ -371,23 +341,15 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
     image = None
     fscale = 1.0
     if rank == 0:
-        # Separately read the units.
-        with af.open(path, mode="readonly") as hdul:
-            if "BUNIT" in hdul[0].header:
-                if hdul[0].header["BUNIT"] == "":
-                    funits = u.dimensionless_unscaled
-                else:
-                    funits = u.Unit(hdul[0].header["BUNIT"])
-            else:
-                msg = f"Pixel data in {path} does not have BUNIT key.  "
-                msg += f"Assuming {pix.units}."
-                log.warning(msg)
-                funits = pix.units
-            if funits != pix.units:
-                scale = 1.0 * funits
-                scale.to(pix.units)
-                fscale = scale.value
-            image = np.array(hdul[0].data)
+        image, funits = read_wcs(path, units=True, **kwargs)
+        if funits is None:
+            msg = f"Pixel data in {path} does not have BUNIT key.  "
+            msg += f"Assuming {pix.units}."
+            funits = pix.units
+        elif funits != pix.units:
+            scale = 1.0 * funits
+            scale.to(pix.units)
+            fscale = scale.value
 
         # Check dimensions
         impix = 1
@@ -405,66 +367,7 @@ def read_wcs_fits(pix, path, ext=0, comm_bytes=10000000):
 
 
 @function_timer
-def read_wcs_hdf5(pix, path, comm_bytes=10000000):
-    """Read and broadcast pixel data stored in a HDF5 image.
-
-    The root process opens the HDF5 file and broadcasts the data in units
-    of the submap size.
-
-    Args:
-        pix (PixelData): The distributed PixelData object.
-        path (str): The path to the HDF5 file.
-        comm_bytes (int): The approximate message size to use in bytes.
-
-    Returns:
-        None
-
-    """
-    log = Logger.get()
-    dist = pix.distribution
-    rank = 0
-    if dist.comm is not None:
-        rank = dist.comm.rank
-
-    image = None
-    fscale = 1.0
-    if rank == 0:
-        with h5py.File(path, "r") as hfile:
-            if "bunit" in hfile:
-                # Separately read the units.
-                bunit = hfile["bunit"][()].decode()
-                if bunit == "":
-                    funits = u.dimensionless_unscaled
-                else:
-                    funits = u.Unit(bunit)
-            else:
-                msg = f"Pixel data in {path} does not have BUNIT key.  "
-                msg += f"Assuming {pix.units}."
-                log.warning(msg)
-                funits = pix.units
-            if funits != pix.units:
-                scale = 1.0 * funits
-                scale.to(pix.units)
-                fscale = scale.value
-            image = np.array(hfile["data"][()])
-
-        # Check dimensions
-        impix = 1
-        for s in image.shape:
-            impix *= s
-        tot_pix = dist.n_pix * pix.n_value
-        if tot_pix != impix:
-            raise RuntimeError(
-                f"Input file has {impix} pixel values instead of {tot_pix}"
-            )
-
-    broadcast_image(image, fscale, pix, comm_bytes)
-
-    return
-
-
-@function_timer
-def write_wcs(filename, image, wcs, units):
+def write_wcs(filename, image, wcs, units, dtype=None):
     """Write a FITS or HDF5 WCS map on the calling process
 
     Args:
@@ -480,8 +383,16 @@ def write_wcs(filename, image, wcs, units):
     filename = filename.strip()
     if os.path.isfile(filename):
         os.remove(filename)
+
     # Basic wcs header
     header = wcs.to_header(relax=True)
+
+    # Output units
+    if dtype is None:
+        dtype = image.dtype
+
+    # Row-major to column major
+    image = np.atleast_3d(image).transpose([0, 2, 1]).astype(dtype)
 
     if filename_is_fits(filename):
         # Add map dimensions
@@ -490,7 +401,7 @@ def write_wcs(filename, image, wcs, units):
             header[f"NAXIS{i + 1}"] = n
         # Add units
         header["BUNIT"] = str(units)
-        hdus = af.HDUList([af.PrimaryHDU(image.astype(np.float32), header)])
+        hdus = af.HDUList([af.PrimaryHDU(image, header)])
         hdus.writeto(filename)
         del hdus
     elif filename_is_hdf5(filename):
@@ -507,7 +418,7 @@ def write_wcs(filename, image, wcs, units):
 
 
 @function_timer
-def read_wcs(filename, *args, **kwargs):
+def read_wcs(filename, units=False, extension=0, dtype=None):
     """Read a FITS or HDF5 WCS map serially.
 
     This reads the file into simple numpy arrays on the calling process.
@@ -515,24 +426,52 @@ def read_wcs(filename, *args, **kwargs):
 
     Args:
         filename (str):  The path to the file.
+        units (bool):  If True, return the units of the map
 
     Returns:
-        (tuple):  The map data and optionally header.
+        (tuple):  The map data and the appropriate astropy units.
 
     """
 
+    log = Logger.get()
+
     filename = filename.strip()
+    funits = None
 
     if filename_is_fits(filename):
         # Load a FITS format image
         with af.open(filename, mode="readonly") as hdul:
-            image = np.array(hdul[0].data)
+            hdu = hdul[extension]
+            image = np.array(hdu.data)
+            if units and "BUNIT" in hdu.header:
+                bunit =  hdu.header["BUNIT"]
     elif filename_is_hdf5(filename):
         # Load an HDF5 format image
         with h5py.File(filename, "r") as hfile:
             image = np.array(hfile["data"][()])
+            if units and "bunit" in hfile:
+                # Separately read the units
+                bunit = hfile["bunit"][()].decode()
     else:
         msg = f"Could not ascertain file type for '{filename}'"
         raise RuntimeError(msg)
-    image = np.atleast_3d(image).transpose([0, 2, 1])
-    return image
+
+    # Column-major to row major
+    image = np.transpose(image, [0, 2, 1]).astype(dtype)
+
+    # Optionally parse units
+    if units:
+        if bunit == "":
+            funits = u.dimensionless_unscaled
+        else:
+            try:
+                funits = u.Unit(bunit)
+            except ValueError as e:
+                log.warning(f"WARNING: failed to parse units in {filename}:\n{e}")
+        result = (image, funits)
+    else:
+        result = image
+
+    print(f"Loaded image from {filename}. RMS = {np.std(image)}", flush=True)  # DEBUG
+
+    return result

@@ -844,6 +844,12 @@ class BuildNoiseWeighted(Operator):
             else:
                 shared_flag_data = np.zeros(1, dtype=np.uint8)
 
+            # DEBUG begin
+            import pdb
+            import matplotlib.pyplot as plt
+            # pdb.set_trace()
+            # DEBUG end
+
             build_noise_weighted(
                 zmap.distribution.global_submap_to_local,
                 zmap.data,

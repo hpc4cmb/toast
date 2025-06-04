@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -18,8 +18,6 @@ from ..hwp_utils import (
     hwpss_sincos_buffer,
 )
 from ..observation import default_values as defaults
-from ..pixels_io_healpix import write_healpix_fits
-from ..pixels_io_wcs import write_wcs_fits
 from ..templates import Fourier2D, Hwpss, Offset
 from ..templates.hwpss import plot as hwpssplot
 from ..templates.offset import plot as offplot

@@ -368,14 +368,21 @@ class PixelsWCS(Operator):
             dims=dims,
         )
 
-        self.pix_lon = self.wcs_shape[0]
-        self.pix_lat = self.wcs_shape[1]
-        self._n_pix = self.pix_lon * self.pix_lat
+        self._shape_to_submaps()
+        self._done_wcs = True
+        return
+
+    @function_timer
+    def _shape_to_submaps(self):
+        # The WCS geometry assumes column-major (Fortran) ordering but
+        # internally the image is stored row-major (Numpy standard)
+        self.n_row = self.wcs_shape[1]
+        self.n_col = self.wcs_shape[0]
+        self._n_pix = self.n_row * self.n_col
         self._n_pix_submap = self._n_pix // self.submaps
         if self._n_pix_submap * self.submaps < self._n_pix:
             self._n_pix_submap += 1
         self._local_submaps = np.zeros(self.submaps, dtype=np.uint8)
-        self._done_wcs = True
         return
 
     @function_timer
@@ -394,13 +401,7 @@ class PixelsWCS(Operator):
                 header = af.Header.fromfile(f)
                 self.wcs = WCS(header=header)
                 self.wcs_shape = self.wcs.array_shape
-                self.pix_lon = self.wcs_shape[0]
-                self.pix_lat = self.wcs_shape[1]
-                self._n_pix = self.pix_lon * self.pix_lat
-                self._n_pix_submap = self._n_pix // self.submaps
-                if self._n_pix_submap * self.submaps < self._n_pix:
-                    self._n_pix_submap += 1
-                self._local_submaps = np.zeros(self.submaps, dtype=np.uint8)
+                self._shape_to_submaps()
                 self._done_wcs = True
                 self._done_auto = True
 
@@ -557,7 +558,9 @@ class PixelsWCS(Operator):
                 for vslice in view_slices:
                     # Timestream of detector quaternions
                     quats = ob.detdata[quats_name][det][vslice]
-                    view_samples = len(quats)
+
+                    # Useful shorthand for pixel view
+                    pixels = ob.detdata[self.pixels][det, vslice]
 
                     if center_lonlat is None:
                         center_offset = None
@@ -571,25 +574,29 @@ class PixelsWCS(Operator):
                         is_azimuth=is_azimuth,
                     )
 
+                    # Turn position relative to the center into row and column
                     world_in = np.column_stack([rel_lon, rel_lat])
-
                     rdpix = self.wcs.wcs_world2pix(world_in, 0)
-                    rdpix = np.array(np.around(rdpix), dtype=np.int64)
+                    col, row = np.array(np.around(rdpix), dtype=np.int64).T
 
-                    ob.detdata[self.pixels][det, vslice] = (
-                        rdpix[:, 0] * self.pix_lat + rdpix[:, 1]
-                    )
-                    bad_pointing = ob.detdata[self.pixels][det, vslice] >= self._n_pix
+                    # Turn row and column into flat pixel numbers assuming
+                    # row-major ordering
+                    pixels[:] = col + row * self.n_col
+                    bad_pointing = pixels >= self._n_pix
+
                     if flags is not None:
-                        bad_pointing = np.logical_or(bad_pointing, flags[vslice] != 0)
-                    (ob.detdata[self.pixels][det, vslice])[bad_pointing] = -1
+                        bad_pointing[flags[vslice] != 0] = True
+                    pixels[bad_pointing] = -1
 
                     if self.create_dist is not None:
-                        good = ob.detdata[self.pixels][det][vslice] >= 0
-                        self._local_submaps[
-                            (ob.detdata[self.pixels][det, vslice])[good]
-                            // self._n_pix_submap
-                        ] = 1
+                        good = pixels >= 0
+                        self._local_submaps[pixels[good] // self._n_pix_submap] = 1
+                        # DEBUG begin
+                    else:
+                        import pdb
+                        import matplotlib.pyplot as plt
+                        # pdb.set_trace()
+                        # DEBUG end
 
     def _finalize(self, data, **kwargs):
         if self.create_dist is not None:
@@ -601,6 +608,13 @@ class PixelsWCS(Operator):
                 submaps = np.arange(self.submaps, dtype=np.int64)[
                     self._local_submaps == 1
                 ]
+
+            # DEBUG begin
+            rank = 0
+            if data.comm.comm_world is not None:
+                rank = data.comm.comm_world.rank
+            print(f"rank={rank}. Creating WCS pixel distribution. n_submap={self.submaps}, local_submaps={submaps}", flush=True)
+            # DEBUG end
 
             data[self.create_dist] = PixelDistribution(
                 n_pix=self._n_pix,

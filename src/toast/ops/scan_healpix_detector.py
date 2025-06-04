@@ -61,7 +61,7 @@ class ScanHealpixDetectorMap(Operator):
     )
 
     focalplane_keys = Unicode(
-        "wafer",
+        "pixel",
         help="Comma-separated list of keys to retrieve from the focalplane.  "
         "Used to expand map file names.",
     )
