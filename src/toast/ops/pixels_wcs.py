@@ -321,7 +321,8 @@ class PixelsWCS(Operator):
             upper_right = wcs.wcs_world2pix(
                 np.array([[bounds_deg[1], bounds_deg[3]]]), 0
             )[0]
-            wcs_shape = tuple(np.round(np.abs(upper_right - lower_left)).astype(int))
+            n_col, n_row = tuple(np.round(np.abs(upper_right - lower_left)).astype(int))
+            wcs_shape = (n_row, n_col)
 
         # Set the reference pixel to the center of the projection
         off = wcs.wcs_world2pix(crval.reshape((1, 2)), 0)[0]
@@ -374,10 +375,8 @@ class PixelsWCS(Operator):
 
     @function_timer
     def _shape_to_submaps(self):
-        # The WCS geometry assumes column-major (Fortran) ordering but
-        # internally the image is stored row-major (Numpy standard)
-        self.n_row = self.wcs_shape[1]
-        self.n_col = self.wcs_shape[0]
+        self.n_row = self.wcs_shape[0]
+        self.n_col = self.wcs_shape[1]
         self._n_pix = self.n_row * self.n_col
         self._n_pix_submap = self._n_pix // self.submaps
         if self._n_pix_submap * self.submaps < self._n_pix:
@@ -400,7 +399,8 @@ class PixelsWCS(Operator):
             with open(self.fits_header, "rb") as f:
                 header = af.Header.fromfile(f)
                 self.wcs = WCS(header=header)
-                self.wcs_shape = self.wcs.array_shape
+                n_row, n_col = self.wcs.array_shape
+                self.wcs_shape = (n_row, n_col)
                 self._shape_to_submaps()
                 self._done_wcs = True
                 self._done_auto = True

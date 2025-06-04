@@ -108,8 +108,7 @@ def create_fake_wcs_file(
 
     """
     # Image dimensions
-    n_row = wcs_shape[0]
-    n_col = wcs_shape[1]
+    n_row, n_col = wcs_shape
     # Get the smoothing kernel FWHM in terms of pixels
     lat_res_deg = np.absolute(wcs.wcs.cdelt[0])
     lon_res_deg = np.absolute(wcs.wcs.cdelt[1])
