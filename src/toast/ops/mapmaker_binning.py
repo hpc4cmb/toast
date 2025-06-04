@@ -281,6 +281,7 @@ class BinMap(Operator):
         # Optionally, store the noise-weighted map
         if self.noiseweighted is not None:
             data[self.noiseweighted] = data[self.binned].duplicate()
+        noiseweighted = data[self.binned].duplicate()  # DEBUG
 
         # Extract the results
         binned_map = data[self.binned]
@@ -290,6 +291,13 @@ class BinMap(Operator):
             log.verbose("  BinMap applying covariance")
         covariance_apply(cov, binned_map, use_alltoallv=(self.sync_type == "alltoallv"))
         # print("Binned final = ", data[self.binned].data)
+        
+        # DEBUG begin
+        import pdb
+        import matplotlib.pyplot as plt
+        # pdb.set_trace()
+        # DEBUG end
+
         return
 
     def _finalize(self, data, **kwargs):

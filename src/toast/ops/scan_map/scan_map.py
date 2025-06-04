@@ -176,6 +176,12 @@ class ScanMap(Operator):
                 impl=implementation,
                 use_accel=use_accel,
             )
+            # DEBUG begin
+            print(f"scan_map: RMS(map) = {np.std(map_data.data)}, RMS(TOD) = {np.std(det_data)}", flush=True)
+            import pdb
+            import matplotlib.pyplot as plt
+            # pdb.set_trace()
+            # DEBUG end
 
         return
 

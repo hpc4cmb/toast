@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -12,8 +12,6 @@ from .. import ops
 from ..accelerator import ImplementationType, accel_enabled
 from ..atm import available_atm
 from ..observation import default_values as defaults
-from ..pixels_io_healpix import write_healpix_fits
-from ..pixels_io_wcs import write_wcs_fits
 from ..templates import Fourier2D, Offset, Periodic
 from ..templates.offset import plot as offplot
 from ..templates.periodic import plot as perplot

@@ -8,7 +8,7 @@ import numpy as np
 
 from .pixels import PixelData, PixelDistribution
 from .pixels_io_healpix import read_healpix
-from .pixels_io_wcs import read_wcs_fits
+from .pixels_io_wcs import read_wcs_parallel
 
 
 def footprint_distribution(

@@ -18,7 +18,7 @@ from ...observation import default_values as defaults
 from ...pixels import PixelData
 from ...pixels_io_healpix import (filename_is_fits, filename_is_hdf5,
                                   read_healpix_fits)
-from ...pixels_io_wcs import read_wcs_fits, read_wcs_hdf5, write_wcs
+from ...pixels_io_wcs import read_wcs_parallel, write_wcs
 
 
 def create_fake_healpix_file(
@@ -108,20 +108,20 @@ def create_fake_wcs_file(
 
     """
     # Image dimensions
-    lon_dim = wcs_shape[0]
-    lat_dim = wcs_shape[1]
+    n_row = wcs_shape[0]
+    n_col = wcs_shape[1]
     # Get the smoothing kernel FWHM in terms of pixels
-    lon_res_deg = np.absolute(wcs.wcs.cdelt[0])
-    lat_res_deg = np.absolute(wcs.wcs.cdelt[1])
-    lon_fwhm = fwhm.to_value(u.degree) / lon_res_deg
+    lat_res_deg = np.absolute(wcs.wcs.cdelt[0])
+    lon_res_deg = np.absolute(wcs.wcs.cdelt[1])
     lat_fwhm = fwhm.to_value(u.degree) / lat_res_deg
+    lon_fwhm = fwhm.to_value(u.degree) / lon_res_deg
 
-    image_shape = (3, lat_dim, lon_dim)
+    image_shape = (3, n_row, n_col)
     image = np.zeros(image_shape, dtype=np.float64)
 
     np.random.seed(987654321)
     for imap, scale in enumerate([I_scale, Q_scale, U_scale]):
-        temp = np.random.normal(loc=0.0, scale=scale, size=(lat_dim, lon_dim))
+        temp = np.random.normal(loc=0.0, scale=scale, size=(n_row, n_col))
         image[imap, :, :] = gaussian_filter(temp, sigma=(lat_fwhm, lon_fwhm))
 
     write_wcs(out_file, image, wcs, units)
@@ -234,10 +234,7 @@ def create_fake_wcs_map(
     if comm is not None:
         comm.barrier()
     pix = PixelData(pixel_dist, np.float64, n_value=3, units=units)
-    if filename_is_fits(out_file):
-        read_wcs_fits(pix, out_file)
-    else:
-        read_wcs_hdf5(pix, out_file)
+    read_wcs_parallel(pix, out_file)
     return pix
 
 

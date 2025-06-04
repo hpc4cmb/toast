@@ -10,7 +10,7 @@ import traitlets
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
-from ..pixels_io_wcs import write_wcs_fits
+from ..pixels_io_wcs import write_wcs_parallel
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
@@ -242,7 +242,7 @@ class MapMaker(Operator):
                 if self.mc_mode and not force and os.path.isfile(fname):
                     log.info_rank(f"Skipping existing file: {fname}", comm=self._comm)
                 else:
-                    write_wcs_fits(self._data[prod_key], fname)
+                    write_wcs_parallel(self._data[prod_key], fname)
             else:
                 if self.write_hdf5:
                     # Non-standard HDF5 output

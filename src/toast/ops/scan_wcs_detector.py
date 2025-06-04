@@ -52,7 +52,7 @@ class ScanWCSDetectorMap(Operator):
     )
 
     focalplane_keys = Unicode(
-        "wafer",
+        "pixel",
         help="Comma-separated list of keys to retrieve from the focalplane.  "
         "Used to expand map file names.",
     )
@@ -195,8 +195,10 @@ class ScanWCSDetectorMap(Operator):
                         msg += f"Shape({self.pixel_pointing.name})={wcs_shape} but "
                         msg += f"Shape({current_file_name})={current_shape}"
                         raise ValueError(msg)
-                    # Collapse each component map into a vector
+                    # Collapse each component map into a vector. Note that TOAST uses
+                    # column-major pixel numbers so we must transpose the map
                     nmap, nx, ny = current_map.shape
+                    current_map = current_map.transpose([0, 2, 1])
                     current_map = current_map.reshape([nmap, nx * ny])
                     last_file_name = current_file_name
                 ref = ob.detdata[self.det_data][det]
