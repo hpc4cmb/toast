@@ -335,9 +335,7 @@ def read_wcs_parallel(pix, path, comm_bytes=10000000, **kwargs):
             fscale = scale.value
 
         # Check dimensions
-        impix = 1
-        for s in image.shape:
-            impix *= s
+        impix = np.prod(image.shape)
         tot_pix = dist.n_pix * pix.n_value
         if tot_pix != impix:
             raise RuntimeError(
