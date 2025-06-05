@@ -377,6 +377,9 @@ class PixelsWCS(Operator):
     def _shape_to_submaps(self):
         self.n_row = self.wcs_shape[0]
         self.n_col = self.wcs_shape[1]
+        if self.n_row < 1 or self.n_col < 1:
+            msg = f"The WCS has non-positive dimensions: {self.wcs_shape}"
+            raise RuntimeError(msg)
         self._n_pix = self.n_row * self.n_col
         self._n_pix_submap = self._n_pix // self.submaps
         if self._n_pix_submap * self.submaps < self._n_pix:
@@ -413,13 +416,11 @@ class PixelsWCS(Operator):
         if self.auto_bounds and not self._done_auto:
             # Pass through the boresight pointing for every observation and build
             # the maximum extent of the detector field of view.
-            lonmax = -2 * np.pi * u.radian
-            lonmin = 2 * np.pi * u.radian
-            latmax = (-np.pi / 2) * u.radian
-            latmin = (np.pi / 2) * u.radian
-            for ob in data.obs:
+            nobs = len(data.obs)
+            minmax = np.zeros([nobs, 4]) * u.rad  # lon_min, lon_max, lat_min, lat_max
+            for iob, ob in enumerate(data.obs):
                 # The scan range is computed collectively among the group.
-                lnmin, lnmax, ltmin, ltmax = scan_range_lonlat(
+                minmax[iob] = scan_range_lonlat(
                     ob,
                     self.detector_pointing.boresight,
                     flags=self.detector_pointing.shared_flags,
@@ -428,25 +429,28 @@ class PixelsWCS(Operator):
                     is_azimuth=is_azimuth,
                     center_offset=self.center_offset,
                 )
-                lonmin = min(lonmin, lnmin)
-                lonmax = max(lonmax, lnmax)
-                latmin = min(latmin, ltmin)
-                latmax = max(latmax, ltmax)
+            minmax = minmax.T
+            # Compact observations on both sides of the zero meridian can
+            # confuse this calculation. Use np.unwrap() to find the most
+            # compact longitude range.
+            lonmin = np.amin(np.unwrap(minmax[0]))
+            lonmax = np.amax(np.unwrap(minmax[1]))
+            if lonmax < lonmin:
+                lonmax += 2 * np.pi
+            latmin = np.amin(minmax[2])
+            latmax = np.amax(minmax[3])
             if data.comm.comm_world is not None:
-                lonlatmin = np.zeros(2, dtype=np.float64)
-                lonlatmax = np.zeros(2, dtype=np.float64)
-                lonlatmin[0] = lonmin.to_value(u.radian)
-                lonlatmin[1] = latmin.to_value(u.radian)
-                lonlatmax[0] = lonmax.to_value(u.radian)
-                lonlatmax[1] = latmax.to_value(u.radian)
-                all_lonlatmin = np.zeros(2, dtype=np.float64)
-                all_lonlatmax = np.zeros(2, dtype=np.float64)
-                data.comm.comm_world.Allreduce(lonlatmin, all_lonlatmin, op=MPI.MIN)
-                data.comm.comm_world.Allreduce(lonlatmax, all_lonlatmax, op=MPI.MAX)
-                lonmin = all_lonlatmin[0] * u.radian
-                latmin = all_lonlatmin[1] * u.radian
-                lonmax = all_lonlatmax[0] * u.radian
-                latmax = all_lonlatmax[1] * u.radian
+                # Zero meridian concern applies across processes
+                all_lonmin = data.comm.comm_world.Allgather(lonmin)
+                all_lonmax = data.comm.comm_world.Allgather(lonmax)
+                all_latmin = data.comm.comm_world.Allgather(latmin)
+                all_latmax = data.comm.comm_world.Allgather(latmax)
+                lonmin = np.amin(np.unwrap(all_lonmin))
+                lonmax = np.amax(np.unwrap(all_lonmax))
+                if lonmax < lonmin:
+                    lonmax += 2 * np.pi
+                latmin = np.amin(all_latmin)
+                latmax = np.amax(all_latmax)
             self.bounds = (
                 lonmin.to(u.degree),
                 lonmax.to(u.degree),

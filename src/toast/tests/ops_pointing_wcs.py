@@ -32,7 +32,14 @@ class PointingWCSTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
-        self.proj_dims = (1000, 500)
+        # Uncomment high resolution versions for prettier plots
+        # (tests take more time)
+        self.proj_dims = (100, 50)
+        self.reso = 1.0 * u.degree
+        self.fsample = 1.0 * u.Hz
+        # self.proj_dims = (1000, 500)
+        # self.reso = 0.02 * u.degree
+        # self.fsample = 60.0 * u.Hz
         # For debugging, change this to True
         self.write_extra = False
 
@@ -115,16 +122,8 @@ class PointingWCSTest(MPITestCase):
         hits_per_pixel = data.comm.ngroups * len(data.obs[0].all_detectors)
         expected = np.zeros_like(flat_hits)
         expected[nonzero] = hits_per_pixel
-        try:
-            np.testing.assert_array_equal(
-                flat_hits,
-                expected,
-            )
-        except:
-            import pdb
-            pdb.set_trace()
+        np.testing.assert_array_equal(flat_hits, expected)
 
-    """
     def test_wcs(self):
         # Test basic creation of WCS projections and plotting
         res_deg = (0.01, 0.01)
@@ -163,9 +162,7 @@ class PointingWCSTest(MPITestCase):
                 outfile = os.path.join(self.outdir, f"test_wcs_{proj}_center.fits")
                 hdu.writeto(outfile)
                 plot_wcs_maps(hitfile=outfile)
-    """
 
-    """
     def test_projections(self):
         centers = list()
         for lon in [130.0, 180.0]:
@@ -228,20 +225,18 @@ class PointingWCSTest(MPITestCase):
                 close_data(data)
                 if self.comm is not None:
                     self.comm.barrier()
-    """
 
-    """
     def test_mapmaking(self):
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
 
         # Test several projections
-        resolution = 0.1 * u.degree
+        resolution = self.reso
 
         for proj in ["CAR"]:
             # Create fake observing of a small patch
-            data = create_ground_data(self.comm)
+            data = create_ground_data(self.comm, sample_rate=self.fsample)
 
             # Simple detector pointing
             detpointing_radec = ops.PointingDetectorSimple(
@@ -356,7 +351,6 @@ class PointingWCSTest(MPITestCase):
                 plot_wcs_maps(hitfile=hitfile, mapfile=mapfile)
 
             close_data(data)
-    """
 
     def fake_source(self, mission_start, ra_start, dec_start, times, deg_per_hour=1.0):
         deg_sec = deg_per_hour / 3600.0
@@ -575,11 +569,13 @@ class PointingWCSTest(MPITestCase):
             rank = self.comm.rank
 
         # Test several projections
-        resolution = 0.02 * u.degree
+        resolution = self.reso
 
         for proj in ["TAN"]:
             # Create fake observing of a small patch
-            data = create_ground_data(self.comm, pixel_per_process=10)
+            data = create_ground_data(
+                self.comm, sample_rate=self.fsample, pixel_per_process=10
+            )
 
             # Create source motion and simulated detector data.
             dbgdir = None
@@ -671,18 +667,19 @@ class PointingWCSTest(MPITestCase):
 
             close_data(data)
 
-    """
     def test_drone_map(self):
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
 
         # Test several projections
-        resolution = 0.02 * u.degree
+        resolution = self.reso
 
         for proj in ["SFL"]:
             # Create fake observing of a small patch
-            data = create_ground_data(self.comm, pixel_per_process=10)
+            data = create_ground_data(
+                self.comm, sample_rate=self.fsample, pixel_per_process=10
+            )
 
             # We are going to hack the boresight pointing so that the RA/DEC simulated
             # pointing is treated as Az/El.  This means that the scan pattern will not
@@ -783,4 +780,3 @@ class PointingWCSTest(MPITestCase):
                 plot_wcs_maps(hitfile=hitfile, mapfile=binmapfile, is_azimuth=True)
 
             close_data(data)
-    """
