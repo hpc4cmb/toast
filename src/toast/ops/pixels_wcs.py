@@ -441,16 +441,16 @@ class PixelsWCS(Operator):
             latmax = np.amax(minmax[3])
             if data.comm.comm_world is not None:
                 # Zero meridian concern applies across processes
-                all_lonmin = data.comm.comm_world.Allgather(lonmin)
-                all_lonmax = data.comm.comm_world.Allgather(lonmax)
-                all_latmin = data.comm.comm_world.Allgather(latmin)
-                all_latmax = data.comm.comm_world.Allgather(latmax)
-                lonmin = np.amin(np.unwrap(all_lonmin))
-                lonmax = np.amax(np.unwrap(all_lonmax))
+                all_lonmin = data.comm.comm_world.allgather(lonmin.to_value(u.radian))
+                all_lonmax = data.comm.comm_world.allgather(lonmax.to_value(u.radian))
+                all_latmin = data.comm.comm_world.allgather(latmin.to_value(u.radian))
+                all_latmax = data.comm.comm_world.allgather(latmax.to_value(u.radian))
+                lonmin = np.amin(np.unwrap(all_lonmin)) * u.radian
+                lonmax = np.amax(np.unwrap(all_lonmax)) * u.radian
                 if lonmax < lonmin:
                     lonmax += 2 * np.pi
-                latmin = np.amin(all_latmin)
-                latmax = np.amax(all_latmax)
+                latmin = np.amin(all_latmin) * u.radian
+                latmax = np.amax(all_latmax) * u.radian
             self.bounds = (
                 lonmin.to(u.degree),
                 lonmax.to(u.degree),
