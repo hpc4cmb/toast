@@ -11,7 +11,7 @@ from astropy import units as u
 from .. import ops as ops
 from ..observation import default_values as defaults
 from ..pixels import PixelData
-from ..pixels_io_wcs import write_wcs_parallel
+from ..pixels_io_wcs import write_wcs_parallel, read_wcs
 from .helpers import (
     close_data,
     create_fake_mask,
@@ -98,6 +98,36 @@ class ScanWCSTest(MPITestCase):
                 np.testing.assert_almost_equal(
                     ob.detdata["test"][det], ob.detdata[defaults.det_data][det]
                 )
+
+        # Bin a map
+
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        mapmaker = ops.MapMaker(
+            det_data="test",
+            binning=binner,
+            write_hits=True,
+            write_binmap=True,
+            output_dir=self.outdir,
+        )
+        mapmaker.apply(data)
+
+        # Check that the output map is consistent with the input map in all hit pixels
+
+        if data.comm.world_rank == 0:
+            output_file = os.path.join(self.outdir, f"{mapmaker.name}_binmap.fits")
+            image_in = read_wcs(input_file)
+            image_out = read_wcs(output_file)
+            good = image_out != 0
+            np.testing.assert_almost_equal(image_in[good], image_out[good])
 
         close_data(data)
 

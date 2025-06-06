@@ -140,13 +140,13 @@ def collect_wcs_submaps(pix, comm_bytes=10000000):
         owners = np.zeros(dist.n_submap, dtype=np.int32)
         owners.fill(not_owned)
         for m in dist.local_submaps:
-            owners[m] = dist.comm.rank
+            owners[m] = rank
         allowners = np.zeros_like(owners)
         dist.comm.Allreduce(owners, allowners, op=MPI.MIN)
 
-    # Create an image array for the output.  WCS shape is (n_col, n_row)
+    # Create an image array for the output.  WCS shape is (n_row, n_col)
     image = None
-    image_shape = (pix.n_value, dist.wcs_shape[1], dist.wcs_shape[0])
+    image_shape = (pix.n_value, dist.wcs_shape[0], dist.wcs_shape[1])
     if rank == 0:
         image = np.zeros(image_shape, dtype=pix.dtype)
 
@@ -175,7 +175,6 @@ def collect_wcs_submaps(pix, comm_bytes=10000000):
                 # at least one submap has some hits.  reduce.
                 for c in range(ncomm):
                     if allowners[submap_off + c] == dist.comm.rank:
-                        # print(f"rank {dist.comm.rank}: set sendview[{c}, :, :]")
                         sendview[c, :, :] = pix.data[
                             dist.global_submap_to_local[submap_off + c], :, :
                         ]
@@ -348,7 +347,7 @@ def read_wcs_parallel(pix, path, comm_bytes=10000000, **kwargs):
 
 
 @function_timer
-def write_wcs(filename, image, wcs, units, dtype=None):
+def write_wcs(filename, image, wcs, units=None, dtype=None):
     """Write a FITS or HDF5 WCS map on the calling process
 
     Args:
@@ -372,7 +371,7 @@ def write_wcs(filename, image, wcs, units, dtype=None):
     if dtype is None:
         dtype = image.dtype
 
-    # Row-major to column major
+    # Row-major to column major (FITS standanrd)
     # image = np.atleast_3d(image).transpose([0, 2, 1]).astype(dtype)
     image = np.atleast_3d(image).astype(dtype)
 
@@ -381,8 +380,9 @@ def write_wcs(filename, image, wcs, units, dtype=None):
         header["NAXIS"] = image.ndim
         for i, n in enumerate(image.shape[::-1]):
             header[f"NAXIS{i + 1}"] = n
-        # Add units
-        header["BUNIT"] = str(units)
+        if units is not None:
+            # Add units
+            header["BUNIT"] = str(units)
         hdus = af.HDUList([af.PrimaryHDU(image, header)])
         hdus.writeto(filename)
         del hdus
@@ -391,8 +391,9 @@ def write_wcs(filename, image, wcs, units, dtype=None):
             hfile["data"] = image
             for key, value in header.items():
                 hfile[f"wcs/{key}"] = value
-            # Add units
-            hfile["bunit"] = str(units)
+            if units is not None:
+                # Add units
+                hfile["bunit"] = str(units)
     else:
         msg = f"Could not ascertain file type for '{filename}'"
         raise RuntimeError(msg)

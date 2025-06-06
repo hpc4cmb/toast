@@ -242,7 +242,9 @@ class MapMaker(Operator):
                 if self.mc_mode and not force and os.path.isfile(fname):
                     log.info_rank(f"Skipping existing file: {fname}", comm=self._comm)
                 else:
-                    write_wcs_parallel(self._data[prod_key], fname)
+                    write_wcs_parallel(
+                        self._data[prod_key], fname, single_precision=True
+                    )
             else:
                 if self.write_hdf5:
                     # Non-standard HDF5 output
