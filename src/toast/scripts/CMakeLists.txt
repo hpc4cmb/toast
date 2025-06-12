@@ -21,6 +21,7 @@ set(ENTRY_POINTS
     toast_plot_wcs.py
     toast_plot_healpix.py
     toast_project_schedule.py
+    toast_analyze_schedule.py
 )
 
 foreach(pyscript ${ENTRY_POINTS})

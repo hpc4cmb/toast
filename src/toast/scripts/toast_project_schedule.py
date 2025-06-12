@@ -18,17 +18,20 @@ import ephem
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
-
-import toast
+from toast.coordinates import to_DJD, to_UTC
 from toast.mpi import MPI, Comm, get_world
 from toast.pixels_io_healpix import read_healpix, write_healpix
 from toast.timing import Timer
 from toast.utils import Environment, Logger
-from toast.coordinates import to_DJD, to_UTC
+
+import toast
+
 
 # tqdm provides a progress bar but it is not critical
 def no_tqdm(x):
     return x
+
+
 try:
     from tqdm import tqdm
 except ModuleNotFoundError:
@@ -36,7 +39,7 @@ except ModuleNotFoundError:
 
 
 def get_periods(args, schedule):
-    """ Construct lists of period start/stop times and period names"""
+    """Construct lists of period start/stop times and period names"""
 
     tstart_schedule = schedule.scans[0].start.timestamp()
     tstop_schedule = schedule.scans[-1].stop.timestamp()
@@ -86,7 +89,7 @@ def get_azel(args, scan):
 
 
 def get_period_hits(args, schedule, period_times, iperiod, iscan):
-    """ Make a hitmap for the given period """
+    """Make a hitmap for the given period"""
 
     radius = np.radians(args.fov) / 2
     tstart, tstop = period_times[iperiod]
@@ -163,7 +166,7 @@ def get_hits(args, schedule, period_times, comm, rank):
 
 
 def plot_hits(all_hits, period_times, period_names, comm, rank):
-    """ Plot daily and total hits """
+    """Plot daily and total hits"""
 
     log = Logger.get()
 
@@ -197,7 +200,7 @@ def plot_hits(all_hits, period_times, period_names, comm, rank):
 
 
 def parse_arguments():
-    """ Parse the command line arguments """
+    """Parse the command line arguments"""
 
     parser = argparse.ArgumentParser(description="Project schedule to a hitmap")
 
