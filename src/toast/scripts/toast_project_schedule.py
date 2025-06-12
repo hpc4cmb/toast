@@ -165,10 +165,34 @@ def get_hits(args, schedule, period_times, comm, rank):
     return hits
 
 
-def plot_hits(all_hits, period_times, period_names, comm, rank):
+def load_background(args):
+    if args.bg is None:
+        return None
+
+    if args.bg_pol:
+        bg = hp.read_map(args.bg, [0, 1, 2])
+    else:
+        bg = hp.read_map(args.bg)
+
+    if args.bg_fwhm is not None:
+        bg = hp.smoothing(bg, fwhm=np.radians(args.bg_fwhm), lmax=args.bg_lmax)
+
+    if args.bg_pol:
+        bg = np.sqrt(bg[1]**2 + bg[2]**2)
+
+    # truncate the color scale
+    limit = np.percentile(bg, args.bg_percentile)
+    bg[bg > limit] = limit
+
+    return bg
+
+
+def plot_hits(args, all_hits, period_times, period_names, comm, rank):
     """Plot daily and total hits"""
 
     log = Logger.get()
+
+    bg = load_background(args)
 
     log.info_rank("Plotting hitmaps", comm=comm)
     if rank == 0:
@@ -192,8 +216,19 @@ def plot_hits(all_hits, period_times, period_names, comm, rank):
             tstop = period_times[-1][1]
             name = "Full"
         title = f"{name} : {to_UTC(tstart)} - {to_UTC(tstop)}"
+        mask = hits > 0
         hits[hits == 0] = hp.UNSEEN
-        hp.mollview(hits, cmap="magma", title=title, xsize=1600, unit="Hits")
+        if bg is not None:
+            hp.mollview(bg, cmap="inferno", coord=args.bg_coord, cbar=False)
+        hp.mollview(
+            hits,
+            cmap="magma",
+            title=title,
+            xsize=1600,
+            unit="Hits",
+            reuse_axes=True,
+            alpha=mask * 0.75,
+        )
         plt.savefig(fname_plot)
         plt.close()
     return
@@ -219,6 +254,44 @@ def parse_arguments():
         "--nside",
         default=128,
         help="Hitmap healpix resolution",
+    )
+
+    parser.add_argument(
+        "--bg",
+        required=False,
+        help="Background map to plot",
+    )
+
+    parser.add_argument(
+        "--bg-fwhm",
+        required=False,
+        help="Background smoothing scale in degrees",
+    )
+
+    parser.add_argument(
+        "--bg-lmax",
+        default=512,
+        help="Background smoothing lmax",
+    )
+
+    parser.add_argument(
+        "--bg-coord",
+        required=False,
+        help="Background coordinates passed to Healpy.",
+    )
+
+    parser.add_argument(
+        "--bg-percentile",
+        default=75,
+        help="Saturate background colorscale at this percentile",
+    )
+
+    parser.add_argument(
+        "--bg-pol",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Plot background polarization amplitude rather than intensity",
     )
 
     parser.add_argument(
@@ -293,7 +366,7 @@ def main():
 
     # Plot
 
-    plot_hits(all_hits, period_times, period_names, comm, rank)
+    plot_hits(args, all_hits, period_times, period_names, comm, rank)
     log.info_rank(f"Made plots in", timer=timer1, comm=comm)
 
     if comm is not None:
