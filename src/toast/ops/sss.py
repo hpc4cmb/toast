@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -19,6 +19,7 @@ from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger
+from .interpolate_healpix import InterpolateHealpixMap
 from .operator import Operator
 from .pipeline import Pipeline
 
@@ -48,6 +49,12 @@ class SimScanSynchronousSignal(Operator):
         klass=Operator,
         allow_none=True,
         help="Operator that translates boresight Az/El pointing into detector frame",
+    )
+
+    stokes_weights = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="An operator that produces the Stokes weights in the Az/El frame",
     )
 
     pol = Bool(False, help="Ground map is polarized")
@@ -97,6 +104,11 @@ class SimScanSynchronousSignal(Operator):
 
         group = data.comm.group
         comm = data.comm.comm_group
+
+        for trait in ("detector_pointing", "stokes_weights"):
+            if getattr(self, trait) is None:
+                msg = f"You must set the '{trait}' trait before calling exec()"
+                raise RuntimeError(msg)
 
         for obs in data.obs:
             dets = obs.select_local_detectors(
@@ -156,6 +168,10 @@ class SimScanSynchronousSignal(Operator):
             if obs["sss_realization"] == self.realization:
                 return
 
+        # Number of Stokes components
+        stokes_components = self.stokes_weights.mode
+        nnz = len(stokes_components)
+
         # Surface temperature is made available but not used yet
         # to scale the SSS
         dtype = np.float32
@@ -163,35 +179,35 @@ class SimScanSynchronousSignal(Operator):
             # Only the root process loads or simulates the map
             temperature = weather.surface_temperature
             if self.path:
-                if self.pol:
-                    sss_map = hp.read_map(self.path, [0, 1, 2], dtype=dtype)
-                else:
-                    sss_map = [hp.read_map(self.path, dtype=dtype)]
+                sss_maps = np.atleast_2d(
+                    hp.read_map(self.path, np.arange(nnz), dtype=dtype)
+                )
             else:
                 npix = 12 * self.nside**2
-                sss_map = rng.random(
-                    npix,
+                sss_maps = []
+                sss_maps = rng.random(
+                    npix * nnz,
                     key=(key1, key2),
                     counter=(counter1, counter2),
                     sampler="gaussian",
                 )
-                sss_map = np.array(sss_map, dtype=dtype)
-                sss_map = hp.smoothing(
-                    sss_map, fwhm=self.fwhm.to_value(u.radian), lmax=self.lmax
-                ).astype(dtype)
-                sss_map /= np.std(sss_map)
-                lon, lat = hp.pix2ang(
-                    self.nside, np.arange(npix, dtype=np.int64), lonlat=True
-                )
-                scale = self.scale * (np.abs(lat) / 90 + 0.5) ** self.power
-                sss_map *= scale.to_value(self.units)
-                if self.pol:
-                    # Mock up a 10% Q-polarized ground signal using the
-                    # simulated intensity
-                    sss_map = [sss_map, sss_map * 0.1, sss_map * 0]
-                else:
-                    sss_map = [sss_map]
-            sss_map = np.vstack(sss_map)
+                sss_maps = np.reshape(sss_maps, [nnz, -1]).astype(dtype)
+                for i, stokes in enumerate(stokes_components):
+                    sss_map = sss_maps[i]
+                    sss_map = hp.smoothing(
+                        sss_map, fwhm=self.fwhm.to_value(u.radian), lmax=self.lmax
+                    ).astype(dtype)
+                    sss_map /= np.std(sss_map)
+                    lon, lat = hp.pix2ang(
+                        self.nside, np.arange(npix, dtype=np.int64), lonlat=True
+                    )
+                    scale = self.scale * (np.abs(lat) / 90 + 0.5) ** self.power
+                    # Suppress all polarized componts to 10% of intensity
+                    if stokes != "I":
+                        scale *= 0.1
+                    sss_map *= scale.to_value(self.units)
+                    sss_maps[i] = sss_map
+            sss_map = np.vstack(sss_maps)
             nmap, npix = sss_map.shape
         else:
             npix = None
@@ -216,30 +232,15 @@ class SimScanSynchronousSignal(Operator):
 
         sss_maps = obs.shared[self.sss_map].data
 
-        for det in dets:
-            signal = obs.detdata[self.det_data][det]
+        interpolator = InterpolateHealpixMap(
+            maps=[sss_maps],
+            det_data=self.det_data,
+            detector_pointing=self.detector_pointing,
+            stokes_weights=self.stokes_weights,
+        )
 
-            try:
-                # Use cached detector quaternions
-                quats = obs.detdata[self.detector_pointing.quats][det]
-            except KeyError:
-                # Compute the detector quaternions
-                obs_data = data.select(obs_uid=obs.uid)
-                self.detector_pointing.apply(obs_data, detectors=[det])
-                quats = obs.detdata[self.detector_pointing.quats][det]
-
-            # Convert Az/El quaternion of the detector into angles
-            theta, phi, psi = qa.to_iso_angles(quats)
-            stokes_weights = [np.ones(signal.size)]
-            if self.pol:
-                stokes_weights.append(np.cos(2 * psi))
-                stokes_weights.append(np.sin(2 * psi))
-
-            # hp.get_interp_val(sss_map, theta, phi)
-            pixels, weights = hp.get_interp_weights(self.nside, theta, phi)
-            for p, w in zip(pixels, weights):
-                for sss_map, wstokes in zip(sss_maps, stokes_weights):
-                    signal += sss_map[p] * w * wstokes
+        obs_data = data.select(obs_uid=obs.uid)
+        interpolator.apply(obs_data, detectors=dets)
 
         return
 

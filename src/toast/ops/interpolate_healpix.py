@@ -1,19 +1,18 @@
-# Copyright (c) 2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import healpy as hp
 import numpy as np
+import toast.qarray as qa
 import traitlets
 from astropy import units as u
 from pshmem import MPIShared
 
-import toast.qarray as qa
-
 from ..observation import default_values as defaults
 from ..pixels_io_healpix import read_healpix
 from ..timing import function_timer
-from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
+from ..traits import Bool, Instance, Int, List, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
@@ -38,6 +37,12 @@ class InterpolateHealpixMap(Operator):
         None,
         allow_none=True,
         help="Path to healpix FITS file.  Use ';' if providing multiple files",
+    )
+
+    maps = List(
+        None,
+        allow_none=True,
+        help="HEALpix maps to scan.  If set, `file` must be None.",
     )
 
     det_data = Unicode(
@@ -121,38 +126,45 @@ class InterpolateHealpixMap(Operator):
         return weights
 
     def __init__(self, **kwargs):
-        self.map_names = []
-        self.maps = {}
         super().__init__(**kwargs)
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        for trait in ("file", "detector_pointing", "stokes_weights"):
+        for trait in ("detector_pointing", "stokes_weights"):
             if getattr(self, trait) is None:
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
-        # Split up the file and map names
-        self.file_names = self.file.split(";")
-        nmap = len(self.file_names)
+        nset = 0
+        exclusive = ("file", "maps")
+        for trait in exclusive:
+            attr = getattr(self, trait)
+            if attr is not None and len(attr) > 0:
+                nset += 1
+        if nset != 1:
+            msg = f"You must set exactly one of '{exclusive}' "
+            msg += f"traits before calling exec(), not {nset}"
+            raise RuntimeError(msg)
+
+        if self.file is None:
+            # Maps are pre-loaded
+            nmap = len(self.maps)
+            self.file_names = []
+        else:
+            # Split up the file names
+            self.file_names = self.file.split(";")
+            nmap = len(self.file_names)
+            self.maps = []
         self.det_data_keys = self.det_data.split(";")
         nkey = len(self.det_data_keys)
         if nkey != 1 and (nmap != nkey):
             msg = "If multiple detdata keys are provided, each must have its own map"
             raise RuntimeError(msg)
-        self.map_names = [f"{self.name}_map{i}" for i in range(nmap)]
 
         # Determine the number of non-zeros from the Stokes weights
-        nnz = None
-        if self.stokes_weights is None or self.stokes_weights.mode == "I":
-            nnz = 1
-        elif self.stokes_weights.mode == "IQU":
-            nnz = 3
-        else:
-            msg = f"Unknown Stokes weights mode '{self.stokes_weights.mode}'"
-            raise RuntimeError(msg)
+        nnz = len(self.stokes_weights.mode)
 
         # Create our map(s) to scan named after our own operator name.  Generally the
         # files on disk are stored as float32, but even if not there is no real benefit
@@ -165,18 +177,18 @@ class InterpolateHealpixMap(Operator):
         else:
             world_rank = world_comm.rank
 
-        for file_name, map_name in zip(self.file_names, self.map_names):
-            if map_name not in self.maps:
-                if world_rank == 0:
-                    m = np.atleast_2d(read_healpix(file_name, None, dtype=np.float32))
-                    map_shape = m.shape
-                else:
-                    m = None
-                    map_shape = None
-                if world_comm is not None:
-                    map_shape = world_comm.bcast(map_shape)
-                self.maps[map_name] = MPIShared(map_shape, np.float32, world_comm)
-                self.maps[map_name].set(m)
+        for file_name in self.file_names:
+            if world_rank == 0:
+                m = np.atleast_2d(read_healpix(file_name, None, dtype=np.float32))
+                map_shape = m.shape
+            else:
+                m = None
+                map_shape = None
+            if world_comm is not None:
+                map_shape = world_comm.bcast(map_shape)
+            shared = MPIShared(map_shape, np.float32, world_comm)
+            shared.set(m)
+            self.maps.append(shared)
 
         # Loop over all observations and local detectors, interpolating each map
         for ob in data.obs:
@@ -202,17 +214,19 @@ class InterpolateHealpixMap(Operator):
                 # Convert pointing quaternion into angles
                 theta, phi, _ = qa.to_iso_angles(det_quat)
                 # Get pointing weights
-                weights = current_ob.detdata[self.stokes_weights.weights][det]
+                weights = np.atleast_2d(
+                    current_ob.detdata[self.stokes_weights.weights][det]
+                )
 
                 # Interpolate the provided maps and accumulate the
                 # appropriate timestreams in the original observation
-                for map_name, map_value in self.maps.items():
+                for m in self.maps:
                     if len(self.det_data_keys) == 1:
                         det_data_key = self.det_data_keys[0]
                     else:
                         det_data_key = self.det_data_keys[imap]
                     ref = ob.detdata[det_data_key][det]
-                    nside = hp.get_nside(map_value)
+                    nside = hp.get_nside(m)
                     interp_pix, interp_weight = hp.pixelfunc.get_interp_weights(
                         nside,
                         theta,
@@ -221,7 +235,7 @@ class InterpolateHealpixMap(Operator):
                         lonlat=False,
                     )
                     sig = np.zeros_like(ref)
-                    for inz, map_column in enumerate(map_value):
+                    for inz, map_column in enumerate(m):
                         sig += weights[:, inz] * np.sum(
                             map_column[interp_pix] * interp_weight, 0
                         )
@@ -232,8 +246,7 @@ class InterpolateHealpixMap(Operator):
 
         # Clean up our map, if needed
         if not self.save_map:
-            for map_name in self.map_names:
-                del self.maps[map_name]
+            self.maps = None
 
         return
 
