@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -14,7 +14,12 @@ from ..instrument_coords import quat_to_xieta
 from ..instrument_sim import plot_focalplane
 from ..observation import default_values as defaults
 from ..pixels import PixelData
-from .helpers import close_data, create_healpix_ring_satellite, create_outdir
+from .helpers import (
+    close_data,
+    create_healpix_ring_satellite,
+    create_outdir,
+    create_satellite_data,
+)
 from .mpi import MPITestCase
 
 
@@ -563,3 +568,39 @@ class StokesWeightsTest(MPITestCase):
                     self.assertTrue(False)
 
             close_data(data)
+
+    def test_QU(self):
+        # Create a fake satellite data set for testing
+
+        data = create_satellite_data(self.comm)
+
+        # Create Stokes weights in IQU and QU modes
+
+        detpointing = ops.PointingDetectorSimple()
+
+        weights_iqu = ops.StokesWeights(
+            mode="IQU",
+            weights="weights_iqu",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights_iqu.apply(data)
+
+        weights_qu = ops.StokesWeights(
+            mode="QU",
+            weights="weights_qu",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights_qu.apply(data)
+
+        # Compare the QU part of the weights. It must match
+
+        for ob in data.obs:
+            qu = ob.detdata["weights_qu"].data
+            iqu = ob.detdata["weights_iqu"].data
+            np.testing.assert_array_equal(qu, iqu[:, :, 1:])
+
+        close_data(data)
+        if self.comm is not None:
+            self.comm.barrier()

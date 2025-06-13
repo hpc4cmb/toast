@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -71,7 +71,7 @@ class StokesWeights(Operator):
         help="Operator that translates boresight pointing into detector frame",
     )
 
-    mode = Unicode("I", help="The Stokes weights to generate (I or IQU)")
+    mode = Unicode("I", help="The Stokes weights to generate (I, QU or IQU)")
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
@@ -127,8 +127,8 @@ class StokesWeights(Operator):
     @traitlets.validate("mode")
     def _check_mode(self, proposal):
         check = proposal["value"]
-        if check not in ["I", "IQU"]:
-            raise traitlets.TraitError("Invalid mode (must be 'I' or 'IQU')")
+        if check not in ["I", "QU", "IQU"]:
+            raise traitlets.TraitError("Invalid mode (must be 'I', 'QU' or 'IQU')")
         return check
 
     def __init__(self, **kwargs):
@@ -236,7 +236,7 @@ class StokesWeights(Operator):
             else:
                 cal = np.array([ob[self.cal][x] for x in dets], np.float64)
 
-            if self.mode == "IQU":
+            if "QU" in self.mode:
                 det_gamma = np.zeros(len(dets), dtype=np.float64)
                 if self.hwp_angle is None or self.hwp_angle not in ob.shared:
                     hwp_data = np.zeros(1, dtype=np.float64)
@@ -244,11 +244,23 @@ class StokesWeights(Operator):
                     hwp_data = ob.shared[self.hwp_angle].data
                     for idet, d in enumerate(dets):
                         det_gamma[idet] = focalplane[d]["gamma"].to_value(u.rad)
+                weight_data = ob.detdata[self.weights].data
+                if self.mode == "IQU":
+                    work_data = weight_data
+                elif self.mode == "QU":
+                    # Allocate temporary space to hold the IQU weights.
+                    # Copy the QU part into persistent storage after the call
+                    ndet, nsample, nnz = weight_data.shape
+                    work_data = np.zeros(
+                        [ndet, nsample, nnz + 1], dtype=weight_data.dtype
+                    )
+                else:
+                    raise RuntimeError(f"Unexpected mode: {self.mode}")
                 stokes_weights_IQU(
                     quat_indx,
                     ob.detdata[quats_name].data,
                     weight_indx,
-                    ob.detdata[self.weights].data,
+                    work_data,
                     hwp_data,
                     ob.intervals[self.view].data,
                     det_epsilon,
@@ -258,6 +270,11 @@ class StokesWeights(Operator):
                     impl=implementation,
                     use_accel=use_accel,
                 )
+                if self.mode == "QU":
+                    # Copy the QU weights out of the temporary array
+                    for i in weight_indx:
+                        weight_data[i, :, :] = work_data[i, :, 1:3]
+                    del work_data
             else:
                 stokes_weights_I(
                     weight_indx,
