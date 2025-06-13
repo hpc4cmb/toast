@@ -138,6 +138,8 @@ class Demodulate(Operator):
 
     do_2f = Bool(False, help="also cache the 2f-demodulated signal")
 
+    pol_only = Bool(False, help="Return only the Q and U detector timestreams")
+
     # Intervals?
 
     @traitlets.validate("det_mask")
@@ -210,9 +212,11 @@ class Demodulate(Operator):
                 "None of the observations have a spinning HWP.  Nothing to demodulate."
             )
 
-        # Each modulated detector demodulates into 3 or 5 pseudo detectors
+        # Each modulated detector demodulates into 3, 2 or 5 pseudo detectors
 
         self.prefixes = ["demod0", "demod4r", "demod4i"]
+        if self.pol_only:
+            self.prefixes = ["demod4r", "demod4i"]
         if self.do_2f:
             self.prefixes.extend(["demod2r", "demod2i"])
 
@@ -524,7 +528,8 @@ class Demodulate(Operator):
             for flavor in self.det_data.split(";"):
                 signal = obs.detdata[flavor][det]
                 det_data = demod_obs.detdata[flavor]
-                det_data[f"demod0_{det}"] = lowpass(signal)
+                if not self.pol_only:
+                    det_data[f"demod0_{det}"] = lowpass(signal)
                 det_data[f"demod4r_{det}"] = lowpass(signal * 2 * qweights * etainv)
                 det_data[f"demod4i_{det}"] = lowpass(signal * 2 * uweights * etainv)
 
