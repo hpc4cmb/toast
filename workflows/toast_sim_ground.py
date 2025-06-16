@@ -491,6 +491,7 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
     # Simulate scan-synchronous signal
 
     ops.sim_sss.detector_pointing = ops.det_pointing_azel
+    ops.sim_sss.stokes_weights = ops.weights_azel
     ops.sim_sss.apply(data)
     log.info_rank("  Simulated Scan-synchronous signal", comm=world_comm, timer=timer)
 
