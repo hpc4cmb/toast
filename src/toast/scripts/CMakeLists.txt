@@ -17,6 +17,7 @@ set(ENTRY_POINTS
     toast_obsmatrix_combine.py
     toast_obsmatrix_coadd.py
     toast_config_verify.py
+    toast_config_compare.py
     toast_merge_timings.py
     toast_plot_wcs.py
     toast_plot_healpix.py
