@@ -14,6 +14,7 @@ from collections import OrderedDict
 
 from astropy.units import Quantity, Unit
 from toast.mpi import Comm, get_world
+from toast.trait_utils import string_to_scalar
 from toast.utils import Environment, Logger, import_from_name, object_fullname
 
 import toast
@@ -23,14 +24,9 @@ from toast.config import dump_json, dump_toml, dump_yaml, load_config
 def cropped_string(value, width):
     """Crop long strings, Add color to select strings"""
     try:
-        value = eval(value)
+        value = string_to_scalar(value)
     except (SyntaxError, NameError):
         pass
-    # Parse Astropy quantities and units
-    # if re.match(r"^Quantity.*", value) is not None:
-    #     value = eval(value)
-    # elif re.match(r"^Unit.*", value) is not None:
-    #     value = eval(value)
     # Convert to string
     string = str(value)
     # If necessary, replace the middle with "..."
