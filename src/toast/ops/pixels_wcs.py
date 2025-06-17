@@ -231,8 +231,10 @@ class PixelsWCS(Operator):
                 msg = f"PixelsWCS: when center is not specified, bounds required."
                 log.error(msg)
                 raise RuntimeError(msg)
-            mid_lon = 0.5 * (bounds_deg[1] + bounds_deg[0])
-            mid_lat = 0.5 * (bounds_deg[3] + bounds_deg[2])
+            lon_min, lon_max, lat_min, lat_max = bounds_deg
+
+            mid_lon = 0.5 * (lon_min + lon_max)
+            mid_lat = 0.5 * (lat_min + lat_max)
             crval = np.array([mid_lon, mid_lat], dtype=np.float64)
             # Either resolution or dimensions should be specified
             if res_deg is not None:
@@ -303,30 +305,35 @@ class PixelsWCS(Operator):
                 wcs.wcs.cdelt = np.array([-res_deg[0], res_deg[1]])
             else:
                 # Compute CDELT from the bounding box and image size.
+                lon_min, lon_max, lat_min, lat_max = bounds_deg
+                n_col, n_row = dims
                 wcs.wcs.cdelt = np.array(
                     [
-                        -(bounds_deg[1] - bounds_deg[0]) / dims[0],
-                        (bounds_deg[3] - bounds_deg[2]) / dims[1],
+                        -(lon_max - lon_min) / n_col,
+                        (lat_max - lat_min) / n_row,
                     ]
                 )
 
         # Compute shape of the projection
         if dims is not None:
-            wcs_shape = tuple(dims)
+            n_col, n_row = dims
+            wcs_shape = (n_row, n_col)
         else:
             # Compute from the bounding box corners
-            lower_left = wcs.wcs_world2pix(
-                np.array([[bounds_deg[0], bounds_deg[2]]]), 0
-            )[0]
-            upper_right = wcs.wcs_world2pix(
-                np.array([[bounds_deg[1], bounds_deg[3]]]), 0
-            )[0]
-            n_col, n_row = tuple(np.round(np.abs(upper_right - lower_left)).astype(int))
+            lon_min, lon_max, lat_min, lat_max = bounds_deg
+            col_min, row_min = wcs.wcs_world2pix([[lon_min, lat_min]], 0)[0]
+            col_max, row_max = wcs.wcs_world2pix([[lon_max, lat_max]], 0)[0]
+            n_col = int(np.abs(col_max - col_min))
+            n_row = int(np.abs(row_max - row_min))
+            # Make sure the dimensions are even
+            n_col += n_col % 2
+            n_row += n_row % 2
             wcs_shape = (n_row, n_col)
 
         # Set the reference pixel to the center of the projection
-        off = wcs.wcs_world2pix(crval.reshape((1, 2)), 0)[0]
-        wcs.wcs.crpix = 0.5 * np.array(wcs_shape, dtype=np.float64) + 0.5 + off
+        off = wcs.wcs_world2pix([crval], 0)[0]
+        c_row, c_col = 0.5 * np.array(wcs_shape, dtype=np.float64) + 0.5 + off
+        wcs.wcs.crpix = (c_col, c_row)
 
         return wcs, wcs_shape
 
@@ -414,8 +421,9 @@ class PixelsWCS(Operator):
             is_azimuth = False
 
         if self.auto_bounds and not self._done_auto:
-            # Pass through the boresight pointing for every observation and build
-            # the maximum extent of the detector field of view.
+            # Pass through the boresight pointing for every observation
+            # and build the maximum extent of the detector field of
+            # view.
             nobs = len(data.obs)
             minmax = np.zeros([nobs, 4]) * u.rad  # lon_min, lon_max, lat_min, lat_max
             for iob, ob in enumerate(data.obs):
@@ -430,9 +438,9 @@ class PixelsWCS(Operator):
                     center_offset=self.center_offset,
                 )
             minmax = minmax.T
-            # Compact observations on both sides of the zero meridian can
-            # confuse this calculation. Use np.unwrap() to find the most
-            # compact longitude range.
+            # Compact observations on both sides of the zero meridian
+            # can confuse this calculation. Use np.unwrap() to find
+            # the most compact longitude range.
             lonmin = np.amin(np.unwrap(minmax[0]))
             lonmax = np.amax(np.unwrap(minmax[1]))
             if lonmax < lonmin:

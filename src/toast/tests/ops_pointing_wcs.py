@@ -201,14 +201,20 @@ class PointingWCSTest(MPITestCase):
 
                 self.assertFalse(pixels.auto_bounds)
                 self.assertTrue(pixels.center == center)
-                self.assertTrue(pixels.resolution == (0.02 * u.degree, 0.02 * u.degree))
+                self.assertTrue(
+                    pixels.resolution == (0.02 * u.degree, 0.02 * u.degree)
+                )
                 self.assertTrue(pixels.dimensions == self.proj_dims)
-                self.assertTrue(pixels.dimensions[0] == pixels.wcs_shape[0])
-                self.assertTrue(pixels.dimensions[1] == pixels.wcs_shape[1])
+                self.assertTrue(pixels.dimensions[0] == pixels.wcs_shape[1])
+                self.assertTrue(pixels.dimensions[1] == pixels.wcs_shape[0])
 
-                # Note, increasing resolution will leave some pixels un-hit, but
-                # the check_hits() helper function will only check pixels with >0 hits
-                pixels.resolution = (0.01 * u.degree, 0.01 * u.degree)
+                # Note, increasing resolution will leave some pixels
+                # un-hit, but the check_hits() helper function will
+                # only check pixels with >0 hits. Don't use exactly
+                # double resolution or our synthetic pointing only hits
+                # pixel boundaries and rounding errors cause sporadic
+                # unit test failures.
+                pixels.resolution = (0.012 * u.degree, 0.012 * u.degree)
                 pixels.center = ()
                 pixels.dimensions = ()
                 pixels.auto_bounds = True
@@ -219,9 +225,10 @@ class PointingWCSTest(MPITestCase):
                     data,
                 )
 
-                self.assertTrue(pixels.resolution == (0.01 * u.degree, 0.01 * u.degree))
+                self.assertTrue(
+                    pixels.resolution == (0.012 * u.degree, 0.012 * u.degree)
+                )
                 self.assertTrue(pixels.auto_bounds)
-
                 close_data(data)
                 if self.comm is not None:
                     self.comm.barrier()
