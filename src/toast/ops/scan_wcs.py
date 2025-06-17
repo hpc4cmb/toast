@@ -8,7 +8,7 @@ from astropy import units as u
 
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_wcs import read_wcs_parallel
+from ..pixels_io_wcs import read_wcs
 from ..timing import function_timer
 from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
@@ -152,7 +152,7 @@ class ScanWCSMap(Operator):
             data[self.map_name] = PixelData(
                 dist, dtype=np.float32, n_value=nnz, units=self.det_data_units
             )
-            read_wcs_parallel(data[self.map_name], self.file)
+            read_wcs(data[self.map_name], self.file)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.
@@ -317,7 +317,7 @@ class ScanWCSMask(Operator):
         # timestreams.
         if self.mask_name not in data:
             data[self.mask_name] = PixelData(dist, dtype=np.uint8, n_value=1)
-            read_wcs_parallel(data[self.mask_name], self.file)
+            read_wcs(data[self.mask_name], self.file)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.

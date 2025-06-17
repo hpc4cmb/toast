@@ -15,7 +15,7 @@ from .. import templates
 from ..data import Data
 from ..observation import Observation
 from ..observation import default_values as defaults
-from ..pixels_io_wcs import write_wcs_parallel
+from ..pixels_io_wcs import write_wcs
 from ..vis import plot_wcs_maps, set_matplotlib_backend
 from .helpers import (
     close_data,
@@ -113,7 +113,7 @@ class PointingWCSTest(MPITestCase):
 
         if self.write_extra:
             outfile = os.path.join(self.outdir, f"{prefix}.fits")
-            write_wcs_parallel(data[build_hits.hits], outfile)
+            write_wcs(data[build_hits.hits], outfile)
             if data.comm.world_rank == 0:
                 plot_wcs_maps(hitfile=outfile)
 

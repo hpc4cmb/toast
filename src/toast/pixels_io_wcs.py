@@ -191,21 +191,21 @@ def collect_wcs_submaps(pix, comm_bytes=10000000):
 
 
 @function_timer
-def write_wcs_parallel(
+def write_wcs(
         pix, path, comm_bytes=10000000, report_memory=False, single_precision=False
 ):
     """Write pixel data to a WCS image
 
-    The data across all processes is assumed to be synchronized (the data for a given
-    submap shared between processes is identical).  The submap data is sent to the root
-    process which writes it out.
+    The data across all processes is assumed to be synchronized (the
+    data for a given submap shared between processes is identical).
+    The submap data is sent to the root process which writes it out.
 
     Args:
         pix (PixelData): The distributed pixel object.
         path (str): The path to the output WCS file (FITS or HDF5).
         comm_bytes (int): The approximate message size to use.
-        report_memory (bool): Report the amount of available memory on the root
-            node just before writing out the map.
+        report_memory (bool): Report the amount of available memory on
+            the root node just before writing out the map.
 
     Returns:
         None
@@ -235,7 +235,7 @@ def write_wcs_parallel(
                 dtype = np.float32
             elif image.dtype == np.int32:
                 dtype = np.int32
-        write_wcs(path, image, dist.wcs, pix.units, dtype=dtype)
+        write_wcs_serial(path, image, dist.wcs, pix.units, dtype=dtype)
 
     del image
     return
@@ -299,7 +299,7 @@ def broadcast_image(image, fscale, pix, comm_bytes):
 
 
 @function_timer
-def read_wcs_parallel(pix, path, comm_bytes=10000000, **kwargs):
+def read_wcs(pix, path, comm_bytes=10000000, **kwargs):
     """Read and broadcast pixel data stored in a WCS image.
 
     The root process reads the file and broadcasts the data in units
@@ -323,7 +323,7 @@ def read_wcs_parallel(pix, path, comm_bytes=10000000, **kwargs):
     image = None
     fscale = 1.0
     if rank == 0:
-        image, funits = read_wcs(path, units=True, **kwargs)
+        image, funits = read_wcs_serial(path, units=True, **kwargs)
         if funits is None:
             msg = f"Pixel data in {path} does not have BUNIT key.  "
             msg += f"Assuming {pix.units}."
@@ -347,7 +347,7 @@ def read_wcs_parallel(pix, path, comm_bytes=10000000, **kwargs):
 
 
 @function_timer
-def write_wcs(filename, image, wcs, units=None, dtype=None):
+def write_wcs_serial(filename, image, wcs, units=None, dtype=None):
     """Write a FITS or HDF5 WCS map on the calling process
 
     Args:
@@ -401,7 +401,7 @@ def write_wcs(filename, image, wcs, units=None, dtype=None):
 
 
 @function_timer
-def read_wcs(filename, units=False, extension=0, dtype=None):
+def read_wcs_serial(filename, units=False, extension=0, dtype=None):
     """Read a FITS or HDF5 WCS map serially.
 
     This reads the file into simple numpy arrays on the calling process.

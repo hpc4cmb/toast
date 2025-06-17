@@ -104,9 +104,9 @@ class PixelTest(MPITestCase):
                     self.outdir,
                     "data_sub{}_type-{}.{}".format(nsb, np.dtype(tp).char, suffix),
                 )
-                io.write_wcs_parallel(pdata, wcsfile)
+                io.write_wcs(pdata, wcsfile)
                 check = self._make_pixdata(dist, tp, n_value, zero=True)
-                io.read_wcs_parallel(check, wcsfile)
+                io.read_wcs(check, wcsfile)
                 nt.assert_equal(pdata.data, check.data)
 
                 if not available_pixell:

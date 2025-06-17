@@ -33,7 +33,7 @@ from ..pixels_io_healpix import (
     write_healpix_fits,
     write_healpix_hdf5,
 )
-from ..pixels_io_wcs import write_wcs_parallel
+from ..pixels_io_wcs import write_wcs
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
@@ -1456,7 +1456,7 @@ class FilterBin(Operator):
                                     f"Skipping existing file: {fname}", comm=self.comm
                                 )
                                 continue
-                        write_wcs_parallel(data[key], fname)
+                        write_wcs(data[key], fname)
                     else:
                         if self.write_hdf5:
                             # Non-standard HEALPix HDF5 output
