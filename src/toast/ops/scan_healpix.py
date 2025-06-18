@@ -180,7 +180,7 @@ class ScanHealpixMap(Operator):
                 data[map_name] = PixelData(
                     dist, dtype=np.float32, n_value=nnz, units=self.det_data_units
                 )
-                data[map_name].read(file_name, healpix_nest=self.pixel_pointing.nest)
+                data[map_name].read(file_name)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.
@@ -361,7 +361,7 @@ class ScanHealpixMask(Operator):
         # timestreams.
         if self.mask_name not in data:
             data[self.mask_name] = PixelData(dist, dtype=np.uint8, n_value=1)
-            data[self.mask_name].read(self.file, healpix_nest=self.pixel_pointing.nest)
+            data[self.mask_name].read(self.file)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.

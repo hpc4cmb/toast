@@ -242,8 +242,7 @@ class MapMaker(Operator):
             else:
                 self._data[prod_key].write(
                     fname,
-                    healpix_nest=is_hpix_nest,
-                    hdf5_force_serial=self.write_hdf5_serial,
+                    force_serial=self.write_hdf5_serial,
                     single_precision=True,
                     report_memory=self.report_memory,
                 )

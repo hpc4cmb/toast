@@ -634,8 +634,8 @@ class MapmakerTest(MPITestCase):
 
         toast_hit_path = os.path.join(testdir, "toast_hits.fits")
         toast_map_path = os.path.join(testdir, "toast_map.fits")
-        data[toast_map].write(toast_map_path, healpix_nest=True)
-        data[toast_hits].write(toast_hit_path, healpix_nest=True)
+        data[toast_map].write(toast_map_path)
+        data[toast_hits].write(toast_hit_path)
 
         # Now run Madam on the same data and compare
 
@@ -907,8 +907,8 @@ class MapmakerTest(MPITestCase):
 
         toast_hit_path = os.path.join(testdir, "toast_hits.fits")
         toast_map_path = os.path.join(testdir, "toast_map.fits")
-        data[toast_map].write(toast_map_path, healpix_nest=True)
-        data[toast_hits].write(toast_hit_path, healpix_nest=True)
+        data[toast_map].write(toast_map_path)
+        data[toast_hits].write(toast_hit_path)
 
         # Now run Madam on the same data and compare
 

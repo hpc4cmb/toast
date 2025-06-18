@@ -90,9 +90,9 @@ class MapmakerBinningTest(MPITestCase):
             toast_cov_path = os.path.join(
                 self.outdir, "toast_cov_{}.fits".format(stype)
             )
-            data[binner.binned].write(toast_bin_path, healpix_nest=True)
-            data[cov_and_hits.hits].write(toast_hit_path, healpix_nest=True)
-            data[cov_and_hits.covariance].write(toast_cov_path, healpix_nest=True)
+            data[binner.binned].write(toast_bin_path)
+            data[cov_and_hits.hits].write(toast_hit_path)
+            data[cov_and_hits.covariance].write(toast_cov_path)
 
         # Manual check
 
@@ -187,9 +187,9 @@ class MapmakerBinningTest(MPITestCase):
         toast_hit_path = os.path.join(self.outdir, "toast_hits.fits")
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
         toast_cov_path = os.path.join(self.outdir, "toast_cov.fits")
-        data[binner.binned].write(toast_bin_path, healpix_nest=True)
-        data[cov_and_hits.hits].write(toast_hit_path, healpix_nest=True)
-        data[cov_and_hits.covariance].write(toast_cov_path, healpix_nest=True)
+        data[binner.binned].write(toast_bin_path)
+        data[cov_and_hits.hits].write(toast_hit_path)
+        data[cov_and_hits.covariance].write(toast_cov_path)
 
         # Now run Madam on the same data and compare
 

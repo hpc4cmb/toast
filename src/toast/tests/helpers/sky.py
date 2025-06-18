@@ -176,7 +176,7 @@ def create_fake_healpix_map(
     if comm is not None:
         comm.barrier()
     pix = PixelData(pixel_dist, np.float64, n_value=3, units=units)
-    pix.read(out_file, healpix_nest=True)
+    pix.read(out_file)
     return pix
 
 

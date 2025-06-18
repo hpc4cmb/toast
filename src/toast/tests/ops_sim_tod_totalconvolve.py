@@ -196,7 +196,7 @@ class SimTotalconvolveTest(MPITestCase):
         )
         binner.apply(data)
         path_totalconvolve = os.path.join(self.outdir, "toast_bin.totalconvolve.fits")
-        data[binner.binned].write(path_totalconvolve, healpix_nest=False)
+        data[binner.binned].write(path_totalconvolve)
 
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
@@ -209,7 +209,7 @@ class SimTotalconvolveTest(MPITestCase):
         )
         binner.apply(data)
         path_conviqt = os.path.join(self.outdir, "toast_bin.conviqt.fits")
-        data[binner.binned].write(path_conviqt, healpix_nest=False)
+        data[binner.binned].write(path_conviqt)
 
         rank = 0
         if self.comm is not None:
@@ -345,7 +345,7 @@ class SimTotalconvolveTest(MPITestCase):
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
-        data[binner.binned].write(toast_bin_path, healpix_nest=False)
+        data[binner.binned].write(toast_bin_path)
 
         rank = 0
         if self.comm is not None:

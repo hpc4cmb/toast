@@ -119,7 +119,7 @@ class SimGainTest(MPITestCase):
         )
         binner1.apply(data)
         map1_path = os.path.join(self.outdir, "toast_bin1_drift.fits")
-        data[binner1.binned].write(map1_path, healpix_nest=False)
+        data[binner1.binned].write(map1_path)
 
         # inject gain drift  w/ common mode
 
@@ -132,7 +132,7 @@ class SimGainTest(MPITestCase):
 
         binner1.apply(data)
         map2_path = os.path.join(self.outdir, "toast_bin2_drift.fits")
-        data[binner1.binned].write(map2_path, healpix_nest=False)
+        data[binner1.binned].write(map2_path)
 
         if data.comm.world_rank == 0:
             # import pdb; pdb.set_trace()
@@ -198,7 +198,7 @@ class SimGainTest(MPITestCase):
         )
         binner1.apply(data)
         map1_path = os.path.join(self.outdir, "toast_bin1_drift.fits")
-        data[binner1.binned].write(map1_path, healpix_nest=False)
+        data[binner1.binned].write(map1_path)
 
         # inject gain drift  w/ common mode
 
@@ -210,7 +210,7 @@ class SimGainTest(MPITestCase):
 
         binner1.apply(data)
         map2_path = os.path.join(self.outdir, "toast_bin2_drift.fits")
-        data[binner1.binned].write(map2_path, healpix_nest=False)
+        data[binner1.binned].write(map2_path)
         if data.comm.world_rank == 0:
             oldmap = hp.read_map(map1_path, field=None, nest=False)
             newmap = hp.read_map(map2_path, field=None, nest=False)
@@ -272,7 +272,7 @@ class SimGainTest(MPITestCase):
         )
         binner1.apply(data)
         map1_path = os.path.join(self.outdir, "toast_bin1_drift.fits")
-        data[binner1.binned].write(map1_path, healpix_nest=False)
+        data[binner1.binned].write(map1_path)
 
         # inject gain drift  w/ common mode
 
@@ -283,7 +283,7 @@ class SimGainTest(MPITestCase):
 
         binner1.apply(data)
         map2_path = os.path.join(self.outdir, "toast_bin2_drift.fits")
-        data[binner1.binned].write(map2_path, healpix_nest=False)
+        data[binner1.binned].write(map2_path)
 
         if data.comm.world_rank == 0:
             oldmap = hp.read_map(map1_path, field=None, nest=False)

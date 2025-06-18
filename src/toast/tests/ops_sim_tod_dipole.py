@@ -133,8 +133,8 @@ class SimDipoleTest(MPITestCase):
 
         toast_hit_path = os.path.join(self.outdir, "toast_hits.fits")
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
-        data[binner.binned].write(toast_bin_path, healpix_nest=False)
-        data[cov_and_hits.hits].write(toast_hit_path, healpix_nest=False)
+        data[binner.binned].write(toast_bin_path)
+        data[cov_and_hits.hits].write(toast_hit_path)
 
         rank = 0
         if self.comm is not None:

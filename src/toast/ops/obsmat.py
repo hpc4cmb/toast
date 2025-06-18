@@ -214,8 +214,6 @@ def coadd_observation_matrix(
         log.info_rank(f"Writing {file_invcov}", comm=comm)
         dist_cov.write(
             file_invcov,
-            healpix_nest=True,
-            hdf5_force_serial=True,
             single_precision=not double_precision,
         )
         log.info_rank(f"Wrote {file_invcov}", timer=timer1, comm=comm)
@@ -225,7 +223,7 @@ def coadd_observation_matrix(
     log.info_rank("Inverting white noise matrices", comm=comm)
     dist_rcond = PixelData(dist, float, n_value=1)
     covariance_invert(dist_cov, rcond_limit, rcond=dist_rcond, use_alltoallv=True)
-    log.info_rank(f"Inverted white noise matrices in", timer=timer1, comm=comm)
+    log.info_rank("Inverted white noise matrices in", timer=timer1, comm=comm)
 
     # Optionally write out the white noise covariance
 
@@ -233,15 +231,13 @@ def coadd_observation_matrix(
         log.info_rank(f"Writing {file_cov}", comm=comm)
         dist_cov.write(
             file_cov,
-            healpix_nest=True,
-            hdf5_force_serial=True,
             single_precision=not double_precision,
         )
         log.info_rank(f"Wrote {file_cov} in", timer=timer1, comm=comm)
 
     # De-weight the observation matrix
 
-    log.info_rank(f"De-weighting obs matrix", comm=comm)
+    log.info_rank("De-weighting obs matrix", comm=comm)
     cc = scipy.sparse.dok_matrix((npixtot, npixtot), dtype=np.float64)
     nsubmap = dist_cov.distribution.n_submap
     npix_submap = dist_cov.distribution.n_pix_submap

@@ -158,7 +158,7 @@ class SimGroundTest(MPITestCase):
         # Plot the hits
 
         hit_path = os.path.join(self.outdir, "hits.fits")
-        data[build_hits.hits].write(hit_path, healpix_nest=pixels.nest)
+        data[build_hits.hits].write(hit_path)
 
         if data.comm.world_rank == 0:
             set_matplotlib_backend()

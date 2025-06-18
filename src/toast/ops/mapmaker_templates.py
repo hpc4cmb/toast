@@ -549,16 +549,6 @@ class SolveAmplitudes(Operator):
     @function_timer
     def _write_del(self, prod_key):
         """Write and optionally delete map object"""
-
-        # FIXME:  This I/O technique assumes "known" types of pixel representations.
-        # Instead, we should associate read / write functions to a particular pixel
-        # class.
-
-        is_pix_wcs = hasattr(self.binning.pixel_pointing, "wcs")
-        is_hpix_nest = None
-        if not is_pix_wcs:
-            is_hpix_nest = self.binning.pixel_pointing.nest
-
         if self.write_solver_products:
             if self.write_hdf5:
                 fname = os.path.join(self.output_dir, f"{prod_key}.h5")
@@ -566,8 +556,7 @@ class SolveAmplitudes(Operator):
                 fname = os.path.join(self.output_dir, f"{prod_key}.fits")
             self._data[prod_key].write(
                 fname,
-                healpix_nest=is_hpix_nest,
-                hdf5_force_serial=self.write_hdf5_serial,
+                force_serial=self.write_hdf5_serial,
                 single_precision=True,
                 report_memory=self.report_memory,
             )
@@ -833,7 +822,7 @@ class SolveAmplitudes(Operator):
             cut = self._comm.allreduce(local_cut, op=MPI.SUM)
 
         frac = 100.0 * (cut / total)
-        msg = f"Solver flags cut {cut } / {total} = {frac:0.2f}% of samples"
+        msg = f"Solver flags cut {cut} / {total} = {frac:0.2f}% of samples"
         self._log.info_rank(f"{self._log_prefix} {msg}", comm=self._comm)
 
         return

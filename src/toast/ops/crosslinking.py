@@ -257,7 +257,7 @@ class CrossLinking(Operator):
         # Write out the results
 
         fname = os.path.join(self.output_dir, f"{self.name}.fits")
-        data[self.crosslinking_map].write(fname, healpix_nest=self.pixel_pointing.nest)
+        data[self.crosslinking_map].write(fname)
         log.info_rank(f"Wrote crosslinking to {fname}", comm=data.comm.comm_world)
         data[self.crosslinking_map].clear()
         del data[self.crosslinking_map]

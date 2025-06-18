@@ -5,6 +5,7 @@
 import astropy.io.fits as af
 import healpy as hp
 import numpy as np
+from astropy.wcs import WCS
 
 from .pixels import PixelData, PixelDistribution
 from .pixels_io_healpix import read_healpix
@@ -63,6 +64,8 @@ def footprint_distribution(
     if comm is not None:
         rank = comm.rank
 
+    wcs = None
+    nest = True
     if wcs_coverage_file is not None:
         # Load a WCS projection
         if (
@@ -77,10 +80,12 @@ def footprint_distribution(
         if rank == 0:
             hdulist = af.open(wcs_coverage_file)
             n_pix = np.prod(hdulist[0].data.shape)
+            wcs = WCS(hdulist[0].header)
             hdulist.close()
             del hdulist
         if comm is not None:
             n_pix = comm.bcast(n_pix, root=0)
+            wcs = comm.bcast(wcs, root=0)
         n_submap = 1
         local_submaps = [0]
     elif healpix_coverage_file is not None:
@@ -91,7 +96,7 @@ def footprint_distribution(
         n_submap = None
         local_submaps = None
         if rank == 0:
-            hpix_data = read_healpix(healpix_coverage_file, field=(0,), nest=True)
+            hpix_data = read_healpix(healpix_coverage_file, field=(0,), nest=nest)
             nside = hp.get_nside(hpix_data)
             n_pix = 12 * nside**2
             n_submap = 12 * healpix_nside_submap**2
@@ -129,7 +134,7 @@ def footprint_distribution(
         n_submap = None
         local_submaps = None
         if rank == 0:
-            submap_data = read_healpix(healpix_submap_file, field=(0,), nest=True)
+            submap_data = read_healpix(healpix_submap_file, field=(0,), nest=nest)
             nside_submap = hp.npix2nside(len(submap_data))
             n_submap = 12 * nside_submap**2
             n_pix = 12 * healpix_nside**2
@@ -154,6 +159,11 @@ def footprint_distribution(
         n_pix = 12 * healpix_nside**2
         n_submap = 12 * healpix_nside_submap**2
         local_submaps = np.arange(n_submap, dtype=np.int32)
-    return PixelDistribution(
+    dist = PixelDistribution(
         n_pix=n_pix, n_submap=n_submap, local_submaps=local_submaps, comm=comm
     )
+    if wcs is None:
+        dist.nest = nest
+    else:
+        dist.wcs = wcs
+    return dist

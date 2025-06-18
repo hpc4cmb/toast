@@ -58,6 +58,7 @@ class PixelTest(MPITestCase):
         dist = PixelDistribution(
             n_pix=npix, n_submap=nsub, local_submaps=local_submaps, comm=comm
         )
+        dist.nest = True
         return dist
 
     def _make_pixdata(self, dist, dtype, nnz, zero=False):
@@ -157,9 +158,9 @@ class PixelTest(MPITestCase):
                             nside, nsb, np.dtype(tp).char
                         ),
                     )
-                    pdata.write(fitsfile, healpix_nest=True)
+                    pdata.write(fitsfile)
                     check = self._make_pixdata(dist, tp, n_value, zero=True)
-                    check.read(fitsfile, healpix_nest=True)
+                    check.read(fitsfile)
                     nt.assert_equal(pdata.data, check.data)
                     if self.comm is None or self.comm.size == 1:
                         # Write out the data serially and compare
@@ -233,9 +234,9 @@ class PixelTest(MPITestCase):
                             nside, nsb, np.dtype(tp).char
                         ),
                     )
-                    pdata.write(hdf5file, healpix_nest=True)
+                    pdata.write(hdf5file)
                     check = self._make_pixdata(dist, tp, n_value, zero=True)
-                    check.read(hdf5file, healpix_nest=True)
+                    check.read(hdf5file)
                     nt.assert_equal(pdata.data, check.data)
                     if self.comm is None or self.comm.rank == 0:
                         # Write out the data serially and compare

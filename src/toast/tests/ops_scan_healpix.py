@@ -108,7 +108,7 @@ class ScanHealpixTest(MPITestCase):
 
         # Write this to a file
         hpix_file = os.path.join(self.outdir, "fake_mask.fits")
-        data["fake_mask"].write(hpix_file, healpix_nest=pixels.nest)
+        data["fake_mask"].write(hpix_file)
 
         # Start with identical flags
         ops.Copy(detdata=[(defaults.det_flags, "test_flags")]).apply(data)
@@ -181,7 +181,7 @@ class ScanHealpixTest(MPITestCase):
 
         # Write to HDF5
         hpix_hdf5 = os.path.join(self.outdir, "fake.h5")
-        data[map_key].write(hpix_hdf5, healpix_nest=True)
+        data[map_key].write(hpix_hdf5)
 
         # Run the scanning from the file
 
