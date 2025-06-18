@@ -11,7 +11,6 @@ from astropy import units as u
 from .. import ops as ops
 from .. import qarray as qa
 from ..observation import default_values as defaults
-from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from .helpers import (
     close_data,
@@ -317,10 +316,10 @@ class SimConviqtTest(MPITestCase):
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
-        write_healpix_fits(data[binner.binned], toast_bin_path, nest=pixels.nest)
+        data[binner.binned].write(toast_bin_path)
 
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
-        write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pixels.nest)
+        data[cov_and_hits.hits].write(toast_hits_path)
 
         fail = False
 
@@ -447,12 +446,12 @@ class SimConviqtTest(MPITestCase):
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
-        write_healpix_fits(data["binned1"], toast_bin_path, nest=pixels.nest)
+        data["binned1"].write(toast_bin_path)
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
-        write_healpix_fits(data["binned2"], toast_bin_path, nest=pixels.nest)
+        data["binned2"].write(toast_bin_path)
 
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
-        write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pixels.nest)
+        data[cov_and_hits.hits].write(toast_hits_path)
 
         fail = False
         if self.rank == 0:
@@ -563,12 +562,12 @@ class SimConviqtTest(MPITestCase):
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
-        write_healpix_fits(data["binned1"], toast_bin_path, nest=pixels.nest)
+        data["binned1"].write(toast_bin_path)
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key2}.fits")
-        write_healpix_fits(data["binned2"], toast_bin_path, nest=pixels.nest)
+        data["binned2"].write(toast_bin_path)
 
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
-        write_healpix_fits(data[cov_and_hits.hits], toast_hits_path, nest=pixels.nest)
+        data[cov_and_hits.hits].write(toast_hits_path)
 
         fail = False
         if self.rank == 0:
@@ -762,20 +761,14 @@ class SimConviqtTest(MPITestCase):
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key_wo_hwp}.fits")
-        write_healpix_fits(
-            data_wo_hwp["binned_wo_hwp"], toast_bin_path, nest=pixels.nest
-        )
+        data_wo_hwp["binned_wo_hwp"].write(toast_bin_path)
         toast_bin_path = os.path.join(self.outdir, f"toast_bin.{key_w_hwp}.fits")
-        write_healpix_fits(data_w_hwp["binned_w_hwp"], toast_bin_path, nest=pixels.nest)
+        data_w_hwp["binned_w_hwp"].write(toast_bin_path)
 
         toast_hits_path = os.path.join(self.outdir, "toast_hits_wo_hwp.fits")
-        write_healpix_fits(
-            data_wo_hwp[cov_and_hits_wo_hwp.hits], toast_hits_path, nest=pixels.nest
-        )
+        data_wo_hwp[cov_and_hits_wo_hwp.hits].write(toast_hits_path)
         toast_hits_path = os.path.join(self.outdir, "toast_hits_w_hwp.fits")
-        write_healpix_fits(
-            data_w_hwp[cov_and_hits_w_hwp.hits], toast_hits_path, nest=pixels.nest
-        )
+        data_w_hwp[cov_and_hits_w_hwp.hits].write(toast_hits_path)
         fail = False
         if self.rank == 0:
             import matplotlib.pyplot as plt

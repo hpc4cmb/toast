@@ -5,6 +5,8 @@
 import os
 
 import numpy as np
+import healpy as hp
+import h5py
 from astropy import units as u
 from pshmem.utils import mpi_data_type
 
@@ -22,8 +24,9 @@ from .accelerator import (
     use_accel_omp,
 )
 from .dist import distribute_uniform
-from .mpi import MPI
-from .timing import GlobalTimers, Timer, function_timer
+from .io import have_hdf5_parallel
+from .mpi import MPI, use_mpi
+from .timing import GlobalTimers, function_timer
 from .utils import (
     AlignedF32,
     AlignedF64,
@@ -36,7 +39,12 @@ from .utils import (
     AlignedU32,
     AlignedU64,
     Logger,
+    memreport,
+    unit_conversion,
 )
+from .pixels_io_healpix import collect_healpix_submaps
+from .pixels_io_utils import filename_is_fits, filename_is_hdf5
+from .pixels_io_wcs import collect_wcs_submaps, broadcast_image, write_wcs, read_wcs
 
 
 class PixelDistribution(AcceleratorObject):
@@ -843,7 +851,7 @@ class PixelData(AcceleratorObject):
                     log.verbose(msg)
                     self._receive_raw = self.storage_class.zeros(recv_buf_size)
                     self.receive = self._receive_raw.array()
-            except:
+            except Exception:
                 buf_check_fail = True
             if self._dist.comm is not None:
                 buf_check_fail = self._dist.comm.allreduce(buf_check_fail, op=MPI.LOR)
@@ -868,7 +876,6 @@ class PixelData(AcceleratorObject):
             msg += " cannot do MPI communication"
             raise RuntimeError(msg)
 
-        log = Logger.get()
         gt = GlobalTimers.get()
         self.setup_alltoallv()
 
@@ -1161,6 +1168,744 @@ class PixelData(AcceleratorObject):
                     loc = self._dist.global_submap_to_local[sm]
                     self.data[loc, :, :] = view[sm - submap_off, :, :]
         return
+
+    def _write_wcs(
+        self,
+        path,
+        comm_bytes=10000000,
+        report_memory=False,
+        single_precision=False,
+    ):
+        """Write distributed PixelData to a WCS file.
+
+        The output will be written to a WCS file in either FITS or HDF5 (determined
+        by the path filename suffix).
+
+        The data across all processes is assumed to be synchronized (the data for a
+        given submap shared between processes is identical).  The submap data is sent
+        to the root process which writes it out.
+
+        Args:
+            path (str): The path to the output WCS file (FITS or HDF5).
+            comm_bytes (int): The approximate message size to use.
+            report_memory (bool): Report the amount of available memory on
+                the root node just before writing out the map.
+            single_precision (bool): If True, write floats and integers in single
+                precision.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+
+        # The distribution
+        dist = self.distribution
+        rank = 0
+        if dist.comm is not None:
+            rank = dist.comm.rank
+
+        # For both FITS and HDF5 formats, this type of pixel
+        # data is always serialized to the root process for writing.
+        image = collect_wcs_submaps(self, comm_bytes=comm_bytes)
+
+        if rank == 0:
+            dtype = None
+            if single_precision:
+                if image.dtype == np.dtype(np.float64):
+                    dtype = np.float32
+                elif image.dtype == np.dtype(np.int32):
+                    dtype = np.int32
+            if report_memory:
+                mem = memreport(msg="(root node)", silent=True)
+                log.info(f"About to write {path}:  {mem}")
+            write_wcs(path, image, dist.wcs, self.units, dtype=dtype)
+        del image
+
+    def _write_healpix_fits(
+        self,
+        path,
+        comm_bytes=10000000,
+        report_memory=False,
+        single_precision=False,
+    ):
+        """Write distributed PixelData to a healpix FITS file.
+
+        Args:
+            path (str): The path to the output WCS file (FITS or HDF5).
+            comm_bytes (int): The approximate message size to use.
+            report_memory (bool): Report the amount of available memory on
+                the root node just before writing out the map.
+            single_precision (bool): If True, write floats and integers in single
+                precision.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+
+        # The distribution
+        dist = self.distribution
+        rank = 0
+        if dist.comm is not None:
+            rank = dist.comm.rank
+
+        # Healpix PixelDistribution should have the nest information.
+        nest = dist.nest
+
+        # Unit string to write
+        if self.units == u.K:
+            funits = "K"
+        elif self.units == u.mK:
+            funits = "mK"
+        elif self.units == u.uK:
+            funits = "uK"
+        else:
+            funits = str(self.units)
+
+        fdata, fview = collect_healpix_submaps(self, comm_bytes=comm_bytes)
+
+        if rank == 0:
+            if os.path.isfile(path):
+                os.remove(path)
+            dtypes = [np.dtype(self.dtype) for x in range(self.n_value)]
+            if single_precision:
+                for i, dtype in enumerate(dtypes):
+                    if dtype == np.dtype(np.float64):
+                        dtypes[i] = np.float32
+                    elif dtype == np.dtype(np.int64):
+                        dtypes[i] = np.int32
+            if report_memory:
+                mem = memreport(msg="(root node)", silent=True)
+                log.info(f"About to write {path}:  {mem}")
+            extra = [(f"TUNIT{x}", f"{funits}") for x in range(self.n_value)]
+            hp.write_map(
+                path,
+                fview,
+                dtype=dtypes,
+                fits_IDL=False,
+                nest=nest,
+                extra_header=extra,
+            )
+            del fview
+            for col in range(self.n_value):
+                fdata[col].clear()
+            del fdata
+
+    def _write_healpix_hdf5(
+        self,
+        path,
+        comm_bytes=10000000,
+        report_memory=False,
+        single_precision=False,
+        force_serial=True,
+    ):
+        """Write distributed PixelData to a healpix HDF5 file.
+
+        Args:
+            path (str): The path to the output WCS file (FITS or HDF5).
+            comm_bytes (int): The approximate message size to use.
+            report_memory (bool): Report the amount of available memory on
+                the root node just before writing out the map.
+            single_precision (bool): If True, write floats and integers in single
+                precision.
+            force_serial (bool): If True, use serial I/O, even if the HDF5
+                implementation is built with MPI.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+
+        # The distribution
+        dist = self.distribution
+        rank = 0
+        nproc = 1
+        if dist.comm is not None:
+            rank = dist.comm.rank
+            nproc = dist.comm.size
+
+        # Healpix PixelDistribution should have the nest information.
+        nest = dist.nest
+
+        # When writing to healpix HDF5 format, we have the option to write
+        # submaps in parallel.  This is a substantial performance boost when
+        # dealing with many processes and large maps.
+
+        not_owned = None
+        allowners = None
+        if dist.comm is None:
+            not_owned = 1
+            allowners = np.zeros(dist.n_submap, dtype=np.int32)
+            allowners.fill(not_owned)
+            for m in dist.local_submaps:
+                allowners[m] = rank
+        else:
+            not_owned = dist.comm.size
+            owners = np.zeros(dist.n_submap, dtype=np.int32)
+            owners.fill(not_owned)
+            for m in dist.local_submaps:
+                owners[m] = dist.comm.rank
+            allowners = np.zeros_like(owners)
+            dist.comm.Allreduce(owners, allowners, op=MPI.MIN)
+
+        header = {}
+        if nest:
+            header["ORDERING"] = "NESTED"
+        else:
+            header["ORDERING"] = "RING"
+        header["NSIDE"] = hp.npix2nside(dist.n_pix)
+        header["UNITS"] = str(self.units)
+
+        dtype = self.dtype
+        if single_precision:
+            if dtype == np.dtype(np.float64):
+                dtype = np.float32
+            elif dtype == np.dtype(np.int64):
+                dtype = np.int32
+
+        if have_hdf5_parallel() and not force_serial:
+            # Open the file for parallel access.
+            with h5py.File(path, "w", driver="mpio", comm=dist.comm) as f:
+                # Each process writes their own submaps to the file
+                dset = f.create_dataset(
+                    "map",
+                    (self.n_value, dist.n_pix),
+                    chunks=(self.n_value, dist.n_pix_submap),
+                    dtype=dtype,
+                )
+                for key, value in header.items():
+                    dset.attrs[key] = value
+                for submap in range(dist.n_submap):
+                    if allowners[submap] == rank:
+                        local_submap = dist.global_submap_to_local[submap]
+                        # Accommodate submap sizes that do not fit the map cleanly
+                        first = submap * dist.n_pix_submap
+                        last = min(first + dist.n_pix_submap, dist.n_pix)
+                        dset[:, first:last] = self.data[
+                            local_submap, 0 : last - first
+                        ].T
+        else:
+            # No luck, write serially from root process
+            if use_mpi:
+                # MPI is enabled, but we are not using it.  Warn the user.
+                log.warning_rank(
+                    f"h5py not built with MPI support.  Writing {path} in serial mode.",
+                    comm=dist.comm,
+                )
+
+            # n_send = len(dist.owned_submaps)
+            n_send = np.sum(allowners == rank)
+            if n_send == 0:
+                sendbuffer = None
+            else:
+                sendbuffer = np.empty(
+                    [n_send, self.n_value, dist.n_pix_submap],
+                    dtype=dtype,
+                )
+                offset = 0
+                # for submap in dist.owned_submaps:
+                for submap in range(dist.n_submap):
+                    if allowners[submap] == rank:
+                        local_submap = dist.global_submap_to_local[submap]
+                        sendbuffer[offset] = self.data[local_submap].T
+                        offset += 1
+
+            if rank == 0:
+                # Root process receives the submaps from other processes and writes
+                # them to file
+                with h5py.File(path, "w") as f:
+                    dset = f.create_dataset(
+                        "map",
+                        (self.n_value, dist.n_pix),
+                        chunks=(self.n_value, dist.n_pix_submap),
+                        dtype=dtype,
+                    )
+                    for rank_send in range(nproc):
+                        # submaps = np.argwhere(dist.submap_owners == rank_send).ravel()
+                        submaps = np.arange(dist.n_submap)[allowners == rank_send]
+                        n_receive = len(submaps)
+                        if n_receive > 0:
+                            if rank_send == rank:
+                                recvbuffer = sendbuffer
+                            else:
+                                recvbuffer = np.empty(
+                                    [
+                                        n_receive,
+                                        self.n_value,
+                                        dist.n_pix_submap,
+                                    ],
+                                    dtype=dtype,
+                                )
+                                dist.comm.Recv(
+                                    recvbuffer, source=rank_send, tag=rank_send
+                                )
+                        for i, submap in enumerate(submaps):
+                            # Accommodate submap sizes that do not fit the map cleanly
+                            first = submap * dist.n_pix_submap
+                            last = min(first + dist.n_pix_submap, dist.n_pix)
+                            dset[:, first:last] = recvbuffer[i, :, 0 : last - first]
+
+                    for key, value in header.items():
+                        dset.attrs[key] = value
+            else:
+                # All others wait for their turn to send
+                if sendbuffer is not None:
+                    dist.comm.Send(sendbuffer, dest=0, tag=rank)
+
+    def _write_healpix(
+        self,
+        path,
+        comm_bytes=10000000,
+        report_memory=False,
+        single_precision=False,
+        force_serial=True,
+    ):
+        """Write distributed PixelData to a healpix file.
+
+        The output format (FITS or HDF5) is determined by the filename suffix.
+
+        The data across all processes is assumed to be synchronized (the data for a
+        given submap shared between processes is identical).  The submap data is sent
+        to the root process which writes it out.
+
+        Args:
+            path (str): The path to the output WCS file (FITS or HDF5).
+            comm_bytes (int): The approximate message size to use.
+            report_memory (bool): Report the amount of available memory on
+                the root node just before writing out the map.
+            single_precision (bool): If True, write floats and integers in single
+                precision.
+            force_serial (bool): If True, use serial I/O, even if the HDF5
+                implementation is built with MPI.
+
+        Returns:
+            None
+
+        """
+        if filename_is_fits(path):
+            self._write_healpix_fits(
+                path,
+                comm_bytes=comm_bytes,
+                report_memory=report_memory,
+                single_precision=single_precision,
+            )
+        elif filename_is_hdf5(path):
+            self._write_healpix_hdf5(
+                path,
+                comm_bytes=comm_bytes,
+                report_memory=report_memory,
+                single_precision=single_precision,
+                force_serial=force_serial,
+            )
+        else:
+            msg = f"Could not determine file type for '{path}'"
+            raise RuntimeError(msg)
+
+    @function_timer
+    def write(
+        self,
+        path,
+        comm_bytes=10000000,
+        report_memory=False,
+        single_precision=False,
+        force_serial=True,
+    ):
+        """Write distributed PixelData to a file.
+
+        If the internal PixelDistribution has a WCS object, then the output will be
+        written to a WCS file in either FITS or HDF5 (determined by the `path`).
+
+        If the PixelDistribution has a 'nest' member, a Healpix file is written
+        in either FITS or HDF5 format.
+
+        The data across all processes is assumed to be synchronized (the data for a
+        given submap shared between processes is identical).  The submap data is sent
+        to the root process which writes it out.
+
+        Args:
+            path (str): The path to the output WCS file (FITS or HDF5).
+            comm_bytes (int): The approximate message size to use.
+            report_memory (bool): Report the amount of available memory on
+                the root node just before writing out the map.
+            single_precision (bool): If True, write floats and integers in single
+                precision.
+            force_serial (bool): If True, use serial I/O, even if the HDF5
+                implementation is built with MPI.
+
+        Returns:
+            None
+
+        """
+        dist = self.distribution
+
+        # Check if we have WCS information
+        if hasattr(dist, "wcs"):
+            self._write_wcs(
+                path,
+                comm_bytes=comm_bytes,
+                report_memory=report_memory,
+                single_precision=single_precision,
+            )
+        elif hasattr(dist, "nest"):
+            self._write_healpix(
+                path,
+                comm_bytes=comm_bytes,
+                report_memory=report_memory,
+                single_precision=single_precision,
+                force_serial=force_serial,
+            )
+        else:
+            msg = "Could not determine pixelization type.  PixelDistribution"
+            msg += " does not have 'wcs' or 'nest' members."
+            raise RuntimeError(msg)
+
+    def _read_wcs(self, path, comm_bytes=10000000):
+        """Read distributed PixelData from a WCS file.
+
+        The input path should be a WCS file in either FITS or HDF5 (determined by
+        the suffix).
+
+        Args:
+            path (str): The path to the input WCS file (FITS or HDF5).
+            comm_bytes (int): The approximate message size to use.
+
+        Returns:
+            None
+
+        """
+        dist = self.distribution
+        rank = 0
+        if dist.comm is not None:
+            rank = dist.comm.rank
+
+        image = None
+        fscale = 1.0
+        if rank == 0:
+            image, funits = read_wcs(path, units=True)
+            if funits is None:
+                msg = f"Pixel data in {path} does not have BUNIT key.  "
+                msg += f"Assuming {self.units}."
+                funits = self.units
+            elif funits != self.units:
+                scale = 1.0 * funits
+                scale.to(self.units)
+                fscale = scale.value
+
+            # Check dimensions
+            impix = np.prod(image.shape)
+            tot_pix = dist.n_pix * self.n_value
+            if tot_pix != impix:
+                raise RuntimeError(
+                    f"Input file has {impix} pixel values instead of {tot_pix}"
+                )
+        broadcast_image(image, fscale, self, comm_bytes)
+
+    def _read_healpix_fits(self, path, comm_bytes=10000000):
+        """Read distributed PixelData from a healpix FITS file.
+
+        Args:
+            path (str): The path to the input healpix FITS file.
+            comm_bytes (int): The approximate message size to use.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        dist = self.distribution
+        rank = 0
+        if dist.comm is not None:
+            rank = dist.comm.rank
+
+        # Healpix PixelDistribution should have the nest information.
+        nest = dist.nest
+
+        # We have Healpix data
+        comm_submap = self.comm_nsubmap(comm_bytes)
+
+        # We make the assumption that FITS binary tables are still stored in
+        # blocks of 2880 bytes just like always...
+        dbytes = self.dtype.itemsize
+        rowbytes = self.n_value * dbytes
+        optrows = 2880 // rowbytes
+
+        # get a tuple of all columns in the table.  We choose memmap here so
+        # that we can (hopefully) read through all columns in chunks such that
+        # we only ever have a couple FITS blocks in memory.
+        fdata = None
+        fscale = 1.0
+        if rank == 0:
+            # Check that the file is in expected format
+            errors = ""
+            h = hp.fitsfunc.pf.open(path, "readonly")
+            nside = hp.npix2nside(dist.n_pix)
+            nside_map = h[1].header["nside"]
+            if "TUNIT1" in h[1].header:
+                if h[1].header["TUNIT1"] == "":
+                    funits = u.dimensionless_unscaled
+                elif h[1].header["TUNIT1"] in ["K", "K_CMB"]:
+                    funits = u.K
+                elif h[1].header["TUNIT1"] in ["mK", "mK_CMB"]:
+                    funits = u.mK
+                elif h[1].header["TUNIT1"] in ["uK", "uK_CMB"]:
+                    funits = u.uK
+                else:
+                    funits = u.Unit(h[1].header["TUNIT1"])
+            else:
+                msg = f"Pixel data in {path} does not have TUNIT1 key.  "
+                msg += f"Assuming '{self.units}'."
+                log.info(msg)
+                funits = self.units
+            if funits != self.units:
+                fscale = unit_conversion(funits, self.units)
+
+            if nside_map != nside:
+                errors += f"Wrong NSide: {path} has {nside_map}, expected {nside}\n"
+            map_nnz = h[1].header["tfields"]
+            if map_nnz != self.n_value:
+                errors += f"Wrong number of columns: {path} has {map_nnz}, "
+                errors += f"expected {self.n_value}\n"
+            h.close()
+            if len(errors) != 0:
+                raise RuntimeError(errors)
+            # Now read the map
+            fdata = hp.read_map(
+                path,
+                field=tuple([x for x in range(self.n_value)]),
+                dtype=[self.dtype for x in range(self.n_value)],
+                memmap=True,
+                nest=nest,
+            )
+            if self.n_value == 1:
+                fdata = (fdata,)
+
+        if dist.comm is not None:
+            fscale = dist.comm.bcast(fscale, root=0)
+        buf = np.zeros(comm_submap * dist.n_pix_submap * self.n_value, dtype=self.dtype)
+        view = buf.reshape(comm_submap, dist.n_pix_submap, self.n_value)
+
+        in_off = 0
+        out_off = 0
+        submap_off = 0
+
+        rows = optrows
+        while in_off < dist.n_pix:
+            if in_off + rows > dist.n_pix:
+                rows = dist.n_pix - in_off
+            # is this the last block for this communication?
+            islast = False
+            copyrows = rows
+            if out_off + rows > (comm_submap * dist.n_pix_submap):
+                copyrows = (comm_submap * dist.n_pix_submap) - out_off
+                islast = True
+
+            if rank == 0:
+                for col in range(self.n_value):
+                    coloff = (out_off * self.n_value) + col
+                    buf[coloff : coloff + (copyrows * self.n_value) : self.n_value] = (
+                        fdata[col][in_off : in_off + copyrows]
+                    )
+
+            out_off += copyrows
+            in_off += copyrows
+
+            if islast:
+                if dist.comm is not None:
+                    dist.comm.Bcast(buf, root=0)
+                # loop over these submaps, and copy any that we are assigned
+                for sm in range(submap_off, submap_off + comm_submap):
+                    if sm in dist.local_submaps:
+                        loc = dist.global_submap_to_local[sm]
+                        self.data[loc, :, :] = fscale * view[sm - submap_off, :, :]
+                out_off = 0
+                submap_off += comm_submap
+                buf.fill(0)
+                islast = False
+
+        # flush the remaining buffer
+        if out_off > 0:
+            if dist.comm is not None:
+                dist.comm.Bcast(buf, root=0)
+            # loop over these submaps, and copy any that we are assigned
+            for sm in range(submap_off, submap_off + comm_submap):
+                if sm in dist.local_submaps:
+                    loc = dist.global_submap_to_local[sm]
+                    self.data[loc, :, :] = fscale * view[sm - submap_off, :, :]
+
+    def _read_healpix_hdf5(self, path, comm_bytes=10000000):
+        """Read distributed PixelData from a healpix HDF5 file.
+
+        Args:
+            path (str): The path to the input healpix HDF5 file.
+            comm_bytes (int): The approximate message size to use.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+        dist = self.distribution
+        rank = 0
+        if dist.comm is not None:
+            rank = dist.comm.rank
+
+        # Healpix PixelDistribution should have the nest information.
+        nest = dist.nest
+
+        # We have Healpix data
+        comm_submap = self.comm_nsubmap(comm_bytes)
+
+        fscale = 1.0
+        if rank == 0:
+            try:
+                f = h5py.File(path, "r")
+            except OSError as e:
+                msg = f"Failed to open {path} for reading: {e}"
+                raise RuntimeError(msg)
+
+            dset = f["map"]
+            header = dict(dset.attrs)
+            nside_file = header["NSIDE"]
+            nside = hp.npix2nside(dist.n_pix)
+            if nside_file != nside:
+                msg = f"Wrong resolution in {path}: expected {nside} but found {nside_file}"
+                raise RuntimeError(msg)
+            if header["ORDERING"] == "NESTED":
+                file_nested = True
+            elif header["ORDERING"] == "RING":
+                file_nested = False
+            else:
+                msg = f"Could not determine {path} pixel ordering."
+                raise RuntimeError(msg)
+            if "UNITS" in header:
+                if header["UNITS"] == "":
+                    funits = u.dimensionless_unscaled
+                else:
+                    funits = u.Unit(header["UNITS"])
+            else:
+                msg = f"Pixel data in {path} does not have UNITS.  "
+                msg += f"Assuming {self.units}."
+                log.info(msg)
+                funits = self.units
+            if funits != self.units:
+                scale = 1.0 * funits
+                scale.to(self.units)
+                fscale = scale.value
+
+            nnz, npix = dset.shape
+            if nnz < self.n_value:
+                msg = f"Map in {path} has {nnz} columns but we "
+                msg += f"require {self.n_value}."
+                raise RuntimeError(msg)
+            if file_nested != nest:
+                log.warning(
+                    f"{path} has ORDERING={header['ORDERING']}, "
+                    f"reordering serially upon load."
+                )
+                if file_nested and not nest:
+                    mapdata = hp.reorder(dset[:], n2r=True)
+                elif not file_nested and nest:
+                    mapdata = hp.reorder(dset[:], r2n=True)
+            else:
+                # No reorder, we'll only load what we need
+                mapdata = dset
+
+        if dist.comm is not None:
+            fscale = dist.comm.bcast(fscale, root=0)
+
+        buf = np.zeros(comm_submap * self.n_value * dist.n_pix_submap, dtype=self.dtype)
+        view = buf.reshape(comm_submap, self.n_value, dist.n_pix_submap)
+
+        # Load and broadcast submaps that are used
+        hit_submaps = dist.all_hit_submaps
+        n_hit_submaps = len(hit_submaps)
+
+        submap_offset = 0
+        while submap_offset < n_hit_submaps:
+            submap_last = min(submap_offset + comm_submap, n_hit_submaps)
+            if rank == 0:
+                for i, submap in enumerate(hit_submaps[submap_offset:submap_last]):
+                    pix_offset = submap * dist.n_pix_submap
+                    # Healpix submaps are always complete but capping the upper
+                    # limit helps when users are embedding other pixelizations
+                    # into Healpix
+                    pix_last = min(pix_offset + dist.n_pix_submap, dist.n_pix)
+                    view[i, :, 0 : pix_last - pix_offset] = mapdata[
+                        0 : self.n_value, pix_offset:pix_last
+                    ]
+
+            if dist.comm is not None:
+                dist.comm.Bcast(buf, root=0)
+
+            # loop over these submaps, and copy any that we are assigned
+            for i, submap in enumerate(hit_submaps[submap_offset:submap_last]):
+                if submap in dist.local_submaps:
+                    loc = dist.global_submap_to_local[submap]
+                    self.data[loc] = fscale * view[i].T
+
+            submap_offset = submap_last
+        if rank == 0:
+            f.close()
+
+    def _read_healpix(self, path, comm_bytes=10000000):
+        """Read distributed PixelData from a healpix file.
+
+        Args:
+            path (str): The path to the input healpix file (FITS or HDF5).
+            comm_bytes (int): The approximate message size to use.
+
+        Returns:
+            None
+
+        """
+        if filename_is_fits(path):
+            # FITS format
+            self._read_healpix_fits(path, comm_bytes=comm_bytes)
+        elif filename_is_hdf5(path):
+            # HDF5 Format
+            self._read_healpix_hdf5(path, comm_bytes=comm_bytes)
+        else:
+            msg = f"Could not determine file type for '{path}'"
+            raise RuntimeError(msg)
+
+    @function_timer
+    def read(
+        self,
+        path,
+        comm_bytes=10000000,
+    ):
+        """Read distributed PixelData from a file.
+
+        If the internal PixelDistribution has a WCS object, then the input should be
+        a WCS file in either FITS or HDF5 (determined by the `path`).
+
+        If no WCS object exists in the PixelDistribution, a Healpix file is loaded
+        in either FITS or HDF5 format.  The NEST or RING ordering is determined by
+        the PixelDistribution.nest member.
+
+        Args:
+            path (str): The path to the output WCS file (FITS or HDF5).
+            comm_bytes (int): The approximate message size to use.
+
+        Returns:
+            None
+
+        """
+        dist = self.distribution
+
+        # Check if we have WCS information
+        if hasattr(dist, "wcs"):
+            # We have WCS data.
+            self._read_wcs(path, comm_bytes=comm_bytes)
+        elif hasattr(dist, "nest"):
+            self._read_healpix(path, comm_bytes=comm_bytes)
+        else:
+            msg = "Could not determine pixelization type.  PixelDistribution"
+            msg += " does not have 'wcs' or 'nest' members."
+            raise RuntimeError(msg)
 
     def _accel_exists(self):
         if use_accel_omp:

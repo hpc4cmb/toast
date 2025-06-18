@@ -12,7 +12,6 @@ from .. import ops as ops
 from .. import qarray as qa
 from ..data import Data
 from ..observation import default_values as defaults
-from ..pixels_io_healpix import write_healpix_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..vis import set_matplotlib_backend

@@ -12,8 +12,6 @@ from ..accelerator import ImplementationType
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
-from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
-from ..pixels_io_wcs import write_wcs
 from ..templates import AmplitudesMap, Template
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, List, Unicode, Unit, trait_docs
@@ -551,40 +549,17 @@ class SolveAmplitudes(Operator):
     @function_timer
     def _write_del(self, prod_key):
         """Write and optionally delete map object"""
-
-        # FIXME:  This I/O technique assumes "known" types of pixel representations.
-        # Instead, we should associate read / write functions to a particular pixel
-        # class.
-
-        is_pix_wcs = hasattr(self.binning.pixel_pointing, "wcs")
-        is_hpix_nest = None
-        if not is_pix_wcs:
-            is_hpix_nest = self.binning.pixel_pointing.nest
-
         if self.write_solver_products:
-            if is_pix_wcs:
-                fname = os.path.join(self.output_dir, f"{prod_key}.fits")
-                write_wcs(self._data[prod_key], fname)
+            if self.write_hdf5:
+                fname = os.path.join(self.output_dir, f"{prod_key}.h5")
             else:
-                if self.write_hdf5:
-                    # Non-standard HDF5 output
-                    fname = os.path.join(self.output_dir, f"{prod_key}.h5")
-                    write_healpix_hdf5(
-                        self._data[prod_key],
-                        fname,
-                        nest=is_hpix_nest,
-                        single_precision=True,
-                        force_serial=self.write_hdf5_serial,
-                    )
-                else:
-                    # Standard FITS output
-                    fname = os.path.join(self.output_dir, f"{prod_key}.fits")
-                    write_healpix_fits(
-                        self._data[prod_key],
-                        fname,
-                        nest=is_hpix_nest,
-                        report_memory=self.report_memory,
-                    )
+                fname = os.path.join(self.output_dir, f"{prod_key}.fits")
+            self._data[prod_key].write(
+                fname,
+                force_serial=self.write_hdf5_serial,
+                single_precision=True,
+                report_memory=self.report_memory,
+            )
 
         if not self.mc_mode and not self.keep_solver_products:
             if prod_key in self._data:
@@ -847,7 +822,7 @@ class SolveAmplitudes(Operator):
             cut = self._comm.allreduce(local_cut, op=MPI.SUM)
 
         frac = 100.0 * (cut / total)
-        msg = f"Solver flags cut {cut } / {total} = {frac:0.2f}% of samples"
+        msg = f"Solver flags cut {cut} / {total} = {frac:0.2f}% of samples"
         self._log.info_rank(f"{self._log_prefix} {msg}", comm=self._comm)
 
         return

@@ -14,8 +14,6 @@ from ..covariance import covariance_apply
 from ..mpi import MPI
 from ..noise import Noise
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from .helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
@@ -92,9 +90,9 @@ class MapmakerBinningTest(MPITestCase):
             toast_cov_path = os.path.join(
                 self.outdir, "toast_cov_{}.fits".format(stype)
             )
-            write_healpix_fits(data[binner.binned], toast_bin_path, nest=True)
-            write_healpix_fits(data[cov_and_hits.hits], toast_hit_path, nest=True)
-            write_healpix_fits(data[cov_and_hits.covariance], toast_cov_path, nest=True)
+            data[binner.binned].write(toast_bin_path)
+            data[cov_and_hits.hits].write(toast_hit_path)
+            data[cov_and_hits.covariance].write(toast_cov_path)
 
         # Manual check
 
@@ -189,9 +187,9 @@ class MapmakerBinningTest(MPITestCase):
         toast_hit_path = os.path.join(self.outdir, "toast_hits.fits")
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
         toast_cov_path = os.path.join(self.outdir, "toast_cov.fits")
-        write_healpix_fits(data[binner.binned], toast_bin_path, nest=True)
-        write_healpix_fits(data[cov_and_hits.hits], toast_hit_path, nest=True)
-        write_healpix_fits(data[cov_and_hits.covariance], toast_cov_path, nest=True)
+        data[binner.binned].write(toast_bin_path)
+        data[cov_and_hits.hits].write(toast_hit_path)
+        data[cov_and_hits.covariance].write(toast_cov_path)
 
         # Now run Madam on the same data and compare
 

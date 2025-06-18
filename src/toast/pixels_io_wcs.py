@@ -10,8 +10,8 @@ import numpy as np
 from astropy import units as u
 
 from .mpi import MPI, use_mpi
-from .pixels_io_healpix import filename_is_fits, filename_is_hdf5
-from .timing import Timer, function_timer
+from .pixels_io_utils import filename_is_fits, filename_is_hdf5
+from .timing import function_timer
 from .utils import Logger, memreport
 
 
@@ -191,57 +191,6 @@ def collect_wcs_submaps(pix, comm_bytes=10000000):
 
 
 @function_timer
-def write_wcs(
-        pix, path, comm_bytes=10000000, report_memory=False, single_precision=False
-):
-    """Write pixel data to a WCS image
-
-    The data across all processes is assumed to be synchronized (the
-    data for a given submap shared between processes is identical).
-    The submap data is sent to the root process which writes it out.
-
-    Args:
-        pix (PixelData): The distributed pixel object.
-        path (str): The path to the output WCS file (FITS or HDF5).
-        comm_bytes (int): The approximate message size to use.
-        report_memory (bool): Report the amount of available memory on
-            the root node just before writing out the map.
-
-    Returns:
-        None
-
-    """
-    log = Logger.get()
-    timer = Timer()
-    timer.start()
-
-    # The distribution
-    dist = pix.distribution
-
-    # Check that we have WCS information
-    if not hasattr(dist, "wcs"):
-        raise RuntimeError("Pixel distribution does not have WCS information")
-
-    rank = 0
-    if dist.comm is not None:
-        rank = dist.comm.rank
-
-    image = collect_wcs_submaps(pix, comm_bytes=comm_bytes)
-
-    if rank == 0:
-        dtype = None
-        if single_precision:
-            if image.dtype == np.float64:
-                dtype = np.float32
-            elif image.dtype == np.int32:
-                dtype = np.int32
-        write_wcs_serial(path, image, dist.wcs, pix.units, dtype=dtype)
-
-    del image
-    return
-
-
-@function_timer
 def broadcast_image(image, fscale, pix, comm_bytes):
     """Broadcast image across the distributed pixel data
 
@@ -299,55 +248,7 @@ def broadcast_image(image, fscale, pix, comm_bytes):
 
 
 @function_timer
-def read_wcs(pix, path, comm_bytes=10000000, **kwargs):
-    """Read and broadcast pixel data stored in a WCS image.
-
-    The root process reads the file and broadcasts the data in units
-    of the submap size.
-
-    Args:
-        pix (PixelData): The distributed PixelData object.
-        path (str): The path to the WCS file (FITS or HDF5).
-        comm_bytes (int): The approximate message size to use in bytes.
-
-    Returns:
-        None
-
-    """
-    log = Logger.get()
-    dist = pix.distribution
-    rank = 0
-    if dist.comm is not None:
-        rank = dist.comm.rank
-
-    image = None
-    fscale = 1.0
-    if rank == 0:
-        image, funits = read_wcs_serial(path, units=True, **kwargs)
-        if funits is None:
-            msg = f"Pixel data in {path} does not have BUNIT key.  "
-            msg += f"Assuming {pix.units}."
-            funits = pix.units
-        elif funits != pix.units:
-            scale = 1.0 * funits
-            scale.to(pix.units)
-            fscale = scale.value
-
-        # Check dimensions
-        impix = np.prod(image.shape)
-        tot_pix = dist.n_pix * pix.n_value
-        if tot_pix != impix:
-            raise RuntimeError(
-                f"Input file has {impix} pixel values instead of {tot_pix}"
-            )
-
-    broadcast_image(image, fscale, pix, comm_bytes)
-
-    return
-
-
-@function_timer
-def write_wcs_serial(filename, image, wcs, units=None, dtype=None):
+def write_wcs(filename, image, wcs, units=None, dtype=None):
     """Write a FITS or HDF5 WCS map on the calling process
 
     Args:
@@ -401,7 +302,7 @@ def write_wcs_serial(filename, image, wcs, units=None, dtype=None):
 
 
 @function_timer
-def read_wcs_serial(filename, units=False, extension=0, dtype=None):
+def read_wcs(filename, units=False, extension=0, dtype=None):
     """Read a FITS or HDF5 WCS map serially.
 
     This reads the file into simple numpy arrays on the calling process.
@@ -427,7 +328,7 @@ def read_wcs_serial(filename, units=False, extension=0, dtype=None):
             hdu = hdul[extension]
             image = np.array(hdu.data)
             if units and "BUNIT" in hdu.header:
-                bunit =  hdu.header["BUNIT"]
+                bunit = hdu.header["BUNIT"]
     elif filename_is_hdf5(filename):
         # Load an HDF5 format image
         with h5py.File(filename, "r") as hfile:

@@ -9,8 +9,6 @@ import traitlets
 
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
-from ..pixels_io_wcs import write_wcs
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
@@ -227,54 +225,27 @@ class MapMaker(Operator):
         else:
             map_binning = self.binning
 
-        if hasattr(map_binning.pixel_pointing, "wcs"):
-            is_pix_wcs = True
-        else:
-            is_pix_wcs = False
+        is_hpix_nest = True
+        if not hasattr(map_binning.pixel_pointing, "wcs"):
             is_hpix_nest = map_binning.pixel_pointing.nest
 
         wtimer = Timer()
         wtimer.start()
         product = prod_key.replace(f"{self.name}_", "")
         if prod_write:
-            if is_pix_wcs:
-                fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
-                if self.mc_mode and not force and os.path.isfile(fname):
-                    log.info_rank(f"Skipping existing file: {fname}", comm=self._comm)
-                else:
-                    write_wcs(
-                        self._data[prod_key], fname, single_precision=True
-                    )
+            if self.write_hdf5:
+                fname = os.path.join(self.output_dir, f"{rootname}_{product}.h5")
             else:
-                if self.write_hdf5:
-                    # Non-standard HDF5 output
-                    fname = os.path.join(self.output_dir, f"{rootname}_{product}.h5")
-                    if self.mc_mode and not force and os.path.isfile(fname):
-                        log.info_rank(
-                            f"Skipping existing file: {fname}", comm=self._comm
-                        )
-                    else:
-                        write_healpix_hdf5(
-                            self._data[prod_key],
-                            fname,
-                            nest=is_hpix_nest,
-                            single_precision=True,
-                            force_serial=self.write_hdf5_serial,
-                        )
-                else:
-                    # Standard FITS output
-                    fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
-                    if self.mc_mode and not force and os.path.isfile(fname):
-                        log.info_rank(
-                            f"Skipping existing file: {fname}", comm=self._comm
-                        )
-                    else:
-                        write_healpix_fits(
-                            self._data[prod_key],
-                            fname,
-                            nest=is_hpix_nest,
-                            report_memory=self.report_memory,
-                        )
+                fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
+            if self.mc_mode and not force and os.path.isfile(fname):
+                log.info_rank(f"Skipping existing file: {fname}", comm=self._comm)
+            else:
+                self._data[prod_key].write(
+                    fname,
+                    force_serial=self.write_hdf5_serial,
+                    single_precision=True,
+                    report_memory=self.report_memory,
+                )
             log.info_rank(f"Wrote {fname} in", comm=self._comm, timer=wtimer)
 
         if not self.keep_final_products and not self.mc_mode:
@@ -645,7 +616,6 @@ class MapMaker(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
-
         # First confirm that there is at least one valid detector
 
         if self.map_binning is not None and self.map_binning.enabled:

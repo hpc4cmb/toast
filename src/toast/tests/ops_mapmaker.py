@@ -14,8 +14,6 @@ from .. import ops as ops
 from .. import templates
 from ..accelerator import accel_enabled
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_healpix import write_healpix_fits
 from ..timing import GlobalTimers
 from ..timing import dump as dump_timers
 from ..timing import gather_timers
@@ -636,8 +634,8 @@ class MapmakerTest(MPITestCase):
 
         toast_hit_path = os.path.join(testdir, "toast_hits.fits")
         toast_map_path = os.path.join(testdir, "toast_map.fits")
-        write_healpix_fits(data[toast_map], toast_map_path, nest=True)
-        write_healpix_fits(data[toast_hits], toast_hit_path, nest=True)
+        data[toast_map].write(toast_map_path)
+        data[toast_hits].write(toast_hit_path)
 
         # Now run Madam on the same data and compare
 
@@ -909,8 +907,8 @@ class MapmakerTest(MPITestCase):
 
         toast_hit_path = os.path.join(testdir, "toast_hits.fits")
         toast_map_path = os.path.join(testdir, "toast_map.fits")
-        write_healpix_fits(data[toast_map], toast_map_path, nest=True)
-        write_healpix_fits(data[toast_hits], toast_hit_path, nest=True)
+        data[toast_map].write(toast_map_path)
+        data[toast_hits].write(toast_hit_path)
 
         # Now run Madam on the same data and compare
 

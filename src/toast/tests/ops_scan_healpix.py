@@ -10,8 +10,6 @@ from astropy import units as u
 
 from .. import ops as ops
 from ..observation import default_values as defaults
-from ..pixels import PixelData
-from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
 from .helpers import (
     close_data,
     create_fake_healpix_scanned_tod,
@@ -110,7 +108,7 @@ class ScanHealpixTest(MPITestCase):
 
         # Write this to a file
         hpix_file = os.path.join(self.outdir, "fake_mask.fits")
-        write_healpix_fits(data["fake_mask"], hpix_file, nest=pixels.nest)
+        data["fake_mask"].write(hpix_file)
 
         # Start with identical flags
         ops.Copy(detdata=[(defaults.det_flags, "test_flags")]).apply(data)
@@ -183,7 +181,7 @@ class ScanHealpixTest(MPITestCase):
 
         # Write to HDF5
         hpix_hdf5 = os.path.join(self.outdir, "fake.h5")
-        write_healpix_hdf5(data[map_key], hpix_hdf5, nest=True)
+        data[map_key].write(hpix_hdf5)
 
         # Run the scanning from the file
 

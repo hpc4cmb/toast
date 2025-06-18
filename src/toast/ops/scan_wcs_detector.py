@@ -9,7 +9,7 @@ import traitlets
 from astropy import units as u
 
 from ..observation import default_values as defaults
-from ..pixels_io_wcs import read_wcs_serial
+from ..pixels_io_wcs import read_wcs
 from ..timing import function_timer
 from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
@@ -141,7 +141,7 @@ class ScanWCSDetectorMap(Operator):
                 msg = f"No such file: {filename}"
                 raise FileNotFoundError(msg)
             # read_wcs() returns a 3D row-major map
-            self.current_map = read_wcs_serial(filename, dtype=np.float32)
+            self.current_map = read_wcs(filename, dtype=np.float32)
             # Check for consistency
             map_nnz = self.current_map.shape[0]
             if map_nnz != nnz:

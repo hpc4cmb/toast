@@ -17,7 +17,6 @@ from ..instrument import Focalplane, SpaceSite, Telescope
 from ..instrument_sim import fake_hexagon_focalplane
 from ..mpi import MPI, Comm
 from ..observation import default_values as defaults
-from ..pixels_io_healpix import write_healpix_fits
 from ..schedule_sim_satellite import create_satellite_schedule
 from ..vis import plot_projected_quats, set_matplotlib_backend
 from .helpers import close_data, create_comm, create_outdir
@@ -109,7 +108,7 @@ class SimSatelliteTest(MPITestCase):
         # Plot the hits
 
         hit_path = os.path.join(self.outdir, "hits.fits")
-        write_healpix_fits(data[build_hits.hits], hit_path, nest=pixels.nest)
+        data[build_hits.hits].write(hit_path)
 
         if data.comm.world_rank == 0:
             set_matplotlib_backend()

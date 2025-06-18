@@ -13,8 +13,6 @@ from ..covariance import covariance_apply
 from ..mpi import MPI
 from ..noise import Noise
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from .helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase

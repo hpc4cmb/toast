@@ -291,6 +291,7 @@ class PixelsHealpix(Operator):
                 local_submaps=submaps,
                 comm=data.comm.comm_world,
             )
+            data[self.create_dist].nest = bool(self.nest)
         return
 
     def _requires(self):

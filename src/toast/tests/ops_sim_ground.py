@@ -17,7 +17,6 @@ from ..instrument import Focalplane, GroundSite, Telescope
 from ..instrument_sim import fake_hexagon_focalplane
 from ..mpi import MPI, Comm
 from ..observation import default_values as defaults
-from ..pixels_io_healpix import write_healpix_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..vis import plot_projected_quats, set_matplotlib_backend
@@ -39,7 +38,7 @@ class SimGroundTest(MPITestCase):
             ring += 1
         self.npix = npix
         self.fp = fake_hexagon_focalplane(n_pix=npix)
-        
+
     def test_exec(self):
         # Slow sampling
         fp = fake_hexagon_focalplane(
@@ -159,7 +158,7 @@ class SimGroundTest(MPITestCase):
         # Plot the hits
 
         hit_path = os.path.join(self.outdir, "hits.fits")
-        write_healpix_fits(data[build_hits.hits], hit_path, nest=pixels.nest)
+        data[build_hits.hits].write(hit_path)
 
         if data.comm.world_rank == 0:
             set_matplotlib_backend()
@@ -172,7 +171,7 @@ class SimGroundTest(MPITestCase):
             plt.close()
 
         close_data(data)
-    
+
     def test_phase(self):
         # Slow sampling
         fp = fake_hexagon_focalplane(

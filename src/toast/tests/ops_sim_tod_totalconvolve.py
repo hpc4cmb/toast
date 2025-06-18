@@ -10,7 +10,6 @@ from astropy import units as u
 
 from .. import ops as ops
 from .. import qarray as qa
-from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from .helpers import (
     close_data,
@@ -197,7 +196,7 @@ class SimTotalconvolveTest(MPITestCase):
         )
         binner.apply(data)
         path_totalconvolve = os.path.join(self.outdir, "toast_bin.totalconvolve.fits")
-        write_healpix_fits(data[binner.binned], path_totalconvolve, nest=False)
+        data[binner.binned].write(path_totalconvolve)
 
         binner = ops.BinMap(
             pixel_dist="pixel_dist",
@@ -210,7 +209,7 @@ class SimTotalconvolveTest(MPITestCase):
         )
         binner.apply(data)
         path_conviqt = os.path.join(self.outdir, "toast_bin.conviqt.fits")
-        write_healpix_fits(data[binner.binned], path_conviqt, nest=False)
+        data[binner.binned].write(path_conviqt)
 
         rank = 0
         if self.comm is not None:
@@ -346,7 +345,7 @@ class SimTotalconvolveTest(MPITestCase):
         # Study the map on the root process
 
         toast_bin_path = os.path.join(self.outdir, "toast_bin.fits")
-        write_healpix_fits(data[binner.binned], toast_bin_path, nest=False)
+        data[binner.binned].write(toast_bin_path)
 
         rank = 0
         if self.comm is not None:

@@ -8,12 +8,6 @@ from astropy import units as u
 
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_healpix import (
-    filename_is_fits,
-    filename_is_hdf5,
-    read_healpix_fits,
-    read_healpix_hdf5,
-)
 from ..timing import function_timer
 from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
@@ -186,17 +180,7 @@ class ScanHealpixMap(Operator):
                 data[map_name] = PixelData(
                     dist, dtype=np.float32, n_value=nnz, units=self.det_data_units
                 )
-                if filename_is_fits(file_name):
-                    read_healpix_fits(
-                        data[map_name], file_name, nest=self.pixel_pointing.nest
-                    )
-                elif filename_is_hdf5(file_name):
-                    read_healpix_hdf5(
-                        data[map_name], file_name, nest=self.pixel_pointing.nest
-                    )
-                else:
-                    msg = f"Could not determine map format (HDF5 or FITS): {self.file}"
-                    raise RuntimeError(msg)
+                data[map_name].read(file_name)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.
@@ -377,17 +361,7 @@ class ScanHealpixMask(Operator):
         # timestreams.
         if self.mask_name not in data:
             data[self.mask_name] = PixelData(dist, dtype=np.uint8, n_value=1)
-            if filename_is_fits(self.file):
-                read_healpix_fits(
-                    data[self.mask_name], self.file, nest=self.pixel_pointing.nest
-                )
-            elif filename_is_hdf5(self.file):
-                read_healpix_hdf5(
-                    data[self.mask_name], self.file, nest=self.pixel_pointing.nest
-                )
-            else:
-                msg = f"Could not determine mask format (HDF5 or FITS): {self.file}"
-                raise RuntimeError(msg)
+            data[self.mask_name].read(self.file)
 
         # The pipeline below will run one detector at a time in case we are computing
         # pointing.  Make sure that our full set of requested detector output exists.

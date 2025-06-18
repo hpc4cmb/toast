@@ -12,7 +12,6 @@ from .. import qarray as qa
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
-from ..pixels_io_healpix import write_healpix_fits
 from ..timing import Timer, function_timer
 from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
@@ -258,9 +257,7 @@ class CrossLinking(Operator):
         # Write out the results
 
         fname = os.path.join(self.output_dir, f"{self.name}.fits")
-        write_healpix_fits(
-            data[self.crosslinking_map], fname, nest=self.pixel_pointing.nest
-        )
+        data[self.crosslinking_map].write(fname)
         log.info_rank(f"Wrote crosslinking to {fname}", comm=data.comm.comm_world)
         data[self.crosslinking_map].clear()
         del data[self.crosslinking_map]

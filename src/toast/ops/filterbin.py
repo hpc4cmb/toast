@@ -24,16 +24,6 @@ from .._libtoast import (
 from ..mpi import MPI, get_world
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_healpix import (
-    filename_is_fits,
-    filename_is_hdf5,
-    read_healpix,
-    read_healpix_fits,
-    read_healpix_hdf5,
-    write_healpix_fits,
-    write_healpix_hdf5,
-)
-from ..pixels_io_wcs import write_wcs
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
@@ -990,8 +980,7 @@ class FilterBin(Operator):
             )
             if self.grank == 0:
                 log.debug(
-                    f"{self.group:4} : FilterBin: Add matrix "
-                    f"in {time() - t1:.2f} s",
+                    f"{self.group:4} : FilterBin: Add matrix in {time() - t1:.2f} s",
                 )
             t1 = time()
             n = indptr[-1]
@@ -1260,13 +1249,13 @@ class FilterBin(Operator):
                 nnz = self.comm.allreduce(nnz)
             if nnz == 0:
                 log.debug_rank(
-                    f"Slice {islice+1:5} / {nslice}: {row_start:12} - {row_stop:12} "
+                    f"Slice {islice + 1:5} / {nslice}: {row_start:12} - {row_stop:12} "
                     f"is empty.  Skipping.",
                     comm=self.comm,
                 )
                 continue
             log.debug_rank(
-                f"Collecting slice {islice+1:5} / {nslice} : {row_start:12} - "
+                f"Collecting slice {islice + 1:5} / {nslice} : {row_start:12} - "
                 f"{row_stop:12}",
                 comm=self.comm,
             )
@@ -1444,63 +1433,25 @@ class FilterBin(Operator):
         ]:
             if write:
                 product = key.replace(f"{self.name}_", "")
-                try:
-                    if hasattr(self.binning.pixel_pointing, "wcs"):
-                        # WCS pixelization
-                        fname = os.path.join(
-                            self.output_dir, f"{rootname}_{product}.fits"
+                if self.write_hdf5:
+                    fname_suffix = "h5"
+                else:
+                    fname_suffix = "fits"
+                fname = os.path.join(
+                    self.output_dir, f"{rootname}_{product}.{fname_suffix}"
+                )
+                if self.mc_mode and not force:
+                    if os.path.isfile(fname):
+                        log.info_rank(
+                            f"Skipping existing file: {fname}", comm=self.comm
                         )
-                        if self.mc_mode and not force:
-                            if os.path.isfile(fname):
-                                log.info_rank(
-                                    f"Skipping existing file: {fname}", comm=self.comm
-                                )
-                                continue
-                        write_wcs(data[key], fname)
-                    else:
-                        if self.write_hdf5:
-                            # Non-standard HEALPix HDF5 output
-                            fname = os.path.join(
-                                self.output_dir, f"{rootname}_{product}.h5"
-                            )
-                            if self.mc_mode and not force:
-                                if os.path.isfile(fname):
-                                    log.info_rank(
-                                        f"Skipping existing file: {fname}",
-                                        comm=self.comm,
-                                    )
-                                    continue
-                            write_healpix_hdf5(
-                                data[key],
-                                fname,
-                                nest=self.binning.pixel_pointing.nest,
-                                force_serial=self.write_hdf5_serial,
-                            )
-                        else:
-                            # Standard HEALPix FITS output
-                            fname = os.path.join(
-                                self.output_dir, f"{rootname}_{product}.fits"
-                            )
-                            if self.mc_mode and not force:
-                                if os.path.isfile(fname):
-                                    log.info_rank(
-                                        f"Skipping existing file: {fname}",
-                                        comm=self.comm,
-                                    )
-                                    continue
-                            write_healpix_fits(
-                                data[key], fname, nest=self.binning.pixel_pointing.nest
-                            )
-                except Exception as e:
-                    msg = f"ERROR: failed to write {fname} : {e}"
-                    raise RuntimeError(msg)
+                        continue
+                data[key].write(fname, force_serial=self.write_hdf5_serial)
                 log.info_rank(f"Wrote {fname} in", comm=self.comm, timer=timer)
             if not keep and not self.mc_mode:
                 if key in data:
                     data[key].clear()
                     del data[key]
-
-        return
 
     @function_timer
     def _load_deprojection_map(self, data):
@@ -1512,21 +1463,7 @@ class FilterBin(Operator):
             n_value=self.deproject_nnz,
             units=self._det_data_units,
         )
-        if filename_is_hdf5(self.deproject_map):
-            read_healpix_hdf5(
-                data[self.deproject_map_name],
-                self.deproject_map,
-                nest=self.binning.pixel_pointing.nest,
-            )
-        elif filename_is_fits(self.deproject_map):
-            read_healpix_fits(
-                data[self.deproject_map_name],
-                self.deproject_map,
-                nest=self.binning.pixel_pointing.nest,
-            )
-        else:
-            msg = f"Cannot determine deprojection map type: {self.deproject_map}"
-            raise RuntimeError(msg)
+        data[self.deproject_map_name].read(self.deproject_map)
         self._deproject_pattern = re.compile(self.deproject_pattern)
         return
 

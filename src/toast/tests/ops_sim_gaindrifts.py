@@ -11,8 +11,6 @@ from .. import ops as ops
 from .. import rng
 from ..covariance import covariance_apply
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_healpix import write_healpix_fits
 from ..vis import set_matplotlib_backend
 from .helpers import (
     close_data,
@@ -121,7 +119,7 @@ class SimGainTest(MPITestCase):
         )
         binner1.apply(data)
         map1_path = os.path.join(self.outdir, "toast_bin1_drift.fits")
-        write_healpix_fits(data[binner1.binned], map1_path, nest=False)
+        data[binner1.binned].write(map1_path)
 
         # inject gain drift  w/ common mode
 
@@ -134,7 +132,7 @@ class SimGainTest(MPITestCase):
 
         binner1.apply(data)
         map2_path = os.path.join(self.outdir, "toast_bin2_drift.fits")
-        write_healpix_fits(data[binner1.binned], map2_path, nest=False)
+        data[binner1.binned].write(map2_path)
 
         if data.comm.world_rank == 0:
             # import pdb; pdb.set_trace()
@@ -200,7 +198,7 @@ class SimGainTest(MPITestCase):
         )
         binner1.apply(data)
         map1_path = os.path.join(self.outdir, "toast_bin1_drift.fits")
-        write_healpix_fits(data[binner1.binned], map1_path, nest=False)
+        data[binner1.binned].write(map1_path)
 
         # inject gain drift  w/ common mode
 
@@ -212,7 +210,7 @@ class SimGainTest(MPITestCase):
 
         binner1.apply(data)
         map2_path = os.path.join(self.outdir, "toast_bin2_drift.fits")
-        write_healpix_fits(data[binner1.binned], map2_path, nest=False)
+        data[binner1.binned].write(map2_path)
         if data.comm.world_rank == 0:
             oldmap = hp.read_map(map1_path, field=None, nest=False)
             newmap = hp.read_map(map2_path, field=None, nest=False)
@@ -274,7 +272,7 @@ class SimGainTest(MPITestCase):
         )
         binner1.apply(data)
         map1_path = os.path.join(self.outdir, "toast_bin1_drift.fits")
-        write_healpix_fits(data[binner1.binned], map1_path, nest=False)
+        data[binner1.binned].write(map1_path)
 
         # inject gain drift  w/ common mode
 
@@ -285,7 +283,7 @@ class SimGainTest(MPITestCase):
 
         binner1.apply(data)
         map2_path = os.path.join(self.outdir, "toast_bin2_drift.fits")
-        write_healpix_fits(data[binner1.binned], map2_path, nest=False)
+        data[binner1.binned].write(map2_path)
 
         if data.comm.world_rank == 0:
             oldmap = hp.read_map(map1_path, field=None, nest=False)
