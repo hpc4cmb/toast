@@ -212,21 +212,12 @@ def coadd_observation_matrix(
 
     if file_invcov is not None:
         log.info_rank(f"Writing {file_invcov}", comm=comm)
-        if filename_is_fits(file_invcov):
-            write_healpix_fits(
-                dist_cov,
-                file_invcov,
-                nest=True,
-                single_precision=not double_precision,
-            )
-        else:
-            write_healpix_hdf5(
-                dist_cov,
-                file_invcov,
-                nest=True,
-                single_precision=not double_precision,
-                force_serial=True,
-            )
+        dist_cov.write(
+            file_invcov,
+            healpix_nest=True,
+            hdf5_force_serial=True,
+            single_precision=not double_precision,
+        )
         log.info_rank(f"Wrote {file_invcov}", timer=timer1, comm=comm)
 
     # Invert the white noise covariance
@@ -240,21 +231,12 @@ def coadd_observation_matrix(
 
     if file_cov is not None:
         log.info_rank(f"Writing {file_cov}", comm=comm)
-        if filename_is_fits(file_cov):
-            write_healpix_fits(
-                dist_cov,
-                file_cov,
-                nest=True,
-                single_precision=not double_precision,
-            )
-        else:
-            write_healpix_hdf5(
-                dist_cov,
-                file_cov,
-                nest=True,
-                single_precision=not double_precision,
-                force_serial=True,
-            )
+        dist_cov.write(
+            file_cov,
+            healpix_nest=True,
+            hdf5_force_serial=True,
+            single_precision=not double_precision,
+        )
         log.info_rank(f"Wrote {file_cov} in", timer=timer1, comm=comm)
 
     # De-weight the observation matrix

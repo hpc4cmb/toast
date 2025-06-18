@@ -24,16 +24,6 @@ from .._libtoast import (
 from ..mpi import MPI, get_world
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_healpix import (
-    filename_is_fits,
-    filename_is_hdf5,
-    read_healpix,
-    read_healpix_fits,
-    read_healpix_hdf5,
-    write_healpix_fits,
-    write_healpix_hdf5,
-)
-from ..pixels_io_wcs import write_wcs
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
 from ..utils import Logger
@@ -1456,7 +1446,7 @@ class FilterBin(Operator):
                                     f"Skipping existing file: {fname}", comm=self.comm
                                 )
                                 continue
-                        write_wcs(data[key], fname)
+                        data[key].write(fname)
                     else:
                         if self.write_hdf5:
                             # Non-standard HEALPix HDF5 output
@@ -1470,11 +1460,10 @@ class FilterBin(Operator):
                                         comm=self.comm,
                                     )
                                     continue
-                            write_healpix_hdf5(
-                                data[key],
+                            data[key].write(
                                 fname,
-                                nest=self.binning.pixel_pointing.nest,
-                                force_serial=self.write_hdf5_serial,
+                                healpix_nest=self.binning.pixel_pointing.nest,
+                                hdf5_force_serial=self.write_hdf5_serial,
                             )
                         else:
                             # Standard HEALPix FITS output
@@ -1488,8 +1477,8 @@ class FilterBin(Operator):
                                         comm=self.comm,
                                     )
                                     continue
-                            write_healpix_fits(
-                                data[key], fname, nest=self.binning.pixel_pointing.nest
+                            data[key].write(
+                                fname, healpix_nest=self.binning.pixel_pointing.nest
                             )
                 except Exception as e:
                     msg = f"ERROR: failed to write {fname} : {e}"
@@ -1512,21 +1501,9 @@ class FilterBin(Operator):
             n_value=self.deproject_nnz,
             units=self._det_data_units,
         )
-        if filename_is_hdf5(self.deproject_map):
-            read_healpix_hdf5(
-                data[self.deproject_map_name],
-                self.deproject_map,
-                nest=self.binning.pixel_pointing.nest,
-            )
-        elif filename_is_fits(self.deproject_map):
-            read_healpix_fits(
-                data[self.deproject_map_name],
-                self.deproject_map,
-                nest=self.binning.pixel_pointing.nest,
-            )
-        else:
-            msg = f"Cannot determine deprojection map type: {self.deproject_map}"
-            raise RuntimeError(msg)
+        data[self.deproject_map_name].read(
+            self.deproject_map, healpix_nest=self.binning.pixel_pointing.nest
+        )
         self._deproject_pattern = re.compile(self.deproject_pattern)
         return
 

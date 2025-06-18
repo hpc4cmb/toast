@@ -9,8 +9,6 @@ import numpy as np
 from .. import ops as ops
 from .. import rng
 from ..covariance import covariance_apply
-from ..pixels import PixelData, PixelDistribution
-from ..pixels_io_healpix import write_healpix_fits
 from .helpers import (
     close_data,
     create_outdir,

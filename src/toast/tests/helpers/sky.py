@@ -16,9 +16,7 @@ from scipy.ndimage import gaussian_filter
 from ... import ops, rng
 from ...observation import default_values as defaults
 from ...pixels import PixelData
-from ...pixels_io_healpix import (filename_is_fits, filename_is_hdf5,
-                                  read_healpix_fits)
-from ...pixels_io_wcs import read_wcs, write_wcs_serial
+from ...pixels_io_wcs import write_wcs
 
 
 def create_fake_healpix_file(
@@ -123,7 +121,7 @@ def create_fake_wcs_file(
         temp = np.random.normal(loc=0.0, scale=scale, size=(n_row, n_col))
         image[imap, :, :] = gaussian_filter(temp, sigma=(lat_fwhm, lon_fwhm))
 
-    write_wcs_serial(out_file, image, wcs, units)
+    write_wcs(out_file, image, wcs, units)
     del image
 
 
@@ -178,7 +176,7 @@ def create_fake_healpix_map(
     if comm is not None:
         comm.barrier()
     pix = PixelData(pixel_dist, np.float64, n_value=3, units=units)
-    read_healpix_fits(pix, out_file, nest=True)
+    pix.read(out_file, healpix_nest=True)
     return pix
 
 
@@ -233,7 +231,7 @@ def create_fake_wcs_map(
     if comm is not None:
         comm.barrier()
     pix = PixelData(pixel_dist, np.float64, n_value=3, units=units)
-    read_wcs(pix, out_file)
+    pix.read(out_file)
     return pix
 
 

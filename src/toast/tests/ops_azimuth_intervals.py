@@ -16,7 +16,6 @@ from ..mpi import MPI, Comm
 from ..observation import Observation
 from ..observation import default_values as defaults
 from ..ops.sim_ground_utils import scan_between
-from ..pixels_io_healpix import write_healpix_fits
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..vis import set_matplotlib_backend

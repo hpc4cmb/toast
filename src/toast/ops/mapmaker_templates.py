@@ -12,8 +12,6 @@ from ..accelerator import ImplementationType
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..pixels import PixelData
-from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
-from ..pixels_io_wcs import write_wcs
 from ..templates import AmplitudesMap, Template
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, List, Unicode, Unit, trait_docs
@@ -562,29 +560,17 @@ class SolveAmplitudes(Operator):
             is_hpix_nest = self.binning.pixel_pointing.nest
 
         if self.write_solver_products:
-            if is_pix_wcs:
-                fname = os.path.join(self.output_dir, f"{prod_key}.fits")
-                write_wcs(self._data[prod_key], fname)
+            if self.write_hdf5:
+                fname = os.path.join(self.output_dir, f"{prod_key}.h5")
             else:
-                if self.write_hdf5:
-                    # Non-standard HDF5 output
-                    fname = os.path.join(self.output_dir, f"{prod_key}.h5")
-                    write_healpix_hdf5(
-                        self._data[prod_key],
-                        fname,
-                        nest=is_hpix_nest,
-                        single_precision=True,
-                        force_serial=self.write_hdf5_serial,
-                    )
-                else:
-                    # Standard FITS output
-                    fname = os.path.join(self.output_dir, f"{prod_key}.fits")
-                    write_healpix_fits(
-                        self._data[prod_key],
-                        fname,
-                        nest=is_hpix_nest,
-                        report_memory=self.report_memory,
-                    )
+                fname = os.path.join(self.output_dir, f"{prod_key}.fits")
+            self._data[prod_key].write(
+                fname,
+                healpix_nest=is_hpix_nest,
+                hdf5_force_serial=self.write_hdf5_serial,
+                single_precision=True,
+                report_memory=self.report_memory,
+            )
 
         if not self.mc_mode and not self.keep_solver_products:
             if prod_key in self._data:

@@ -11,7 +11,6 @@ from astropy import units as u
 
 from .. import ops as ops
 from ..observation import default_values as defaults
-from ..pixels_io_healpix import write_healpix_fits, write_healpix_hdf5
 from .helpers import (
     close_data,
     create_fake_healpix_scanned_tod,

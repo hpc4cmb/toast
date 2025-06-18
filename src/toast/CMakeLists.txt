@@ -124,6 +124,7 @@ install(FILES
     pixels.py
     pixels_io_healpix.py
     pixels_io_wcs.py
+    pixels_io_utils.py
     covariance.py
     dist.py
     data.py

@@ -11,7 +11,7 @@ from astropy import units as u
 from .. import ops as ops
 from ..observation import default_values as defaults
 from ..pixels import PixelData
-from ..pixels_io_wcs import write_wcs, read_wcs_serial
+from ..pixels_io_wcs import read_wcs
 from .helpers import (
     close_data,
     create_fake_mask,
@@ -124,8 +124,8 @@ class ScanWCSTest(MPITestCase):
 
         if data.comm.world_rank == 0:
             output_file = os.path.join(self.outdir, f"{mapmaker.name}_binmap.fits")
-            image_in = read_wcs_serial(input_file)
-            image_out = read_wcs_serial(output_file)
+            image_in = read_wcs(input_file)
+            image_out = read_wcs(output_file)
             good = image_out != 0
             np.testing.assert_almost_equal(image_in[good], image_out[good])
 
@@ -136,7 +136,6 @@ class ScanWCSTest(MPITestCase):
 
     def test_wcs_hdf5(self):
         self._test_wcs("hdf5")
-
 
     def test_wcs_mask(self):
         # Create fake observing of a small patch
@@ -173,7 +172,7 @@ class ScanWCSTest(MPITestCase):
 
         # Write this to a file
         input_file = os.path.join(self.outdir, "fake_mask.fits")
-        write_wcs(data["fake_mask"], input_file)
+        data["fake_mask"].write(input_file)
 
         # Scan mask into timestreams
         scanner = ops.ScanMask(
@@ -202,4 +201,3 @@ class ScanWCSTest(MPITestCase):
                 )
 
         close_data(data)
-

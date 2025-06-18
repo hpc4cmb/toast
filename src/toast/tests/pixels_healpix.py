@@ -157,9 +157,9 @@ class PixelTest(MPITestCase):
                             nside, nsb, np.dtype(tp).char
                         ),
                     )
-                    io.write_healpix_fits(pdata, fitsfile, nest=True)
+                    pdata.write(fitsfile, healpix_nest=True)
                     check = self._make_pixdata(dist, tp, n_value, zero=True)
-                    io.read_healpix_fits(check, fitsfile, nest=True)
+                    check.read(fitsfile, healpix_nest=True)
                     nt.assert_equal(pdata.data, check.data)
                     if self.comm is None or self.comm.size == 1:
                         # Write out the data serially and compare
@@ -233,9 +233,9 @@ class PixelTest(MPITestCase):
                             nside, nsb, np.dtype(tp).char
                         ),
                     )
-                    io.write_healpix_hdf5(pdata, hdf5file, nest=True)
+                    pdata.write(hdf5file, healpix_nest=True)
                     check = self._make_pixdata(dist, tp, n_value, zero=True)
-                    io.read_healpix_hdf5(check, hdf5file, nest=True)
+                    check.read(hdf5file, healpix_nest=True)
                     nt.assert_equal(pdata.data, check.data)
                     if self.comm is None or self.comm.rank == 0:
                         # Write out the data serially and compare
