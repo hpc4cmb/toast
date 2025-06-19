@@ -1,6 +1,7 @@
 # Build dependencies installed after any low-level / pinned packages
 tomlkit
 traitlets>=5.0
+numpy<2.3
 scipy
 matplotlib
 psutil
