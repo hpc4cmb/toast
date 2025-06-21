@@ -721,8 +721,8 @@ class StokesWeightsDemod(Operator):
     @traitlets.validate("mode")
     def _check_mode(self, proposal):
         mode = proposal["value"]
-        if mode not in ["IQU"]:
-            raise traitlets.TraitError("Invalid mode (must be 'IQU')")
+        if mode not in ["QU", "IQU"]:
+            raise traitlets.TraitError("Invalid mode (must be 'QU' or 'IQU')")
         return mode
 
     def __init__(self, **kwargs):
@@ -760,18 +760,34 @@ class StokesWeightsDemod(Operator):
                     eta = props["pol_efficiency"]
                 else:
                     eta = 1.0
-                if det.startswith("demod0"):
-                    # Stokes I only
-                    weights[det] = np.column_stack([ones, zeros, zeros])
-                elif det.startswith("demod4r"):
-                    # Stokes Q only
-                    weights[det] = np.column_stack([zeros, eta * ones, zeros])
-                elif det.startswith("demod4i"):
-                    # Stokes U only
-                    weights[det] = np.column_stack([zeros, zeros, eta * ones])
+
+                if self.mode == "IQU":
+                    if det.startswith("demod0"):
+                        # Stokes I only
+                        weights[det] = np.column_stack([ones, zeros, zeros])
+                    elif det.startswith("demod4r"):
+                        # Stokes Q only
+                        weights[det] = np.column_stack([zeros, eta * ones, zeros])
+                    elif det.startswith("demod4i"):
+                        # Stokes U only
+                        weights[det] = np.column_stack([zeros, zeros, eta * ones])
+                    else:
+                        # 2f, systematics only
+                        weights[det] = np.column_stack([zeros, zeros, zeros])
+                elif self.mode == "QU":
+                    if det.startswith("demod4r"):
+                        # Stokes Q only
+                        weights[det] = np.column_stack([eta * ones, zeros])
+                    elif det.startswith("demod4i"):
+                        # Stokes U only
+                        weights[det] = np.column_stack([zeros, eta * ones])
+                    else:
+                        # 2f, systematics only
+                        weights[det] = np.column_stack([zeros, zeros])
                 else:
-                    # 2f, systematics only
-                    weights[det] = np.column_stack([zeros, zeros, zeros])
+                    raise RuntimeError("Invalid mode for Stokes Weight Demod")
+
+
         return
 
     def _finalize(self, data, **kwargs):
