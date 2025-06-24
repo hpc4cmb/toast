@@ -17,6 +17,12 @@ import plotly.express as px
 import plotly.io as pio
 
 
+if pio.kaleido.scope is None:
+    # Missing kaleido causes cryptic error messages
+    msg = "toast_timing_plot requires plotly with kaleido"
+    raise ImportError(msg)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Plot a timing dump.")
 
