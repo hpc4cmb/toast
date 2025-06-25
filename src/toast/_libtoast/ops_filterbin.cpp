@@ -290,6 +290,35 @@ void build_template_covariance(std::vector <int64_t> & starts,
 
     size_t ntemplate = templates.size();
 
+    // Find templates that are very sparse and best indexed explicitly
+    // For maximum efficiency, we skip over flagged samples
+
+    std::vector <std::vector <size_t>> nonzeros(ntemplate);
+    #pragma omp parallel for schedule(static, 1)
+    for (size_t itemplate = 0; itemplate < ntemplate; ++itemplate) {
+        auto template_ = templates[itemplate].unchecked <1>();
+        size_t istart = starts[itemplate];
+	size_t istop = stops[itemplate];
+	size_t nnz = 0;
+	for (size_t isample = istart; isample < istop; ++isample) {
+	  if (template_(isample - istart) * fast_good(isample) != 0) {
+	    nnz++;
+	  }
+	}
+	// For now, define "sparse" as having less than 1% nonzero samples
+	// between start and stop.
+	if (100 * nnz < istop - istart) {
+	    auto current_nonzeros = nonzeros.at(itemplate);
+	    for (size_t isample = istart; isample < istop; ++isample) {
+	      if (template_(isample - istart) * fast_good(isample) != 0) {
+		    current_nonzeros.push_back(isample);
+		}
+	    }
+	}
+    }
+
+    // Compute F^T F by taking inner products of templates (columns of F)
+
     #pragma omp parallel for schedule(static, 1)
     for (size_t row = 0; row < ntemplate; ++row) {
         auto rowtemplate = templates[row].unchecked <1>();
@@ -301,11 +330,44 @@ void build_template_covariance(std::vector <int64_t> & starts,
             size_t istart = std::max(starts[row], starts[col]);
             size_t istop = std::min(stops[row], stops[col]);
             if ((row == col) && (istop - istart <= 1)) val = 1;
-            for (size_t isample = istart; isample < istop; ++isample) {
-                val += rowtemplate(isample - rowoffset)
-                       * coltemplate(isample - coloffset)
-                       * fast_good(isample);
-            }
+	    // If either template is sparse, loop over its nonzero indices
+	    // Otherwise, use dense inner product
+	    std::vector <size_t> * current_nonzeros = NULL;
+	    auto nnz_row = nonzeros.at(row).size();
+	    auto nnz_col = nonzeros.at(col).size();
+	    if (nnz_row > 0 && nnz_col > 0) {
+	        // Both templates are sparse
+	        if (nnz_row < nnz_col) {
+		    // Row template is more sparse
+		    current_nonzeros = &nonzeros.at(row);
+	        } else {
+	            // Column template is more sparse
+		    current_nonzeros = &nonzeros.at(col);
+		}
+	    } else if (nnz_row > 0) {
+	        // Row template is sparse
+	        current_nonzeros = &nonzeros.at(row);
+	    } else if (nnz_col > 0) {
+		// Column template is sparse
+		current_nonzeros = &nonzeros.at(col);
+	    }
+	    if (current_nonzeros) {
+	        // Use the sparsest indices.
+	        // Indices account for data quality flags
+	        for (auto isample: *current_nonzeros) {
+		    if (isample < istart) continue;
+		    if (isample >= istop) break;
+		    val += rowtemplate(isample - rowoffset)
+		        * coltemplate(isample - coloffset);
+		}
+	    } else {
+	        // Neither template is sparse
+	        for (size_t isample = istart; isample < istop; ++isample) {
+		    val += rowtemplate(isample - rowoffset)
+		        * coltemplate(isample - coloffset)
+		        * fast_good(isample);
+		}
+	    }
             fast_covariance(row, col) = val;
             if (row != col) {
                 fast_covariance(col, row) = val;
