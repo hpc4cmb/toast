@@ -25,7 +25,7 @@ from ..mpi import MPI, get_world
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import Logger
 from .copy import Copy
 from .delete import Delete
@@ -295,9 +295,15 @@ class FilterBin(Operator):
     )
 
     ground_filter_order = Int(
-        5,
+        None,
         allow_none=True,
         help="Order of a Legendre polynomial to fit as a function of azimuth.",
+    )
+
+    ground_filter_bin_width = Quantity(
+        None,
+        allow_none=True,
+        help="Azimuthal bin width of ground filter",
     )
 
     split_ground_template = Bool(
@@ -753,7 +759,7 @@ class FilterBin(Operator):
         return
 
     @function_timer
-    def _add_ground_templates(self, obs, templates):
+    def _add_ground_poly_templates(self, obs, templates):
         if self.ground_filter_order is None:
             return
 
@@ -792,6 +798,77 @@ class FilterBin(Operator):
             legendre_filter = np.vstack(legendre_filter)
 
         templates.append(legendre_filter)
+
+        return
+
+    @function_timer
+    def _add_ground_bin_templates(self, obs, templates):
+        if self.ground_filter_bin_width is None:
+            return
+
+        if self.azimuth is not None:
+            az = obs.shared[self.azimuth]
+        else:
+            quats = obs.shared[self.boresight_azel]
+            theta, phi, _ = qa.to_iso_angles(quats)
+            az = 2 * np.pi - phi
+
+        # Make sure azimuth is continuous and positive
+        az = np.unwrap(az)
+        while np.amin(az) < 0:
+            az += 2 * np.pi
+
+        # Assign each time stamp to an azimuthal bin
+        wbin = self.ground_filter_bin_width.to_value(u.radian)
+        ibin = (az // wbin).astype(int)
+
+        # bin numbers are positive by construction.
+        # Assign flagged samples to bin = -1
+        shared_flags = np.array(obs.shared[self.shared_flags])
+        bad = (shared_flags & self.shared_flag_mask) != 0
+        ibin[bad] = -1
+
+        # Find the set of hit azimuthal bins
+        bins, counts = np.unique(ibin, return_counts=True)
+        good = bins >= 0
+        bins = bins[good]
+        counts = counts[good]
+        nhit = len(bins)
+
+        # Discard one bin.  This makes the rest of the templates
+        # relative to it and breaks degeneracy with polynomial templates
+        cut = np.argmax(counts)
+        good = np.ones(len(counts), dtype=bool)
+        good[cut] = False
+        bins = bins[good]
+        counts = counts[good]
+
+        # Each template is just a boolean mask that is true when
+        # boresight is in a specific bin
+        directionless_templates = []
+        for bin_ in bins:
+            directionless_templates.append((ibin == bin_).astype(float))
+
+        # Optionally separate ground filter by scan direction.
+        if not self.split_ground_template:
+            ground_templates = directionless_templates
+        else:
+            ground_templates = []
+            masks = []
+            for name in self.leftright_interval, self.rightleft_interval:
+                mask = np.zeros(ibin.size, dtype=bool)
+                for ival in obs.intervals[name]:
+                    mask[ival.first : ival.last] = True
+                masks.append(mask)
+            for template in directionless_templates:
+                for mask in masks:
+                    temp = template.copy()
+                    temp[mask] = 0
+                    ground_templates.append(temp)
+
+        ground_templates = np.vstack(ground_templates)
+
+        templates.append(ground_templates)
 
         return
 
@@ -835,7 +912,8 @@ class FilterBin(Operator):
         templates = SparseTemplates()
 
         self._add_hwp_templates(obs, templates)
-        self._add_ground_templates(obs, templates)
+        self._add_ground_poly_templates(obs, templates)
+        self._add_ground_bin_templates(obs, templates)
         self._add_poly_templates(obs, templates)
 
         return templates

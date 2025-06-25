@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -22,12 +22,7 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import read_healpix
 from ..vis import set_matplotlib_backend
-from .helpers import (
-    close_data,
-    create_ground_data,
-    create_outdir,
-    fake_flags,
-)
+from .helpers import close_data, create_ground_data, create_outdir, fake_flags
 from .mpi import MPITestCase
 
 
@@ -37,7 +32,7 @@ class FilterBinTest(MPITestCase):
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.nside = 64
 
-    def test_filterbin(self):
+    def _test_filterbin(self, ground_order=None, ground_bin_width=None):
         if "CIBUILDWHEEL" in os.environ:
             print(f"WARNING:  Skipping test_filterbin during wheel tests")
             return
@@ -90,8 +85,13 @@ class FilterBinTest(MPITestCase):
             det_flag_mask=defaults.det_mask_invalid,
         )
 
+        name = "filterbin"
+        if ground_order is not None:
+            name += "_ground_poly"
+        if ground_bin_width is not None:
+            name += "_ground_binned"
         filterbin = ops.FilterBin(
-            name="filterbin",
+            name=name,
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
             det_flag_mask=defaults.det_mask_nonscience,
@@ -99,7 +99,8 @@ class FilterBinTest(MPITestCase):
             shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             hwp_filter_order=4,
-            ground_filter_order=5,
+            ground_filter_order=ground_order,
+            ground_filter_bin_width=ground_bin_width,
             split_ground_template=True,
             poly_filter_order=2,
             output_dir=self.outdir,
@@ -152,7 +153,7 @@ class FilterBinTest(MPITestCase):
                     **args,
                 )
 
-                fname = os.path.join(self.outdir, "filter_test.png")
+                fname = os.path.join(self.outdir, filterbin.name + ".png")
                 fig.savefig(fname)
                 check = rms2 < 1e-4 * rms1
                 if not check:
@@ -160,6 +161,12 @@ class FilterBinTest(MPITestCase):
                 self.assertTrue(check)
 
         close_data(data)
+
+    def test_filterbin_ground_binned(self):
+        self._test_filterbin(ground_bin_width=1.0 * u.deg)
+
+    def test_filterbin_ground_poly(self):
+        self._test_filterbin(ground_order=5)
 
     def plot_obsmatrix_result(
         self, suffix, input_map_file, obsmat_file, name, nest, filtered=None
