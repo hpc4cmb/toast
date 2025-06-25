@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -57,6 +57,8 @@ class Lowpass:
 @trait_docs
 class Demodulate(Operator):
     """Demodulate and downsample HWP-modulated data"""
+
+    allowed_modes = ("", "I", "QU", "IQU")
 
     API = Int(0, help="Internal interface version for this operator")
 
@@ -138,7 +140,7 @@ class Demodulate(Operator):
 
     do_2f = Bool(False, help="also cache the 2f-demodulated signal")
 
-    pol_only = Bool(False, help="Return only the Q and U detector timestreams")
+    mode = Unicode("IQU", help="Return I, QU or IQU timestreams.")
 
     # Intervals?
 
@@ -172,11 +174,24 @@ class Demodulate(Operator):
                     "stokes_weights should be an Operator instance"
                 )
             # Check that this operator has the traits we expect
-            for trt in ["weights", "view"]:
+            for trt in ["weights", "view", "mode"]:
                 if not weights.has_trait(trt):
                     msg = f"stokes_weights operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
+            # Check that weights are supported
+            supported = ("I", "QU", "IQU")
+            if weights.mode not in supported:
+                msg = f"Stokes weights mode not in {supported}"
+                raise traitlets.TraitError(msg)
         return weights
+
+    @traitlets.validate("mode")
+    def _check_mode(self, proposal):
+        mode = proposal["value"]
+        if mode not in self.allowed_modes:
+            msg = f"mode most be one of {self.allowed_modes}"
+            raise traitlets.TraitError(msg)
+        return mode
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -191,6 +206,10 @@ class Demodulate(Operator):
             if getattr(self, trait) is None:
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
+
+        if "QU" in self.mode and "QU" not in self.stokes_weights.mode:
+            msg = "Cannot produce demodulated QU without QU Stokes weights"
+            raise RuntimeError(msg)
 
         # Demodulation only applies to observations with HWP.  Verify
         # that there are such observations in `data`
@@ -212,13 +231,17 @@ class Demodulate(Operator):
                 "None of the observations have a spinning HWP.  Nothing to demodulate."
             )
 
-        # Each modulated detector demodulates into 3, 2 or 5 pseudo detectors
+        # Each modulated detector demodulates into one or more pseudo detectors
 
-        self.prefixes = ["demod0", "demod4r", "demod4i"]
-        if self.pol_only:
-            self.prefixes = ["demod4r", "demod4i"]
+        self.prefixes = []
+        if "I" in self.mode:
+            self.prefixes.append("demod0")
+        if "QU" in self.mode:
+            self.prefixes.extend(["demod4r", "demod4i"])
         if self.do_2f:
             self.prefixes.extend(["demod2r", "demod2i"])
+        if len(self.prefixes) == 0:
+            raise RuntimeError("There are no pseudo detectors to modulate to")
 
         timer = Timer()
         timer.start()
@@ -358,7 +381,7 @@ class Demodulate(Operator):
             if det not in all_set:
                 continue
             for field_name in field_names:
-                # Each detector translates into 3 or 5 new entries
+                # Each detector translates into one or more
                 for prefix in self.prefixes:
                     if field_name == "name":
                         fields[field_name].append(f"{prefix}_{det}")
@@ -522,25 +545,33 @@ class Demodulate(Operator):
             # iweights = 1
             # qweights = eta * cos(2 * psi_det + 4 * psi_hwp)
             # uweights = eta * sin(2 * psi_det + 4 * psi_hwp)
-            iweights, qweights, uweights = weights.T
-            etainv = 1 / np.sqrt(qweights**2 + uweights**2)
+            if self.stokes_weights.mode == "IQU":
+                iweights, qweights, uweights = weights.T
+            elif self.stokes_weights.mode == "QU":
+                qweights, uweights = weights.T
+                iweights = np.ones_like(qweights)
+            if "QU" in self.mode:
+                # remove polarization efficiency from the Q/U weights
+                etainv = 1 / np.sqrt(qweights**2 + uweights**2)
+                qweights = qweights * etainv
+                uweights = uweights * etainv
 
             for flavor in self.det_data.split(";"):
                 signal = obs.detdata[flavor][det]
                 det_data = demod_obs.detdata[flavor]
-                if not self.pol_only:
+                if "I" in self.mode:
                     det_data[f"demod0_{det}"] = lowpass(signal)
-                det_data[f"demod4r_{det}"] = lowpass(signal * 2 * qweights * etainv)
-                det_data[f"demod4i_{det}"] = lowpass(signal * 2 * uweights * etainv)
-
+                if "QU" in self.mode:
+                    det_data[f"demod4r_{det}"] = lowpass(signal * 2 * qweights)
+                    det_data[f"demod4i_{det}"] = lowpass(signal * 2 * uweights)
                 if self.do_2f:
                     # Start by evaluating the 2f demodulation factors from the
                     # pointing matrix.  We use the half-angle formulas and some
                     # extra logic to identify the right branch
                     #
                     # |cos(psi/2)| and |sin(psi/2)|:
-                    signal_demod2r = np.sqrt(0.5 * (1 + qweights * etainv))
-                    signal_demod2i = np.sqrt(0.5 * (1 - qweights * etainv))
+                    signal_demod2r = np.sqrt(0.5 * (1 + qweights))
+                    signal_demod2i = np.sqrt(0.5 * (1 - qweights))
                     # inverse the sign for every second mode
                     for sig in signal_demod2r, signal_demod2i:
                         dsig = np.diff(sig)
@@ -704,6 +735,8 @@ class Demodulate(Operator):
 class StokesWeightsDemod(Operator):
     """Compute the Stokes pointing weights for demodulated data"""
 
+    allowed_modes = ("I", "QU", "IQU")
+
     API = Int(0, help="Internal interface version for this operator")
 
     mode = Unicode("IQU", help="The Stokes weights to generate")
@@ -721,8 +754,9 @@ class StokesWeightsDemod(Operator):
     @traitlets.validate("mode")
     def _check_mode(self, proposal):
         mode = proposal["value"]
-        if mode not in ["QU", "IQU"]:
-            raise traitlets.TraitError("Invalid mode (must be 'QU' or 'IQU')")
+        if mode not in self.allowed_modes:
+            msg = f"Invalid mode (must be one of {self.allowed_modes})"
+            raise traitlets.TraitError(msg)
         return mode
 
     def __init__(self, **kwargs):
@@ -754,6 +788,22 @@ class StokesWeightsDemod(Operator):
             ones = np.ones(nsample, dtype=dtype)
             zeros = np.zeros(nsample, dtype=dtype)
             weights = obs.detdata[self.weights]
+            if self.mode == "I":
+                i_weights = ones
+                q_weights = zeros
+                u_weights = zeros
+                no_weights = zeros
+            elif self.mode == "QU":
+                i_weights = np.column_stack([zeros, zeros])
+                q_weights = np.column_stack([ones, zeros])
+                u_weights = np.column_stack([zeros, ones])
+                no_weights = np.column_stack([zeros, zeros])
+            elif self.mode == "IQU":
+                i_weights = np.column_stack([ones, zeros, zeros])
+                q_weights = np.column_stack([zeros, ones, zeros])
+                u_weights = np.column_stack([zeros, zeros, ones])
+                no_weights = np.column_stack([zeros, zeros, zeros])
+
             for det in dets:
                 props = obs.telescope.focalplane[det]
                 if "pol_efficiency" in props.colnames:
@@ -761,32 +811,18 @@ class StokesWeightsDemod(Operator):
                 else:
                     eta = 1.0
 
-                if self.mode == "IQU":
-                    if det.startswith("demod0"):
-                        # Stokes I only
-                        weights[det] = np.column_stack([ones, zeros, zeros])
-                    elif det.startswith("demod4r"):
-                        # Stokes Q only
-                        weights[det] = np.column_stack([zeros, eta * ones, zeros])
-                    elif det.startswith("demod4i"):
-                        # Stokes U only
-                        weights[det] = np.column_stack([zeros, zeros, eta * ones])
-                    else:
-                        # 2f, systematics only
-                        weights[det] = np.column_stack([zeros, zeros, zeros])
-                elif self.mode == "QU":
-                    if det.startswith("demod4r"):
-                        # Stokes Q only
-                        weights[det] = np.column_stack([eta * ones, zeros])
-                    elif det.startswith("demod4i"):
-                        # Stokes U only
-                        weights[det] = np.column_stack([zeros, eta * ones])
-                    else:
-                        # 2f, systematics only
-                        weights[det] = np.column_stack([zeros, zeros])
+                if det.startswith("demod0"):
+                    # Stokes I only
+                    weights[det] = i_weights
+                elif det.startswith("demod4r"):
+                    # Stokes Q only
+                    weights[det] = q_weights * eta
+                elif det.startswith("demod4i"):
+                    # Stokes U only
+                    weights[det] = u_weights * eta
                 else:
-                    raise RuntimeError("Invalid mode for Stokes Weight Demod")
-
+                    # Not an I/Q/U pseudo detector
+                    weights[det] = no_weights
 
         return
 
