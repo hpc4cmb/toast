@@ -189,7 +189,7 @@ class Demodulate(Operator):
     def _check_mode(self, proposal):
         mode = proposal["value"]
         if mode not in self.allowed_modes:
-            msg = f"mode most be one of {self.allowed_modes}"
+            msg = f"mode must be one of {self.allowed_modes}"
             raise traitlets.TraitError(msg)
         return mode
 
