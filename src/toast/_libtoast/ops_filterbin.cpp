@@ -305,9 +305,9 @@ void build_template_covariance(std::vector <int64_t> & starts,
 	    nnz++;
 	  }
 	}
-	// For now, define "sparse" as having less than 1% nonzero samples
+	// For now, define "sparse" as having less than 10% nonzero samples
 	// between start and stop.
-	if (100 * nnz < istop - istart) {
+	if (10 * nnz < istop - istart) {
 	    auto current_nonzeros = nonzeros.at(itemplate);
 	    for (size_t isample = istart; isample < istop; ++isample) {
 	      if (template_(isample - istart) * fast_good(isample) != 0) {
@@ -329,26 +329,31 @@ void build_template_covariance(std::vector <int64_t> & starts,
             double val = 0;
             size_t istart = std::max(starts[row], starts[col]);
             size_t istop = std::min(stops[row], stops[col]);
-            if ((row == col) && (istop - istart <= 1)) val = 1;
+            if ((row == col) && (istop - istart <= 1)) {
+              // Special case, empty or completely flagged template.
+              // Attempt to regularize the covariance by inserting
+              // unity at the diagonal.
+              val = 1;
+            }
 	    // If either template is sparse, loop over its nonzero indices
 	    // Otherwise, use dense inner product
 	    std::vector <size_t> * current_nonzeros = NULL;
 	    auto nnz_row = nonzeros.at(row).size();
 	    auto nnz_col = nonzeros.at(col).size();
 	    if (nnz_row > 0 && nnz_col > 0) {
-	        // Both templates are sparse
+	        // Both templates are sparse ...
 	        if (nnz_row < nnz_col) {
-		    // Row template is more sparse
+		    // ... but the row template is sparser
 		    current_nonzeros = &nonzeros.at(row);
 	        } else {
-	            // Column template is more sparse
+	            // ... but the column template is sparser
 		    current_nonzeros = &nonzeros.at(col);
 		}
 	    } else if (nnz_row > 0) {
-	        // Row template is sparse
+	        // Only the row template is sparse
 	        current_nonzeros = &nonzeros.at(row);
 	    } else if (nnz_col > 0) {
-		// Column template is sparse
+		// Only the column template is sparse
 		current_nonzeros = &nonzeros.at(col);
 	    }
 	    if (current_nonzeros) {
