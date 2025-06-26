@@ -53,7 +53,6 @@ install(FILES
     ops_gainscrambler.py
     template_periodic.py
     template_amplitudes.py
-    template_hwpss.py
     template_offset.py
     template_fourier2d.py
     template_subharmonic.py

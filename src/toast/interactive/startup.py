@@ -12,7 +12,9 @@ from ..mpi import MPI
 from ..utils import Environment, Logger
 
 
-def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
+def start_parallel(
+    procs=1, threads=1, nice=True, auto_mpi=False, shell=None, shell_line=None
+):
     """Attempt to start up ipyparallel with mpi4py and OpenMP.
 
     Args:
@@ -38,14 +40,16 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
                 print("Running in SLURM")
                 srun_path = shutil.which("srun")
                 if procs != int(os.environ["SLURM_NTASKS"]):
-                    print(f"WARNING:  Slurm environment has {os.environ['SLURM_NTASKS']} processes, not {procs}")
+                    print(
+                        f"WARNING:  Slurm environment has {os.environ['SLURM_NTASKS']} processes, not {procs}"
+                    )
                 controller_class.mpi_cmd = [srun_path]
                 engine_class.mpi_cmd = [srun_path]
             cluster = ipp.Cluster(
                 controller=controller_class,
                 engines=engine_class,
                 engine_timeout=120,
-                n=procs
+                n=procs,
             )
 
             cluster = ipp.Cluster(engines="mpi", n=procs)
@@ -62,8 +66,13 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
             # Optionally enable automatic use of MPI
             if auto_mpi and shell is not None:
                 # Turn on automatic use of MPI
-                shell.run_line_magic("autopx")
-        except Exception:
+                shell.run_line_magic(shell_line, "autopx")
+        except Exception as e:
+            import traceback
+
+            tb_str = "".join(traceback.format_exception(e))
+            print(e)
+            print(tb_str)
             procs = 1
             print("Failed to start ipyparallel cluster, using one process.")
     extmanager = ExtensionManager()

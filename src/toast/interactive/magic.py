@@ -61,6 +61,7 @@ class ToastMagics(Magics):
             nice=args.nice,
             auto_mpi=args.auto,
             shell=self.shell,
+            shell_line=line,
         )
 
 

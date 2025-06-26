@@ -27,12 +27,10 @@ def fake_hwpss(data, field, scale):
     for ob in data.obs:
         hwpss, ccos, csin = fake_hwpss_data(ob.shared[defaults.hwp_angle].data, scale)
         n_harm = len(ccos)
-        coeff[ob.name] = np.zeros(4 * n_harm)
+        coeff[ob.name] = np.zeros(2 * n_harm)
         for h in range(n_harm):
-            coeff[ob.name][4 * h] = csin[h]
-            coeff[ob.name][4 * h + 1] = 0
-            coeff[ob.name][4 * h + 2] = ccos[h]
-            coeff[ob.name][4 * h + 3] = 0
+            coeff[ob.name][2 * h] = csin[h]
+            coeff[ob.name][2 * h + 1] = ccos[h]
         if field not in ob.detdata:
             ob.detdata.create(field, units=defaults.det_data_units)
         for det in ob.local_detectors:

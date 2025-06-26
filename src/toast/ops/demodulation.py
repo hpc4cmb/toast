@@ -22,7 +22,7 @@ from ..noise import Noise
 from ..observation import Observation
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
 from ..utils import Logger, dtype_to_aligned, name_UID
 from .operator import Operator
 
@@ -129,6 +129,11 @@ class Demodulate(Operator):
         "hamming", help="Window function name recognized by scipy.signal.firwin"
     )
 
+    keep_dets_frac = Float(
+        0.1,
+        help="If less than this fraction of detectors are good, cut the observation",
+    )
+
     purge = Bool(False, help="Remove inputs after demodulation")
 
     in_place = Bool(False, help="Modify the data object in-place.  Implies purge=True.")
@@ -211,20 +216,46 @@ class Demodulate(Operator):
             self.demod_data = Data()
 
         # Demodulation only applies to observations with HWP.  Verify
-        # that there are such observations in `data`
+        # that there are such observations in `data`.  We also cut all
+        # observations where more than 90% of optical detectors are cut.
 
-        obs_indx = []
-        demodulate_obs = []
-        for iobs, obs in enumerate(data.obs):
+        demodulate_input_obs = []
+        for obs in data.obs:
             if self.hwp_angle not in obs.shared:
+                msg = f"Obs {obs.name} has no HWP angle, skipping"
+                log.debug_rank(msg, obs.comm.comm_group)
+                if self.in_place or self.purge:
+                    # Un-demodulated observations will be deleted
+                    obs.clear()
                 continue
             hwp_angle = obs.shared[self.hwp_angle]
             if np.abs(np.median(np.diff(hwp_angle))) < 1e-6:
                 # Stepped or stationary HWP
+                msg = f"Obs {obs.name} has a stepped / stationary HWP, skipping"
+                log.debug_rank(msg, obs.comm.comm_group)
+                if self.in_place:
+                    # Un-demodulated observations will be deleted
+                    obs.clear()
                 continue
-            obs_indx.append(iobs)
-            demodulate_obs.append(obs)
-        n_obs = len(demodulate_obs)
+            n_local = len(obs.local_detectors)
+            n_local_good = np.sum(
+                [1 for x, y in obs.local_detector_flags.items() if y == 0]
+            )
+            if obs.comm.comm_group is None:
+                n_dets = n_local
+                n_good = n_local_good
+            else:
+                n_dets = obs.comm.comm_group.allreduce(n_local, op=MPI.SUM)
+                n_good = obs.comm.comm_group.allreduce(n_local_good, op=MPI.SUM)
+            if n_good / n_dets < self.keep_dets_frac:
+                msg = f"Obs {obs.name} has only {n_good} / {n_dets} good dets, cutting"
+                log.debug_rank(msg, obs.comm.comm_group)
+                if self.in_place:
+                    # Un-demodulated observations will be deleted
+                    obs.clear()
+                continue
+            demodulate_input_obs.append(obs)
+        n_obs = len(demodulate_input_obs)
         if data.comm.comm_world is not None:
             n_obs = data.comm.comm_world.allreduce(n_obs)
         if n_obs == 0:
@@ -246,7 +277,12 @@ class Demodulate(Operator):
 
         timer = Timer()
         timer.start()
-        for iobs, obs in zip(obs_indx, demodulate_obs):
+
+        # The list of demodulated observations.  This will either be placed in a new
+        # data object or the list will be swapped into the existing data object.
+        demodulate_obs = []
+
+        for obs in demodulate_input_obs:
             # Get the detectors which are not cut with per-detector flags
             local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if obs.comm.comm_group is None:
@@ -325,22 +361,22 @@ class Demodulate(Operator):
 
             self._demodulate_intervals(obs, demod_obs)
 
-            if self.in_place:
+            demodulate_obs.append(demod_obs)
+
+            if self.in_place or self.purge:
+                # Input observations are not saved
                 obs.clear()
-                data.obs[iobs] = demod_obs
-            else:
-                self.demod_data.obs.append(demod_obs)
-                if self.purge:
-                    obs.clear()
 
             log.debug_rank(
                 f"Demodulated observation {obs.name} in",
                 comm=data.comm.comm_group,
                 timer=timer,
             )
-        if not self.in_place and self.purge:
-            data.clear()
-        return
+        if self.in_place:
+            data.obs.clear()
+            data.obs = demodulate_obs
+        else:
+            self.demod_data.obs = demodulate_obs
 
     @function_timer
     def _get_fmax(self, obs):

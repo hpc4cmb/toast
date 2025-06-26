@@ -225,7 +225,11 @@ class CMakeBuild(build_ext):
             cmake_args += ["-D{}={}".format(k, v)]
 
         # Assuming Makefiles
-        build_args += ["--", "-j2"]
+        if "CPU_COUNT" in os.environ:
+            makej = int(os.environ["CPU_COUNT"])
+        else:
+            makej = 2
+        build_args += ["--", f"-j{makej}"]
 
         self.build_args = build_args
 

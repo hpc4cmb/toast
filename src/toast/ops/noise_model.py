@@ -662,7 +662,12 @@ class FlagNoiseFit(Operator):
         if self.focalplane_value is not None and self.focalplane_key is None:
             raise RuntimeError("If you set focalplane_value, you must also set the key")
 
+        timer = Timer()
+        timer.start()
+
         for obs in data.obs:
+            obs_timer = Timer()
+            obs_timer.start()
             if self.noise_model not in obs:
                 msg = f"Observation {obs.name} does not contain noise model {self.noise_model}"
                 raise RuntimeError(msg)
@@ -691,10 +696,6 @@ class FlagNoiseFit(Operator):
                     }
 
             for group, dets in all_groups.items():
-                if len(dets) == 0:
-                    # Nothing to do for this group
-                    continue
-
                 local_net = list()
                 local_fknee = list()
                 local_rms = list()
@@ -834,7 +835,7 @@ class FlagNoiseFit(Operator):
                     }
                     msg = f"obs {obs.name}|{group}: flagged {len(group_flags)}"
                     msg += " outlier detectors"
-                    log.info(msg)
+                    log.debug(msg)
                 if obs.comm.comm_group is not None:
                     group_flags = obs.comm.comm_group.bcast(group_flags, root=0)
 
@@ -846,6 +847,16 @@ class FlagNoiseFit(Operator):
                         local_flags[det] |= val
                         obs.detdata[self.det_flags][det, :] |= val
                 obs.update_local_detector_flags(local_flags)
+            log.debug_rank(
+                f"Flagged noise outliers for {obs.name} in",
+                comm=data.comm.comm_group,
+                timer=obs_timer,
+            )
+        log.info_rank(
+            "Flagged noise outliers in",
+            comm=data.comm.comm_group,
+            timer=timer,
+        )
 
     def _finalize(self, data, **kwargs):
         return

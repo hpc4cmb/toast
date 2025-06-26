@@ -46,6 +46,7 @@ def print_job(job):
                     print(f"{spacer}  {trait_name} = {trait.get(v)}")
             else:
                 print(f"{spacer}{k} = {v}")
+
     dump(job, 0)
 
 
@@ -129,7 +130,7 @@ def main(opts=None):
     # Create communicators and empty data container.
     log = toast.utils.Logger.get()
     if runargs.group_size is not None:
-        msg = "Using user-specifed process group size of {runargs.group_size}"
+        msg = f"Using user-specifed process group size of {runargs.group_size}"
         log.info_rank(msg, comm=comm)
         group_size = runargs.group_size
     else:
