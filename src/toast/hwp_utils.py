@@ -4,6 +4,7 @@
 
 import numpy as np
 from scipy.linalg import eigvalsh, lu_factor, lu_solve
+from scipy.optimize import least_squares
 
 from .dist import distribute_uniform
 from .mpi import MPI
@@ -390,3 +391,140 @@ def hwpss_build_model(sincos, flags, coeff, times=None, time_drift=False):
                 model[good] += coeff[2 * h + 0] * sincos[good, 2 * h]
                 model[good] += coeff[2 * h + 1] * sincos[good, 2 * h + 1]
     return model
+
+
+def hwpss_build_model_step2f(sincos, flags, coeff):
+    """Construct the HWPSS template from coefficients.
+
+    The 2F coefficients are represented by step-wise values.
+
+    Args:
+        sincos (array):  The pre-computed sin / cos terms.
+        flags (array):  The flags indicating bad angle samples
+        coeff (array):  The model coefficents for this detector.
+
+    Returns:
+        (array):  The template.
+
+    """
+    n_samp = sincos.shape[0]
+    n_harmonics = sincos.shape[1] // 2
+    n_steps = (len(coeff) - 2 * (n_harmonics - 1)) // 2
+
+    # We assign any "leftover" samples to the final step
+    step_samples = n_samp // n_steps
+
+    good = flags == 0
+    out = np.zeros(n_samp, dtype=np.float64)
+    if np.count_nonzero(good) == 0:
+        # No good samples
+        return out
+
+    # Accumulate the first harmonic
+    out[good] += coeff[0] * sincos[good, 0]
+    out[good] += coeff[1] * sincos[good, 1]
+
+    # Accumulate the second harmonic.  We project the stepwise coefficients.
+    step_good = np.zeros_like(good)
+    for stp in range(n_steps):
+        off = stp * step_samples
+        if stp == n_steps - 1:
+            slc = slice(off, n_samp, 1)
+        else:
+            slc = slice(off, off + step_samples, 1)
+        step_good[:] = False
+        step_good[slc] = good[slc]
+        out[step_good] += coeff[2 + 2 * stp] * sincos[step_good, 2]
+        out[step_good] += coeff[2 + 2 * stp + 1] * sincos[step_good, 3]
+
+    # Accumulate the remaining harmonics
+    off = 2 + 2 * n_steps
+    for h in range(n_harmonics - 2):
+        out[good] += coeff[off + 2 * h] * sincos[good, 2 * (h + 2)]
+        out[good] += coeff[off + 2 * h + 1] * sincos[good, 2 * (h + 2) + 1]
+
+    return out
+
+
+def hwpss_compute_coeff_step2f(sincos, detdata, flags, step_size=None):
+    """Compute the HWPSS model coefficients.
+
+    See docstring for `hwpss_compute_coeff_covariance`.  This function is similar
+    but models the 2F coefficients as piecewise steps.
+
+    Args:
+        sincos (array):  The pre-computed sin / cos terms.
+        detdata (array):  The detector data for one detector.
+        flags (array):  The detector flags.
+        step_size (int):  The number of samples per step.  If None, use
+            one step for the whole data length.
+
+    Returns:
+        (array):  The coefficients.
+
+    """
+    n_samp = len(detdata)
+    n_harmonics = sincos.shape[1] // 2
+
+    good = flags == 0
+    n_good = np.count_nonzero(good)
+
+    # We assign any "leftover" samples to the final step
+    if step_size is None:
+        step_size = n_samp
+    n_steps = n_samp // step_size
+    n_coeff = 2 * n_harmonics + 2 * (n_steps - 1)
+
+    if n_good == 0:
+        # No good data, return zeros
+        return np.zeros(n_coeff, dtype=np.float64)
+
+    def _func_stepwise(x, *args, **kwargs):
+        """Function to compute the current model residuals."""
+        cur_model = hwpss_build_model_step2f(sincos, flags, x)
+        resid = cur_model[:] - detdata[:]
+        return resid
+
+    def _jac_stepwise(x, *args, **kwargs):
+        """Return Jacobian (partial derivatives) of the model."""
+        J = np.zeros((n_samp, x.size))
+
+        # Partial derivative with respect to 1F coefficients.  These are just the
+        # sin / cos quantities.
+        J[good, 0] = sincos[good, 0]
+        J[good, 1] = sincos[good, 1]
+
+        # Partial derivative of the 2F coefficients.  These are the sin / cos terms
+        # for the current step and zero otherwise.
+        step_good = np.zeros_like(good)
+        for stp in range(n_steps):
+            off = stp * step_size
+            if stp == n_steps - 1:
+                slc = slice(off, n_samp, 1)
+            else:
+                slc = slice(off, off + step_size, 1)
+            step_good[:] = False
+            step_good[slc] = good[slc]
+            J[step_good, 2 + 2 * stp] = sincos[step_good, 2]
+            J[step_good, 2 + 2 * stp + 1] = sincos[step_good, 3]
+
+        # Partial derivative with respect to higher harmonics.  The function is
+        # linear in these coefficients and so the derivative is just the sin / cos
+        # quantities.
+        off = 2 + 2 * n_steps
+        for h in range(n_harmonics - 2):
+            J[good, off + 2 * h] = sincos[good, 2 * (h + 2)]
+            J[good, off + 2 * h + 1] = sincos[good, 2 * (h + 2) + 1]
+        return J
+
+    x_0 = np.zeros(n_coeff)
+    result = least_squares(
+        _func_stepwise,
+        x_0,
+        jac=_jac_stepwise,
+    )
+    coeff = np.array(result.x)
+
+    # Scale result based on the number of good samples
+    coeff[:] *= n_samp / n_good
+    return coeff

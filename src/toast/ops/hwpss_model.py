@@ -23,6 +23,66 @@ from ..utils import Environment, Logger, flagged_noise_fill
 from .operator import Operator
 
 
+def demodulate_2f():
+    """Compute the demodulated 2F Real and Imaginary data.
+
+    FIXME:  This should be factored out of the demodulation operator
+    and placed somewhere that is usable globally.
+
+
+    """
+    # Get weights
+            obs_data = data.select(obs_uid=obs.uid)
+            self.stokes_weights.apply(obs_data, dets=[det])
+            weights = obs.detdata[self.stokes_weights.weights][det]
+            # iweights = 1
+            # qweights = eta * cos(2 * psi_det + 4 * psi_hwp)
+            # uweights = eta * sin(2 * psi_det + 4 * psi_hwp)
+            if self.stokes_weights.mode == "IQU":
+                iweights, qweights, uweights = weights.T
+            elif self.stokes_weights.mode == "QU":
+                qweights, uweights = weights.T
+                iweights = np.ones_like(qweights)
+            if "QU" in self.mode:
+                # remove polarization efficiency from the Q/U weights
+                etainv = 1 / np.sqrt(qweights**2 + uweights**2)
+                qweights = qweights * etainv
+                uweights = uweights * etainv
+
+            for flavor in self.det_data.split(";"):
+                signal = obs.detdata[flavor][det]
+                det_data = demod_obs.detdata[flavor]
+                if "I" in self.mode:
+                    det_data[f"demod0_{det}"] = lowpass(signal)
+                if "QU" in self.mode:
+                    det_data[f"demod4r_{det}"] = lowpass(signal * 2 * qweights)
+                    det_data[f"demod4i_{det}"] = lowpass(signal * 2 * uweights)
+                if self.do_2f:
+                    # Start by evaluating the 2f demodulation factors from the
+                    # pointing matrix.  We use the half-angle formulas and some
+                    # extra logic to identify the right branch
+                    #
+                    # |cos(psi/2)| and |sin(psi/2)|:
+                    signal_demod2r = np.sqrt(0.5 * (1 + qweights))
+                    signal_demod2i = np.sqrt(0.5 * (1 - qweights))
+                    # inverse the sign for every second mode
+                    for sig in signal_demod2r, signal_demod2i:
+                        dsig = np.diff(sig)
+                        dsig[sig[1:] > 0.5] = 0
+                        starts = np.where(dsig[:-1] * dsig[1:] < 0)[0]
+                        for start, stop in zip(starts[::2], starts[1::2]):
+                            sig[start + 1 : stop + 2] *= -1
+                        # handle some corner cases
+                        dsig = np.diff(sig)
+                        dstep = np.median(np.abs(dsig[sig[1:] < 0.5]))
+                        bad = np.abs(dsig) > 2 * dstep
+                        bad = np.hstack([bad, False])
+                        sig[bad] *= -1
+                    # Demodulate and lowpass for 2f
+                    det_data[f"demod2r_{det}"] = lowpass(signal * signal_demod2r)
+                    det_data[f"demod2i_{det}"] = lowpass(signal * signal_demod2i)
+
+
 @trait_docs
 class HWPSynchronousModel(Operator):
     """Operator that models and removes HWP synchronous signal.
@@ -108,6 +168,11 @@ class HWPSynchronousModel(Operator):
         help="The overlapping time chunks over which to compute the HWPSS template",
     )
 
+    chunk_2f_step_time = Quantity(
+        None,
+        allow_none=True,
+        help="The timespan for step-wise modeling of the 2F HWPSS")
+
     relcal_fixed = Unicode(
         None,
         allow_none=True,
@@ -182,6 +247,10 @@ class HWPSynchronousModel(Operator):
         if not self.subtract_model and (self.save_model is None) and not do_cal:
             msg = "Nothing to do.  You should enable at least one of the options"
             msg += " to subtract or save the model or to generate calibrations."
+            raise RuntimeError(msg)
+
+        if self.time_drift and self.chunk_2f_steps > 1:
+            msg = "Cannot use time_drift option with multiple 2F chunk steps"
             raise RuntimeError(msg)
 
         if self.debug is not None:
@@ -557,11 +626,14 @@ class HWPSynchronousModel(Operator):
                 raise RuntimeError(msg)
             det_coeff = np.zeros((len(reltime), n_coeff), dtype=np.float64)
             for icoeff in range(n_coeff):
-                coeff_spl = scipy.interpolate.splrep(
-                    ch_times, ch_coeff[icoeff, good_chunk], s=smoothing
-                )
-                det_coeff[:, icoeff] = scipy.interpolate.splev(
-                    reltime, coeff_spl, ext=0
+                # coeff_spl = scipy.interpolate.splrep(
+                #     ch_times, ch_coeff[icoeff, good_chunk], s=smoothing
+                # )
+                # det_coeff[:, icoeff] = scipy.interpolate.splev(
+                #     reltime, coeff_spl, ext=0
+                # )
+                det_coeff[:, icoeff] = np.interp(
+                    reltime, ch_times, ch_coeff[icoeff, good_chunk]
                 )
             model = hwpss_build_model(
                 sincos,
