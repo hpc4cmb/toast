@@ -158,14 +158,7 @@ class ScanHealpixMap(Operator):
 
         # Use the pixel distribution and pointing configuration to allocate our
         # map data and read it in.
-        nnz = None
-        if self.stokes_weights is None or self.stokes_weights.mode == "I":
-            nnz = 1
-        elif self.stokes_weights.mode == "IQU":
-            nnz = 3
-        else:
-            msg = f"Unknown Stokes weights mode '{self.stokes_weights.mode}'"
-            raise RuntimeError(msg)
+        nnz = len(self.stokes_weights.mode)
 
         filenames = self.file.split(";")
         detdata_keys = self.det_data.split(";")

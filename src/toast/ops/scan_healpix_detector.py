@@ -162,6 +162,10 @@ class ScanHealpixDetectorMap(Operator):
 
         # Determine the number of non-zeros from the Stokes weights
         nnz = len(self.stokes_weights.mode)
+        if nnz == 2:
+            field = (1, 2)
+        else:
+            field = tuple(np.arange(nnz))
 
         # Loop over all observations and local detectors, sampling the appropriate maps
         last_file_name = None
@@ -204,7 +208,7 @@ class ScanHealpixDetectorMap(Operator):
                         current_map = np.atleast_2d(
                             read_healpix(
                                 current_file_name,
-                                None,
+                                field,
                                 nest=nest,
                                 dtype=np.float32,
                                 verbose=False,
