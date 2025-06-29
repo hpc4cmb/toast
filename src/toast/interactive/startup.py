@@ -4,6 +4,7 @@
 """Tools for starting up interactive sessions."""
 
 import os
+import shutil
 
 from IPython.core.extensions import ExtensionManager
 
@@ -26,10 +27,26 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
     """
     log = Logger.get()
     env = Environment.get()
-    
+
     if procs > 1:
         try:
             import ipyparallel as ipp
+
+            controller_class = ipp.cluster.launcher.MPIControllerLauncher
+            engine_class = ipp.cluster.launcher.MPIEngineSetLauncher
+            if "SLURM_JOB_ID" in os.environ:
+                print("Running in SLURM")
+                srun_path = shutil.which("srun")
+                if procs != int(os.environ["SLURM_NTASKS"]):
+                    print(f"WARNING:  Slurm environment has {os.environ['SLURM_NTASKS']} processes, not {procs}")
+                controller_class.mpi_cmd = [srun_path]
+                engine_class.mpi_cmd = [srun_path]
+            cluster = ipp.Cluster(
+                controller=controller_class,
+                engines=engine_class,
+                engine_timeout=120,
+                n=procs
+            )
 
             cluster = ipp.Cluster(engines="mpi", n=procs)
             client = cluster.start_and_connect_sync()
@@ -37,12 +54,11 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
             if nice:
                 # Optionally nice the individual processes if running on a
                 # shared node.
-                if procs > 1:
-                    import psutil
+                import psutil
 
-                    psutil.Process().nice(
-                        20 if psutil.POSIX else psutil.IDLE_PRIORITY_CLASS
-                    )
+                psutil.Process().nice(
+                    20 if psutil.POSIX else psutil.IDLE_PRIORITY_CLASS
+                )
             # Optionally enable automatic use of MPI
             if auto_mpi and shell is not None:
                 # Turn on automatic use of MPI
@@ -60,6 +76,8 @@ def start_parallel(procs=1, threads=1, nice=True, auto_mpi=False, shell=None):
     if procs == 1:
         rank = 0
         comm = None
+        os.environ["MPI_DISABLE"] = "1"
+        os.environ["DISABLE_MPI"] = "1"
     else:
         comm = MPI.COMM_WORLD
         rank = comm.rank
