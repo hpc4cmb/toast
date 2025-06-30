@@ -137,7 +137,7 @@ def main():
         return
 
     if len(sys.argv) != 3:
-        msg = f"Usage: toast_config_compare.py <config1> <config2>"
+        msg = f"Usage: toast_config_compare <config1> <config2>"
         raise RuntimeError(msg)
 
     path0 = sys.argv[0]
