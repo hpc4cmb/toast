@@ -133,7 +133,8 @@ def main():
         if ifile % ntask != rank:
             continue
         log.info(f"{prefix}Loading file {ifile + 1} / {nfile} : {infile_map}")
-        inmap = read_healpix(infile_map, None, nest=True, dtype=float)
+        inmap = read_healpix(infile_map, None, nest=True, dtype=float, verbose=False)
+        inmap = np.atleast_2d(inmap)
         log.info_rank(
             f"{prefix}Loaded {infile_map} {inmap.shape} in", timer=timer1, comm=None
         )
@@ -172,7 +173,8 @@ def main():
 
         if os.path.isfile(infile_invcov):
             log.info(f"{prefix}Loading {infile_invcov}")
-            invcov = read_healpix(infile_invcov, None, nest=True, dtype=float)
+            invcov = read_healpix(infile_invcov, None, nest=True, dtype=float, verbose=False)
+            invcov = np.atleast_2d(invcov)
             if nnz2 is None:
                 nnz2, npix_test = invcov.shape
             good = invcov[0] != 0
@@ -197,7 +199,8 @@ def main():
                 )
                 raise RuntimeError(msg)
             log.info(f"{prefix}Loading {infile_cov}")
-            cov = read_healpix(infile_cov, None, nest=True, dtype=float)
+            cov = read_healpix(infile_cov, None, nest=True, dtype=float, verbose=False)
+            cov = np.atleast_2d(cov)
             if nnz2 is None:
                 nnz2, npix_test = cov.shape
             cov_shape = cov.shape
@@ -276,6 +279,8 @@ def main():
     else:
         good = hit_pixels
         ngood = np.sum(hit_pixels)
+        noiseweighted_sum = noiseweighted_sum[:, good]
+        invcov_sum = invcov_sum[:, good]
     fsky = ngood / npix
     log.info_rank(f"fsky = {fsky:.4f}", comm=comm)
 
@@ -297,13 +302,9 @@ def main():
     last_pix = min(first_pix + npix_task, ngood)
     if first_pix < last_pix:
         my_npix = last_pix - first_pix
-        cumulative_good = np.cumsum(good)
-        ifirst, ilast = np.searchsorted(cumulative_good, [first_pix, last_pix], side="right")
-        ind = slice(ifirst, ilast)
-        my_good = np.zeros_like(good)
-        my_good[ind] = good[ind]
-        my_map = noiseweighted_sum[:, my_good].T.ravel().copy()
-        my_cov = invcov_sum[:, my_good].T.ravel().copy()
+        ind = slice(first_pix, last_pix)
+        my_map = noiseweighted_sum[:, ind].T.ravel().copy()
+        my_cov = invcov_sum[:, ind].T.ravel().copy()
         my_rcond = np.zeros(my_npix, dtype=float)
         log.debug(f"{prefix}Inverting {my_npix} pixels")
         cov_eigendecompose_diag(
@@ -351,7 +352,7 @@ def main():
         if args.cov is not None:
             log.info(f"Writing {args.cov}")
             total_cov = np.hstack(total_cov)
-            full_cov = np.zeros([nnz, npix])
+            full_cov = np.zeros([nnz2, npix])
             full_cov[:, good] = total_cov
             write_healpix(args.cov, full_cov, nest=True, dtype=dtype, overwrite=True)
             del full_cov
