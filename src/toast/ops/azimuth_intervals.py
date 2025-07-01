@@ -151,6 +151,8 @@ class AzimuthIntervals(Operator):
             # Smoothing window in samples
             window = int(rate * self.window_seconds)
 
+            az_min_rad = None
+            az_max_rad = None
             if obs.comm_col_rank == 0:
                 # The azimuth angle
                 azimuth = np.array(obs.shared[self.azimuth].data)
@@ -158,6 +160,11 @@ class AzimuthIntervals(Operator):
                 # The azimuth flags
                 flags = np.array(obs.shared[self.shared_flags].data)
                 flags &= self.shared_flag_mask
+
+                # The min / max Az range for this time chunk
+                good_az = flags == 0
+                az_min_rad = min(azimuth[good_az])
+                az_max_rad = max(azimuth[good_az])
 
                 # Scan velocity
                 scan_vel = self._gradient(azimuth, window, flags=flags)
@@ -447,6 +454,18 @@ class AzimuthIntervals(Operator):
                         ax.set_ylabel("Scan Acceleration")
                     plt.savefig(out_file)
                     plt.close()
+
+            # Find the global Az min / max
+            if obs.comm_col_rank == 0 and obs.comm_row is not None:
+                # Find the min / max across the top process row
+                az_min_rad = obs.comm_row.allreduce(az_min_rad, op=MPI.MIN)
+                az_max_rad = obs.comm_row.allreduce(az_max_rad, op=MPI.MAX)
+            if obs.comm_col is not None:
+                # Broadcast down the column
+                az_min_rad = obs.comm_col.bcast(az_min_rad, root=0)
+                az_max_rad = obs.comm_col.bcast(az_max_rad, root=0)
+            obs["scan_min_az"] = az_min_rad * u.radian
+            obs["scan_max_az"] = az_max_rad * u.radian
 
             # Now create the intervals across each process column
             if obs.comm_col is not None:
