@@ -42,6 +42,7 @@ from ..utils import (
     rate_from_times,
 )
 from ..weather import SimWeather
+from .azimuth_intervals import AzimuthRanges
 from .flag_intervals import FlagIntervals
 from .operator import Operator
 from .sim_ground_utils import (
@@ -601,10 +602,6 @@ class SimGround(Operator):
 
             # Scan limits
             ob["scan_el"] = scan.el  # Nominal elevation
-            ob["scan_min_az"] = scan_min_az * u.radian
-            ob["scan_max_az"] = scan_max_az * u.radian
-            ob["scan_min_el"] = scan_min_el * u.radian
-            ob["scan_max_el"] = scan_max_el * u.radian
 
             # Create and set shared objects for timestamps, position, velocity, and
             # boresight.
@@ -813,6 +810,14 @@ class SimGround(Operator):
             ],
         )
         flag_intervals.apply(data, detectors=None)
+
+        # Add azimuth ranges to the observations
+        azimuth_ranges = AzimuthRanges(
+            azimuth=self.azimuth,
+            shared_flags=self.shared_flags,
+            shared_flag_mask=defaults.shared_mask_invalid,
+        )
+        azimuth_ranges.apply(data, detectors=None)
 
     def _simulate_scanning(self, site, scan, n_samples, rate, comm, samp_ranks):
         """Simulate the boresight Az/El pointing for one session."""

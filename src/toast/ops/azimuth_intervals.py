@@ -151,8 +151,6 @@ class AzimuthIntervals(Operator):
             # Smoothing window in samples
             window = int(rate * self.window_seconds)
 
-            az_min_rad = None
-            az_max_rad = None
             if obs.comm_col_rank == 0:
                 # The azimuth angle
                 azimuth = np.array(obs.shared[self.azimuth].data)
@@ -160,11 +158,6 @@ class AzimuthIntervals(Operator):
                 # The azimuth flags
                 flags = np.array(obs.shared[self.shared_flags].data)
                 flags &= self.shared_flag_mask
-
-                # The min / max Az range for this time chunk
-                good_az = flags == 0
-                az_min_rad = min(azimuth[good_az])
-                az_max_rad = max(azimuth[good_az])
 
                 # Scan velocity
                 scan_vel = self._gradient(azimuth, window, flags=flags)
@@ -455,18 +448,6 @@ class AzimuthIntervals(Operator):
                     plt.savefig(out_file)
                     plt.close()
 
-            # Find the global Az min / max
-            if obs.comm_col_rank == 0 and obs.comm_row is not None:
-                # Find the min / max across the top process row
-                az_min_rad = obs.comm_row.allreduce(az_min_rad, op=MPI.MIN)
-                az_max_rad = obs.comm_row.allreduce(az_max_rad, op=MPI.MAX)
-            if obs.comm_col is not None:
-                # Broadcast down the column
-                az_min_rad = obs.comm_col.bcast(az_min_rad, root=0)
-                az_max_rad = obs.comm_col.bcast(az_max_rad, root=0)
-            obs["scan_min_az"] = az_min_rad * u.radian
-            obs["scan_max_az"] = az_max_rad * u.radian
-
             # Now create the intervals across each process column
             if obs.comm_col is not None:
                 have_scanning = obs.comm_col.bcast(have_scanning, root=0)
@@ -526,6 +507,14 @@ class AzimuthIntervals(Operator):
                     )
                 else:
                     obs.shared[self.shared_flags].set(None, offset=(0,), fromrank=0)
+
+        # Add azimuth ranges to the observations
+        azimuth_ranges = AzimuthRanges(
+            azimuth=self.azimuth,
+            shared_flags=self.shared_flags,
+            shared_flag_mask=self.shared_flag_mask,
+        )
+        azimuth_ranges.apply(data, detectors=None)
 
         # Additionally flag turnarounds as unstable pointing
         flag_intervals = FlagIntervals(
@@ -598,3 +587,105 @@ class AzimuthIntervals(Operator):
                 self.throw_rightleft_interval,
             ]
         }
+
+
+@trait_docs
+class AzimuthRanges(Operator):
+    """Measure and record the azimuth ranges in each observation"""
+
+    # Class traits
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    azimuth = Unicode(defaults.azimuth, help="Observation shared key for Azimuth")
+
+    shared_flags = Unicode(
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
+    )
+
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid,
+        help="Bit mask value for bad azimuth pointing",
+    )
+
+    view = Unicode(
+        None, allow_none=True, help="Use this view of the data in all observations"
+    )
+
+    @traitlets.validate("shared_flag_mask")
+    def _check_shared_flag_mask(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("Flag mask should be a positive integer")
+        return check
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    @function_timer
+    def _exec(self, data, detectors=None, **kwargs):
+        env = Environment.get()
+        log = Logger.get()
+
+        for obs in data.obs:
+            if obs.comm_col_rank == 0:
+                # The azimuth angle
+                azimuth = np.array(obs.shared[self.azimuth].data)
+
+                # The azimuth flags
+                flags = np.array(obs.shared[self.shared_flags].data)
+                flags &= self.shared_flag_mask
+
+                # The min / max Az range for this time chunk
+                good = flags == 0
+
+                az = []
+                for view in obs.intervals[self.view]:
+                    ind = slice(view.first, view.last)
+                    az.append(azimuth[ind][good[ind]])
+                az = np.hstack(az)
+
+            # Find the global Az min / max
+            if obs.comm_col_rank == 0 and obs.comm_row is not None:
+                # Find the min / max across the top process row
+                az = obs.comm_row.allgather(az)
+                az = np.hstack(az)
+                az = np.unwrap(az)
+                az_min_rad = np.amin(az)
+                az_max_rad = np.amax(az)
+                # Find the right branch
+                while az_min_rad < 0:
+                    az_min_rad += 2 * np.pi
+                    az_max_rad += 2 * np.pi
+                while az_min_rad > 2 * np.pi:
+                    az_min_rad -= 2 * np.pi
+                    az_max_rad -= 2 * np.pi
+                # Check if we wrap around
+                if az_max_rad - az_min_rad > 2 * np.pi:
+                    az_min_rad = 0
+                    az_max_rad = 2 * np.pi
+            else:
+                az_min_rad = 0
+                az_max_rad = 0
+            if obs.comm_col is not None:
+                # Broadcast down the column
+                az_min_rad = obs.comm_col.bcast(az_min_rad, root=0)
+                az_max_rad = obs.comm_col.bcast(az_max_rad, root=0)
+            obs["scan_min_az"] = az_min_rad * u.radian
+            obs["scan_max_az"] = az_max_rad * u.radian
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = {
+            "shared": [self.azimuth],
+        }
+        if self.shared_flags is not None:
+            req["shared"].append(self.shared_flags)
+        return req
+
+    def _provides(self):
+        return {}
