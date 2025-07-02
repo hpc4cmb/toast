@@ -129,7 +129,6 @@ class AzimuthIntervals(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-        env = Environment.get()
         log = Logger.get()
 
         for obs in data.obs:
@@ -186,9 +185,9 @@ class AzimuthIntervals(Operator):
 
                 if len(begin_stable) == 0 or len(end_stable) == 0:
                     msg = f"Observation {obs.name} has no stable scanning"
-                    msg += f" periods.  You should cut this observation or"
-                    msg += f" change the filter window.  Flagging all samples"
-                    msg += f" as unstable pointing."
+                    msg += " periods.  You should cut this observation or"
+                    msg += " change the filter window.  Flagging all samples"
+                    msg += " as unstable pointing."
                     log.warning(msg)
                     have_scanning = False
 
@@ -220,7 +219,7 @@ class AzimuthIntervals(Operator):
                                 stable_bad = (
                                     stable_timespans < self.short_limit.to_value(u.s)
                                 )
-                            except:
+                            except Exception:
                                 # Try short limit as fraction
                                 median_stable = np.median(stable_timespans)
                                 stable_bad = (
@@ -244,7 +243,7 @@ class AzimuthIntervals(Operator):
                                 stable_bad = (
                                     stable_timespans > self.long_limit.to_value(u.s)
                                 )
-                            except:
+                            except Exception:
                                 # Try long limit as fraction
                                 median_stable = np.median(stable_timespans)
                                 stable_bad = (
@@ -626,11 +625,12 @@ class AzimuthRanges(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-        env = Environment.get()
-        log = Logger.get()
-
         for obs in data.obs:
+            az_min_rad = None
+            az_max_rad = None
             if obs.comm_col_rank == 0:
+                # Compute the good azimuth data along the top process row
+
                 # The azimuth angle
                 azimuth = np.array(obs.shared[self.azimuth].data)
 
@@ -647,32 +647,34 @@ class AzimuthRanges(Operator):
                     az.append(azimuth[ind][good[ind]])
                 az = np.hstack(az)
 
-            # Find the global Az min / max
-            if obs.comm_col_rank == 0 and obs.comm_row is not None:
-                # Find the min / max across the top process row
-                az = obs.comm_row.allgather(az)
-                az = np.hstack(az)
-                az = np.unwrap(az)
-                az_min_rad = np.amin(az)
-                az_max_rad = np.amax(az)
-                # Find the right branch
-                while az_min_rad < 0:
-                    az_min_rad += 2 * np.pi
-                    az_max_rad += 2 * np.pi
-                while az_min_rad > 2 * np.pi:
-                    az_min_rad -= 2 * np.pi
-                    az_max_rad -= 2 * np.pi
-                # Check if we wrap around
-                if az_max_rad - az_min_rad > 2 * np.pi:
-                    az_min_rad = 0
-                    az_max_rad = 2 * np.pi
-            else:
-                az_min_rad = 0
-                az_max_rad = 0
-            if obs.comm_col is not None:
-                # Broadcast down the column
-                az_min_rad = obs.comm_col.bcast(az_min_rad, root=0)
-                az_max_rad = obs.comm_col.bcast(az_max_rad, root=0)
+                # Gather the data to the first process and compute the range
+                # there.
+                if obs.comm_row is not None:
+                    az = np.hstack(obs.comm_row.gather(az, root=0))
+
+                if obs.comm_row_rank == 0:
+                    # Find the global min / max on one process
+                    az = np.unwrap(az)
+                    az_min_rad = np.amin(az)
+                    az_max_rad = np.amax(az)
+                    # Find the right branch
+                    while az_min_rad < 0:
+                        az_min_rad += 2 * np.pi
+                        az_max_rad += 2 * np.pi
+                    while az_min_rad > 2 * np.pi:
+                        az_min_rad -= 2 * np.pi
+                        az_max_rad -= 2 * np.pi
+                    # Check if we wrap around
+                    if az_max_rad - az_min_rad > 2 * np.pi:
+                        az_min_rad = 0
+                        az_max_rad = 2 * np.pi
+
+            # Broadcast the result to the whole group
+            if obs.comm.comm_group is not None:
+                az_min_rad = obs.comm.comm_group.bcast(az_min_rad, root=0)
+                az_max_rad = obs.comm.comm_group.bcast(az_max_rad, root=0)
+
+            # Set the metadata
             obs["scan_min_az"] = az_min_rad * u.radian
             obs["scan_max_az"] = az_max_rad * u.radian
 

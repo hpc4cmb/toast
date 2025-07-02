@@ -602,6 +602,8 @@ class SimGround(Operator):
 
             # Scan limits
             ob["scan_el"] = scan.el  # Nominal elevation
+            ob["scan_min_el"] = scan_min_el * u.radian
+            ob["scan_max_el"] = scan_max_el * u.radian
 
             # Create and set shared objects for timestamps, position, velocity, and
             # boresight.
