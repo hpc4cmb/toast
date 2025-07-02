@@ -119,12 +119,7 @@ class DetectorData(AcceleratorObject):
             self._is_view = True
 
     def _set_detectors(self, detectors):
-        log = Logger.get()
         self._detectors = detectors
-        if len(self._detectors) == 0:
-            msg = "You must specify a list of at least one detector name"
-            log.error(msg)
-            raise ValueError(msg)
         self._name2idx = {y: x for x, y in enumerate(self._detectors)}
 
     def _data_props(self, detectors, detshape, dtype):
@@ -176,17 +171,20 @@ class DetectorData(AcceleratorObject):
             del self._raw
 
         # Allocate new host buffer
-        self._raw = self._storage_class.zeros(self._fullsize)
-
-        # Wrap _raw
-        self._flatdata = self._raw.array()[: self._flatshape]
-        self._data = self._flatdata.reshape(self._shape)
-
-        # Restore device buffer if needed
-        if create_accel:
-            self._accel_create(zero_out=True)
-        if on_accel:
-            self.accel_used(True)
+        if self._fullsize > 0:
+            self._raw = self._storage_class.zeros(self._fullsize)
+            # Wrap _raw
+            self._flatdata = self._raw.array()[: self._flatshape]
+            self._data = self._flatdata.reshape(self._shape)
+            # Restore device buffer if needed
+            if create_accel:
+                self._accel_create(zero_out=True)
+            if on_accel:
+                self.accel_used(True)
+        else:
+            self._raw = None
+            self._flatdata = None
+            self._data = None
 
     @property
     def detectors(self):
@@ -349,10 +347,11 @@ class DetectorData(AcceleratorObject):
             if hasattr(self, "_flatdata"):
                 del self._flatdata
                 self._flatdata = None
-            if hasattr(self, "_raw") and not self._raw:
-                self._raw.clear()
-                del self._raw
-                self._raw = None
+            if hasattr(self, "_raw"):
+                if self._raw is not None:
+                    self._raw.clear()
+                    del self._raw
+                    self._raw = None
 
     def reset(self, dets=None):
         """Zero the current memory.
@@ -370,11 +369,13 @@ class DetectorData(AcceleratorObject):
         if self.accel_in_use():
             self.accel_reset()
         elif dets is None:
-            # Zero the whole thing
-            self.data[:] = 0
+            if self.data is not None:
+                # Zero the whole thing
+                self.data[:] = 0
         else:
-            for d in dets:
-                self[d, :] = 0
+            if self.data is not None:
+                for d in dets:
+                    self[d, :] = 0
 
     def __del__(self):
         self.clear()

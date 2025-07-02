@@ -22,6 +22,7 @@ from .helpers import (
     create_ground_data,
     create_outdir,
     create_satellite_empty,
+    create_overdistributed_data,
 )
 from .mpi import MPITestCase
 
@@ -439,7 +440,7 @@ class ObservationTest(MPITestCase):
                     np.testing.assert_equal(ob.detdata[dd][:, slc], vw[:])
                 # Test inverting views
                 for vw1, vw2 in zip(
-                        ob.view["good"].detdata[dd], ob.view["~bad"].detdata[dd]
+                    ob.view["good"].detdata[dd], ob.view["~bad"].detdata[dd]
                 ):
                     np.testing.assert_equal(vw1[:], vw2[:])
 
@@ -657,6 +658,21 @@ class ObservationTest(MPITestCase):
                 self.assertTrue(False)
 
         del inplace
+        close_data(data)
+
+    def test_no_local_dets(self):
+        # Populate the observations
+        np.random.seed(12345)
+        data = create_overdistributed_data(self.comm, sample_rate=10.0 * u.Hz)
+        ops.DefaultNoiseModel().apply(data)
+        ops.SimNoise(noise_model="noise_model")
+
+        # Try roundtrip redistribution
+        for obs in data.obs:
+            check_obs = obs.duplicate(times=defaults.times)
+            check_obs.redistribute(1, times=defaults.times)
+            check_obs.redistribute(obs.comm.group_size, times=defaults.times)
+            self.assertTrue(check_obs == obs)
         close_data(data)
 
     # The code below is here for reference, but we cannot actually test this

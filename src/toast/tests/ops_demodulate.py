@@ -17,6 +17,7 @@ from .helpers import (
     create_fake_healpix_scanned_tod,
     create_ground_data,
     create_outdir,
+    create_overdistributed_data,
 )
 from .mpi import MPITestCase
 
@@ -26,11 +27,8 @@ class DemodulateTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
-    def _test_demodulate(self, weight_mode):
+    def _test_demodulate(self, weight_mode, data, suffix=""):
         nside = 128
-
-        # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -49,7 +47,7 @@ class DemodulateTest(MPITestCase):
             detector_pointing=detpointing,
         )
 
-        sky_file = os.path.join(self.outdir, f"fake_sky_{weight_mode}.fits")
+        sky_file = os.path.join(self.outdir, f"fake_sky_{weight_mode}{suffix}.fits")
         map_key = "fake_map"
         create_fake_healpix_scanned_tod(
             data,
@@ -75,7 +73,7 @@ class DemodulateTest(MPITestCase):
         )
 
         mapper = ops.MapMaker(
-            name=f"modulated_{weight_mode}",
+            name=f"modulated_{weight_mode}{suffix}",
             det_data=defaults.det_data,
             binning=binner,
             template_matrix=None,
@@ -99,7 +97,7 @@ class DemodulateTest(MPITestCase):
             dname = valid_dets[0]
             tod_input = os.path.join(
                 self.outdir,
-                f"tod_{oname}_{dname}_in.np",
+                f"tod_{oname}_{dname}{suffix}_in.np",
             )
             data.obs[0].detdata[defaults.det_data][dname].tofile(tod_input)
 
@@ -124,7 +122,7 @@ class DemodulateTest(MPITestCase):
         # Map again
         demod_weights = ops.StokesWeightsDemod(mode=weight_mode)
 
-        mapper.name = f"demodulated_{weight_mode}"
+        mapper.name = f"demodulated_{weight_mode}{suffix}"
         binner.stokes_weights = demod_weights
         mapper.apply(demod_data)
 
@@ -140,10 +138,10 @@ class DemodulateTest(MPITestCase):
             dname = valid_dets[0]
             tod_in_file = os.path.join(
                 self.outdir,
-                f"tod_{oname}_{dname}_in.np",
+                f"tod_{oname}_{dname}{suffix}_in.np",
             )
             tod_in = np.fromfile(tod_in_file)
-            tod_plot = os.path.join(self.outdir, f"tod_{oname}_{dname}.pdf")
+            tod_plot = os.path.join(self.outdir, f"tod_{oname}_{dname}{suffix}.pdf")
 
             slc_in = slice(0, 50)
             slc_demod = slice(0, 50 // downsample)
@@ -154,13 +152,13 @@ class DemodulateTest(MPITestCase):
                 data.obs[0].shared[defaults.times].data[slc_in],
                 tod_in[slc_in],
                 c="black",
-                label=f"Original Signal",
+                label="Original Signal",
             )
             ax.plot(
                 data.obs[0].shared[defaults.times].data[slc_in],
                 data.obs[0].shared[defaults.hwp_angle].data[slc_in],
                 c="purple",
-                label=f"HWP Angle",
+                label="HWP Angle",
             )
             ax.legend(loc="best")
             ax = fig.add_subplot(2, 1, 2, aspect="auto")
@@ -171,7 +169,7 @@ class DemodulateTest(MPITestCase):
                         f"demod0_{dname}", slc_demod
                     ],
                     c="red",
-                    label=f"Demod0",
+                    label="Demod0",
                 )
             if "QU" in weight_mode:
                 ax.plot(
@@ -180,7 +178,7 @@ class DemodulateTest(MPITestCase):
                         f"demod4r_{dname}", slc_demod
                     ],
                     c="blue",
-                    label=f"Demod4r",
+                    label="Demod4r",
                 )
                 ax.plot(
                     demod_data.obs[0].shared[defaults.times].data[slc_demod],
@@ -188,16 +186,18 @@ class DemodulateTest(MPITestCase):
                         f"demod4i_{dname}", slc_demod
                     ],
                     c="green",
-                    label=f"Demod4i",
+                    label="Demod4i",
                 )
             ax.legend(loc="best")
-            plt.title(f"Demodulation")
+            plt.title("Demodulation")
             plt.savefig(tod_plot)
             plt.close()
 
-            fname_mod = os.path.join(self.outdir, f"modulated_{weight_mode}_map.fits")
+            fname_mod = os.path.join(
+                self.outdir, f"modulated_{weight_mode}{suffix}_map.fits"
+            )
             fname_demod = os.path.join(
-                self.outdir, f"demodulated_{weight_mode}_map.fits"
+                self.outdir, f"demodulated_{weight_mode}{suffix}_map.fits"
             )
 
             map_mod = hp.read_map(fname_mod, None)
@@ -255,7 +255,9 @@ class DemodulateTest(MPITestCase):
                     )
                     all_good = False
 
-            outfile = os.path.join(self.outdir, f"map_comparison.{weight_mode}.png")
+            outfile = os.path.join(
+                self.outdir, f"map_comparison.{weight_mode}{suffix}.png"
+            )
             fig.savefig(outfile)
             self.assertTrue(all_good)
 
@@ -265,10 +267,29 @@ class DemodulateTest(MPITestCase):
         close_data(data)
 
     def test_demodulate_IQU(self):
-        self._test_demodulate(weight_mode="IQU")
+        data = create_ground_data(self.comm)
+        self._test_demodulate(weight_mode="IQU", data=data)
 
     def test_demodulate_QU(self):
-        self._test_demodulate(weight_mode="QU")
+        data = create_ground_data(self.comm)
+        self._test_demodulate(weight_mode="QU", data=data)
 
     def test_demodulate_I(self):
-        self._test_demodulate(weight_mode="I")
+        data = create_ground_data(self.comm)
+        self._test_demodulate(weight_mode="I", data=data)
+
+    def test_demodulate_IQU_overdist(self):
+        data = create_overdistributed_data(self.comm, single_group=True)
+        self._test_demodulate(weight_mode="IQU", data=data, suffix="-overdist")
+
+    def test_demodulate_IQU_detcuts(self):
+        data = create_ground_data(self.comm, single_group=True)
+        # Flag the second half of the detectors
+        for ob in data.obs:
+            det_flags = dict()
+            total_dets = len(ob.local_detectors)
+            for idet, det in enumerate(ob.local_detectors):
+                if idet >= total_dets // 2:
+                    det_flags[det] = defaults.det_mask_invalid
+            ob.update_local_detector_flags(det_flags)
+        self._test_demodulate(weight_mode="IQU", data=data, suffix="-detcuts")

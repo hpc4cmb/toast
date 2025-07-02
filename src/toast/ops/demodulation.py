@@ -339,7 +339,9 @@ class Demodulate(Operator):
                 obs.clear()
 
             log.debug_rank(
-                "Demodulated observation in", comm=data.comm.comm_group, timer=timer
+                f"Demodulated observation {obs.name} in",
+                comm=data.comm.comm_group,
+                timer=timer,
             )
         if self.purge:
             data.clear()
@@ -459,8 +461,8 @@ class Demodulate(Operator):
                             plocal.append(d)
                     if len(plocal) == 0:
                         msg = f"obs {obs.name}, process row {iprow} has no"
-                        msg += " unflagged detectors.  This may cause an error."
-                        log.warning(msg)
+                        msg += " good detectors.  This is inefficient..."
+                        log.debug(msg)
                     detsets.append(plocal)
             detsets = obs.comm_col.bcast(detsets, root=0)
 

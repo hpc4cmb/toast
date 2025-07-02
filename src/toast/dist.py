@@ -70,15 +70,14 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
     weights = None
     max_per_proc = None
     target = None
-    if len(sizes) < groups:
-        msg = (
-            f"Too many groups: cannot distribute {len(sizes)} blocks between "
-            f"{groups} groups."
-        )
-        raise RuntimeError(msg)
-    elif len(sizes) == groups:
-        # One chunk per group, trivial solution
-        dist = [DistRange(off, 1) for off in range(len(sizes))]
+    if len(sizes) == groups:
+        # One chunk per group, but check for zero-sized chunks
+        dist = list()
+        for off, sz in enumerate(sizes):
+            if sz == 0:
+                dist.append(DistRange(off, 0))
+            else:
+                dist.append(DistRange(off, 1))
     elif groups == 1:
         # Only one group, with all chunks
         dist = [DistRange(0, len(sizes))]
@@ -121,6 +120,9 @@ def distribute_discrete(sizes, groups, pow=1.0, breaks=None):
                     at_break = True
 
         dist.append(DistRange(off, weights.shape[0] - off))
+        n_empty = groups - len(dist)
+        for missing in range(n_empty):
+            dist.append(DistRange(weights.shape[0], 0))
 
     if len(dist) != groups:
         msg = (
@@ -158,10 +160,9 @@ def distribute_uniform(totalsize, groups, breaks=None):
         all_breaks = all_breaks[all_breaks < totalsize]
         all_breaks = np.sort(all_breaks)
         if len(all_breaks) > groups - 1:
-            raise RuntimeError(
-                "Cannot distribute {} chunks with {} breaks over {} groups"
-                "".format(totalsize, len(all_breaks), groups)
-            )
+            msg = f"Cannot distribute {totalsize} chunks with {len(all_breaks)}"
+            msg += f" breaks over {groups} groups"
+            raise RuntimeError(msg)
         groupcounts = []
         groupsizes = []
         offset = 0
@@ -320,5 +321,4 @@ def distribute_samples(
             dist_samples.append(dist_samples_row[c])
             if dist_chunks is not None:
                 dist_chunks.append(dist_chunks_row[c])
-
     return (dist_dets, dist_detsets, dist_samples, dist_chunks)

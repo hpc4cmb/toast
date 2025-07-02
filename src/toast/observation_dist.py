@@ -172,20 +172,22 @@ class DistDetSamp(object):
 
         self.det_indices = list()
         for ds in self.dets:
-            dfirst = self.det_index[ds[0]]
-            dlast = self.det_index[ds[-1]]
-            self.det_indices.append(DistRange(dfirst, dlast - dfirst + 1))
+            if len(ds) > 0:
+                # At least one detector on this process
+                dfirst = self.det_index[ds[0]]
+                dlast = self.det_index[ds[-1]]
+                self.det_indices.append(DistRange(dfirst, dlast - dfirst + 1))
 
         if self.comm.group_rank == 0:
             # check that all processes have some data, otherwise print warning
             for i, ds in enumerate(self.dets):
                 if len(ds) == 0:
                     msg = f"Process {i} has no detectors assigned."
-                    log.warning(msg)
+                    log.verbose(msg)
             for i, ss in enumerate(self.samps):
                 if ss[1] == 0:
                     msg = f"Process {i} has no samples assigned."
-                    log.warning(msg)
+                    log.verbose(msg)
 
     def __eq__(self, other):
         log = Logger.get()
@@ -195,7 +197,7 @@ class DistDetSamp(object):
             log.verbose(f"  process_rows {self.process_rows} != {other.process_rows}")
         if not comm_equivalent(self.comm.comm_group, other.comm.comm_group):
             fail = 1
-            log.verbose(f"  obs group comm not equivalent")
+            log.verbose("  obs group comm not equivalent")
         # If the group comms are equivalent, then we know that the row / col
         # comms are equivalent, since they come from the same cache for a given
         # value of process_rows.
@@ -223,7 +225,7 @@ class DistDetSamp(object):
         return not self.__eq__(other)
 
     def __repr__(self):
-        s = f"<DistDetSamp "
+        s = "<DistDetSamp "
         s += f"P_row {self.comm_row_rank}/{self.comm_row_size} "
         s += f"P_col {self.comm_col_rank}/{self.comm_col_size} "
         s += "dets=["

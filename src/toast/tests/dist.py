@@ -159,6 +159,29 @@ class DataTest(MPITestCase):
                     f.write("{:04d} = ({}, {})\n".format(indx, d[0], d[1]))
                     indx += 1
 
+    def test_overdist(self):
+        sizes = [100, 100]
+        groups = 4
+        dist = distribute_discrete(sizes, groups)
+        self.assertTrue(dist[0].offset == 0)
+        self.assertTrue(dist[0].n_elem == 1)
+        self.assertTrue(dist[1].offset == 1)
+        self.assertTrue(dist[1].n_elem == 1)
+        self.assertTrue(dist[2].offset == 2)
+        self.assertTrue(dist[2].n_elem == 0)
+        self.assertTrue(dist[3].offset == 2)
+        self.assertTrue(dist[3].n_elem == 0)
+
+        dist = distribute_uniform(2, 4)
+        self.assertTrue(dist[0].offset == 0)
+        self.assertTrue(dist[0].n_elem == 1)
+        self.assertTrue(dist[1].offset == 1)
+        self.assertTrue(dist[1].n_elem == 1)
+        self.assertTrue(dist[2].offset == 2)
+        self.assertTrue(dist[2].n_elem == 0)
+        self.assertTrue(dist[3].offset == 2)
+        self.assertTrue(dist[3].n_elem == 0)
+
     def test_view(self):
         data = create_satellite_data(
             self.comm, obs_per_group=1, obs_time=10.0 * u.minute
