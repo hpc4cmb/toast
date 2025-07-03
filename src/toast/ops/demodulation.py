@@ -421,7 +421,7 @@ class Demodulate(Operator):
     def _demodulate_shared_data(self, obs, demod_obs):
         """Downsample shared data"""
         n_local = demod_obs.n_local_samples
-        for key in self.azimuth, self.elevation:
+        for key in self.azimuth, self.elevation, self.hwp_angle:
             if key is None:
                 continue
             values = obs.shared[key].data.copy()
