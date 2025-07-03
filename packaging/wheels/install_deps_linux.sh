@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # This script is designed to run within a container managed by cibuildwheel.
-# This will run in a manylinux2014 (CentOS 7) container.
+# This will run in a manylinux container.
 #
 # The purpose of this script is to install TOAST dependency libraries that will be
 # bundled with our compiled extension.
