@@ -95,13 +95,16 @@ class SparseTemplates:
         """Return a new SparseTemplates instance that complies with the
         provided mask"""
         masked = SparseTemplates()
+        failed = []
         for start, stop, template in zip(self.starts, self.stops, self.templates):
             if np.any(good[start:stop]):
                 masked.starts.append(start)
                 masked.stops.append(stop)
                 masked.templates.append(template)
+            else:
+                failed.append(slice(start, stop))
         masked.normalize(good)
-        return masked
+        return masked, failed
 
     def normalize(self, good=None):
         """Normalize templates"""
@@ -475,6 +478,28 @@ class FilterBin(Operator):
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
+        # Check that samples that fail filtering do not contribute to maps
+
+        if self.filter_flag_mask | self.det_flag_mask == 0:
+            msg = f"Filter flag mask does not overlap with det flag mask: "
+            msg += "{self.filter_flag_mask} | {self.det_flag_mask} = 0"
+            raise RuntimeError(msg)
+
+        if self.filter_flag_mask | self.shared_flag_mask == 0:
+            msg = f"Filter flag mask does not overlap with shared mask: "
+            msg += "{self.filter_flag_mask} | {self.shared_flag_mask} = 0"
+            raise RuntimeError(msg)
+
+        if self.filter_flag_mask | self.binning.det_flag_mask == 0:
+            msg = f"Filter flag mask does not overlap with det bin mask: "
+            msg += "{self.filter_flag_mask} | {self.binning.det_flag_mask} = 0"
+            raise RuntimeError(msg)
+
+        if self.filter_flag_mask | self.binning.shared_flag_mask == 0:
+            msg = f"Filter flag mask does not overlap with shared bin mask: "
+            msg += "{self.filter_flag_mask} | {self.binning.shared_flag_mask} = 0"
+            raise RuntimeError(msg)
+
         # Optionally destroy existing pixel distributions (useful if calling
         # repeatedly with different data objects)
 
@@ -592,12 +617,8 @@ class FilterBin(Operator):
                     (common_flags & self.shared_flag_mask) == 0,
                     (flags & self.det_flag_mask) == 0,
                 )
-                good_bin = np.logical_and(
-                    (common_flags & self.binning.shared_flag_mask) == 0,
-                    (flags & self.binning.det_flag_mask) == 0,
-                )
-
                 if np.sum(good_fit) == 0:
+                    flags |= self.filter_flag_mask
                     continue
 
                 deproject = (
@@ -617,7 +638,24 @@ class FilterBin(Operator):
                     pixels = None
                     weights = None
 
-                det_templates = common_templates.mask(good_fit)
+                det_templates, failed = common_templates.mask(good_fit)
+                # Mask samples that cannot be filtered
+                if len(failed) != 0:
+                    for ind in failed:
+                        flags[ind] |= self.filter_flag_mask
+                    good_fit = np.logical_and(
+                        (common_flags & self.shared_flag_mask) == 0,
+                        (flags & self.det_flag_mask) == 0,
+                    )
+                    if np.sum(good_fit) == 0:
+                        flags |= self.filter_flag_mask
+                        continue
+
+                # Find all samples that remain good after filtering cuts
+                good_bin = np.logical_and(
+                    (common_flags & self.binning.shared_flag_mask) == 0,
+                    (flags & self.binning.det_flag_mask) == 0,
+                )
 
                 if (
                     self.deproject_map is not None
@@ -655,26 +693,30 @@ class FilterBin(Operator):
                     )
                     t1 = time()
 
-                self._regress_templates(
-                    det_templates, template_covariance, signal, good_fit
-                )
-                if self.grank == 0:
-                    log.debug(
-                        f"{self.group:4} : FilterBin:   Regressed templates in "
-                        f"{time() - t1:.2f} s",
+                if template_covariance is None:
+                    # template covariance failed to invert. Flag detector data
+                    flags |= self.filter_flag_mask
+                else:
+                    self._regress_templates(
+                        det_templates, template_covariance, signal, good_fit
                     )
-                    t1 = time()
+                    if self.grank == 0:
+                        log.debug(
+                            f"{self.group:4} : FilterBin:   Regressed templates in "
+                            f"{time() - t1:.2f} s",
+                        )
+                        t1 = time()
 
-                self._accumulate_observation_matrix(
-                    obs,
-                    det,
-                    pixels,
-                    weights,
-                    good_fit,
-                    good_bin,
-                    det_templates,
-                    template_covariance,
-                )
+                        self._accumulate_observation_matrix(
+                            obs,
+                            det,
+                            pixels,
+                            weights,
+                            good_fit,
+                            good_bin,
+                            det_templates,
+                            template_covariance,
+                        )
 
         log.debug_rank(
             f"{self.group:4} : FilterBin:   Filtered group data in",
@@ -973,7 +1015,11 @@ class FilterBin(Operator):
             invcov,
         )
         try:
-            rcond = 1 / np.linalg.cond(invcov)
+            cond = np.linalg.cond(invcov)
+            if np.isinf(cond):
+                rcond = 0
+            else:
+                rcond = 1 / cond
         except np.linalg.LinAlgError:
             print(
                 f"Failed condition number calculation for {ntemplate}x{ntemplate} matrix:"
@@ -988,6 +1034,9 @@ class FilterBin(Operator):
                 f"{self.group:4} : FilterBin: Template covariance matrix "
                 f"rcond = {rcond}",
             )
+        if rcond == 0:
+            # No covariance for empty templates
+            return None
         if rcond > 1e-6:
             cov = np.linalg.inv(invcov)
         else:
