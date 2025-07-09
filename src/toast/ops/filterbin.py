@@ -480,24 +480,24 @@ class FilterBin(Operator):
 
         # Check that samples that fail filtering do not contribute to maps
 
-        if self.filter_flag_mask | self.det_flag_mask == 0:
+        if self.filter_flag_mask & self.det_flag_mask == 0:
             msg = f"Filter flag mask does not overlap with det flag mask: "
-            msg += "{self.filter_flag_mask} | {self.det_flag_mask} = 0"
+            msg += "{self.filter_flag_mask} & {self.det_flag_mask} = 0"
             raise RuntimeError(msg)
 
-        if self.filter_flag_mask | self.shared_flag_mask == 0:
+        if self.filter_flag_mask & self.shared_flag_mask == 0:
             msg = f"Filter flag mask does not overlap with shared mask: "
-            msg += "{self.filter_flag_mask} | {self.shared_flag_mask} = 0"
+            msg += "{self.filter_flag_mask} & {self.shared_flag_mask} = 0"
             raise RuntimeError(msg)
 
-        if self.filter_flag_mask | self.binning.det_flag_mask == 0:
+        if self.filter_flag_mask & self.binning.det_flag_mask == 0:
             msg = f"Filter flag mask does not overlap with det bin mask: "
-            msg += "{self.filter_flag_mask} | {self.binning.det_flag_mask} = 0"
+            msg += "{self.filter_flag_mask} & {self.binning.det_flag_mask} = 0"
             raise RuntimeError(msg)
 
-        if self.filter_flag_mask | self.binning.shared_flag_mask == 0:
+        if self.filter_flag_mask & self.binning.shared_flag_mask == 0:
             msg = f"Filter flag mask does not overlap with shared bin mask: "
-            msg += "{self.filter_flag_mask} | {self.binning.shared_flag_mask} = 0"
+            msg += "{self.filter_flag_mask} & {self.binning.shared_flag_mask} = 0"
             raise RuntimeError(msg)
 
         # Optionally destroy existing pixel distributions (useful if calling
