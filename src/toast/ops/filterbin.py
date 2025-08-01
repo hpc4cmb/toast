@@ -97,29 +97,28 @@ class SparseTemplates:
         masked = SparseTemplates()
         failed = []
         for start, stop, template in zip(self.starts, self.stops, self.templates):
-            if np.any(good[start:stop]):
+            nnz = np.sum(template * good[start:stop] != 0)
+            if nnz > 0:
                 masked.starts.append(start)
                 masked.stops.append(stop)
-                masked.templates.append(template)
+                masked.templates.append(template.copy())
             else:
+                # The masked template is null.  Any samples that the full
+                # template spans must be flagged.
                 failed.append(slice(start, stop))
         masked.normalize(good)
         return masked, failed
 
     def normalize(self, good=None):
-        """Normalize templates"""
+        """Normalize templates and discard empty ones"""
         for start, stop, template in zip(self.starts, self.stops, self.templates):
             if good is None:
                 norm = np.sum(template**2) ** 0.5
             else:
                 norm = np.sum((template * good[start:stop]) ** 2) ** 0.5
-            # If the template and the "good" array have disjoint elements which are
-            # non-zero, then the norm might end up being zero.  In that case, just
-            # zero the template.
             if norm == 0:
-                template[:] = 0
-            else:
-                template /= norm
+                raise RuntimeError("Zero-norm template")
+            template /= norm
         return
 
 
