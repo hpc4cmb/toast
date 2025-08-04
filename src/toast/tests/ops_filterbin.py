@@ -466,7 +466,13 @@ class FilterBinTest(MPITestCase):
         scan_hpix.apply(data)
 
         # Copy the signal
-        ops.Copy(detdata=[(defaults.det_data, "signal_copy")]).apply(data)
+        ops.Copy(
+            shared=[(defaults.shared_flags, "shared_flags_copy")],
+            detdata=[
+                (defaults.det_data, "signal_copy"),
+                (defaults.det_flags, "det_flags_copy"),
+            ],
+        ).apply(data)
 
         # Configure and apply the filterbin operator
         binning = ops.BinMap(
@@ -507,7 +513,14 @@ class FilterBinTest(MPITestCase):
         filterbin.apply(data)
 
         filterbin.name = "cached_run_2"
+        # First run changed the flags to reject samples that failed to
+        # filter.  Running against the modified flags would change
+        # the result.
         filterbin.det_data = "signal_copy"
+        binning.det_flags = "det_flags_copy"
+        binning.shared_flags = "shared_flags_copy"
+        filterbin.det_flags = "det_flags_copy"
+        filterbin.shared_flags = "shared_flags_copy"
         filterbin.apply(data)
 
         if data.comm.world_rank == 0:
@@ -645,8 +658,16 @@ class FilterBinTest(MPITestCase):
         )
         scan_hpix.apply(data)
 
-        # Copy the signal
-        ops.Copy(detdata=[(defaults.det_data, "signal_copy")]).apply(data)
+        # Copy the signal and flags so we can run twice against the same
+        # inputs.  Filtering may change the flags since it discards
+        # samples that fail to filter.
+        ops.Copy(
+            shared=[(defaults.shared_flags, "shared_flags_copy")],
+            detdata=[
+                (defaults.det_data, "signal_copy"),
+                (defaults.det_flags, "det_flags_copy"),
+            ],
+        ).apply(data)
 
         # Configure and apply the filterbin operator
         binning = ops.BinMap(
@@ -658,7 +679,7 @@ class FilterBinTest(MPITestCase):
             noise_model=default_model.noise_model,
             sync_type="allreduce",
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=detpointing.shared_flag_mask,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             det_flags=defaults.det_flags,
             det_flag_mask=255,
         )
@@ -669,7 +690,7 @@ class FilterBinTest(MPITestCase):
             det_flags=defaults.det_flags,
             det_flag_mask=255,
             shared_flags=defaults.shared_flags,
-            shared_flag_mask=detpointing.shared_flag_mask,
+            shared_flag_mask=defaults.shared_mask_nonscience,
             binning=binning,
             ground_filter_order=5,
             split_ground_template=True,
@@ -692,8 +713,15 @@ class FilterBinTest(MPITestCase):
 
         filterbin.name = "noiseweighted_run"
         filterbin.reset_pix_dist = True
-        filterbin.det_data = "signal_copy"
         filterbin.noiseweight_obs_matrix = True
+        # First run changed the flags to reject samples that failed to
+        # filter.  Running against the modified flags would change
+        # the result.
+        filterbin.det_data = "signal_copy"
+        binning.det_flags = "det_flags_copy"
+        binning.shared_flags = "shared_flags_copy"
+        filterbin.det_flags = "det_flags_copy"
+        filterbin.shared_flags = "shared_flags_copy"
 
         orig_name_filterbin = filterbin.name
         orig_comm = data.comm
