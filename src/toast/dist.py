@@ -205,7 +205,7 @@ def distribute_uniform(totalsize, groups, breaks=None):
 def distribute_samples(
     mpicomm, detectors, samples, detranks=1, detsets=None, sampsets=None
 ):
-    """Distribute data by detector and sample.
+    r"""Distribute data by detector and sample.
 
     Given a list of detectors and some number of samples, distribute the data in a load
     balanced way.  Optionally account for constraints on this distribution.  Both the
