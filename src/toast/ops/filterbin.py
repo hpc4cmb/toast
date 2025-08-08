@@ -1217,10 +1217,15 @@ class FilterBin(Operator):
             c_obs_matrix = np.zeros([c_npixtot, c_npixtot])
             if self.grank == 0:
                 log.debug(f"{self.group:4} : FilterBin:     Accumulating")
+            w = weights[good_any].copy()
+            if len(w.shape) == 1:
+                # Only one Stokes component. We lost an array dimension
+                # along the way and our compiled kernel would be unhappy
+                w = w[:, np.newaxis]
             accumulate_observation_matrix(
                 c_obs_matrix,
                 c_pixels,
-                weights[good_any].copy(),
+                w,
                 templates[good_any].copy(),
                 template_covariance,
                 good_fit[good_any].astype(np.uint8),
