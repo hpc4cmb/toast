@@ -180,6 +180,7 @@ def coadd_observation_matrix(
         invcov = read_healpix(
             infile_invcov, None, nest=True, dtype=float, verbose=False
         )
+        invcov = np.atleast_2d(invcov)
         if N != 1:
             invcov *= N
         if invcov_sum is None:
