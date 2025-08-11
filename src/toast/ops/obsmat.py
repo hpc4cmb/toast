@@ -202,6 +202,7 @@ def coadd_observation_matrix(
     dist = PixelDistribution(
         n_pix=npix, n_submap=nsubmap, local_submaps=local_submaps, comm=comm
     )
+    dist.nest = True
     dist_cov = PixelData(dist, float, n_value=nnzcov)
     for local_submap, global_submap in enumerate(local_submaps):
         pix_start = global_submap * npix_submap
