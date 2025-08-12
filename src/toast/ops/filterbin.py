@@ -706,16 +706,16 @@ class FilterBin(Operator):
                         )
                         t1 = time()
 
-                        self._accumulate_observation_matrix(
-                            obs,
-                            det,
-                            pixels,
-                            weights,
-                            good_fit,
-                            good_bin,
-                            det_templates,
-                            template_covariance,
-                        )
+                    self._accumulate_observation_matrix(
+                        obs,
+                        det,
+                        pixels,
+                        weights,
+                        good_fit,
+                        good_bin,
+                        det_templates,
+                        template_covariance,
+                    )
 
         log.debug_rank(
             f"{self.group:4} : FilterBin:   Filtered group data in",
