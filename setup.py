@@ -342,6 +342,7 @@ conf["entry_points"] = {
         "toast_config_compare = toast.scripts.toast_config_compare:main",
         "toast_plot_wcs = toast.scripts.toast_plot_wcs:main",
         "toast_plot_healpix = toast.scripts.toast_plot_healpix:main",
+        "toast_overlap_schedule = toast.scripts.toast_overlap_schedule:main",
     ]
 }
 conf["cmdclass"] = {"build_ext": CMakeBuild}
