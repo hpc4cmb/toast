@@ -180,7 +180,9 @@ def get_mask(args):
 def parse_arguments():
     """Parse the command line arguments"""
 
-    parser = argparse.ArgumentParser(description="Project schedule to a hitmap")
+    parser = argparse.ArgumentParser(
+        description="Filter a TOAST schedule for observations that overlap with a specified target area."
+    )
 
     parser.add_argument(
         "schedule",
