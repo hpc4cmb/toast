@@ -205,6 +205,7 @@ def parse_arguments():
     parser.add_argument(
         "--nside",
         default=128,
+        type=int,
         help="Hitmap healpix resolution",
     )
 
