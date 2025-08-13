@@ -196,6 +196,7 @@ def parse_arguments():
     parser.add_argument(
         "--fov",
         default=5,
+        type=float,
         help="Field of view in degrees",
     )
 
