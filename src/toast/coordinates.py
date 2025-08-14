@@ -127,7 +127,7 @@ def _qpoint_transform(site, t, quats_azel):
     # Rearrange to match qarray component order
     quats_radec = np.vstack([q[1], q[2], q[3], q[0]]).T
     XAXIS, YAXIS, ZAXIS = np.eye(3)
-    zrot = qa.rotation(ZAXIS, np.pi)
+    zrot = qa.rotation(ZAXIS, np.pi + psi)
     quats_radec = qa.mult(quats_radec, zrot)
     return quats_radec
 
