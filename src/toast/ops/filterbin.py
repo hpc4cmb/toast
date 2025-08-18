@@ -679,16 +679,25 @@ class FilterBin(Operator):
                 # memreport.prefix = "After detector templates"
                 # memreport.apply(data)
 
-                if template_covariance is None or np.any(last_good_fit != good_fit):
+                if (
+                        template_covariance is None or
+                        template_covariance.shape[0] != det_templates.ntemplate or
+                        np.any(last_good_fit != good_fit)
+                ):
                     template_covariance = self._build_template_covariance(
                         det_templates, good_fit
                     )
                     last_good_fit = good_fit.copy()
 
                 if self.grank == 0:
+                    if template_covariance is None:
+                        shape = None
+                    else:
+                        shape = template_covariance.shape
                     log.debug(
-                        f"{self.group:4} : FilterBin:   Built template covariance "
-                        f"{time() - t1:.2f} s",
+                        f"{self.group:4} : FilterBin:   Built "
+                        f"{shape} template covariance "
+                        f"in {time() - t1:.2f} s",
                     )
                     t1 = time()
 
