@@ -93,6 +93,7 @@ def create_ground_data(
     turnarounds_invalid=False,
     single_group=False,
     flagged_pixels=True,
+    schedule_hours=2,
 ):
     """Create a data object with a simple ground sim.
 
@@ -137,6 +138,7 @@ def create_ground_data(
         if tdir is None:
             tdir = tempfile.mkdtemp()
 
+        sch_hours = f"{int(schedule_hours):02d}"
         sch_file = os.path.join(tdir, "ground_schedule.txt")
         run_scheduler(
             opts=[
@@ -155,7 +157,7 @@ def create_ground_data(
                 "--start",
                 "2020-01-01 00:00:00",
                 "--stop",
-                "2020-01-01 06:00:00",
+                f"2020-01-01 {sch_hours}:00:00",
                 "--out",
                 sch_file,
             ]
@@ -218,6 +220,7 @@ def create_overdistributed_data(
     freqs=None,
     turnarounds_invalid=False,
     single_group=False,
+    schedule_hours=2,
 ):
     """Create a data object with more detectors than processes.
 
@@ -264,6 +267,7 @@ def create_overdistributed_data(
         if tdir is None:
             tdir = tempfile.mkdtemp()
 
+        sch_hours = f"{int(schedule_hours):02d}"
         sch_file = os.path.join(tdir, "ground_schedule.txt")
         run_scheduler(
             opts=[
@@ -282,7 +286,7 @@ def create_overdistributed_data(
                 "--start",
                 "2020-01-01 00:00:00",
                 "--stop",
-                "2020-01-01 06:00:00",
+                f"2020-01-01 {sch_hours}:00:00",
                 "--out",
                 sch_file,
             ]
