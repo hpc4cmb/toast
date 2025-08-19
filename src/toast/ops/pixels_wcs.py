@@ -23,6 +23,18 @@ from .delete import Delete
 from .operator import Operator
 
 
+def unwrap_together(x, y, period=2 * np.pi * u.rad):
+    """ Unwrap x but apply the same branch corrections to y """
+    for i in range(1, len(x)):
+        while np.abs(x[i] - x[i - 1]) > np.abs(x[i] + period - x[i - 1]):
+            x[i] += period
+            y[i] += period
+        while np.abs(x[i] - x[i - 1]) > np.abs(x[i] - period - x[i - 1]):
+            x[i] -= period
+            y[i] -= period
+    return
+
+
 @trait_docs
 class PixelsWCS(Operator):
     """Operator which generates detector pixel indices defined on a flat projection.
@@ -437,28 +449,31 @@ class PixelsWCS(Operator):
                     is_azimuth=is_azimuth,
                     center_offset=self.center_offset,
                 )
+            rank = data.comm.comm_world.rank  # DEBUG
             minmax = minmax.T
             # Compact observations on both sides of the zero meridian
-            # can confuse this calculation. Use np.unwrap() to find
-            # the most compact longitude range.
-            lonmin = np.amin(np.unwrap(minmax[0]))
-            lonmax = np.amax(np.unwrap(minmax[1]))
-            if lonmax < lonmin:
-                lonmax += 2 * np.pi
+            # can confuse this calculation.  We must unwrap the per-observation
+            # limits for the most compact longitude range.
+            unwrap_together(minmax[0], minmax[1])
+            lonmin = np.amin(minmax[0])
+            lonmax = np.amin(minmax[1])
             latmin = np.amin(minmax[2])
             latmax = np.amax(minmax[3])
             if data.comm.comm_world is not None:
                 # Zero meridian concern applies across processes
-                all_lonmin = data.comm.comm_world.allgather(lonmin.to_value(u.radian))
-                all_lonmax = data.comm.comm_world.allgather(lonmax.to_value(u.radian))
-                all_latmin = data.comm.comm_world.allgather(latmin.to_value(u.radian))
-                all_latmax = data.comm.comm_world.allgather(latmax.to_value(u.radian))
-                lonmin = np.amin(np.unwrap(all_lonmin)) * u.radian
-                lonmax = np.amax(np.unwrap(all_lonmax)) * u.radian
-                if lonmax < lonmin:
-                    lonmax += 2 * np.pi
-                latmin = np.amin(all_latmin) * u.radian
-                latmax = np.amax(all_latmax) * u.radian
+                def gather(x):
+                    return data.comm.comm_world.allgather(
+                        x.to_value(u.radian)
+                        ) * u.radian
+                all_lonmin = gather(lonmin)
+                all_lonmax = gather(lonmax)
+                all_latmin = gather(latmin)
+                all_latmax = gather(latmax)
+                unwrap_together(all_lonmin, all_lonmax)
+                lonmin = np.amin(all_lonmin)
+                lonmax = np.amin(all_lonmax)
+                latmin = np.amin(all_latmin)
+                latmax = np.amax(all_latmax)
             self.bounds = (
                 lonmin.to(u.degree),
                 lonmax.to(u.degree),
