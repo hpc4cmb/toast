@@ -10,7 +10,7 @@ import numpy as np
 from astropy import units as u
 
 from ..instrument import GroundSite, SpaceSite
-from ..intervals import IntervalList
+from ..intervals import IntervalList, interval_dtype
 from ..timing import function_timer
 from ..utils import Environment, Logger, object_fullname
 from .spt3g_utils import (
@@ -167,7 +167,20 @@ def export_intervals(obs, name, iframe):
         (G3Object):  The best container available.
 
     """
-    overlap = iframe & obs.intervals[name]
+    overlap = []
+    frame = iframe.data[0]
+    for ival in obs.intervals[name]:
+        if frame.start <= ival.stop and frame.stop >= ival.start:
+            overlap.append((
+                ival.start,
+                ival.stop,
+                max(frame.first, ival.first),
+                min(frame.last, ival.last),
+            ))
+    overlap = IntervalList(
+        iframe.timestamps,
+        intervals=np.array(overlap, dtype=interval_dtype).view(np.recarray),
+    )
 
     out = None
     try:

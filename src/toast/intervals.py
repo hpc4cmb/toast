@@ -94,8 +94,16 @@ class IntervalList(Sequence, AcceleratorObject):
                     if np.isclose(timespans[i][1], timespans[i + 1][0], rtol=1e-12):
                         # Force nearly equal timestamps to match
                         timespans[i][1] = timespans[i + 1][0]
+                    # Check that the intervals are sorted and disjoint
                     if timespans[i][1] > timespans[i + 1][0]:
-                        raise RuntimeError("Timespans must be sorted and disjoint")
+                        t1 = timespans[i][1]
+                        t2 = timespans[i + 1][0]
+                        dt = t1 - t2
+                        ts = np.median(np.diff(timestamps))
+                        msg = f"Timespans must be sorted and disjoint"
+                        msg += f" but {t1} - {t2} = {dt} s = {dt / ts} samples)"
+                        raise RuntimeError(msg)
+                #  Map interval times into sample indices
                 indices, times = self._find_indices(timespans)
                 self.data = np.array(
                     [
@@ -186,7 +194,12 @@ class IntervalList(Sequence, AcceleratorObject):
         return len(self.data)
 
     def __repr__(self):
-        return self.data.__repr__()
+        s = "<IntervalList [\n"
+        for ival in self.data:
+            s += f" {ival.start:15.3f} - {ival.stop:15.3f} ({ival.first:9} - {ival.last:9}),\n"
+        s += "]>"
+        # return self.data.__repr__()
+        return s
 
     def __eq__(self, other):
         if len(self.data) != len(other):
