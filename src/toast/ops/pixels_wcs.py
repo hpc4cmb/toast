@@ -24,7 +24,7 @@ from .operator import Operator
 
 
 def unwrap_together(x, y, period=2 * np.pi * u.rad):
-    """ Unwrap x but apply the same branch corrections to y """
+    """Unwrap x but apply the same branch corrections to y"""
     for i in range(1, len(x)):
         while np.abs(x[i] - x[i - 1]) > np.abs(x[i] + period - x[i - 1]):
             x[i] += period
@@ -449,7 +449,6 @@ class PixelsWCS(Operator):
                     is_azimuth=is_azimuth,
                     center_offset=self.center_offset,
                 )
-            rank = data.comm.comm_world.rank  # DEBUG
             minmax = minmax.T
             # Compact observations on both sides of the zero meridian
             # can confuse this calculation.  We must unwrap the per-observation
@@ -462,9 +461,10 @@ class PixelsWCS(Operator):
             if data.comm.comm_world is not None:
                 # Zero meridian concern applies across processes
                 def gather(x):
-                    return data.comm.comm_world.allgather(
-                        x.to_value(u.radian)
-                        ) * u.radian
+                    return (
+                        data.comm.comm_world.allgather(x.to_value(u.radian)) * u.radian
+                    )
+
                 all_lonmin = gather(lonmin)
                 all_lonmax = gather(lonmax)
                 all_latmin = gather(latmin)
