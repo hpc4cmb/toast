@@ -90,7 +90,7 @@ class GroundFilterTest(MPITestCase):
         close_data(data)
 
     def test_groundfilter_split(self):
-        # Create a fake satellite data set for testing
+        # Create a fake data set for testing
         data = create_ground_data(self.comm)
 
         # Create an uncorrelated noise model from focalplane detector properties
@@ -147,4 +147,96 @@ class GroundFilterTest(MPITestCase):
                 check_rms = np.std(ob.detdata[defaults.det_data][det][good])
                 # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
                 self.assertTrue(check_rms < 0.1 * rms[ob.name][det])
+        close_data(data)
+
+    def test_groundfilter_split_binned(self):
+        # Create a fake data set for testing
+        data = create_ground_data(self.comm)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise from this model
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
+        sim_noise.apply(data)
+
+        # Make fake flags
+        fake_flags(data)
+
+        rms = dict()
+        for ob in data.obs:
+            az = ob.shared[defaults.azimuth].data * 100
+            rightgoing = np.zeros(az.size, dtype=bool)
+            for ival in ob.intervals[defaults.throw_leftright_interval]:
+                rightgoing[ival.first : ival.last] = True
+            leftgoing = np.zeros(az.size, dtype=bool)
+            for ival in ob.intervals[defaults.throw_rightleft_interval]:
+                leftgoing[ival.first : ival.last] = True
+            rms[ob.name] = dict()
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
+                flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
+                flags |= ob.detdata[defaults.det_flags][det]
+                good = flags == 0
+                # Add scan-synchronous signal to the data
+                ob.detdata[defaults.det_data][det][leftgoing] += az[leftgoing]
+                ob.detdata[defaults.det_data][det][rightgoing] -= az[rightgoing]
+                rms[ob.name][det] = np.std(ob.detdata[defaults.det_data][det][good])
+
+        # Filter
+
+        groundfilter = ops.GroundFilter(
+            trend_order=None,
+            filter_order=None,
+            bin_width=1 * u.deg,
+            detrend=True,
+            split_template=True,
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
+            det_flag_mask=defaults.det_mask_invalid,
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=self.shared_flag_mask,
+            view=None,
+        )
+        groundfilter.apply(data)
+
+        for ob in data.obs:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
+                flags = ob.shared[defaults.shared_flags].data & self.shared_flag_mask
+                flags |= ob.detdata[defaults.det_flags][det]
+                good = flags == 0
+                check_rms = np.std(ob.detdata[defaults.det_data][det][good])
+                # print(f"check_rms = {check_rms}, det rms = {rms[ob.name][det]}")
+                self.assertTrue(check_rms < 0.1 * rms[ob.name][det])
+        close_data(data)
+
+    def test_redistributed(self):
+        # Create a fake data set for testing
+        data = create_ground_data(self.comm)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise from this model
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
+        sim_noise.apply(data)
+
+        # Redistribute the data.  If there is more than one process in a
+        # group, this will render the data incompatible with the operator
+        for ob in data.obs:
+            ob.redistribute(1, times=defaults.times)
+
+        caught = False
+        try:
+            groundfilter = ops.GroundFilter()
+            groundfilter.apply(data)
+        except RuntimeError as e:
+            caught = True
+
+        if data.comm.group_size == 1:
+            self.assertFalse(caught)
+        else:
+            self.assertTrue(caught)
+
         close_data(data)

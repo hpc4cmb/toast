@@ -14,7 +14,7 @@ from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Int, Unicode, trait_docs
+from ..traits import Bool, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
 
@@ -112,11 +112,21 @@ class GroundFilter(Operator):
     )
 
     trend_order = Int(
-        5, help="Order of a Legendre polynomial to fit along with the ground template."
+        5,
+        allow_none=True,
+        help="Order of a Legendre polynomial to fit along with the ground template.",
     )
 
     filter_order = Int(
-        5, help="Order of a Legendre polynomial to fit as a function of azimuth."
+        5,
+        allow_none=True,
+        help="Order of a Legendre polynomial to fit as a function of azimuth.",
+    )
+
+    bin_width = Quantity(
+        None,
+        allow_none=True,
+        help="Azimuthal bin width of ground filter",
     )
 
     view = Unicode(
@@ -165,19 +175,77 @@ class GroundFilter(Operator):
     @traitlets.validate("trend_order")
     def _check_trend_order(self, proposal):
         check = proposal["value"]
-        if check < 0:
+        if check is not None and check < 0:
             raise traitlets.TraitError("Trend order should be a non-negative integer")
         return check
 
     @traitlets.validate("filter_order")
     def _check_filter_order(self, proposal):
         check = proposal["value"]
-        if check < 0:
+        if check is not None and check < 0:
             raise traitlets.TraitError("Filter order should be a non-negative integer")
+        return check
+
+    @traitlets.validate("bin_width")
+    def _check_filter_order(self, proposal):
+        check = proposal["value"]
+        if check is not None and check.to_value(u.radian) <= 0:
+            raise traitlets.TraitError("bin_width should be a positive quantity")
         return check
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    @function_timer
+    def _split_templates(self, templates, obs):
+        """Create separate templates for left and right-going scans"""
+        split_templates = []
+        split_masks = []
+        for name in self.leftright_interval, self.rightleft_interval:
+            mask = np.zeros(obs.n_local_samples, dtype=bool)
+            for ival in obs.intervals[name]:
+                mask[ival.first : ival.last] = True
+            split_masks.append(mask)
+        for template in templates:
+            for mask in split_masks:
+                split_template = template.copy()
+                split_template[mask] = 0
+                split_templates.append(split_template)
+        split_templates = np.vstack(split_templates)
+        return split_templates
+
+    @function_timer
+    def _make_poly_templates(self, phase):
+        """Evaluate Legendre polynomial templates up to the requested
+        order"""
+        norder = self.filter_order + 1
+        legendre_templates = np.zeros([norder, phase.size])
+        legendre(phase, legendre_templates, 0, norder)
+        return legendre_templates
+
+    @function_timer
+    def _make_bin_templates(self, az):
+        # Assign each time stamp to an azimuthal bin
+        wbin = self.bin_width.to_value(u.radian)
+        ibin = (az // wbin).astype(int)
+
+        # Find the set of hit azimuthal bins
+        bins = np.unique(ibin)
+
+        if self.filter_order is not None:
+            # Discard one bin.  This makes the rest of the templates
+            # relative to it and breaks degeneracy with polynomial templates
+            cut = np.argmax(counts)
+            good = np.ones(len(counts), dtype=bool)
+            good[cut] = False
+            bins = bins[good]
+
+        # Each template is just a boolean mask that is true when
+        # boresight is in a specific bin
+        bin_templates = []
+        for bin_ in bins:
+            bin_templates.append((ibin == bin_).astype(float))
+        return bin_templates
 
     @function_timer
     def build_templates(self, obs):
@@ -187,15 +255,20 @@ class GroundFilter(Operator):
 
         # Construct trend templates.  Full domain for x is [-1, 1]
 
-        my_offset = obs.local_index_offset
-        my_nsamp = obs.n_local_samples
-        nsamp_tot = obs.n_all_samples
-        x = np.arange(my_offset, my_offset + my_nsamp) / nsamp_tot * 2 - 1
+        nsample = obs.n_local_samples
+        x = np.arange(nsample) / nsample * 2 - 1
 
-        # Do not include the offset in the trend.  It will be part of
-        # of the ground template
-        legendre_trend = np.zeros([self.trend_order, x.size])
-        legendre(x, legendre_trend, 1, self.trend_order + 1)
+        templates = []
+
+        if self.trend_order is not None:
+            # Do not include the offset in the trend.  It will be part of
+            # of the ground template
+
+            legendre_trend = np.zeros([self.trend_order, nsample])
+            legendre(x, legendre_trend, 1, self.trend_order + 1)
+            templates.append(legendre_trend)
+
+        # Get boresight azimuth
 
         try:
             if self.azimuth is not None:
@@ -204,18 +277,6 @@ class GroundFilter(Operator):
                 quats = obs.shared[self.boresight_azel]
                 theta, phi, _ = qa.to_iso_angles(quats)
                 az = 2 * np.pi - phi
-            if "scan_min_az" in obs:
-                azmin = obs["scan_min_az"].to_value(u.radian)
-                azmax = obs["scan_max_az"].to_value(u.radian)
-            else:
-                azmin = np.amin(az)
-                azmax = np.amax(az)
-                comm = obs.comm.comm_group
-                if comm is not None:
-                    azmin = comm.allreduce(azmin, op=MPI.MIN)
-                    azmax = comm.allreduce(azmax, op=MPI.MAX)
-                obs["scan_min_az"] = azmin * u.radian
-                obs["scan_max_az"] = azmax * u.radian
         except Exception as e:
             msg = (
                 f"Failed to get boresight azimuth from TOD.  "
@@ -223,35 +284,43 @@ class GroundFilter(Operator):
             )
             raise RuntimeError(msg)
 
-        # The azimuth vector is assumed to be arranged so that the
-        # azimuth increases monotonously even across the zero meridian.
+        # Figure out the azimuth range, accounting for observations that
+        # cross the zero meridian
 
-        phase = (np.unwrap(az) - azmin) / (azmax - azmin) * 2 - 1
-        nfilter = self.filter_order + 1
-        legendre_templates = np.zeros([nfilter, phase.size])
-        legendre(phase, legendre_templates, 0, nfilter)
-        if not self.split_template:
-            legendre_filter = legendre_templates
-        else:
-            # Create separate templates for alternating scans
-            common_flags = obs.shared[self.shared_flags].data
-            legendre_filter = []
-            masks = []
-            for name in self.leftright_interval, self.rightleft_interval:
-                mask = np.zeros(phase.size, dtype=bool)
-                for ival in obs.intervals[name]:
-                    mask[ival.first : ival.last] = True
-                masks.append(mask)
-            for template in legendre_templates:
-                for mask in masks:
-                    temp = template.copy()
-                    temp[mask] = 0
-                    legendre_filter.append(temp)
-            legendre_filter = np.vstack(legendre_filter)
+        azmin = np.amin(az)
+        azmax = np.amax(az)
+        while azmin < 0:
+            azmin += 2 * np.pi
+            azmax += 2 * np.pi
+        if azmax - azmin > 2 * np.pi:
+            # Full wrap around
+            azmin = 0
+            azmax = 2 * np.pi
+            az %= 2 * np.pi
 
-        templates = np.vstack([legendre_trend, legendre_filter])
+        # phase maps azimuth to [-1, 1]
 
-        return templates, legendre_trend, legendre_filter
+        phase = (az - azmin) / (azmax - azmin) * 2 - 1
+
+        # Polynomial templates
+
+        if self.filter_order is not None:
+            legendre_templates = self._make_poly_templates(phase)
+            if self.split_template:
+                legendre_templates = self._split_templates(legendre_templates, obs)
+            templates.append(legendre_templates)
+
+        # Binned templates
+
+        if self.bin_width is not None:
+            bin_templates = self._make_bin_templates(az)
+            if self.split_template:
+                bin_templates = self._split_templates(bin_templates, obs)
+            templates.append(bin_templates)
+
+        templates = np.vstack(templates)
+
+        return templates
 
     @function_timer
     def fit_templates(
@@ -267,12 +336,7 @@ class GroundFilter(Operator):
     ):
         log = Logger.get()
         # communicator for processes with the same detectors
-        comm = obs.comm_row
         ngood = np.sum(good)
-        ntask = 1
-        if comm is not None:
-            ngood = comm.allreduce(ngood)
-            ntask = comm.size
         if ngood == 0:
             return None, None, None, None
 
@@ -281,18 +345,13 @@ class GroundFilter(Operator):
         proj = np.zeros(ntemplate)
 
         bin_proj_fast(ref, templates, good.astype(np.uint8), proj)
-        if last_good is not None and np.all(good == last_good) and ntask == 1:
+        if last_good is not None and np.all(good == last_good):
             # Flags have not changed, we can re-use the last inverse covariance
             invcov = last_invcov
             cov = last_cov
             rcond = last_rcond
         else:
             bin_invcov_fast(templates, good.astype(np.uint8), invcov)
-            if comm is not None:
-                # Reduce the binned data.  The detector signal is
-                # distributed across the group communicator.
-                comm.Allreduce(MPI.IN_PLACE, invcov, op=MPI.SUM)
-                comm.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
             rcond = get_rcond(invcov)
             cov = None
 
@@ -314,16 +373,14 @@ class GroundFilter(Operator):
         return coeff, invcov, cov, rcond
 
     @function_timer
-    def subtract_templates(self, ref, good, coeff, legendre_trend, legendre_filter):
-        # Trend
+    def subtract_templates(self, ref, good, coeff, templates):
         if self.detrend:
-            trend = np.zeros_like(ref)
-            add_templates(trend, legendre_trend, coeff[: self.trend_order])
-            ref -= trend
-        # Ground template
-        grtemplate = np.zeros(ref.size, dtype=np.float64)
-        add_templates(grtemplate, legendre_filter, coeff[self.trend_order :])
-        ref -= grtemplate
+            offset = 0
+        else:
+            offset = self.trend_order
+        fit = np.zeros(ref.size, dtype=np.float64)
+        add_templates(fit, templates[offset:], coeff[offset:])
+        ref -= fit
         return
 
     @function_timer
@@ -342,6 +399,9 @@ class GroundFilter(Operator):
         # Each group loops over its own CES:es
         nobs = len(data.obs)
         for iobs, obs in enumerate(data.obs):
+            if obs.comm_row is not None and obs.comm_row.size != 1:
+                raise RuntimeError("GroundFilter assumes data is split by detector")
+
             # Prefix for logging
             log_prefix = f"{data.comm.group} : {obs.name} :"
 
@@ -361,7 +421,7 @@ class GroundFilter(Operator):
                 common_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
             t1 = time()
-            templates, legendre_trend, legendre_filter = self.build_templates(obs)
+            templates = self.build_templates(obs)
             if data.comm.group_rank == 0:
                 msg = (
                     f"{log_prefix} OpGroundFilter: "
@@ -415,7 +475,10 @@ class GroundFilter(Operator):
 
                 t1 = time()
                 self.subtract_templates(
-                    ref, good, coeff, legendre_trend, legendre_filter
+                    ref,
+                    good,
+                    coeff,
+                    templates,  # legendre_trend, legendre_filter
                 )
                 if data.comm.group_rank == 0:
                     msg = (
