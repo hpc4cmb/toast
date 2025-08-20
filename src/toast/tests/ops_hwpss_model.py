@@ -106,7 +106,7 @@ class HWPModelTest(MPITestCase):
             weights,
             skyfile,
             "input_sky_dist",
-            map_key="input_sky",
+            map_key=map_key,
             fwhm=30.0 * u.arcmin,
             lmax=3 * pixels.nside,
             I_scale=0.001,
@@ -274,7 +274,7 @@ class HWPModelTest(MPITestCase):
             os.makedirs(testdir)
 
         data, tod_rms, coeff = self.create_test_data(testdir)
-        n_harmonics = len(coeff) // 4
+        n_harmonics = len(coeff[data.obs[0].name]) // 4
 
         # Add random DC level
         for ob in data.obs:
@@ -331,7 +331,7 @@ class HWPModelTest(MPITestCase):
             os.makedirs(testdir)
 
         data, tod_rms, coeff = self.create_test_data(testdir)
-        n_harmonics = len(coeff) // 4
+        n_harmonics = len(coeff[data.obs[0].name]) // 4
 
         # Apply a random inverse relative calibration
         np.random.seed(123456)
@@ -400,7 +400,7 @@ class HWPModelTest(MPITestCase):
             os.makedirs(testdir)
 
         data, tod_rms, coeff = self.create_test_data(testdir)
-        n_harmonics = len(coeff) // 4
+        n_harmonics = len(coeff[data.obs[0].name]) // 4
 
         # Apply a random inverse relative calibration that is time-varying
         np.random.seed(123456)

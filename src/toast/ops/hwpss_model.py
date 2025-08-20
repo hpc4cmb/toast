@@ -690,8 +690,11 @@ class HWPSynchronousModel(Operator):
             all_dets = dets
             all_mag = mag
         else:
-            all_dets = flatten(obs.comm_col.gather(dets, root=0))
-            all_mag = np.array(flatten(obs.comm_col.gather(mag, root=0)))
+            all_dets = obs.comm_col.gather(dets, root=0)
+            all_mag = obs.comm_col.gather(mag, root=0)
+            if obs.comm_col.rank == 0:
+                all_dets = list(flatten(all_dets))
+                all_mag = np.array(list(flatten(all_mag)))
 
         # One process does the trivial calculation
         all_flags = None
