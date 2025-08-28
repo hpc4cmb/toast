@@ -153,8 +153,9 @@ class SimpleJumpCorrect(Operator):
         Return the time domain matched filter kernel of length m.
         """
         h = np.zeros(m)
-        h[: m // 2] = 1
-        h[m // 2 :] = -1
+        mid = m // 2
+        h[: mid] = 1
+        h[mid:] = -1
         # This turns the interpretation of the peak amplitude directly
         # into the step amplitude
         h /= m // 2
@@ -248,10 +249,17 @@ class SimpleJumpCorrect(Operator):
         nsample = len(signal)
         flag_out = flag.copy()
         for peak, _, amplitude in peaks:
-            corrected_signal[peak:] -= amplitude
             pstart = max(0, peak - tol)
-            pstop = min(nsample, peak + tol)
+            pstop = min(nsample, peak + tol + 1)
             flag_out[pstart:pstop] = True
+            # The filter-based amplitude gets biased if there is any
+            # ringing around the jump
+            ind = slice(peak - self.filterlen // 2, peak)
+            before = np.mean(signal[ind][flag_out[ind] == False])
+            ind = slice(peak, peak + self.filterlen // 2)
+            after = np.mean(signal[ind][flag_out[ind] == False])
+            amplitude = after - before
+            corrected_signal[peak:] -= amplitude
         return corrected_signal, flag_out
 
     @function_timer
