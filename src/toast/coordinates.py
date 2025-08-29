@@ -100,14 +100,27 @@ def _qpoint_transform(site, t, quats_azel):
     """Get the Az/El -> Ra/Dec conversion quaternion for boresight."""
     import qpoint
 
+    if hasattr(site, "weather"):
+        weather = site.weather
+        temperature = weather.air_temperature.to_value(u.Celsius)
+        pressure = weather.surface_pressure.to_value(u.mbar)
+        if hasattr(weather, "relative_humidity"):
+            humidity = weather.relative_humidity
+        else:
+            humidity = 0
+    else:
+        temperature = 0
+        pressure = 0
+        humidity = 0
+
     qp = qpoint.QPoint(
         accuracy="high",
         fast_math=True,
         mean_aber=True,
         rate_ref="always",
-        temperature=0,
-        pressure=0,
-        humidity=0,
+        temperature=temperature,
+        pressure=pressure,
+        humidity=humidity,
         update_iers=True,
         rate_dut1="always",
         rate_wobble="always",

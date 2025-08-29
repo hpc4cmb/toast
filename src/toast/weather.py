@@ -63,6 +63,20 @@ class Weather(object):
         self._west_wind_val = west_wind
         self._south_wind_val = south_wind
 
+    def copy(self):
+        return Weather(
+            time=self._time_val,
+            ice_water=self._ice_water_val,
+            liquid_water=self._liquid_water_val,
+            pwv=self._pwv_val,
+            humidity=self._humidity_val,
+            surface_pressure=self._surface_pressure_val,
+            surface_temperature=self._surface_temperature_val,
+            air_temperature=self._air_temperature_val,
+            west_wind=self._west_wind_val,
+            south_wind=self._south_wind_val,
+        )
+
     def __eq__(self, other):
         if self._time_val != other._time_val:
             return False
