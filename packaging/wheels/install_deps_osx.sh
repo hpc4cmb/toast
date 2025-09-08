@@ -63,7 +63,6 @@ fi
 
 # Install any pre-built dependencies with homebrew
 
-brew install cmake
 # Force uninstall flac tools, to avoid conflicts with our
 # custom compiled version.
 brew uninstall -f --ignore-dependencies flac libogg libsndfile libvorbis opusfile sox
