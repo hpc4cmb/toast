@@ -42,6 +42,18 @@ class SimpleJumpCorrect(Operator):
         help="Observation detdata key for flags to use",
     )
 
+    phase = Unicode(
+        defaults.azimuth,
+        allow_none=True,
+        help="Observation shared key for scan phase (to reject scan-synchronous jumps)",
+    )
+
+    phase_tol = Float(
+        np.radians(1.0),
+        help="When `phase` is not None, jumps closer than `phase_tol` are "
+        "synchronous and not corrected",
+    )
+
     det_flag_mask = Int(
         defaults.det_mask_invalid,
         help="Bit mask value for detector sample flagging",
@@ -140,14 +152,18 @@ class SimpleJumpCorrect(Operator):
             raise traitlets.TraitError("njump limit should be a positive integer")
         return check
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.net_factors = []
-        self.total_factors = []
-        self.weights_in = []
-        self.weights_out = []
-        self.rates = []
+    @traitlets.validate("phase_tol")
+    def _check_phase_tol(self, proposal):
+        check = proposal["value"]
+        if check < 0:
+            raise traitlets.TraitError("phase_tol should not be negative")
+        return check
 
+    def __init__(self, **kwargs):
+        self.stepfilter = self._get_stepfilter(self.filterlen)
+        super().__init__(**kwargs)
+
+    @function_timer
     def _get_stepfilter(self, m):
         """
         Return the time domain matched filter kernel of length m.
@@ -161,7 +177,8 @@ class SimpleJumpCorrect(Operator):
         h /= m // 2
         return h
 
-    def _find_peaks(self, toi, flag, flag_out, lim=3.0, tol=1e4, sigma_in=None):
+    @function_timer
+    def _find_peaks(self, toi, flag, lim=3.0, tol=1e4, sigma_in=None):
         """
         Find the peaks and their amplitudes in the match-filtered TOI.
         Inputs:
@@ -174,6 +191,7 @@ class SimpleJumpCorrect(Operator):
         """
         peaks = []
         mytoi = np.ma.masked_array(toi)
+        myflag = flag.copy()
         nsample = len(mytoi)
         # Do not accept jumps at the ends due to boundary effects
         lbound = tol
@@ -181,7 +199,7 @@ class SimpleJumpCorrect(Operator):
         mytoi[:lbound] = np.ma.masked
         mytoi[-rbound:] = np.ma.masked
         if sigma_in is None:
-            sigma = self._get_sigma(mytoi, flag_out, tol)
+            sigma = self._get_sigma(mytoi, myflag, tol)
         else:
             sigma = sigma_in
 
@@ -201,16 +219,16 @@ class SimpleJumpCorrect(Operator):
             istart = max(0, imax - tol)
             istop = min(nsample, imax + tol)
             mytoi[istart:istop] = np.ma.masked
-            flag_out[istart:istop] = True
+            myflag[istart:istop] = True
             # Excessive flagging is a sign of false detection
             if significance > 5 or (
-                float(np.sum(flag_out[istart:istop])) / (istop - istart) < 0.5
+                float(np.sum(myflag[istart:istop])) / (istop - istart) < 0.5
             ):
                 peaks.append((imax, significance, amplitude))
 
             # Find additional peaks
             if sigma_in is None:
-                sigma = self._get_sigma(mytoi, flag_out, tol)
+                sigma = self._get_sigma(mytoi, myflag, tol)
             if np.isnan(sigma) or sigma == 0:
                 npeak = 0
             else:
@@ -218,8 +236,11 @@ class SimpleJumpCorrect(Operator):
 
         return peaks
 
+    @function_timer
     def _get_sigma(self, toi, flag, tol):
-
+        """ Measure the median flagged standard deviation of toi over
+        windows of size 2 * tol
+        """
         full_flag = np.logical_or(flag, toi == 0)
 
         sigmas = []
@@ -239,7 +260,8 @@ class SimpleJumpCorrect(Operator):
             sigma = 0.0
         return sigma
 
-    def _remove_jumps(self, signal, flag, peaks, tol):
+    @function_timer
+    def _remove_jumps(self, signal, flag, jumps):
         """
         Removes the jumps described by peaks from x.
         Adds a buffer of flags with radius of tol.
@@ -248,19 +270,59 @@ class SimpleJumpCorrect(Operator):
         corrected_signal = signal.copy()
         nsample = len(signal)
         flag_out = flag.copy()
-        for peak, _, amplitude in peaks:
-            pstart = max(0, peak - tol)
-            pstop = min(nsample, peak + tol + 1)
+        for pos, _, amplitude in jumps:
+            pstart = max(0, pos - self.jump_radius)
+            pstop = min(nsample, pos + self.jump_radius + 1)
             flag_out[pstart:pstop] = True
             # The filter-based amplitude gets biased if there is any
             # ringing around the jump
-            ind = slice(peak - self.filterlen // 2, peak)
+            ind = slice(pos - self.filterlen // 2, pos)
             before = np.mean(signal[ind][flag_out[ind] == False])
-            ind = slice(peak, peak + self.filterlen // 2)
+            ind = slice(pos, pos + self.filterlen // 2)
             after = np.mean(signal[ind][flag_out[ind] == False])
             amplitude = after - before
-            corrected_signal[peak:] -= amplitude
+            corrected_signal[pos:] -= amplitude
         return corrected_signal, flag_out
+
+    @function_timer
+    def _find_jumps(self, sig, bad, jumps=None, phase=None, view=None):
+        if view is None:
+            nsample = len(sig)
+            ind = slice(nsample)
+        else:
+            nsample = view.last - view.first
+            ind = slice(view.first, view.last)
+        sig_view = sig[ind].copy()
+        bad_view = bad[ind]
+        bad_view_out = bad_view.copy()
+        # Potential jumps show up as peaks in the match-filtered signal
+        sig_filtered = convolve(sig_view, self.stepfilter, mode="same")
+        peaks = self._find_peaks(
+            sig_filtered,
+            bad_view,
+            lim=self.jump_limit,
+            tol=self.filterlen // 2,
+        )
+        njump = len(peaks)
+        # Strong scan-syncronous signal can cause false detections
+        while njump > 0 and phase is not None:
+            peak_phase = np.array([phase[p[0]] for p in peaks])
+            med = np.sort(peak_phase)[njump // 2]
+            sync = np.abs(peak_phase - med) < self.phase_tol
+            nsync = np.sum(sync)
+            if nsync == 1:
+                break
+            new_peaks = []
+            for p, good in zip(peaks, np.logical_not(sync)):
+                if good:
+                    new_peaks.append(p)
+            peaks = new_peaks
+            njump = len(peaks)
+        if jumps is not None:
+            jumps.extend(
+                [(x + view.first, y, z) for x, y, z in peaks]
+            )
+        return peaks
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
@@ -269,8 +331,6 @@ class SimpleJumpCorrect(Operator):
         if self.save_jumps is not None and self.apply_jumps is not None:
             msg = "Cannot both save to and apply pre-existing jumps"
             raise RuntimeError(msg)
-
-        stepfilter = self._get_stepfilter(self.filterlen)
 
         for ob in data.obs:
             if not ob.is_distributed_by_detector:
@@ -282,13 +342,20 @@ class SimpleJumpCorrect(Operator):
 
             local_dets = ob.select_local_detectors(flagmask=self.det_mask)
             shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
+            if self.phase is None:
+                phase = ob.shared[self.phase].data
+                phase = np.unwrap(phase)
+            else:
+                phase = None
             if self.save_jumps is not None:
                 jump_props = dict()
-            for name in local_dets:
-                if self.save_jumps is not None:
-                    jump_dets = list()
-                sig = ob.detdata[self.det_data][name]
-                det_flags = ob.detdata[self.det_flags][name]
+            for det in local_dets:
+                if self.save_jumps is None:
+                    jumps = None
+                else:
+                    jumps = list()
+                sig = ob.detdata[self.det_data][det]
+                det_flags = ob.detdata[self.det_flags][det]
                 if self.reset_det_flags:
                     det_flags[:] = 0
                 bad = np.logical_or(
@@ -297,44 +364,29 @@ class SimpleJumpCorrect(Operator):
                 )
                 if self.apply_jumps is not None:
                     corrected_signal, flag_out = self._remove_jumps(
-                        sig, bad, ob[self.apply_jumps][name], self.jump_radius
+                        sig, bad, ob[self.apply_jumps][det], self.jump_radius
                     )
                     sig[:] = corrected_signal
                     det_flags[flag_out] |= self.jump_mask
                 else:
                     for iview, view in enumerate(views):
-                        nsample = view.last - view.first
-                        ind = slice(view.first, view.last)
-                        sig_view = sig[ind].copy()
-                        bad_view = bad[ind]
-                        bad_view_out = bad_view.copy()
-                        sig_filtered = convolve(sig_view, stepfilter, mode="same")
-                        peaks = self._find_peaks(
-                            sig_filtered,
-                            bad_view,
-                            bad_view_out,
-                            lim=self.jump_limit,
-                            tol=self.filterlen // 2,
+                        jumps = self._find_jumps(
+                            sig, bad, view=view, jumps=jumps, phase=phase
                         )
-                        if self.save_jumps is not None:
-                            jump_dets.extend(
-                                [(x + view.first, y, z) for x, y, z in peaks]
-                            )
-                        njump = len(peaks)
-                        if njump == 0:
+                        if len(jumps) == 0:
                             continue
-                        if njump > self.njump_limit:
-                            ob._detflags[name] |= self.det_mask
-                            det_flags[ind] |= self.det_flag_mask
+                        if len(jumps) > self.njump_limit:
+                            # This detector has too many jumps
+                            ob._detflags[det] |= self.det_mask
+                            det_flags[view.first : view.last] |= self.det_flag_mask
                             continue
-
                         corrected_signal, flag_out = self._remove_jumps(
-                            sig_view, bad_view, peaks, self.jump_radius
+                            sig_view, bad_view, jumps
                         )
                         sig[ind] = corrected_signal
                         det_flags[ind][flag_out] |= self.jump_mask
                     if self.save_jumps is not None:
-                        jump_props[name] = jump_dets
+                        jump_props[det] = jumps
             if self.save_jumps is not None:
                 ob[self.save_jumps] = jump_props
         return
