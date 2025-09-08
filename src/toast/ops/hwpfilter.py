@@ -108,6 +108,12 @@ class HWPFilter(Operator):
         5, help="Order of a Fourier expansion to fit as a function of HWP angle."
     )
 
+    save_amplitudes = Unicode(
+        None,
+        allow_none=True,
+        help="Store the template amplitudes in observation metadata using this key."
+    )
+
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
     )
@@ -239,6 +245,13 @@ class HWPFilter(Operator):
         return coeff, invcov, cov, rcond
 
     @function_timer
+    def record_coeff(self, obs, det, coeff):
+        if self.save_amplitudes not in obs:
+            obs[self.save_amplitudes] = {}
+        obs[self.save_amplitudes][det] = coeff
+        return
+
+    @function_timer
     def subtract_templates(self, ref, good, coeff, legendre_trend, fourier_filter):
         # Trend
         if self.detrend:
@@ -330,6 +343,8 @@ class HWPFilter(Operator):
                     last_cov,
                     last_rcond,
                 )
+                if self.save_amplitudes is not None:
+                    self.record_coeff(obs, det, coeff)
                 last_good = good
                 if data.comm.group_rank == 0:
                     msg = (
