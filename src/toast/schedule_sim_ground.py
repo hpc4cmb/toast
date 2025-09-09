@@ -2272,10 +2272,23 @@ def get_visible(args, observer, patches, el_min):
 
 
 @function_timer
-def get_boresight_angle(args, t, t0=0):
+def get_boresight_angle(args, t):
     """Return the scheduled boresight angle at time t."""
     if args.boresight_angle_step_deg == 0 or args.boresight_angle_time_min == 0:
         return 0
+
+    if args.boresight_angle_start_time is None:
+        t0 = 0
+    else:
+        start_time = args.boresight_angle_start_time
+        if start_time.endswith("Z"):
+            tz = ""
+        else:
+            if args.timezone < 0:
+                tz = "-{:02}00".format(-args.timezone)
+            else:
+                tz = "+{:02}00".format(args.timezone)
+        t0 = dateutil.parser.parse(start_time + tz).timestamp()
 
     nstep = int(
         np.round(
@@ -2620,36 +2633,31 @@ def parse_args(opts=None):
     )
 
     parser.add_argument(
-        "--site-name", required=False, default="LBL", help="Observing site name"
+        "--site-name", default="LBL", help="Observing site name"
     )
     parser.add_argument(
         "--telescope",
-        required=False,
         default="Telescope",
         help="Observing telescope name",
     )
     parser.add_argument(
         "--site-lon",
-        required=False,
         default="-122.247",
         help="Observing site longitude [PyEphem string]",
     )
     parser.add_argument(
         "--site-lat",
-        required=False,
         default="37.876",
         help="Observing site latitude [PyEphem string]",
     )
     parser.add_argument(
         "--site-alt",
-        required=False,
         default=100,
         type=float,
         help="Observing site altitude [meters]",
     )
     parser.add_argument(
         "--scan-margin",
-        required=False,
         default=0,
         type=float,
         help="""Random fractional margin [0..1] added to the
@@ -2657,49 +2665,42 @@ scans to smooth out edge effects""",
     )
     parser.add_argument(
         "--ra-period",
-        required=False,
         default=10,
         type=int,
         help="Period of patch position oscillations in RA [visits]",
     )
     parser.add_argument(
         "--ra-amplitude-deg",
-        required=False,
         default=0,
         type=float,
         help="Amplitude of patch position oscillations in RA [deg]",
     )
     parser.add_argument(
         "--dec-period",
-        required=False,
         default=10,
         type=int,
         help="Period of patch position oscillations in DEC [visits]",
     )
     parser.add_argument(
         "--dec-amplitude-deg",
-        required=False,
         default=0,
         type=float,
         help="Amplitude of patch position oscillations in DEC [deg]",
     )
     parser.add_argument(
         "--elevation-penalty-limit",
-        required=False,
         default=0,
         type=float,
         help="Assign a penalty to observing elevations below this limit [degrees]",
     )
     parser.add_argument(
         "--elevation-penalty-power",
-        required=False,
         default=2,
         type=float,
         help="Power in the elevation penalty function [> 0]",
     )
     parser.add_argument(
         "--elevation-change-limit-deg",
-        required=False,
         default=0,
         type=float,
         help="""Assign a penalty to changes in elevation larger than this limit [degrees].
@@ -2707,7 +2708,6 @@ See --elevation-change-penalty and --elevation-change-time-s""",
     )
     parser.add_argument(
         "--elevation-change-penalty",
-        required=False,
         default=1,
         type=float,
         help="""Multiplicative elevation change penalty triggered by
@@ -2715,7 +2715,6 @@ See --elevation-change-penalty and --elevation-change-time-s""",
     )
     parser.add_argument(
         "--elevation-change-time-s",
-        required=False,
         default=0,
         type=float,
         help="""Time it takes for the telescope to stabilize after a change in observing
@@ -2723,7 +2722,6 @@ elevation [seconds].  Triggered by --elevation-change-limit-deg""",
     )
     parser.add_argument(
         "--verbose-schedule",
-        required=False,
         default=False,
         action="store_true",
         help="""Write a 24-field verbose schedule
@@ -2736,7 +2734,6 @@ instead of the concise 11-field schedule""",
     )
     parser.add_argument(
         "--lock-az-range",
-        required=False,
         default=False,
         action="store_true",
         help="Use the same azimuth range for all sub scans",
@@ -2750,21 +2747,18 @@ instead of the concise 11-field schedule""",
     )
     parser.add_argument(
         "--equalize-area",
-        required=False,
         default=False,
         action="store_true",
         help="Adjust priorities to account for patch area",
     )
     parser.add_argument(
         "--equalize-time",
-        required=False,
         action="store_true",
         dest="equalize_time",
         help="Modulate priority by integration time.",
     )
     parser.add_argument(
         "--equalize-scans",
-        required=False,
         action="store_false",
         dest="equalize_time",
         help="Modulate priority by number of scans.",
@@ -2790,111 +2784,100 @@ frequent observations""",
     )
     parser.add_argument(
         "--patch-coord",
-        required=False,
         default="C",
         help="Sky patch coordinate system [C,E,G]",
     )
     parser.add_argument(
         "--el-min-deg",
-        required=False,
         default=30,
         type=float,
         help="Minimum elevation for a CES",
     )
     parser.add_argument(
         "--el-max-deg",
-        required=False,
         default=80,
         type=float,
         help="Maximum elevation for a CES",
     )
     parser.add_argument(
         "--el-step-deg",
-        required=False,
         default=0,
         type=float,
         help="Optional step to apply to minimum elevation",
     )
     parser.add_argument(
         "--alternate",
-        required=False,
         default=False,
         action="store_true",
         help="Alternate between rising and setting scans",
     )
     parser.add_argument(
         "--fp-radius-deg",
-        required=False,
         default=0,
         type=float,
         help="Focal plane radius [deg]",
     )
     parser.add_argument(
         "--sun-avoidance-angle-deg",
-        required=False,
         default=30,
         type=float,
         help="Minimum distance between the Sun and the bore sight [deg]",
     )
     parser.add_argument(
         "--sun-avoidance-altitude-deg",
-        required=False,
         default=-18,
         type=float,
         help="Minimum altitude to apply Solar avoidance [deg]",
     )
     parser.add_argument(
         "--moon-avoidance-angle-deg",
-        required=False,
         default=20,
         type=float,
         help="Minimum distance between the Moon and the bore sight [deg]",
     )
     parser.add_argument(
         "--moon-avoidance-altitude-deg",
-        required=False,
         default=-18,
         type=float,
         help="Minimum altitude to apply Lunar avoidance [deg]",
     )
     parser.add_argument(
         "--sun-el-max-deg",
-        required=False,
         default=90,
         type=float,
         help="Maximum allowed sun elevation [deg]",
     )
     parser.add_argument(
         "--boresight-angle-step-deg",
-        required=False,
         default=0,
         type=float,
         help="Boresight rotation step size [deg]",
     )
     parser.add_argument(
         "--boresight-angle-min-deg",
-        required=False,
         default=0,
         type=float,
         help="Boresight rotation angle minimum [deg]",
     )
     parser.add_argument(
         "--boresight-angle-max-deg",
-        required=False,
         default=360,
         type=float,
         help="Boresight rotation angle maximum [deg]",
     )
     parser.add_argument(
         "--boresight-angle-time-min",
-        required=False,
         default=0,
         type=float,
         help="Boresight rotation step interval [minutes]",
     )
     parser.add_argument(
+        "--boresight-angle-start-time",
+        default="2000-01-01 00:00:00",
+        help="UTC start time of the boresight rotation schedule",
+    )
+    parser.add_argument(
         "--start",
-        required=False,
         default="2000-01-01 00:00:00",
         help="UTC start time of the schedule",
     )
@@ -2916,49 +2899,42 @@ where YEAR, MONTH and DAY are integers. END days are inclusive""",
     )
     parser.add_argument(
         "--timezone",
-        required=False,
         type=int,
         default=0,
         help="Offset to apply to MJD to separate operational days [hours]",
     )
     parser.add_argument(
         "--gap-s",
-        required=False,
         default=100,
         type=float,
         help="Gap between CES:es [seconds]",
     )
     parser.add_argument(
         "--gap-small-s",
-        required=False,
         default=10,
         type=float,
         help="Gap between split CES:es [seconds]",
     )
     parser.add_argument(
         "--time-step-s",
-        required=False,
         default=600,
         type=float,
         help="Time step after failed target acquisition [seconds]",
     )
     parser.add_argument(
         "--one-scan-per-day",
-        required=False,
         default=False,
         action="store_true",
         help="Pad each operational day to have only one CES",
     )
     parser.add_argument(
         "--ces-max-time-s",
-        required=False,
         default=900,
         type=float,
         help="Maximum length of a CES [seconds]",
     )
     parser.add_argument(
         "--debug",
-        required=False,
         default=False,
         action="store_true",
         help="Write diagnostics, including patch plots.",
@@ -2982,38 +2958,33 @@ where YEAR, MONTH and DAY are integers. END days are inclusive""",
     )
     parser.add_argument(
         "--pole-mode",
-        required=False,
         default=False,
         action="store_true",
         help="Pole scheduling mode (no drift scan)",
     )
     parser.add_argument(
         "--pole-el-step-deg",
-        required=False,
         default=0.25,
         type=float,
         help="Elevation step in pole scheduling mode [deg]",
     )
     parser.add_argument(
         "--pole-ces-time-s",
-        required=False,
         default=3000,
         type=float,
         help="Time to scan at constant elevation in pole mode",
     )
     parser.add_argument(
-        "--out", required=False, default="schedule.txt", help="Output filename"
+        "--out", default="schedule.txt", help="Output filename"
     )
     parser.add_argument(
         "--boresight-offset-el-deg",
-        required=False,
         default=0,
         type=float,
         help="Optional offset added to every observing elevation",
     )
     parser.add_argument(
         "--boresight-offset-az-deg",
-        required=False,
         default=0,
         type=float,
         help="Optional offset added to every observing azimuth",
@@ -3041,42 +3012,36 @@ where YEAR, MONTH and DAY are integers. END days are inclusive""",
     # Pole raster scan arguments
     parser.add_argument(
         "--pole-raster-scan",
-        required=False,
         default=False,
         action="store_true",
         help="Pole raster scan mode",
     )
     parser.add_argument(
         "--pole-raster-el-step-deg",
-        required=False,
         default=1 / 60,
         type=float,
         help="Elevation step in pole raster scheduling mode [deg]",
     )
     parser.add_argument(
         "--az-rate-sky-deg",
-        required=False,
         default=1.0,
         type=float,
         help="Azimuthal rate in pole raster scheduling mode [deg]",
     )
     parser.add_argument(
         "--az-accel-mount-deg",
-        required=False,
         default=1.0,
         type=float,
         help="Azimuthal accleration in pole raster scheduling mode [deg]",
     )
     parser.add_argument(
         "--el-rate-deg",
-        required=False,
         default=1.0,
         type=float,
         help="Elevation rate in pole raster scheduling mode [deg]",
     )
     parser.add_argument(
         "--el-accel-deg",
-        required=False,
         default=1.0,
         type=float,
         help="Elevation accleration in pole raster scheduling mode [deg]",
