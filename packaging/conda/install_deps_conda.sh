@@ -82,6 +82,8 @@ fi
 
 # Now build the packages not available through conda
 
+python3 -m pip install qpoint
+
 # CC set by conda compilers
 # CXX set by conda compilers
 # FC set by conda compilers

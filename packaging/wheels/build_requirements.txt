@@ -11,4 +11,5 @@ pyyaml
 astropy
 healpy
 ephem
+qpoint
 spt3g
