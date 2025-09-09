@@ -2277,18 +2277,15 @@ def get_boresight_angle(args, t):
     if args.boresight_angle_step_deg == 0 or args.boresight_angle_time_min == 0:
         return 0
 
-    if args.boresight_angle_start_time is None:
-        t0 = 0
+    start_time = args.boresight_angle_start_time
+    if start_time.endswith("Z"):
+        tz = ""
     else:
-        start_time = args.boresight_angle_start_time
-        if start_time.endswith("Z"):
-            tz = ""
+        if args.timezone < 0:
+            tz = "-{:02}00".format(-args.timezone)
         else:
-            if args.timezone < 0:
-                tz = "-{:02}00".format(-args.timezone)
-            else:
-                tz = "+{:02}00".format(args.timezone)
-        t0 = dateutil.parser.parse(start_time + tz).timestamp()
+            tz = "+{:02}00".format(args.timezone)
+    t0 = dateutil.parser.parse(start_time + tz).timestamp()
 
     nstep = int(
         np.round(
