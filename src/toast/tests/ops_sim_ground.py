@@ -172,6 +172,69 @@ class SimGroundTest(MPITestCase):
 
         close_data(data)
 
+    def test_qpoint(self):
+        # Slow sampling
+        fp = fake_hexagon_focalplane(
+            n_pix=self.npix,
+            sample_rate=10.0 * u.Hz,
+        )
+
+        site = GroundSite("Atacama", "-22:57:30", "-67:47:10", 5200.0 * u.meter)
+
+        tele = Telescope("telescope", focalplane=fp, site=site)
+
+        sch_file = os.path.join(self.outdir, "exec_schedule.txt")
+        schedule = None
+
+        if self.comm is None or self.comm.rank == 0:
+            run_scheduler(
+                opts=[
+                    "--site-name",
+                    site.name,
+                    "--telescope",
+                    tele.name,
+                    "--site-lon",
+                    "{}".format(site.earthloc.lon.to_value(u.degree)),
+                    "--site-lat",
+                    "{}".format(site.earthloc.lat.to_value(u.degree)),
+                    "--site-alt",
+                    "{}".format(site.earthloc.height.to_value(u.meter)),
+                    "--patch",
+                    "small_patch,1,40,-40,44,-44",
+                    "--start",
+                    "2020-01-01 00:00:00",
+                    "--stop",
+                    "2020-01-01 12:00:00",
+                    "--out",
+                    sch_file,
+                    "--field-separator",
+                    "|",
+                ]
+            )
+            schedule = GroundSchedule()
+            schedule.read(sch_file)
+        if self.comm is not None:
+            schedule = self.comm.bcast(schedule, root=0)
+
+        # Sort the schedule to exercise that method
+        schedule.sort_by_RA()
+
+        data = Data(self.toastcomm)
+
+        sim_ground = ops.SimGround(
+            name="sim_ground",
+            telescope=tele,
+            schedule=schedule,
+            hwp_angle=defaults.hwp_angle,
+            hwp_rpm=1.0,
+            max_pwv=5 * u.mm,
+            weather="atacama",
+            median_weather=True,
+            use_ephem=False,
+            use_qpoint=True,
+        )
+        sim_ground.apply(data)
+
     def test_phase(self):
         # Slow sampling
         fp = fake_hexagon_focalplane(

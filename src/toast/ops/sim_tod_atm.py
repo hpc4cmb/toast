@@ -588,7 +588,9 @@ class SimAtmosphere(Operator):
                 if generate_absorption:
                     absorption = atm_absorption_coefficient_vec(
                         altitude.to_value(u.meter),
-                        weather.air_temperature.to_value(u.Kelvin),
+                        weather.air_temperature.to_value(
+                            u.Kelvin, equivalencies=u.temperature()
+                        ),
                         weather.surface_pressure.to_value(u.Pa),
                         weather.pwv.to_value(u.mm),
                         freqs[my_start].to_value(u.GHz),
@@ -598,7 +600,9 @@ class SimAtmosphere(Operator):
                 if generate_loading:
                     loading = atm_atmospheric_loading_vec(
                         altitude.to_value(u.meter),
-                        weather.air_temperature.to_value(u.Kelvin),
+                        weather.air_temperature.to_value(
+                            u.Kelvin, equivalencies=u.temperature()
+                        ),
                         weather.surface_pressure.to_value(u.Pa),
                         weather.pwv.to_value(u.mm),
                         freqs[my_start].to_value(u.GHz),
