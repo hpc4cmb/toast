@@ -14,7 +14,7 @@ on:
   pull_request:
     branches:
       - master
-      #- toast3
+      - toast3
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
