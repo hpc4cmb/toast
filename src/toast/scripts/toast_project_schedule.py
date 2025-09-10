@@ -178,7 +178,7 @@ def load_background(args):
         bg = hp.smoothing(bg, fwhm=np.radians(args.bg_fwhm), lmax=args.bg_lmax)
 
     if args.bg_pol:
-        bg = np.sqrt(bg[1]**2 + bg[2]**2)
+        bg = np.sqrt(bg[1] ** 2 + bg[2] ** 2)
 
     # truncate the color scale
     limit = np.percentile(bg, args.bg_percentile)
@@ -218,14 +218,23 @@ def plot_hits(args, all_hits, period_times, period_names, comm, rank):
         title = f"{name} : {to_UTC(tstart)} - {to_UTC(tstop)}"
         mask = hits > 0
         hits[hits == 0] = hp.UNSEEN
+        rot = [args.rot_ra, args.rot_dec]
         if bg is not None:
-            hp.mollview(bg, cmap="inferno", coord=args.bg_coord, cbar=False)
+            hp.mollview(
+                bg,
+                cmap="inferno",
+                rot=rot,
+                coord=args.bg_coord,
+                cbar=False,
+                alpha=np.ones(bg.size) * 0.5,
+            )
         hp.mollview(
             hits,
             cmap="magma",
             title=title,
             xsize=1600,
             unit="Hits",
+            rot=rot,
             reuse_axes=True,
             alpha=mask * 0.75,
         )
@@ -246,12 +255,14 @@ def parse_arguments():
 
     parser.add_argument(
         "--fov",
+        type=float,
         default=5,
         help="Field of view in degrees",
     )
 
     parser.add_argument(
         "--nside",
+        type=int,
         default=128,
         help="Hitmap healpix resolution",
     )
@@ -264,12 +275,14 @@ def parse_arguments():
 
     parser.add_argument(
         "--bg-fwhm",
+        type=float,
         required=False,
         help="Background smoothing scale in degrees",
     )
 
     parser.add_argument(
         "--bg-lmax",
+        type=int,
         default=512,
         help="Background smoothing lmax",
     )
@@ -281,9 +294,31 @@ def parse_arguments():
     )
 
     parser.add_argument(
+        "--bg-alpha",
+        type=float,
+        default=0.5,
+        help="Background alpha passed to Healpy.",
+    )
+
+    parser.add_argument(
         "--bg-percentile",
+        type=float,
         default=75,
         help="Saturate background colorscale at this percentile",
+    )
+
+    parser.add_argument(
+        "--rot-ra",
+        type=float,
+        default=0,
+        help="Rotate images in RA",
+    )
+
+    parser.add_argument(
+        "--rot-dec",
+        type=float,
+        default=0,
+        help="Rotate images in Declination",
     )
 
     parser.add_argument(
@@ -296,6 +331,7 @@ def parse_arguments():
 
     parser.add_argument(
         "--timestep",
+        type=float,
         default=600,
         help="Time step in seconds (default is 10 minutes). "
         "Each period is sampled once every time step.",
@@ -311,12 +347,14 @@ def parse_arguments():
 
     parser.add_argument(
         "--period",
+        type=float,
         default=86400,
         help="Time period in seconds (default is 1 day)",
     )
 
     parser.add_argument(
         "--azstep",
+        type=float,
         default=1,
         help="Width of azimuth step in degrees",
     )
