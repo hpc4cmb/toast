@@ -226,7 +226,7 @@ def plot_hits(args, all_hits, period_times, period_names, comm, rank):
                 rot=rot,
                 coord=args.bg_coord,
                 cbar=False,
-                alpha=np.ones(bg.size) * 0.5,
+                alpha=np.ones(bg.size) * args.bg_alpha,
             )
         hp.mollview(
             hits,
