@@ -38,6 +38,7 @@ from .mapmaker_utils import (
 )
 from .memory_counter import MemoryCounter
 from .noise_estimation import NoiseEstim
+from .noise_filter import NoiseFilter
 from .noise_model import DefaultNoiseModel, FitNoiseModel, FlagNoiseFit
 from .noise_weight import NoiseWeight
 from .obsmat import ObsMat, coadd_observation_matrix

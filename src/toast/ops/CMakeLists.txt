@@ -27,6 +27,7 @@ install(FILES
     flag_intervals.py
     common_mode_noise.py
     noise_model.py
+    noise_filter.py
     signal_diff_noise_model.py
     gainscrambler.py
     pointing.py
