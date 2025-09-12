@@ -104,6 +104,65 @@ class DefaultNoiseModel(Operator):
         return prov
 
 
+def estimate_net(freqs, data):
+    """Estimate the NET from the high frequency PSD.
+
+    This assumes that at high frequency the PSD has a white noise "plateau".  A simple
+    parabola is fit to the last bit of the spectrum and this is used to compute the
+    NET.
+
+    Args:
+        freqs (array):  The frequency values in Hz
+        data (array):  The PSD in arbitrary units
+
+    Returns:
+        (float):  The estimated NET.
+
+    """
+
+    def quad_func(x, a, b, c):
+        # Parabola
+        return a * (x - b) ** 2 + c
+
+    def lin_func(x, a, b, c):
+        # Line
+        return a * (x - b) + c
+
+    n_psd = len(data)
+    offset = int(0.8 * n_psd)
+    try_quad = True
+    if n_psd - offset < 10:
+        # Too few points
+        try_quad = False
+        if n_psd < 10:
+            # Crazy...
+            offset = 0
+        else:
+            offset = n_psd - 10
+
+    ffreq = np.log(freqs[offset:])
+    fdata = np.log(data[offset:])
+    if try_quad:
+        try:
+            params, params_cov = curve_fit(
+                quad_func, ffreq, fdata, p0=[1.0, ffreq[-1], fdata[-1]]
+            )
+            # It worked!
+            fdata = quad_func(ffreq, params[0], params[1], params[2])
+            fdata = np.exp(fdata)
+            return np.sqrt(fdata[-1])
+        except RuntimeError:
+            pass
+
+    params, params_cov = curve_fit(
+        lin_func, ffreq, fdata, p0=[0.0, ffreq[-1], fdata[-1]]
+    )
+    fdata = lin_func(ffreq, params[0], params[1], params[2])
+    fdata = np.exp(fdata)
+    net = np.sqrt(fdata[-1])
+    return net
+
+
 @trait_docs
 class FitNoiseModel(Operator):
     """Perform a least squares fit to an existing noise model.
@@ -259,65 +318,6 @@ class FitNoiseModel(Operator):
                 # We are storing this in a new key
                 ob[self.out_model] = new_model
         return
-
-    def _estimate_net(self, freqs, data):
-        """Estimate the NET from the high frequency PSD.
-
-        This assumes that at high frequency the PSD has a white noise "plateau".  A simple
-        parabola is fit to the last bit of the spectrum and this is used to compute the
-        NET.
-
-        Args:
-            freqs (array):  The frequency values in Hz
-            data (array):  The PSD in arbitrary units
-
-        Returns:
-            (float):  The estimated NET.
-
-        """
-        log = Logger.get()
-
-        def quad_func(x, a, b, c):
-            # Parabola
-            return a * (x - b) ** 2 + c
-
-        def lin_func(x, a, b, c):
-            # Line
-            return a * (x - b) + c
-
-        n_psd = len(data)
-        offset = int(0.8 * n_psd)
-        try_quad = True
-        if n_psd - offset < 10:
-            # Too few points
-            try_quad = False
-            if n_psd < 10:
-                # Crazy...
-                offset = 0
-            else:
-                offset = n_psd - 10
-
-        ffreq = np.log(freqs[offset:])
-        fdata = np.log(data[offset:])
-        if try_quad:
-            try:
-                params, params_cov = curve_fit(
-                    quad_func, ffreq, fdata, p0=[1.0, ffreq[-1], fdata[-1]]
-                )
-                # It worked!
-                fdata = quad_func(ffreq, params[0], params[1], params[2])
-                fdata = np.exp(fdata)
-                return np.sqrt(fdata[-1])
-            except RuntimeError:
-                pass
-
-        params, params_cov = curve_fit(
-            lin_func, ffreq, fdata, p0=[0.0, ffreq[-1], fdata[-1]]
-        )
-        fdata = lin_func(ffreq, params[0], params[1], params[2])
-        fdata = np.exp(fdata)
-        net = np.sqrt(fdata[-1])
-        return net
 
     def _evaluate_model(self, freqs, fmin, net, fknee, alpha):
         """Evaluate the noise model
@@ -529,7 +529,7 @@ class FitNoiseModel(Operator):
         raw_fmin = self.f_min.to_value(u.Hz)
 
         if self.white_noise_max is None:
-            net = self._estimate_net(input_freqs, input_data)
+            net = estimate_net(input_freqs, input_data)
         else:
             plateau_samples = np.logical_and(
                 (input_freqs > self.white_noise_min.to_value(u.Hz)),

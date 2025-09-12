@@ -51,6 +51,7 @@ from . import ops_mapmaker_solve as test_ops_mapmaker_solve
 from . import ops_mapmaker_utils as test_ops_mapmaker_utils
 from . import ops_memory_counter as test_ops_memory_counter
 from . import ops_noise_estim as test_ops_noise_estim
+from . import ops_noise_filter as test_ops_noise_filter
 from . import ops_perturbhwp as test_ops_perturbhwp
 from . import ops_pixels_healpix as test_ops_pixels_healpix
 from . import ops_pointing_detector as test_ops_pointing_detector
@@ -242,6 +243,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_perturbhwp))
         suite.addTest(loader.loadTestsFromModule(test_ops_filterbin))
         suite.addTest(loader.loadTestsFromModule(test_ops_noise_estim))
+        suite.addTest(loader.loadTestsFromModule(test_ops_noise_filter))
         suite.addTest(loader.loadTestsFromModule(test_ops_yield_cut))
         suite.addTest(loader.loadTestsFromModule(test_ops_elevation_noise))
         suite.addTest(loader.loadTestsFromModule(test_ops_signal_diff_noise))
