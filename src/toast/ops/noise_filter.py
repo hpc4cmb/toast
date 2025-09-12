@@ -135,8 +135,8 @@ class NoiseFilter(Operator):
                     net = estimate_net(freq.value, psd)
                 else:
                     plateau_samples = np.logical_and(
-                        (freq > self.white_noise_min.to_value(u.Hz)),
-                        (freq < self.white_noise_max.to_value(u.Hz)),
+                        (freq > self.white_noise_min.to(u.Hz)),
+                        (freq < self.white_noise_max.to(u.Hz)),
                     )
                     net = np.sqrt(np.mean(psd[plateau_samples]))
 
