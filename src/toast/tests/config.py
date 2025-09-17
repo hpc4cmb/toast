@@ -692,14 +692,14 @@ class ConfigTest(MPITestCase):
         # Create the telescope and schedule files
         tele_file = os.path.join(self.outdir, "toast_run_telescope.h5:/leve1/level2")
         tele = create_space_telescope(self.toastcomm.group_size)
-        if self.comm.rank == 0:
+        if self.toastcomm.world_rank == 0:
             save_instrument_file(tele_file, tele, None)
 
         sch_file = os.path.join(self.outdir, "toast_run_schedule.ecsv")
         sch = create_satellite_schedule(
             mission_start=datetime(2023, 2, 23), num_observations=self.toastcomm.ngroups
         )
-        if self.comm.rank == 0:
+        if self.toastcomm.world_rank == 0:
             sch.write(sch_file)
 
         # Create the config file on disk
