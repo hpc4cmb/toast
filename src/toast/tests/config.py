@@ -23,9 +23,11 @@ from ..config import (
     dump_yaml,
     load_config,
     parse_config,
+    run_config,
 )
 from ..data import Data
 from ..instrument import Focalplane, Telescope
+from ..io import save_instrument_file
 from ..schedule_sim_satellite import create_satellite_schedule
 from ..templates import Offset, SubHarmonic
 from ..trait_utils import string_to_trait, trait_to_string
@@ -449,6 +451,19 @@ class ConfigTest(MPITestCase):
             if self.toastcomm.comm_world is not None:
                 self.toastcomm.comm_world.barrier()
 
+            conf_defaults_auto_file = os.path.join(
+                self.outdir, f"multi_defaults_auto.{case}"
+            )
+            if self.toastcomm.world_rank == 0:
+                dump_config(
+                    conf_defaults_auto_file,
+                    defaults,
+                    format=None,
+                    comm=self.toastcomm.comm_world,
+                )
+            if self.toastcomm.comm_world is not None:
+                self.toastcomm.comm_world.barrier()
+
             # Now change some values
             testops["mem_count"].prefix = "newpref"
             testops["mem_count"].enabled = False
@@ -540,9 +555,9 @@ class ConfigTest(MPITestCase):
 
                 # Check
                 self.assertTrue(runops.mem_count.prefix == "altpref")
-                self.assertTrue(runops.mem_count.enabled == True)
-                self.assertTrue(runops.sim_noise.serial == True)
-                self.assertTrue(runops.sim_satellite.distribute_time == False)
+                self.assertTrue(runops.mem_count.enabled)
+                self.assertTrue(runops.sim_noise.serial)
+                self.assertFalse(runops.sim_satellite.distribute_time)
                 self.assertTrue(runops.sim_satellite.hwp_rpm == 3.0)
                 self.assertTrue(runops.sim_satellite.shared_flags is None)
                 self.assertTrue(runops.fake.unicode_none is None)
@@ -621,3 +636,104 @@ class ConfigTest(MPITestCase):
         run.operators.sim_pipe.apply(data)
 
         close_data(data)
+
+    def test_config_bootstrap(self):
+        # This tests instantiating operators directly from a config file.
+
+        testops = self.create_operators()
+        testtmpl = self.create_templates()
+        conf_pipe = dict()
+        for op_name, op in testops.items():
+            conf_pipe = op.get_config(input=conf_pipe)
+        pipe = ops.Pipeline(name="sim_pipe")
+        pipe.operators = [y for x, y in testops.items() if x != "det_pointing"]
+        conf_pipe = pipe.get_config(input=conf_pipe)
+        for tmpl_name, tmpl in testtmpl.items():
+            conf_pipe = tmpl.get_config(input=conf_pipe)
+
+        conf_file = os.path.join(self.outdir, "run_bootstrap.yml")
+        if self.toastcomm.world_rank == 0:
+            dump_yaml(conf_file, conf_pipe)
+        if self.toastcomm.comm_world is not None:
+            self.toastcomm.comm_world.barrier()
+
+        parser = argparse.ArgumentParser(description="Bootstrap test")
+        config, otherargs, runargs = run_config(
+            parser,
+            prefix="",
+            opts=["--config", conf_file],
+        )
+
+        run = create_from_config(config)
+
+        data = Data(self.toastcomm)
+
+        tele = create_space_telescope(self.toastcomm.group_size)
+        sch = create_satellite_schedule(
+            mission_start=datetime(2023, 2, 23), num_observations=self.toastcomm.ngroups
+        )
+
+        # Add our fake telescope and schedule
+        run.operators.sim_satellite.telescope = tele
+        run.operators.sim_satellite.schedule = sch
+
+        # Set up detector pointing
+        run.operators.pixels.detector_pointing = run.operators.det_pointing
+
+        # Run it
+        run.operators.sim_pipe.apply(data)
+
+        close_data(data)
+
+    def test_script_run_config(self):
+        # This tests the toast_run:main entry point
+        from ..scripts.toast_run import main as run_main
+
+        # Create the telescope and schedule files
+        tele_file = os.path.join(self.outdir, "toast_run_telescope.h5:/leve1/level2")
+        tele = create_space_telescope(self.toastcomm.group_size)
+        if self.comm.rank == 0:
+            save_instrument_file(tele_file, tele, None)
+
+        sch_file = os.path.join(self.outdir, "toast_run_schedule.ecsv")
+        sch = create_satellite_schedule(
+            mission_start=datetime(2023, 2, 23), num_observations=self.toastcomm.ngroups
+        )
+        if self.comm.rank == 0:
+            sch.write(sch_file)
+
+        # Create the config file on disk
+        testops = self.create_operators()
+
+        # Set the telescope / schedule file traits, and cross references to other
+        # operators
+        testops["sim_satellite"].telescope_file = tele_file
+        testops["sim_satellite"].schedule_file = sch_file
+        testops["pixels"].detector_pointing = testops["det_pointing"]
+
+        testtmpl = self.create_templates()
+        conf_pipe = dict()
+        for op_name, op in testops.items():
+            conf_pipe = op.get_config(input=conf_pipe)
+        pipe = ops.Pipeline(name="sim_pipe")
+        pipe.operators = [y for x, y in testops.items() if x != "det_pointing"]
+        conf_pipe = pipe.get_config(input=conf_pipe)
+        for tmpl_name, tmpl in testtmpl.items():
+            conf_pipe = tmpl.get_config(input=conf_pipe)
+
+        conf_file = os.path.join(self.outdir, "toast_run_input.yml")
+        if self.toastcomm.world_rank == 0:
+            dump_yaml(conf_file, conf_pipe)
+        if self.toastcomm.comm_world is not None:
+            self.toastcomm.comm_world.barrier()
+
+        opts = [
+            "--config",
+            conf_file,
+            "--main",
+            "sim_pipe",
+            "--out_dir",
+            self.outdir,
+        ]
+
+        run_main(opts=opts)

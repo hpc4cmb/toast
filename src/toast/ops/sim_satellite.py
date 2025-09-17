@@ -13,6 +13,7 @@ from .. import qarray as qa
 from ..dist import distribute_discrete
 from ..healpix import ang2vec
 from ..instrument import Session, Telescope
+from ..io import load_instrument_file
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
 from ..observation import default_values as defaults
@@ -21,6 +22,7 @@ from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, Unit, trait_docs
 from ..utils import Environment, Logger, name_UID, rate_from_times
 from .operator import Operator
+from .pipeline import Pipeline
 from .sim_hwp import simulate_hwp_response
 
 
@@ -191,6 +193,12 @@ class SimSatellite(Operator):
     To be consistent with the ground simulation facilities, the satellite pointing
     is expressed in the ICRS (equatorial) system by default.  Detector pointing
     expansion can rotate the output pointing to any other reference frame.
+
+    The telescope file, if specified, can reference an HDF5 data dump by specifying the
+    internal path within the file.  For example:
+
+    telescope_file="/path/to/data.h5:/obs1/instrument"
+
     """
 
     # Class traits
@@ -201,8 +209,18 @@ class SimSatellite(Operator):
         klass=Telescope, allow_none=True, help="This must be an instance of a Telescope"
     )
 
+    telescope_file = Unicode(
+        None, allow_none=True, help="Path to HDF5 file containing an instrument group."
+    )
+
     schedule = Instance(
         klass=SatelliteSchedule, allow_none=True, help="Instance of a SatelliteSchedule"
+    )
+
+    schedule_file = Unicode(
+        None,
+        allow_none=True,
+        help="satellite-based observing schedule file",
     )
 
     spin_angle = Quantity(
@@ -306,49 +324,6 @@ class SimSatellite(Operator):
                 )
         return sch
 
-    @traitlets.validate("hwp_angle")
-    def _check_hwp_angle(self, proposal):
-        hwp_angle = proposal["value"]
-        if hwp_angle is None:
-            if self.hwp_rpm is not None or self.hwp_step is not None:
-                raise traitlets.TraitError(
-                    "Cannot simulate HWP without a shared data key"
-                )
-        else:
-            if self.hwp_rpm is None and self.hwp_step is None:
-                raise traitlets.TraitError("Cannot simulate HWP without parameters")
-        return hwp_angle
-
-    @traitlets.validate("hwp_rpm")
-    def _check_hwp_rpm(self, proposal):
-        hwp_rpm = proposal["value"]
-        if hwp_rpm is not None:
-            if self.hwp_angle is None:
-                raise traitlets.TraitError(
-                    "Cannot simulate rotating HWP without a shared data key"
-                )
-            if self.hwp_step is not None:
-                raise traitlets.TraitError("HWP cannot rotate *and* step.")
-        else:
-            if self.hwp_angle is not None and self.hwp_step is None:
-                raise traitlets.TraitError("Cannot simulate HWP without parameters")
-        return hwp_rpm
-
-    @traitlets.validate("hwp_step")
-    def _check_hwp_step(self, proposal):
-        hwp_step = proposal["value"]
-        if hwp_step is not None:
-            if self.hwp_angle is None:
-                raise traitlets.TraitError(
-                    "Cannot simulate stepped HWP without a shared data key"
-                )
-            if self.hwp_rpm is not None:
-                raise traitlets.TraitError("HWP cannot rotate *and* step.")
-        else:
-            if self.hwp_angle is not None and self.hwp_rpm is None:
-                raise traitlets.TraitError("Cannot simulate HWP without parameters")
-        return hwp_step
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -369,14 +344,29 @@ class SimSatellite(Operator):
         zaxis = np.array([0, 0, 1], dtype=np.float64)
         coord_rot = self._get_coord_rot()
         log = Logger.get()
+
+        if self.schedule is None and self.schedule_file is None:
+            raise RuntimeError(
+                "Either the schedule or schedule_file must be set before calling exec()"
+            )
+
+        if self.telescope is None and self.telescope_file is None:
+            raise RuntimeError(
+                "Either the telescope or the telescope_file must be specified"
+            )
+
         if self.telescope is None:
-            raise RuntimeError(
-                "The telescope attribute must be set before calling exec()"
-            )
+            if data.comm.world_rank == 0:
+                self.telescope, _ = load_instrument_file(self.telescope_file)
+            if data.comm.comm_world is not None:
+                self.telescope = data.comm.comm_world.bcast(self.telescope, root=0)
+
         if self.schedule is None:
-            raise RuntimeError(
-                "The schedule attribute must be set before calling exec()"
-            )
+            schedule = SatelliteSchedule()
+            schedule.read(self.schedule_file, comm=data.comm.comm_world)
+        else:
+            schedule = self.schedule
+
         focalplane = self.telescope.focalplane
         rate = focalplane.sample_rate.to_value(u.Hz)
         site = self.telescope.site
@@ -431,13 +421,13 @@ class SimSatellite(Operator):
 
         # The global start is the beginning of the first scan
 
-        mission_start = self.schedule.scans[0].start
+        mission_start = schedule.scans[0].start
 
         # Satellite motion is continuous across multiple observations, so we simulate
         # continuous sampling and find the actual start / stop times for the samples
         # that fall in each scan time range.
 
-        if len(self.schedule.scans) == 0:
+        if len(schedule.scans) == 0:
             raise RuntimeError("Schedule has no scans!")
 
         scan_starts = list()
@@ -447,7 +437,7 @@ class SimSatellite(Operator):
 
         incr = 1.0 / rate
         off = 0
-        for scan in self.schedule.scans:
+        for scan in schedule.scans:
             ffirst = rate * (scan.start - mission_start).total_seconds()
             first = int(ffirst)
             if ffirst - first > 1.0e-3 * incr:
@@ -472,7 +462,7 @@ class SimSatellite(Operator):
         group_numobs = groupdist[comm.group][1]
 
         for obindx in range(group_firstobs, group_firstobs + group_numobs):
-            scan = self.schedule.scans[obindx]
+            scan = schedule.scans[obindx]
 
             ses_start = scan_starts[obindx]
             ses_end = ses_start + float(scan_samples[obindx] - 1) / rate

@@ -20,7 +20,7 @@ from tomlkit.exceptions import TOMLKitError
 from ..trait_utils import scalar_to_string as trait_scalar_to_string
 from ..trait_utils import string_to_scalar as trait_string_to_scalar
 from ..trait_utils import string_to_trait, trait_to_string
-from ..utils import Environment, Logger
+from ..utils import Environment, Logger, import_from_name
 from .json import dump_json, load_json
 from .toml import dump_toml, load_toml
 from .yaml import dump_yaml, load_yaml
@@ -81,10 +81,11 @@ def load_config(file, input=None, comm=None):
         return ret
 
 
-def dump_config(file, conf, format="toml", comm=None):
+def dump_config(file, conf, format=None, comm=None):
     """Dump a config file to a supported format.
 
-    Writes the configuration to a file in the specified format.
+    Writes the configuration to a file in the specified format.  If `format` is
+    None, the format with be determined from the file name.
 
     Args:
         file (str):  The file to write.
@@ -96,6 +97,19 @@ def dump_config(file, conf, format="toml", comm=None):
         None
 
     """
+    if format is None:
+        # Guess from the file name
+        base, ext = os.path.splitext(file)
+        if ext == ".toml":
+            format = "toml"
+        elif ext == ".json" or ext == ".jsn":
+            format = "json"
+        elif ext == ".yaml" or ext == ".yml":
+            format = "yaml"
+        else:
+            msg = "Cannot determine format (yaml, toml, json) from"
+            msg += f" path '{file}'"
+            raise RuntimeError(msg)
     if format == "toml":
         dump_toml(file, conf, comm=comm)
     elif format == "json":
@@ -361,6 +375,133 @@ def args_update_config(args, conf, useropts, section, prefix="", separator=r"\."
     return remain
 
 
+def add_job_parser_options(parser):
+    # Add an option to load one or more config files.  These should have compatible
+    # names for the operators used in defaults.
+    parser.add_argument(
+        "--config",
+        type=str,
+        required=False,
+        nargs="+",
+        help="One or more input config files.",
+    )
+
+    parser.add_argument(
+        "--job_group_size",
+        required=False,
+        type=int,
+        default=None,
+        help="(Advanced) Size of the process groups",
+    )
+
+    parser.add_argument(
+        "--job_node_mem",
+        required=False,
+        type=int,
+        default=None,
+        help="(Advanced) Override the detected memory per node in bytes",
+    )
+
+
+def add_default_parser_options(parser, prefix, operators, templates):
+     # Add options to dump default values
+    parser.add_argument(
+        "--defaults_toml",
+        type=str,
+        required=False,
+        default=None,
+        help="Dump default config values to a TOML file",
+    )
+    parser.add_argument(
+        "--defaults_json",
+        type=str,
+        required=False,
+        default=None,
+        help="Dump default config values to a JSON file",
+    )
+    parser.add_argument(
+        "--defaults_yaml",
+        type=str,
+        required=False,
+        default=None,
+        help="Dump default config values to a YAML file",
+    )
+
+    # The default configuration
+    defaults_op = build_config(operators)
+    defaults_tmpl = build_config(templates)
+
+    # Add commandline overrides
+    if len(operators) > 0:
+        add_config_args(
+            parser,
+            defaults_op,
+            "operators",
+            ignore=["API"],
+            prefix=prefix,
+        )
+    if len(templates) > 0:
+        add_config_args(
+            parser,
+            defaults_tmpl,
+            "templates",
+            ignore=["API"],
+            prefix=prefix,
+        )
+
+    # Combine all the defaults
+    defaults = OrderedDict()
+    defaults["operators"] = OrderedDict()
+    defaults["templates"] = OrderedDict()
+    if "operators" in defaults_op:
+        defaults["operators"].update(defaults_op["operators"])
+    if "templates" in defaults_tmpl:
+        defaults["templates"].update(defaults_tmpl["templates"])
+    return defaults
+
+
+def process_job_args(args):
+    # Parse job args
+    jobargs = types.SimpleNamespace(
+        node_mem=args.job_node_mem,
+        group_size=args.job_group_size,
+    )
+    del args.job_node_mem
+    del args.job_group_size
+    return jobargs
+
+
+def process_default_args(args, defaults):
+    # Dump default config values.
+    if args.defaults_toml is not None:
+        dump_toml(args.defaults_toml, defaults)
+        del args.default_toml
+    if args.defaults_json is not None:
+        dump_json(args.defaults_json, defaults)
+        del args.default_json
+    if args.defaults_yaml is not None:
+        dump_yaml(args.defaults_yaml, defaults)
+        del args.default_yaml
+
+
+def process_object_args(args, prefix, config, opts, operators, templates):
+    # Parse operator and template commandline options.  These override any config
+    # file or default values.
+    if len(operators) > 0:
+        op_remaining = args_update_config(
+            args, config, opts, "operators", prefix=prefix
+        )
+    else:
+        op_remaining = args
+    if len(templates) > 0:
+        remaining = args_update_config(
+            op_remaining, config, opts, "templates", prefix=prefix
+        )
+    else:
+        remaining = op_remaining
+    return remaining
+
+
 def parse_config(
     parser,
     operators=list(),
@@ -404,138 +545,123 @@ def parse_config(
         opts (list):  If not None, parse arguments from this list instead of sys.argv.
 
     Returns:
-        (tuple):  The (config dictionary, args).  The args namespace contains all the
-            remaining parameters after extracting the operator and template options.
+        (tuple):  The (config dictionary, other args, run args).  The other args
+            namespace contains all the remaining parameters after extracting the
+            operator and template options.
 
     """
+    add_job_parser_options(parser)
 
-    # The default configuration
-    defaults_op = build_config(operators)
-    defaults_tmpl = build_config(templates)
-
-    # Add commandline overrides
-    if len(operators) > 0:
-        add_config_args(
-            parser,
-            defaults_op,
-            "operators",
-            ignore=["API"],
-            prefix=prefix,
-        )
-    if len(templates) > 0:
-        add_config_args(
-            parser,
-            defaults_tmpl,
-            "templates",
-            ignore=["API"],
-            prefix=prefix,
-        )
-
-    # Combine all the defaults
-    defaults = OrderedDict()
-    defaults["operators"] = OrderedDict()
-    defaults["templates"] = OrderedDict()
-    if "operators" in defaults_op:
-        defaults["operators"].update(defaults_op["operators"])
-    if "templates" in defaults_tmpl:
-        defaults["templates"].update(defaults_tmpl["templates"])
-
-    # Add an option to load one or more config files.  These should have compatible
-    # names for the operators used in defaults.
-    parser.add_argument(
-        "--config",
-        type=str,
-        required=False,
-        nargs="+",
-        help="One or more input config files.",
-    )
-
-    # Add options to dump default values
-    parser.add_argument(
-        "--defaults_toml",
-        type=str,
-        required=False,
-        default=None,
-        help="Dump default config values to a TOML file",
-    )
-    parser.add_argument(
-        "--defaults_json",
-        type=str,
-        required=False,
-        default=None,
-        help="Dump default config values to a JSON file",
-    )
-    parser.add_argument(
-        "--defaults_yaml",
-        type=str,
-        required=False,
-        default=None,
-        help="Dump default config values to a YAML file",
-    )
-
-    parser.add_argument(
-        "--job_group_size",
-        required=False,
-        type=int,
-        default=None,
-        help="(Advanced) Size of the process groups",
-    )
-
-    parser.add_argument(
-        "--job_node_mem",
-        required=False,
-        type=int,
-        default=None,
-        help="(Advanced) Override the detected memory per node in bytes",
-    )
-
-    # Parse commandline or list of options.
+    # Select commandline or list of options.
     if opts is None:
         opts = sys.argv[1:]
+
+    # Add options for user-provided objects
+    defaults = add_default_parser_options(parser, prefix, operators, templates)
+
+    # Parse everything
     args = parser.parse_args(args=opts)
 
-    # Dump default config values.
-    if args.defaults_toml is not None:
-        dump_toml(args.defaults_toml, defaults)
-    if args.defaults_json is not None:
-        dump_json(args.defaults_json, defaults)
-    if args.defaults_yaml is not None:
-        dump_yaml(args.defaults_yaml, defaults)
+    # Process the default logging options
+    process_default_args(args, defaults)
 
-    # Parse job args
-    jobargs = types.SimpleNamespace(
-        node_mem=args.job_node_mem,
-        group_size=args.job_group_size,
-    )
-    del args.job_node_mem
-    del args.job_group_size
+    # Extract the job args
+    jobargs = process_job_args(args)
 
     # Load any config files.  This overrides default values with config file contents.
     config = copy.deepcopy(defaults)
-
     if args.config is not None:
         for conf in args.config:
             config = load_config(conf, input=config)
+    del args.config
 
-    # Parse operator and template commandline options.  These override any config
-    # file or default values.
-    if len(operators) > 0:
-        op_remaining = args_update_config(
-            args, config, opts, "operators", prefix=prefix
-        )
-    else:
-        op_remaining = args
-    if len(templates) > 0:
-        remaining = args_update_config(
-            op_remaining, config, opts, "templates", prefix=prefix
-        )
-    else:
-        remaining = op_remaining
-
-    # Remove the options we created in this function
-    del remaining.config
-    del remaining.defaults_toml
-    del remaining.defaults_json
-    del remaining.defaults_yaml
+    # Now override defaults and config options with command line options
+    remaining = process_object_args(args, prefix, config, opts, operators, templates)
 
     return config, remaining, jobargs
+
+
+def run_config(
+    parser,
+    prefix="",
+    opts=None,
+):
+    """Use config files to instantiate operators and templates.
+
+    This function is similar to `parse_config()`, but the lists of operators and
+    templates is read from the config files rather than being provided by the calling
+    code.
+
+    Args:
+        parser (ArgumentParser):  The argparse parser.
+        prefix (str):  Optional string to prefix all options by.
+        opts (list):  If not None, parse arguments from this list instead of sys.argv.
+
+    Returns:
+        (tuple):  The (job namespace, config dictionary, other args, runtime args)
+            from the result of parsing opts + config_files or command line and then
+            configuring all operators and templates.
+
+    """
+    add_job_parser_options(parser)
+
+    # Select commandline or list of options.
+    if opts is None:
+        opts = sys.argv[1:]
+
+    # Parse the initial args, including the config file names
+    initial_args, remaining_opts = parser.parse_known_args(args=opts)
+
+    # Parse the job args
+    jobargs = process_job_args(initial_args)
+
+    # Get the config files
+    if initial_args.config is None:
+        raise RuntimeError("run_config() requires at least one config file.")
+    config_files = list(initial_args.config)
+    del initial_args.config
+
+    # Make a pass through the config files, just to get the object names and types
+    raw_config = dict()
+    for conf in config_files:
+        raw_config = load_config(conf, input=raw_config)
+    operators = list()
+    templates = list()
+    for section, lst in [("operators", operators), ("templates", templates)]:
+        if section not in raw_config:
+            continue
+        for objname, obj in raw_config[section].items():
+            if "name" not in obj:
+                msg = "config files used with run_config() must have a name for "
+                msg += "each object"
+                raise RuntimeError(msg)
+            if "class" not in obj:
+                msg = "config files used with run_config() must have a class for "
+                msg += "each object"
+                raise RuntimeError(msg)
+            cls_path = obj["class"]
+            cls = import_from_name(cls_path)
+            lst.append(cls(name=obj["name"]["value"]))
+
+    # Now we can build the config of default values for all objects.
+    defaults = add_default_parser_options(parser, prefix, operators, templates)
+
+    # Parse the remaining options now that we have our object options in the parser
+    args = parser.parse_args(args=remaining_opts)
+
+    # Parse the default logging options
+    process_default_args(args, defaults)
+
+    # Make a second pass through the config files.  This overrides default values with
+    # config file contents.
+    config = copy.deepcopy(defaults)
+    for conf in config_files:
+        config = load_config(conf, input=config)
+
+    # Now override defaults and config options with command line options
+    remaining = process_object_args(args, prefix, config, opts, operators, templates)
+
+    other_dict = {**vars(remaining), **vars(initial_args)}
+    otherargs = types.SimpleNamespace(**other_dict)
+
+    return config, otherargs, jobargs

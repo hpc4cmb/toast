@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -17,6 +17,7 @@ from ..dist import distribute_discrete, distribute_uniform
 from ..healpix import ang2vec
 from ..instrument import Focalplane, Session, Telescope
 from ..intervals import IntervalList, regular_intervals
+from ..io import load_instrument_file
 from ..noise_sim import AnalyticNoise
 from ..observation import Observation
 from ..observation import default_values as defaults
@@ -45,6 +46,7 @@ from ..weather import SimWeather
 from .azimuth_intervals import AzimuthRanges
 from .flag_intervals import FlagIntervals
 from .operator import Operator
+from .pipeline import Pipeline
 from .sim_ground_utils import (
     add_solar_intervals,
     oscillate_el,
@@ -66,6 +68,11 @@ class SimGround(Operator):
     the telescope is scanning left, right or in a turnaround or El-nod.  A shared
     flag array is also created with bits sets for these same properties.
 
+    The telescope file, if specified, can reference an HDF5 data dump by specifying the
+    internal path within the file.  For example:
+
+    telescope_file="/path/to/data.h5:/obs1/instrument"
+
     """
 
     # Class traits
@@ -74,6 +81,10 @@ class SimGround(Operator):
 
     telescope = Instance(
         klass=Telescope, allow_none=True, help="This must be an instance of a Telescope"
+    )
+
+    telescope_file = Unicode(
+        None, allow_none=True, help="Path to HDF5 file containing an instrument group."
     )
 
     session_split_key = Unicode(
@@ -90,6 +101,17 @@ class SimGround(Operator):
 
     schedule = Instance(
         klass=GroundSchedule, allow_none=True, help="Instance of a GroundSchedule"
+    )
+
+    schedule_file = Unicode(
+        None,
+        allow_none=True,
+        help="Ground-based observing schedule file",
+    )
+
+    sort_schedule_file = Bool(
+        False,
+        help="If True, sort schedule loaded from a file by mean boresight RA",
     )
 
     randomize_phase = Bool(
@@ -409,20 +431,6 @@ class SimGround(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
-        if self.schedule is None:
-            raise RuntimeError(
-                "The schedule attribute must be set before calling exec()"
-            )
-
-        # Check valid combinations of options
-
-        if (self.elnod_start or self.elnod_end) and len(self.elnods) == 0:
-            raise RuntimeError(
-                "If simulating elnods, you must specify the list of offsets"
-            )
-
-        if len(self.schedule.scans) == 0:
-            raise RuntimeError("Schedule has no scans!")
 
         # Data distribution in the detector and sample directions
         comm = data.comm
@@ -432,11 +440,45 @@ class SimGround(Operator):
             det_ranks = 1
             samp_ranks = comm.group_size
 
+        if self.schedule is None and self.schedule_file is None:
+            raise RuntimeError(
+                "Either the schedule or schedule_file must be set before calling exec()"
+            )
+
+        if self.telescope is None and self.telescope_file is None:
+            raise RuntimeError(
+                "Either the telescope or the telescope_file must be specified"
+            )
+
+        if self.telescope is None:
+            if comm.world_rank == 0:
+                self.telescope, _ = load_instrument_file(self.telescope_file)
+            if comm.comm_world is not None:
+                self.telescope = comm.comm_world.bcast(self.telescope, root=0)
+
+        if self.schedule is None:
+            schedule = GroundSchedule()
+            schedule.read(self.schedule_file, comm=comm.comm_world)
+            if self.sort_schedule_file:
+                schedule.sort_by_RA()
+        else:
+            schedule = self.schedule
+
+        # Check valid combinations of options
+
+        if (self.elnod_start or self.elnod_end) and len(self.elnods) == 0:
+            raise RuntimeError(
+                "If simulating elnods, you must specify the list of offsets"
+            )
+
+        if len(schedule.scans) == 0:
+            raise RuntimeError("Schedule has no scans!")
+
         # Get per-observation telescopes
         obs_tele = self._obs_telescopes(data, det_ranks, detectors)
 
         # The global start is the beginning of the first scan
-        mission_start = self.schedule.scans[0].start
+        mission_start = schedule.scans[0].start
 
         # Although there is no requirement that the sampling is contiguous from one
         # session to the next, for simulations there is no need to restart the
@@ -451,7 +493,7 @@ class SimGround(Operator):
         incr = 1.0 / rate
         off = 0
 
-        for scan in self.schedule.scans:
+        for scan in schedule.scans:
             # Check that the observation has valid samples
             length = (scan.stop - scan.start).total_seconds()
             if np.abs(length) < incr:
@@ -491,7 +533,7 @@ class SimGround(Operator):
 
         # FIXME:  Re-enable this when using astropy for coordinate transforms.
         # # Ensure that astropy IERS is downloaded
-        # astropy_control(max_future=self.schedule.scans[-1].stop)
+        # astropy_control(max_future=schedule.scans[-1].stop)
 
         # Distribute the sessions uniformly among groups.  We take each scan and
         # weight it by the duration in samples.

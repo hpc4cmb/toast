@@ -526,26 +526,34 @@ class TraitConfig(HasTraits):
         avail_traits = set(cls.class_trait_names())
         for k, v in props.items():
             if k == "class":
+                # print(f"CONF {name}: skipping class", flush=True)
                 continue
             if k not in avail_traits:
                 msg = f"Class {cls_path} currently has no configuration"
                 msg += f" trait '{k}'.  This will be ignored, and your config "
-                msg += f"file is likely out of date."
+                msg += "file is likely out of date."
                 log.warning(msg)
                 continue
-            # print(f"from_config: parsing {v}", flush=True)
-            if v["value"] == "None":
-                # Regardless of type, we set this to None
-                kw[k] = None
-            elif v["type"] == "unknown":
-                # This was a None value in the TOML or similar unknown object
-                pass
-            elif v["type"] in parsable:
-                kw[k] = string_to_trait(v["value"])
+            # print(f"CONF {name}: parsing {v}", flush=True)
+            if isinstance(v["value"], str):
+                if v["value"] == "None":
+                    # Regardless of type, we set this to None
+                    kw[k] = None
+                    # print(f"CONF {name}:   (str -> None) {k} = None", flush=True)
+                elif v["type"] == "unknown":
+                    # This was a None value or similar unknown object
+                    # print(f"CONF {name}:   (str, type unknown) {k} = pass", flush=True)
+                    pass
+                elif v["type"] in parsable:
+                    kw[k] = string_to_trait(v["value"])
+                    # print(f"CONF {name}:   (str -> parsable) {k} = {kw[k]}", flush=True)
+                else:
+                    # print(f"CONF {name}:   (str, nonparsable) {k} != {v['value']}", flush=True)
+                    pass
             else:
-                # This is either a class instance of some arbitrary type,
-                # or a callable.
-                pass
+                kw[k] = v["value"]
+                # print(f"CONF {name}:   ({type(kw[k])}) {k} = {kw[k]}", flush=True)
+
         # Instantiate class and return
         # print(f"Instantiate class with {kw}", flush=True)
         return cls(**kw)

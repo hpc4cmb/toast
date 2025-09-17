@@ -9,6 +9,7 @@ from .cli import (
     dump_config,
     load_config,
     parse_config,
+    run_config,
 )
 from .json import dump_json
 from .toml import dump_toml

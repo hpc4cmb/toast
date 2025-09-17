@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -586,6 +586,73 @@ def save_hdf5_intervals(obs, hgrp, fields, log_prefix):
         )
 
 
+def save_instrument(parent_group, telescope, comm=None, session=None):
+    """Save instrument information to an HDF5 group.
+
+    Given the parent group (which might exist on multiple processes in the case of
+    MPI use), create an instrument sub group and write telescope and optionally
+    session information to that group.
+
+    """
+    inst_group = None
+    if parent_group is not None:
+        # Instrument properties
+        inst_group = parent_group.create_group("instrument")
+        inst_group.attrs["telescope_name"] = telescope.name
+        inst_group.attrs["telescope_class"] = object_fullname(telescope.__class__)
+        inst_group.attrs["telescope_uid"] = telescope.uid
+        site = telescope.site
+        inst_group.attrs["site_name"] = site.name
+        inst_group.attrs["site_class"] = object_fullname(site.__class__)
+        inst_group.attrs["site_uid"] = site.uid
+        if isinstance(site, GroundSite):
+            inst_group.attrs["site_lat_deg"] = float(
+                site.earthloc.lat.to_value(u.degree)
+            )
+            inst_group.attrs["site_lon_deg"] = float(
+                site.earthloc.lon.to_value(u.degree)
+            )
+            inst_group.attrs["site_alt_m"] = float(
+                site.earthloc.height.to_value(u.meter)
+            )
+            if site.weather is not None:
+                if hasattr(site.weather, "name"):
+                    # This is a simulated weather object, dump it.
+                    inst_group.attrs["site_weather_name"] = str(site.weather.name)
+                    inst_group.attrs["site_weather_realization"] = int(
+                        site.weather.realization
+                    )
+                    if site.weather.max_pwv is None:
+                        inst_group.attrs["site_weather_max_pwv"] = "NONE"
+                    else:
+                        inst_group.attrs["site_weather_max_pwv"] = float(
+                            site.weather.max_pwv.to_value(u.mm)
+                        )
+                    inst_group.attrs["site_weather_time"] = (
+                        site.weather.time.timestamp()
+                    )
+                    inst_group.attrs["site_weather_median"] = (
+                        site.weather.median_weather
+                    )
+                else:
+                    msg = "HDF5 saving currently only supports SimWeather instances"
+                    raise NotImplementedError(msg)
+        if session is not None:
+            inst_group.attrs["session_name"] = session.name
+            inst_group.attrs["session_class"] = object_fullname(session.__class__)
+            inst_group.attrs["session_uid"] = session.uid
+            if session.start is None:
+                inst_group.attrs["session_start"] = "NONE"
+            else:
+                inst_group.attrs["session_start"] = session.start.timestamp()
+            if session.end is None:
+                inst_group.attrs["session_end"] = "NONE"
+            else:
+                inst_group.attrs["session_end"] = session.end.timestamp()
+    telescope.focalplane.save_hdf5(inst_group, comm=comm)
+    del inst_group
+
+
 @function_timer
 def save_hdf5(
     obs,
@@ -710,73 +777,10 @@ def save_hdf5(
         timer=vtimer,
     )
 
-    inst_group = None
-    if hgroup is not None:
-        # Instrument properties
-        inst_group = hgroup.create_group("instrument")
-        inst_group.attrs["telescope_name"] = obs.telescope.name
-        inst_group.attrs["telescope_class"] = object_fullname(obs.telescope.__class__)
-        inst_group.attrs["telescope_uid"] = obs.telescope.uid
-        site = obs.telescope.site
-        inst_group.attrs["site_name"] = site.name
-        inst_group.attrs["site_class"] = object_fullname(site.__class__)
-        inst_group.attrs["site_uid"] = site.uid
-        if isinstance(site, GroundSite):
-            inst_group.attrs["site_lat_deg"] = float(
-                site.earthloc.lat.to_value(u.degree)
-            )
-            inst_group.attrs["site_lon_deg"] = float(
-                site.earthloc.lon.to_value(u.degree)
-            )
-            inst_group.attrs["site_alt_m"] = float(
-                site.earthloc.height.to_value(u.meter)
-            )
-            if site.weather is not None:
-                if hasattr(site.weather, "name"):
-                    # This is a simulated weather object, dump it.
-                    inst_group.attrs["site_weather_name"] = str(site.weather.name)
-                    inst_group.attrs["site_weather_realization"] = int(
-                        site.weather.realization
-                    )
-                    if site.weather.max_pwv is None:
-                        inst_group.attrs["site_weather_max_pwv"] = "NONE"
-                    else:
-                        inst_group.attrs["site_weather_max_pwv"] = float(
-                            site.weather.max_pwv.to_value(u.mm)
-                        )
-                    inst_group.attrs["site_weather_time"] = (
-                        site.weather.time.timestamp()
-                    )
-                    inst_group.attrs["site_weather_median"] = (
-                        site.weather.median_weather
-                    )
-                else:
-                    msg = "HDF5 saving currently only supports SimWeather instances"
-                    raise NotImplementedError(msg)
-        session = obs.session
-        if session is not None:
-            inst_group.attrs["session_name"] = session.name
-            inst_group.attrs["session_class"] = object_fullname(session.__class__)
-            inst_group.attrs["session_uid"] = session.uid
-            if session.start is None:
-                inst_group.attrs["session_start"] = "NONE"
-            else:
-                inst_group.attrs["session_start"] = session.start.timestamp()
-            if session.end is None:
-                inst_group.attrs["session_end"] = "NONE"
-            else:
-                inst_group.attrs["session_end"] = session.end.timestamp()
-    log.verbose_rank(
-        f"{log_prefix}  Wrote instrument attributes in",
-        comm=comm,
-        timer=vtimer,
-    )
-
-    obs.telescope.focalplane.save_hdf5(inst_group, comm=comm)
-    del inst_group
+    save_instrument(hgroup, obs.telescope, comm=comm, session=obs.session)
 
     log.verbose_rank(
-        f"{log_prefix}  Wrote focalplane in",
+        f"{log_prefix}  Wrote instrument in",
         comm=comm,
         timer=vtimer,
     )
@@ -929,3 +933,26 @@ def save_hdf5(
         os.rename(hfpath_temp, hfpath)
 
     return hfpath
+
+
+def save_instrument_file(path, telescope, session):
+    """Save instrument data to an HDF5 group.
+
+    This function loads the telescope and session serially on one process.
+    It supports including a relative internal path inside the HDF5 file by separating
+    the filesystem path from the internal path with a colon.  For example:
+
+    path="/path/to/file.h5:/obs1
+
+    The internal path should be to the *parent* group of the "instrument" group.
+
+    """
+    file, internal = path.split(":")
+    grouptree = internal.split(os.path.sep)
+    with h5py.File(file, "w") as hf:
+        parent = hf
+        for grp in grouptree:
+            if grp == "":
+                continue
+            parent = parent.create_group(grp)
+        save_instrument(parent, telescope, session=session)

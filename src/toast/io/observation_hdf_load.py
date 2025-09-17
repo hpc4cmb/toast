@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -442,53 +442,13 @@ def load_hdf5_intervals(obs, hgrp, times, fields, log_prefix, parallel):
         )
 
 
-@function_timer
-def load_hdf5_obs_meta(
-    comm,
-    hgroup,
-    parallel=False,
-    log_prefix="",
-    meta=None,
-    detectors=None,
-    process_rows=None,
-):
-    log = Logger.get()
-    rank = comm.group_rank
-    nproc = comm.group_size
-
-    timer = Timer()
-    timer.start()
-
+def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None):
+    """Load instrument information from an HDF5 group."""
     telescope = None
-    obs_samples = None
-    obs_name = None
-    obs_uid = None
     session = None
-    obs_det_sets = None
-    obs_sample_sets = None
-
-    if hgroup is not None:
-        # Observation properties
-        obs_name = str(hgroup.attrs["observation_name"])
-        obs_uid = int(hgroup.attrs["observation_uid"])
-        obs_dets = json.loads(hgroup.attrs["observation_detectors"])
-        obs_det_sets = None
-        if hgroup.attrs["observation_detector_sets"] != "NONE":
-            obs_det_sets = json.loads(hgroup.attrs["observation_detector_sets"])
-        obs_samples = int(hgroup.attrs["observation_samples"])
-        obs_sample_sets = None
-        if hgroup.attrs["observation_sample_sets"] != "NONE":
-            obs_sample_sets = [
-                [int(x) for x in y]
-                for y in json.loads(hgroup.attrs["observation_sample_sets"])
-            ]
-
-        # Instrument properties
-
-        # FIXME:  We should add save / load methods to these classes to
-        # generalize this and allow use of other classes.
-
-        inst_group = hgroup["instrument"]
+    new_detsets = file_det_sets
+    if parent_group is not None:
+        inst_group = parent_group["instrument"]
         telescope_name = str(inst_group.attrs["telescope_name"])
         telescope_uid = int(inst_group.attrs["telescope_uid"])
         telescope_class = import_from_name(str(inst_group.attrs["telescope_class"]))
@@ -579,9 +539,9 @@ def load_hdf5_obs_meta(
                 field_of_view=raw_focalplane.field_of_view,
             )
             new_detsets = list()
-            if isinstance(obs_det_sets, list):
+            if isinstance(file_det_sets, list):
                 # List of lists
-                for ds in obs_det_sets:
+                for ds in file_det_sets:
                     new_ds = list()
                     for d in ds:
                         if d in keep:
@@ -590,19 +550,66 @@ def load_hdf5_obs_meta(
                         new_detsets.append(new_ds)
             else:
                 # Must be a dictionary
-                for dskey, ds in obs_det_sets.items():
+                for dskey, ds in file_det_sets.items():
                     new_ds = list()
                     for d in ds:
                         if d in keep:
                             new_ds.append(d)
                     if len(new_ds) > 0:
                         new_detsets.append(new_ds)
-            obs_det_sets = new_detsets
 
         telescope = telescope_class(
             telescope_name, uid=telescope_uid, focalplane=focalplane, site=site
         )
         del inst_group
+    return telescope, session, new_detsets
+
+
+@function_timer
+def load_hdf5_obs_meta(
+    comm,
+    hgroup,
+    parallel=False,
+    log_prefix="",
+    meta=None,
+    detectors=None,
+    process_rows=None,
+):
+    log = Logger.get()
+    rank = comm.group_rank
+    nproc = comm.group_size
+
+    timer = Timer()
+    timer.start()
+
+    telescope = None
+    obs_samples = None
+    obs_name = None
+    obs_uid = None
+    session = None
+    obs_det_sets = None
+    obs_sample_sets = None
+
+    if hgroup is not None:
+        # Observation properties
+        obs_name = str(hgroup.attrs["observation_name"])
+        obs_uid = int(hgroup.attrs["observation_uid"])
+        obs_dets = json.loads(hgroup.attrs["observation_detectors"])
+        file_det_sets = None
+        if hgroup.attrs["observation_detector_sets"] != "NONE":
+            file_det_sets = json.loads(hgroup.attrs["observation_detector_sets"])
+        obs_samples = int(hgroup.attrs["observation_samples"])
+        obs_sample_sets = None
+        if hgroup.attrs["observation_sample_sets"] != "NONE":
+            obs_sample_sets = [
+                [int(x) for x in y]
+                for y in json.loads(hgroup.attrs["observation_sample_sets"])
+            ]
+
+        # Instrument properties
+        telescope, session, obs_det_sets = load_instrument(
+            hgroup, detectors=detectors, file_det_sets=file_det_sets, comm=None
+        )
 
     log.debug_rank(
         f"{log_prefix} Loaded instrument properties in",
@@ -901,3 +908,27 @@ def load_hdf5(
     del hf
 
     return obs
+
+
+def load_instrument_file(path, detectors=None, obs_det_sets=None, comm=None):
+    """Load instrument information from an HDF5 file.
+
+    This function loads the telescope and session serially on one process.
+    It supports including a relative internal path inside the HDF5 file by separating
+    the filesystem path from the internal path with a colon.  For example:
+
+    path="/path/to/file.h5:/obs1
+
+    The internal path should be to the *parent* group of the "instrument" group.
+
+    """
+    file, internal = path.split(":")
+    grouptree = internal.split(os.path.sep)
+    with h5py.File(file, "r") as hf:
+        parent = hf
+        for grp in grouptree:
+            if grp == "":
+                continue
+            parent = parent[grp]
+        telescope, session, _ = load_instrument(parent)
+    return telescope, session

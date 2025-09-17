@@ -4,6 +4,7 @@ libtool
 automake
 psutil
 cython
+ruamel.yaml
 pytest
 tomlkit
 traitlets

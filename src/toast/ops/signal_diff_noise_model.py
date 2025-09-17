@@ -33,7 +33,7 @@ class SignalDiffNoiseModel(Operator):
     det_data = Unicode(defaults.det_data, help="Observation detdata key to analyze")
 
     det_mask = Int(
-        defaults.det_mask_nonscience,
+        defaults.det_mask_invalid,
         help="Bit mask value for per-detector flagging",
     )
 

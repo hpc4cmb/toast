@@ -325,6 +325,7 @@ conf["scripts"] = scripts
 conf["entry_points"] = {
     "console_scripts": [
         "toast_env = toast.scripts.toast_env:main",
+        "toast_run = toast.scripts.toast_run:main",
         "toast_fake_focalplane = toast.scripts.toast_fake_focalplane:main",
         "toast_ground_schedule = toast.scripts.toast_ground_schedule:main",
         "toast_project_schedule = toast.scripts.toast_project_schedule:main",
