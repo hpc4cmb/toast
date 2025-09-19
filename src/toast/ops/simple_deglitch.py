@@ -152,9 +152,9 @@ class SimpleDeglitch(Operator):
 
             local_dets = ob.select_local_detectors(flagmask=self.det_mask)
             shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
-            for name in local_dets:
-                sig = ob.detdata[self.det_data][name]
-                det_flags = ob.detdata[self.det_flags][name]
+            for det in local_dets:
+                sig = ob.detdata[self.det_data][det]
+                det_flags = ob.detdata[self.det_flags][det]
                 if self.reset_det_flags:
                     det_flags[:] = 0
                 bad = np.logical_or(
@@ -174,6 +174,8 @@ class SimpleDeglitch(Operator):
                         sig_view[-w:] -= np.median(sig_view[-w:])
                     trend = sig[ind] - sig_view
                     sig_view[bad[ind]] = np.nan
+                    if np.all(np.isnan(sig_view)):
+                        continue
                     offset = np.nanmedian(sig_view)
                     sig_view -= offset
                     trend += offset
@@ -204,13 +206,17 @@ class SimpleDeglitch(Operator):
                         continue
                     bad_view = np.isnan(sig_view)
                     det_flags[ind][bad_view] |= self.glitch_mask
-                if self.fill_gaps:
+
+                if np.all(det_flags != 0):
+                    # This detector is a total loss. Raise the detector flag
+                    ob.local_detector_flags[det] |= defaults.det_mask_invalid
+                elif self.fill_gaps:
                     # 1 second buffer
-                    buffer = int(focalplane.sample_rate.to_value(u.Hz))
+                    buffer_ = int(focalplane.sample_rate.to_value(u.Hz))
                     flagged_noise_fill(
                         sig,
                         det_flags,
-                        buffer,
+                        buffer_,
                         poly_order=1,
                     )
 

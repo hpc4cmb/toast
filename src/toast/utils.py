@@ -860,6 +860,9 @@ def flagged_noise_fill(data, flags, buffer, poly_order=1):
         msg += " within the buffer"
         raise RuntimeError(msg)
 
+    if np.sum(flags == 0) == 0:
+        raise RuntimeError(f"Cannot gapfill a buffer without any good data")
+
     flag_indx = np.arange(n_samp, dtype=np.int64)[flags != 0]
     flag_groups = np.split(flag_indx, np.where(np.diff(flag_indx) != 1)[0] + 1)
     nfgroup = len(flag_groups)

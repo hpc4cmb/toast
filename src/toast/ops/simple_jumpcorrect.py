@@ -285,21 +285,15 @@ class SimpleJumpCorrect(Operator):
         return corrected_signal, flag_out
 
     @function_timer
-    def _find_jumps(self, sig, bad, jumps=None, phase=None, view=None):
-        if view is None:
-            nsample = len(sig)
-            ind = slice(nsample)
-        else:
-            nsample = view.last - view.first
-            ind = slice(view.first, view.last)
-        sig_view = sig[ind].copy()
-        bad_view = bad[ind]
-        bad_view_out = bad_view.copy()
+    def _find_jumps(self, sig, bad, jumps=None, phase=None, offset=0):
+        """ Locate all jumps in `sig` using a matched filter
+        """
+        bad_out = bad.copy()
         # Potential jumps show up as peaks in the match-filtered signal
-        sig_filtered = convolve(sig_view, self.stepfilter, mode="same")
+        sig_filtered = convolve(sig, self.stepfilter, mode="same")
         peaks = self._find_peaks(
             sig_filtered,
-            bad_view,
+            bad,
             lim=self.jump_limit,
             tol=self.filterlen // 2,
         )
@@ -320,7 +314,7 @@ class SimpleJumpCorrect(Operator):
             njump = len(peaks)
         if jumps is not None:
             jumps.extend(
-                [(x + view.first, y, z) for x, y, z in peaks]
+                [(x + offset, y, z) for x, y, z in peaks]
             )
         return peaks
 
@@ -370,18 +364,22 @@ class SimpleJumpCorrect(Operator):
                     det_flags[flag_out] |= self.jump_mask
                 else:
                     for iview, view in enumerate(views):
+                        ind = slice(view.first, view.last)
                         jumps = self._find_jumps(
-                            sig, bad, view=view, jumps=jumps, phase=phase
+                            sig[ind],
+                            bad[ind],
+                            jumps=jumps,
+                            phase=phase,
+                            offset=view.first,
                         )
                         if len(jumps) == 0:
                             continue
                         if len(jumps) > self.njump_limit:
-                            # This detector has too many jumps
-                            ob._detflags[det] |= self.det_mask
-                            det_flags[view.first : view.last] |= self.det_flag_mask
+                            # This detector view has too many jumps
+                            det_flags[ind] |= self.det_flag_mask
                             continue
                         corrected_signal, flag_out = self._remove_jumps(
-                            sig_view, bad_view, jumps
+                            sig[ind], bad[ind], jumps,
                         )
                         sig[ind] = corrected_signal
                         det_flags[ind][flag_out] |= self.jump_mask
