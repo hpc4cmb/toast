@@ -90,7 +90,7 @@ class Demodulate(Operator):
     )
 
     det_mask = Int(
-        defaults.det_mask_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for per-detector flagging",
     )
 
