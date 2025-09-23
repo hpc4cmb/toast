@@ -535,7 +535,7 @@ class FitNoiseModel(Operator):
                 (input_freqs > self.white_noise_min.to_value(u.Hz)),
                 (input_freqs < self.white_noise_max.to_value(u.Hz)),
             )
-            net = np.sqrt(np.mean(input_data[plateau_samples]))
+            net = np.sqrt(np.median(input_data[plateau_samples]))
 
         midfreq = 0.5 * input_freqs[-1]
 
@@ -752,13 +752,13 @@ class FlagNoiseFit(Operator):
                     else:
                         proc_vals = obs.comm_col.gather(local_net, root=0)
                         if obs.comm_col_rank == 0:
-                            all_net = np.array(list(flatten(proc_vals)))
+                            all_net = np.hstack(proc_vals)
                         proc_vals = obs.comm_col.gather(local_fknee, root=0)
                         if obs.comm_col_rank == 0:
-                            all_fknee = np.array(list(flatten(proc_vals)))
+                            all_fknee = np.hstack(proc_vals)
                         proc_vals = obs.comm_col.gather(local_rms, root=0)
                         if obs.comm_col_rank == 0:
-                            all_rms = np.array(list(flatten(proc_vals)))
+                            all_rms = np.hstack(proc_vals)
                         proc_vals = obs.comm_col.gather(local_names, root=0)
                         if obs.comm_col_rank == 0:
                             all_names = list(flatten(proc_vals))
@@ -775,21 +775,21 @@ class FlagNoiseFit(Operator):
                     flag_pass = 0
                     while n_cut > 0:
                         n_cut = 0
-                        net_mean = np.mean(all_net[all_good])
+                        net_med = np.median(all_net[all_good])
                         net_std = np.std(all_net[all_good])
                         for idet, (name, net) in enumerate(zip(all_names, all_net)):
                             if not all_good[idet]:
                                 # Already cut
                                 continue
-                            if np.absolute(net - net_mean) > net_std * self.sigma_NET:
+                            if np.absolute(net - net_med) > net_std * self.sigma_NET:
                                 msg = f"obs {obs.name}, det {name} has NET "
                                 msg += f"{net} that is > {self.sigma_NET} "
-                                msg += f"x {net_std} from {net_mean}"
+                                msg += f"x {net_std} from {net_med}"
                                 log.debug(msg)
                                 all_good[idet] = False
                                 n_cut += 1
                         if self.sigma_fknee is not None:
-                            fknee_mean = np.mean(all_fknee[all_good])
+                            fknee_med = np.median(all_fknee[all_good])
                             fknee_std = np.std(all_fknee[all_good])
                             for idet, (name, fknee) in enumerate(
                                 zip(all_names, all_fknee)
@@ -798,29 +798,29 @@ class FlagNoiseFit(Operator):
                                     # Already cut
                                     continue
                                 if (
-                                    np.absolute(fknee - fknee_mean)
+                                    np.absolute(fknee - fknee_med)
                                     > fknee_std * self.sigma_fknee
                                 ):
                                     msg = f"obs {obs.name}, det {name} has f_knee "
                                     msg += f"{fknee} that is > {self.sigma_fknee} "
-                                    msg += f"x {fknee_std} from {fknee_mean}"
+                                    msg += f"x {fknee_std} from {fknee_med}"
                                     log.debug(msg)
                                     all_good[idet] = False
                                     n_cut += 1
                         if self.sigma_rms is not None:
-                            rms_mean = np.mean(all_rms[all_good])
+                            rms_med = np.median(all_rms[all_good])
                             rms_std = np.std(all_rms[all_good])
                             for idet, (name, rms) in enumerate(zip(all_names, all_rms)):
                                 if not all_good[idet]:
                                     # Already cut
                                     continue
                                 if (
-                                    np.absolute(rms - rms_mean)
+                                    np.absolute(rms - rms_med)
                                     > rms_std * self.sigma_rms
                                 ):
                                     msg = f"obs {obs.name}, det {name} has TOD RMS "
                                     msg += f"{rms} that is > {self.sigma_rms} "
-                                    msg += f"x {rms_std} from {rms_mean}"
+                                    msg += f"x {rms_std} from {rms_med}"
                                     log.debug(msg)
                                     all_good[idet] = False
                                     n_cut += 1
