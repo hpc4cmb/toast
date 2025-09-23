@@ -47,6 +47,56 @@ def build_config(objects):
     return conf
 
 
+def check_config_format(path, format=None):
+    """Given a path name, return the config file format.
+
+    Args:
+        path (str):  The file name.
+        format (str):  If specified, check that the file extension matches.
+
+    Returns:
+        (str):  The format ("toml", "json", "yaml")
+
+    """
+    log = Logger.get()
+
+    # Determine the format from the file name
+    _, rawext = os.path.splitext(path)
+    ext = rawext.lower()
+    if ext == ".toml" or ext == ".tml":
+        file_format = "toml"
+    elif ext == ".json" or ext == ".jsn":
+        file_format = "json"
+    elif ext == ".yaml" or ext == ".yml":
+        file_format = "yaml"
+    else:
+        file_format = None
+
+    if format is None:
+        # No information from the calling code
+        if file_format is None:
+            # ... and we couldn't determine it.
+            msg = "Cannot determine format (yaml, toml, json) from"
+            msg += f" path '{path}'"
+            raise RuntimeError(msg)
+        else:
+            # Return our guess
+            return file_format
+    else:
+        # Calling code claims it is a particular format
+        if file_format is None:
+            # We could not determine format from path, trust the caller
+            return format
+        else:
+            # Warn if they disagree, but still trust caller
+            if file_format != format:
+                msg = (
+                    f"Config format '{format}' does not match filename '{file_format}'"
+                )
+                log.warning(msg)
+            return format
+
+
 def load_config(file, input=None, comm=None):
     """Load a config file in a supported format.
 
@@ -61,24 +111,13 @@ def load_config(file, input=None, comm=None):
         (dict):  The result.
 
     """
-    ret = None
-    # If the file has a recognized extension, just use that instead of guessing.
-    ext = os.path.splitext(file)[1]
-    if ext in [".yml", ".yaml"]:
+    format = check_config_format(file)
+    if format == "yaml":
         return load_yaml(file, input=input, comm=comm)
-    elif ext in [".json", ".jsn"]:
+    elif format == "json":
         return load_json(file, input=input, comm=comm)
-    elif ext in [".toml", ".tml"]:
-        return load_toml(file, input=input, comm=comm)
     else:
-        try:
-            ret = load_toml(file, input=input, comm=comm)
-        except TOMLKitError:
-            try:
-                ret = load_json(file, input=input, comm=comm)
-            except (ValueError, JSONDecodeError):
-                ret = load_yaml(file, input=input, comm=comm)
-        return ret
+        return load_toml(file, input=input, comm=comm)
 
 
 def dump_config(file, conf, format=None, comm=None):
@@ -97,28 +136,13 @@ def dump_config(file, conf, format=None, comm=None):
         None
 
     """
-    if format is None:
-        # Guess from the file name
-        base, ext = os.path.splitext(file)
-        if ext == ".toml":
-            format = "toml"
-        elif ext == ".json" or ext == ".jsn":
-            format = "json"
-        elif ext == ".yaml" or ext == ".yml":
-            format = "yaml"
-        else:
-            msg = "Cannot determine format (yaml, toml, json) from"
-            msg += f" path '{file}'"
-            raise RuntimeError(msg)
-    if format == "toml":
-        dump_toml(file, conf, comm=comm)
-    elif format == "json":
-        dump_json(file, conf, comm=comm)
-    elif format == "yaml":
+    real_format = check_config_format(file, format=format)
+    if real_format == "yaml":
         dump_yaml(file, conf, comm=comm)
+    elif real_format == "json":
+        dump_json(file, conf, comm=comm)
     else:
-        msg = "Unknown config format '{format}'"
-        raise ValueError(msg)
+        dump_toml(file, conf, comm=comm)
 
 
 class TraitAction(argparse.Action):
@@ -404,27 +428,13 @@ def add_job_parser_options(parser):
 
 
 def add_default_parser_options(parser, prefix, operators, templates):
-     # Add options to dump default values
+    # Add options to dump default values
     parser.add_argument(
-        "--defaults_toml",
+        "--defaults",
         type=str,
         required=False,
         default=None,
-        help="Dump default config values to a TOML file",
-    )
-    parser.add_argument(
-        "--defaults_json",
-        type=str,
-        required=False,
-        default=None,
-        help="Dump default config values to a JSON file",
-    )
-    parser.add_argument(
-        "--defaults_yaml",
-        type=str,
-        required=False,
-        default=None,
-        help="Dump default config values to a YAML file",
+        help="Dump default config values to a file",
     )
 
     # The default configuration
@@ -473,15 +483,9 @@ def process_job_args(args):
 
 def process_default_args(args, defaults):
     # Dump default config values.
-    if args.defaults_toml is not None:
-        dump_toml(args.defaults_toml, defaults)
-        del args.default_toml
-    if args.defaults_json is not None:
-        dump_json(args.defaults_json, defaults)
-        del args.default_json
-    if args.defaults_yaml is not None:
-        dump_yaml(args.defaults_yaml, defaults)
-        del args.default_yaml
+    if args.defaults is not None:
+        dump_config(args.defaults, defaults)
+    del args.defaults
 
 
 def process_object_args(args, prefix, config, opts, operators, templates):
