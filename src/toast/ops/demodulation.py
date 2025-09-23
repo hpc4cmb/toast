@@ -138,6 +138,8 @@ class Demodulate(Operator):
 
     purge = Bool(False, help="Remove inputs after demodulation")
 
+    in_place = Bool(False, help="Modify the data object in-place.  Implies purge=True.")
+
     do_2f = Bool(False, help="also cache the 2f-demodulated signal")
 
     mode = Unicode("IQU", help="Return I, QU or IQU timestreams.")
@@ -195,7 +197,6 @@ class Demodulate(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.demod_data = Data()
         return
 
     @function_timer
@@ -211,17 +212,24 @@ class Demodulate(Operator):
             msg = "Cannot produce demodulated QU without QU Stokes weights"
             raise RuntimeError(msg)
 
+        if self.in_place:
+            self.demod_data = None
+        else:
+            self.demod_data = Data()
+
         # Demodulation only applies to observations with HWP.  Verify
         # that there are such observations in `data`
 
+        obs_indx = []
         demodulate_obs = []
-        for obs in data.obs:
+        for iobs, obs in enumerate(data.obs):
             if self.hwp_angle not in obs.shared:
                 continue
             hwp_angle = obs.shared[self.hwp_angle]
             if np.abs(np.median(np.diff(hwp_angle))) < 1e-6:
                 # Stepped or stationary HWP
                 continue
+            obs_indx.append(iobs)
             demodulate_obs.append(obs)
         n_obs = len(demodulate_obs)
         if data.comm.comm_world is not None:
@@ -245,7 +253,7 @@ class Demodulate(Operator):
 
         timer = Timer()
         timer.start()
-        for obs in demodulate_obs:
+        for iobs, obs in zip(obs_indx, demodulate_obs):
             # Get the detectors which are not cut with per-detector flags
             local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if obs.comm.comm_group is None:
@@ -333,19 +341,21 @@ class Demodulate(Operator):
 
             self._demodulate_intervals(obs, demod_obs)
 
-            self.demod_data.obs.append(demod_obs)
-
-            if self.purge:
+            if self.in_place:
                 obs.clear()
+                data.obs[iobs] = demod_obs
+            else:
+                self.demod_data.obs.append(demod_obs)
+                if self.purge:
+                    obs.clear()
 
             log.debug_rank(
                 f"Demodulated observation {obs.name} in",
                 comm=data.comm.comm_group,
                 timer=timer,
             )
-        if self.purge:
+        if not self.in_place and self.purge:
             data.clear()
-
         return
 
     @function_timer
