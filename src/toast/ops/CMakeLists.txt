@@ -71,6 +71,7 @@ install(FILES
     yield_cut.py
     azimuth_intervals.py
     calibrate.py
+    demod_common_mode.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
 

@@ -14,6 +14,7 @@ from .copy import Copy
 from .crosslinking import CrossLinking
 from .delete import Delete
 from .demodulation import Demodulate, StokesWeightsDemod
+from .demod_common_mode import DemodCommonModeFilter
 from .elevation_noise import ElevationNoise
 from .fill_gaps import FillGaps
 from .filterbin import FilterBin, combine_observation_matrix
