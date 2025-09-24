@@ -36,15 +36,23 @@ class DemodulateTest(MPITestCase):
 
         # Pointing operator
 
-        detpointing = ops.PointingDetectorSimple(shared_flag_mask=0)
+        detpointing_azel = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_azel,
+            shared_flag_mask=0,
+        )
+        detpointing_radec = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_azel,
+            shared_flag_mask=0,
+        )
+
         pixels = ops.PixelsHealpix(
             nside=nside,
-            detector_pointing=detpointing,
+            detector_pointing=detpointing_radec,
         )
         weights = ops.StokesWeights(
             mode="IQU",
             hwp_angle=defaults.hwp_angle,
-            detector_pointing=detpointing,
+            detector_pointing=detpointing_radec,
         )
 
         sky_file = os.path.join(self.outdir, f"fake_sky_{weight_mode}{suffix}.fits")
@@ -107,7 +115,7 @@ class DemodulateTest(MPITestCase):
             weights="demod_weights_in",
             mode=weight_mode,
             hwp_angle=defaults.hwp_angle,
-            detector_pointing=detpointing,
+            detector_pointing=detpointing_azel,
         )
 
         downsample = 3
@@ -120,7 +128,12 @@ class DemodulateTest(MPITestCase):
         demod_data = demod.apply(data)
 
         # Map again
-        demod_weights = ops.StokesWeightsDemod(mode=weight_mode)
+
+        demod_weights = ops.StokesWeightsDemod(
+            detector_pointing_in=detpointing_azel,
+            detector_pointing_out=detpointing_radec,
+            mode=weight_mode,
+        )
 
         mapper.name = f"demodulated_{weight_mode}{suffix}"
         binner.stokes_weights = demod_weights

@@ -753,6 +753,21 @@ class StokesWeightsDemod(Operator):
 
     single_precision = Bool(False, help="If True, use 32bit float in output")
 
+    detector_pointing_in = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="Pointing operator in the native Q/U frame, typically az/el.  "
+        "Must be set if `detector_pointing_out` is set.  Has no effect if "
+        " `detector_pointing_out` is not set.",
+    )
+
+    detector_pointing_out = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="Pointing operator for the desired frame, typically RA/Dec.  "
+        "Requires `detector_pointing_in` to be set.",
+    )
+
     @traitlets.validate("mode")
     def _check_mode(self, proposal):
         mode = proposal["value"]
@@ -760,6 +775,81 @@ class StokesWeightsDemod(Operator):
             msg = f"Invalid mode (must be one of {self.allowed_modes})"
             raise traitlets.TraitError(msg)
         return mode
+
+    @traitlets.validate("detector_pointing_in")
+    def _check_detector_pointing_in(self, proposal):
+        detpointing = proposal["value"]
+        if detpointing is not None:
+            if not isinstance(detpointing, Operator):
+                raise traitlets.TraitError(
+                    "detector_pointing should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in [
+                "view",
+                "boresight",
+                "shared_flags",
+                "shared_flag_mask",
+                "det_mask",
+                "quats",
+                "coord_in",
+                "coord_out",
+            ]:
+                if not detpointing.has_trait(trt):
+                    msg = f"detector_pointing operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return detpointing
+
+    @traitlets.validate("detector_pointing_out")
+    def _check_detector_pointing_out(self, proposal):
+        detpointing = proposal["value"]
+        if detpointing is not None:
+            if not isinstance(detpointing, Operator):
+                raise traitlets.TraitError(
+                    "detector_pointing should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in [
+                "view",
+                "boresight",
+                "shared_flags",
+                "shared_flag_mask",
+                "det_mask",
+                "quats",
+                "coord_in",
+                "coord_out",
+            ]:
+                if not detpointing.has_trait(trt):
+                    msg = f"detector_pointing operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return detpointing
+
+    @function_timer
+    def _get_delta(self, ob, det):
+        """Get the polarization angle in the input and output
+           frames to rotate Q and U accordingly
+
+        """
+        if self.detector_pointing_out is None:
+            return None
+
+        if det.startswith("demod4r") or det.startswith("demod4i"):
+            ob_data = data.select(obs_name=obs.name)
+            self.detector_pointing_in.apply(ob_data, detectors=[det])
+            quats_in = ob_data.detector_data[
+                self.detector_pointing_in.quats
+            ][det]
+            self.detector_pointing_out.apply(ob_data, detectors=[det])
+            quats_out = ob_data.detector_data[
+                self.detector_pointing_out.quats
+                    ][det]
+            psi_in = qa.to_iso_angles(quats_in)[3]
+            psi_out = qa.to_iso_angles(quats_out)[3]
+            delta = psi_out - psi_in
+        else:
+            delta = None
+
+        return delta
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -769,6 +859,11 @@ class StokesWeightsDemod(Operator):
         log = Logger.get()
 
         nnz = len(self.mode)
+
+        if self.detector_pointing_in is None and self.detector_pointing_out is not None:
+            raise RuntimeError(
+                "You must set the input detector pointing with output pointing"
+            )
 
         if self.single_precision:
             dtype = np.float32
@@ -813,15 +908,32 @@ class StokesWeightsDemod(Operator):
                 else:
                     eta = 1.0
 
+                # Check if we need to rotate Q/U weights between reference frames
+                delta = self.get_delta(obs, det)
+
                 if det.startswith("demod0"):
                     # Stokes I only
                     weights[det] = i_weights
                 elif det.startswith("demod4r"):
                     # Stokes Q only
-                    weights[det] = q_weights * eta
+                    if delta is None:
+                        weights[det] = q_weights * eta
+                    else:
+                        # Q' = Qcos(2psi) + Usin(2psi)
+                        weights[det] = (
+                            q_weights * np.cos(2 * delta)
+                            + u_weights * np.sin(2 * delta)
+                        ) * eta
                 elif det.startswith("demod4i"):
                     # Stokes U only
-                    weights[det] = u_weights * eta
+                    if delta is None:
+                        weights[det] = u_weights * eta
+                    else:
+                        # U' = Ucos(2psi) - Qsin(2psi)
+                        weights[det] = (
+                            u_weights * np.cos(2 * delta)
+                            - q_weights * np.sin(2 * delta)
+                        ) * eta
                 else:
                     # Not an I/Q/U pseudo detector
                     weights[det] = no_weights

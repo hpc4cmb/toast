@@ -20,7 +20,10 @@ from .operator import Operator
 
 @trait_docs
 class DemodCommonModeFilter(Operator):
-    """Operator that extracts and projects out the Qr/Ur common modes"""
+    """Operator that extracts and projects out the Qr/Ur common modes
+
+    The provided data must be demodulated in the horizontal (Az/El) frame.
+    """
 
     # Class traits
 
@@ -32,7 +35,7 @@ class DemodCommonModeFilter(Operator):
     )
 
     det_mask = Int(
-        defaults.det_mask_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for per-detector flagging",
     )
 
@@ -45,6 +48,13 @@ class DemodCommonModeFilter(Operator):
     shared_flag_mask = Int(
         defaults.shared_mask_invalid,
         help="Bit mask value for optional shared flagging",
+    )
+
+    boresight = Unicode(
+        defaults.boresight_azel,
+        allow_none=False,
+        help="Observation shared data key for boresight quaternions for deriving "
+        "the boresight roll angle",
     )
 
     # view = Unicode(
@@ -112,16 +122,20 @@ class DemodCommonModeFilter(Operator):
         log = Logger.get()
 
         for ob in data.obs:
+            if self.boresight is None:
+                roll = 0
+            else:
+                roll = qa.to_iso_angles(ob.shared[self.boresight])[2]
             good = (ob.shared[self.shared_flags].data & self.shared_flag_mask) == 0
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-            tod = self._collect_tod(ob, dets, good)
+            tod = self._collect_tod(ob, dets, good, roll)
             templates = self._get_templates(ob, tod)
-            self._project_templates(ob, dets, templates, good)
+            self._project_templates(ob, dets, templates, good, roll)
 
         return
 
     @function_timer
-    def _collect_tod(self, ob, detectors, good):
+    def _collect_tod(self, ob, detectors, good, roll):
         """Rotate the TOD to Qr/Ur and send to root process"""
         fp = ob.telescope.focalplane
 
@@ -141,6 +155,7 @@ class DemodCommonModeFilter(Operator):
             U = ob.detdata[self.det_data][Udet][good]
             # Rotate from horizontal to radial polarization basis
             theta, phi, psi = qa.to_iso_angles(fp[Qdet]["quat"])
+            phi += roll
             Qr = Q * np.cos(2 * phi) + U * np.sin(2 * phi)
             Ur = U * np.cos(2 * phi) - Q * np.sin(2 * phi)
             Qtod.append(Qr - np.mean(Qr))
@@ -205,7 +220,7 @@ class DemodCommonModeFilter(Operator):
         return templates
 
     @function_timer
-    def _project_templates(self, ob, detectors, templates, good):
+    def _project_templates(self, ob, detectors, templates, good, roll):
         """Use linear regression to clean the TOD"""
 
         fp = ob.telescope.focalplane
@@ -223,6 +238,7 @@ class DemodCommonModeFilter(Operator):
                 U = ob.detdata[self.det_data][Udet][good].copy()
                 # Rotate from horizontal to radial polarization basis
                 theta, phi, psi = qa.to_iso_angles(fp[Qdet]["quat"])
+                phi += roll
                 Qr = Q * np.cos(2 * phi) + U * np.sin(2 * phi)
                 Ur = U * np.cos(2 * phi) - Q * np.sin(2 * phi)
                 # Clean Qr and Ur
