@@ -798,7 +798,7 @@ class FlagNoiseFit(Operator):
                                 log.debug(msg)
                                 all_good[idet] = False
                                 n_cut += 1
-                            elif (net < net_med * self.low_noise_limit):
+                            elif net < net_med * self.low_noise_limit:
                                 msg = f"obs {obs.name}, det {name} has NET {net} "
                                 msg += f"that is < {net_med * self.low_noise_limit}"
                                 log.debug(msg)
@@ -840,8 +840,10 @@ class FlagNoiseFit(Operator):
                                     log.debug(msg)
                                     all_good[idet] = False
                                     n_cut += 1
-                                elif (rms < rms_med * self.low_noise_limit):
-                                    msg = f"obs {obs.name}, det {name} has TOD RMS {rms} "
+                                elif rms < rms_med * self.low_noise_limit:
+                                    msg = (
+                                        f"obs {obs.name}, det {name} has TOD RMS {rms} "
+                                    )
                                     msg += f"that is < {rms_med * self.low_noise_limit}"
                                     log.debug(msg)
                                     all_good[idet] = False
