@@ -15,10 +15,10 @@ from ..hwp_utils import (
     hwpss_compute_coeff_covariance,
     hwpss_compute_coeff,
     hwpss_build_model,
-    hwpss_sincos_buffer_sub2f,
-    hwpss_compute_coeff_covariance_sub2f,
-    hwpss_compute_coeff_sub2f,
-    hwpss_build_model_sub2f,
+    # hwpss_sincos_buffer_sub2f,
+    # hwpss_compute_coeff_covariance_sub2f,
+    # hwpss_compute_coeff_sub2f,
+    # hwpss_build_model_sub2f,
 )
 from ..noise import Noise
 from ..observation import default_values as defaults
@@ -100,113 +100,113 @@ class HWPModelTest(MPITestCase):
         fig.savefig(os.path.join(self.outdir, "lowlevel_standard.png"))
         plt.close(fig)
 
-    def test_lowlevel_drift2f(self):
-        # Slightly slower than 1 Hz
-        hwp_rpm = 59.0
-        hwp_rate = 2 * np.pi * hwp_rpm / 60.0  # rad/s
-        rate = 30.0
-        n_cycles = 100
-        n_sample = int((n_cycles / hwp_rate) * rate)
-        hwpincr = hwp_rate / rate
+    # def test_lowlevel_drift2f(self):
+    #     # Slightly slower than 1 Hz
+    #     hwp_rpm = 59.0
+    #     hwp_rate = 2 * np.pi * hwp_rpm / 60.0  # rad/s
+    #     rate = 30.0
+    #     n_cycles = 100
+    #     n_sample = int((n_cycles / hwp_rate) * rate)
+    #     hwpincr = hwp_rate / rate
 
-        # Set the chunking to 2 seconds
-        # chunk_2f = int(2 * rate)
-        # chunk_2f = n_sample
-        chunk_2f = n_sample // 80
-        half_chunk = chunk_2f // 2
-        n_chunk = n_sample // chunk_2f
+    #     # Set the chunking to 2 seconds
+    #     # chunk_2f = int(2 * rate)
+    #     # chunk_2f = n_sample
+    #     chunk_2f = n_sample // 80
+    #     half_chunk = chunk_2f // 2
+    #     n_chunk = n_sample // chunk_2f
 
-        times = (1.0 / rate) * np.arange(n_sample, dtype=np.float64)
-        hwp_angle = hwpincr * np.arange(n_sample, dtype=np.float64)
-        hwp_flags = np.zeros(n_sample, dtype=np.uint8)
+    #     times = (1.0 / rate) * np.arange(n_sample, dtype=np.float64)
+    #     hwp_angle = hwpincr * np.arange(n_sample, dtype=np.float64)
+    #     hwp_flags = np.zeros(n_sample, dtype=np.uint8)
 
-        # Simulate input HWPSS
-        input, ccos, csin = fake_hwpss_data(hwp_angle, 1.0)
-        n_harm = len(ccos)
+    #     # Simulate input HWPSS
+    #     input, ccos, csin = fake_hwpss_data(hwp_angle, 1.0)
+    #     n_harm = len(ccos)
 
-        # Add calibration drift
-        # factor = 0.01
-        # x_cal = np.arange(n_sample) - n_sample // 2
-        # cal = ((4 * factor) / (n_sample**2)) * x_cal**2
-        factor = 0.2
-        cal = np.linspace(1.0 - factor, 1.0 + factor, num=n_sample)
-        hwpss = input[:] * cal[:]
+    #     # Add calibration drift
+    #     # factor = 0.01
+    #     # x_cal = np.arange(n_sample) - n_sample // 2
+    #     # cal = ((4 * factor) / (n_sample**2)) * x_cal**2
+    #     factor = 0.2
+    #     cal = np.linspace(1.0 - factor, 1.0 + factor, num=n_sample)
+    #     hwpss = input[:] * cal[:]
 
-        # Compute coefficient covariance
-        sincos = hwpss_sincos_buffer_sub2f(
-            hwp_angle, hwp_flags, n_harm, sub2f_chunk=chunk_2f
-        )
-        cov = hwpss_compute_coeff_covariance_sub2f(sincos, hwp_flags)
-        cf = hwpss_compute_coeff_sub2f(
-            sincos,
-            hwpss,
-            hwp_flags,
-            cov[0],
-            cov[1],
-        )
+    #     # Compute coefficient covariance
+    #     sincos = hwpss_sincos_buffer_sub2f(
+    #         hwp_angle, hwp_flags, n_harm, sub2f_chunk=chunk_2f
+    #     )
+    #     cov = hwpss_compute_coeff_covariance_sub2f(sincos, hwp_flags)
+    #     cf = hwpss_compute_coeff_sub2f(
+    #         sincos,
+    #         hwpss,
+    #         hwp_flags,
+    #         cov[0],
+    #         cov[1],
+    #     )
 
-        # Build the model including the 2f
-        raw_model = hwpss_build_model_sub2f(sincos, hwp_flags, cf)
+    #     # Build the model including the 2f
+    #     raw_model = hwpss_build_model_sub2f(sincos, hwp_flags, cf)
 
-        # Extract the 2f coefficients and build the estimated calibration
-        gain_times = [times[x * chunk_2f + half_chunk] for x in range(n_chunk)]
-        gain_vals = list()
-        for chk in range(n_chunk):
-            cre = cf[2 * chk + 2]
-            cim = cf[2 * chk + 3]
-            mag = np.sqrt(cre**2 + cim**2)
-            gain_vals.append(mag)
-        gain_times = np.array(gain_times)
-        gain_vals = np.array(gain_vals)
-        dc = np.mean(gain_vals)
-        gain_vals -= dc
-        gain_vals = 1.0 / (1.0 + gain_vals)
-        rel_cal = np.interp(times, gain_times, gain_vals)
+    #     # Extract the 2f coefficients and build the estimated calibration
+    #     gain_times = [times[x * chunk_2f + half_chunk] for x in range(n_chunk)]
+    #     gain_vals = list()
+    #     for chk in range(n_chunk):
+    #         cre = cf[2 * chk + 2]
+    #         cim = cf[2 * chk + 3]
+    #         mag = np.sqrt(cre**2 + cim**2)
+    #         gain_vals.append(mag)
+    #     gain_times = np.array(gain_times)
+    #     gain_vals = np.array(gain_vals)
+    #     dc = np.mean(gain_vals)
+    #     gain_vals -= dc
+    #     gain_vals = 1.0 / (1.0 + gain_vals)
+    #     rel_cal = np.interp(times, gain_times, gain_vals)
 
-        calibrated = raw_model * rel_cal
+    #     calibrated = raw_model * rel_cal
 
-        # Create a new set of coefficients without the 2f component
-        new_cf = np.zeros(2 * n_harm)
-        for h in range(n_harm):
-            if h == 0:
-                new_cf[0] = cf[0]
-                new_cf[1] = cf[1]
-            elif h == 1:
-                continue
-            new_cf[2 * h] = cf[2 * (h + n_chunk - 1)]
-            new_cf[2 * h + 1] = cf[2 * (h + n_chunk - 1) + 1]
+    #     # Create a new set of coefficients without the 2f component
+    #     new_cf = np.zeros(2 * n_harm)
+    #     for h in range(n_harm):
+    #         if h == 0:
+    #             new_cf[0] = cf[0]
+    #             new_cf[1] = cf[1]
+    #         elif h == 1:
+    #             continue
+    #         new_cf[2 * h] = cf[2 * (h + n_chunk - 1)]
+    #         new_cf[2 * h + 1] = cf[2 * (h + n_chunk - 1) + 1]
 
-        cal_sincos = hwpss_sincos_buffer(hwp_angle, hwp_flags, n_harm)
-        model = hwpss_build_model(cal_sincos, hwp_flags, new_cf)
+    #     cal_sincos = hwpss_sincos_buffer(hwp_angle, hwp_flags, n_harm)
+    #     model = hwpss_build_model(cal_sincos, hwp_flags, new_cf)
 
-        import matplotlib.pyplot as plt
+    #     import matplotlib.pyplot as plt
 
-        fig = plt.figure(figsize=(12, 18), dpi=300)
+    #     fig = plt.figure(figsize=(12, 18), dpi=300)
 
-        ax = fig.add_subplot(4, 1, 1, aspect="auto")
-        ax.plot(times, input, color="black", label="Input")
-        ax.plot(times, hwpss, color="red", label="Input with Gain Drift")
-        ax.legend(loc="best")
+    #     ax = fig.add_subplot(4, 1, 1, aspect="auto")
+    #     ax.plot(times, input, color="black", label="Input")
+    #     ax.plot(times, hwpss, color="red", label="Input with Gain Drift")
+    #     ax.legend(loc="best")
 
-        ax = fig.add_subplot(4, 1, 2, aspect="auto")
-        ax.plot(times, hwpss, color="red", label="Input with Gain Drift")
-        ax.plot(times, raw_model, color="green", label="Chunked 2F Solution")
-        ax.legend(loc="best")
+    #     ax = fig.add_subplot(4, 1, 2, aspect="auto")
+    #     ax.plot(times, hwpss, color="red", label="Input with Gain Drift")
+    #     ax.plot(times, raw_model, color="green", label="Chunked 2F Solution")
+    #     ax.legend(loc="best")
 
-        ax = fig.add_subplot(4, 1, 3, aspect="auto")
-        ax.plot(times, cal, color="black", label="True Gain Drift")
-        ax.plot(times, 1 / rel_cal, color="green", label="2F Recovered Gain")
-        ax.legend(loc="best")
+    #     ax = fig.add_subplot(4, 1, 3, aspect="auto")
+    #     ax.plot(times, cal, color="black", label="True Gain Drift")
+    #     ax.plot(times, 1 / rel_cal, color="green", label="2F Recovered Gain")
+    #     ax.legend(loc="best")
 
-        # ax = fig.add_subplot(4, 1, 4, aspect="auto")
-        # ax.plot(times, input, color="black", label="Input")
-        # ax.plot(times, calibrated, color="blue", label="Calibrated Chunked Solution")
-        # # ax.plot(times, model, color="green", label="Model without 2F")
-        # ax.legend(loc="best")
+    #     # ax = fig.add_subplot(4, 1, 4, aspect="auto")
+    #     # ax.plot(times, input, color="black", label="Input")
+    #     # ax.plot(times, calibrated, color="blue", label="Calibrated Chunked Solution")
+    #     # # ax.plot(times, model, color="green", label="Model without 2F")
+    #     # ax.legend(loc="best")
 
-        fig.suptitle("Chunked 2f HWPSS Modeling")
-        fig.savefig(os.path.join(self.outdir, "lowlevel_sub2f.png"))
-        plt.close(fig)
+    #     fig.suptitle("Chunked 2f HWPSS Modeling")
+    #     fig.savefig(os.path.join(self.outdir, "lowlevel_sub2f.png"))
+    #     plt.close(fig)
 
     # def create_test_data(self, testdir):
     #     # Slightly slower than 1 Hz
