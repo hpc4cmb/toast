@@ -57,6 +57,7 @@ class DemodCommonModeFilter(Operator):
         "the boresight roll angle",
     )
 
+    # For now, only support full observation common modes
     # view = Unicode(
     #     None, allow_none=True, help="Use this view of the data in all observations"
     # )
@@ -98,13 +99,6 @@ class DemodCommonModeFilter(Operator):
             raise traitlets.TraitError("Det mask should be a positive integer")
         return check
 
-    @traitlets.validate("det_flag_mask")
-    def _check_det_flag_mask(self, proposal):
-        check = proposal["value"]
-        if check < 0:
-            raise traitlets.TraitError("Flag mask should be a positive integer")
-        return check
-
     @traitlets.validate("shared_flag_mask")
     def _check_shared_flag_mask(self, proposal):
         check = proposal["value"]
@@ -122,6 +116,11 @@ class DemodCommonModeFilter(Operator):
         log = Logger.get()
 
         for ob in data.obs:
+            if ob.dist.comm_row_size != 1:
+                raise RuntimeError(
+                    "DemodCommonModeFilter only works with observations "
+                    "distributed by detector"
+                )
             if self.boresight is None:
                 roll = 0
             else:
@@ -204,7 +203,7 @@ class DemodCommonModeFilter(Operator):
                     upper_limit = sorted_rms[int(ndet * (1 - self.rms_cut_high))]
                     good = np.logical_and(lower_limit <= rms, rms <= upper_limit)
                 else:
-                    good = slice(tods[0].size)
+                    good = slice(len(tods))
                 _, S, modes = np.linalg.svd(tods[good], full_matrices=False)
                 offset = np.ones(tods[0].size)
                 modes = np.vstack([offset, modes[: self.nmode]])
@@ -244,15 +243,8 @@ class DemodCommonModeFilter(Operator):
                 # Clean Qr and Ur
                 Qmodes, Qcov = templates["Q"]
                 Umodes, Ucov = templates["U"]
-                # Qrcopy = Qr.copy()  # DEBUG
-                # Urcopy = Ur.copy()  # DEBUG
                 self._regress(Qmodes, Qcov, Qr)
                 self._regress(Umodes, Ucov, Ur)
-                # DEBUG begin
-                # import pdb
-                # import matplotlib.pyplot as plt
-                # pdb.set_trace()
-                # DEBUG end
                 # Rotate back to horizontal basis
                 Q = Qr * np.cos(2 * phi) - Ur * np.sin(2 * phi)
                 U = Ur * np.cos(2 * phi) + Qr * np.sin(2 * phi)
@@ -282,10 +274,8 @@ class DemodCommonModeFilter(Operator):
         }
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)
-        if self.azimuth is not None:
-            req["shared"].append(self.azimuth)
-        if self.boresight_azel is not None:
-            req["shared"].append(self.boresight_azel)
+        if self.boresight is not None:
+            req["shared"].append(self.boresight)
         return req
 
     def _provides(self):
