@@ -798,7 +798,7 @@ class StokesWeightsDemod(Operator):
     @function_timer
     def _get_delta(self, data, ob, det):
         """Get the polarization angle in the input and output
-           frames to rotate Q and U accordingly
+        frames to rotate Q and U accordingly
 
         """
         if self.detector_pointing_out is None:

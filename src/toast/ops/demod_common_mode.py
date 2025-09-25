@@ -154,8 +154,8 @@ class DemodCommonModeFilter(Operator):
             Q = ob.detdata[self.det_data][Qdet][good]
             U = ob.detdata[self.det_data][Udet][good]
             # Rotate from horizontal to radial polarization basis
-            theta, phi, psi = qa.to_iso_angles(fp[Qdet]["quat"])
-            phi += roll
+            phi = qa.to_iso_angles(fp[Qdet]["quat"])[1]
+            phi = (phi + roll)[good]
             Qr = Q * np.cos(2 * phi) + U * np.sin(2 * phi)
             Ur = U * np.cos(2 * phi) - Q * np.sin(2 * phi)
             Qtod.append(Qr - np.mean(Qr))
@@ -238,7 +238,7 @@ class DemodCommonModeFilter(Operator):
                 U = ob.detdata[self.det_data][Udet][good].copy()
                 # Rotate from horizontal to radial polarization basis
                 theta, phi, psi = qa.to_iso_angles(fp[Qdet]["quat"])
-                phi += roll
+                phi = (phi + roll)[good]
                 Qr = Q * np.cos(2 * phi) + U * np.sin(2 * phi)
                 Ur = U * np.cos(2 * phi) - Q * np.sin(2 * phi)
                 # Clean Qr and Ur
