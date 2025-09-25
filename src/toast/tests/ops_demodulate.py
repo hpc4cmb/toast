@@ -28,7 +28,7 @@ class DemodulateTest(MPITestCase):
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
     def _test_demodulate(self, weight_mode, data, suffix=""):
-        nside = 128
+        nside = 256
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -64,7 +64,7 @@ class DemodulateTest(MPITestCase):
             sky_file,
             "pixel_dist",
             map_key=map_key,
-            fwhm=10.0 * u.deg,
+            fwhm=1.0 * u.deg,
             lmax=3 * nside,
             I_scale=0.001,
             Q_scale=0.0001,
@@ -212,13 +212,23 @@ class DemodulateTest(MPITestCase):
             fname_demod = os.path.join(
                 self.outdir, f"demodulated_{weight_mode}{suffix}_map.fits"
             )
+            fname_hits = os.path.join(
+                self.outdir, f"demodulated_{weight_mode}{suffix}_hits.fits"
+            )
 
             map_mod = hp.read_map(fname_mod, None)
             map_demod = np.atleast_2d(hp.read_map(fname_demod, None))
+            hits = hp.read_map(fname_hits)
             map_input = np.atleast_2d(hp.read_map(sky_file, None))
 
+            # Develop a comparison mask that excludes poorly observed pixels
+            sorted_hits = np.sort(hits[hits != 0])
+            nhit = len(sorted_hits)
+            hit_min = sorted_hits[int(0.1 * nhit)]  # worst 10% of hit pixels
+            rms_mask = hits > hit_min
+
             fig = plt.figure(figsize=[18, 12])
-            nrow, ncol = 2, 3
+            nrow, ncol = 3, 3
             rot = [42, -42]
             reso = 1
             xsize = 800
@@ -228,7 +238,7 @@ class DemodulateTest(MPITestCase):
                 # Modulated map is full IQU
                 value = map_input[i]
                 good = m != 0
-                rms = np.sqrt(np.mean((m[good] - value[good]) ** 2))
+                rms = np.sqrt(np.mean((m - value)[rms_mask] ** 2))
                 m[m == 0] = hp.UNSEEN
                 stokes = "IQU"[i]
                 hp.gnomview(
@@ -249,25 +259,35 @@ class DemodulateTest(MPITestCase):
                 i = "IQU".index(stokes)
                 value = map_input[i]
                 good = m != 0
-                rms0 = np.sqrt(np.mean(value[good] ** 2))
-                rms = np.sqrt(np.mean(m[good] ** 2))
-                if np.isnan(rms):
-                    import pdb
-                    pdb.set_trace()
-                rms1 = np.sqrt(np.mean((m[good] - value[good]) ** 2))
+                rms0 = np.sqrt(np.mean(value[rms_mask] ** 2))
+                rms = np.sqrt(np.mean(m[rms_mask] ** 2))
+                rms1 = np.sqrt(np.mean((m - value)[rms_mask] ** 2))
                 m[m == 0] = hp.UNSEEN
                 hp.gnomview(
                     m,
-                    sub=[nrow, ncol, 4 + i],
+                    sub=[nrow, ncol, ncol + i + 1],
                     reso=reso,
                     xsize=xsize,
                     rot=rot,
-                    title=f"Demodulated {stokes} : rms = {rms}",
+                    title=f"Demodulated {stokes} : rms = {rms / rms0:.3f} x rms(in)",
                     min=np.amin(value[good]) - amp,
                     max=np.amax(value[good]) + amp,
                     cmap="coolwarm",
                 )
-                if rms1 / rms0 > 0.5:
+                resid = m - value
+                resid[m == 0] = hp.UNSEEN
+                hp.gnomview(
+                    resid,
+                    sub=[nrow, ncol, 2 * ncol + i + 1],
+                    reso=reso,
+                    xsize=xsize,
+                    rot=rot,
+                    title=f"Residual {stokes} : resid rms = {rms1 / rms0:.3f} x rms(in)",
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
+                    cmap="coolwarm",
+                )
+                if rms1 / rms0 > 0.1:
                     print(
                         f"input - demodulated map RMS = {rms1}, (input RMS = {rms0})",
                         flush=True,

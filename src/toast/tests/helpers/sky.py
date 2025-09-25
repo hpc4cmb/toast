@@ -65,6 +65,7 @@ def create_fake_healpix_file(
         off += npix
     del vals
     unit_str = f"{units}"
+    maps = hp.reorder(maps, r2n=True)
     hp.write_map(
         out_file,
         maps,

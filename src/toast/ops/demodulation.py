@@ -814,19 +814,19 @@ class StokesWeightsDemod(Operator):
             # Get input pointing
             self.detector_pointing_in.apply(ob_data, detectors=[det])
             quats_in = ob_data.obs[0].detdata[self.detector_pointing_in.quats][det]
+            psi_in = qa.to_iso_angles(quats_in)[2]
             if reset and self.detector_pointing_out.quats in ob_data.obs[0].detdata:
                 del ob_data.obs[0].detdata[self.detector_pointing_out.quats]
             # Get output pointing
             self.detector_pointing_out.apply(ob_data, detectors=[det])
             quats_out = ob_data.obs[0].detdata[self.detector_pointing_out.quats][det]
+            psi_out = qa.to_iso_angles(quats_out)[2]
             if reset:
                 # Purge the quaternions to avoid confusion later
                 del ob_data.obs[0].detdata[self.detector_pointing_out.quats]
             # Get the difference in position angle
-            psi_in = qa.to_iso_angles(quats_in)[2]
-            psi_out = qa.to_iso_angles(quats_out)[2]
             delta = psi_out - psi_in
-            delta = -delta[:, np.newaxis]
+            delta = delta[:, np.newaxis]
         else:
             delta = None
 
