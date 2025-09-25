@@ -41,7 +41,7 @@ class DemodulateTest(MPITestCase):
             shared_flag_mask=0,
         )
         detpointing_radec = ops.PointingDetectorSimple(
-            boresight=defaults.boresight_azel,
+            boresight=defaults.boresight_radec,
             shared_flag_mask=0,
         )
 
@@ -220,7 +220,8 @@ class DemodulateTest(MPITestCase):
             fig = plt.figure(figsize=[18, 12])
             nrow, ncol = 2, 3
             rot = [42, -42]
-            reso = 5
+            reso = 1
+            xsize = 800
 
             amp = 1e-5
             for i, m in enumerate(map_mod):
@@ -234,6 +235,7 @@ class DemodulateTest(MPITestCase):
                     m,
                     sub=[nrow, ncol, 1 + i],
                     reso=reso,
+                    xsize=xsize,
                     rot=rot,
                     title=f"Modulated {stokes} : rms = {rms}",
                     min=np.amin(value[good]) - amp,
@@ -249,12 +251,16 @@ class DemodulateTest(MPITestCase):
                 good = m != 0
                 rms0 = np.sqrt(np.mean(value[good] ** 2))
                 rms = np.sqrt(np.mean(m[good] ** 2))
+                if np.isnan(rms):
+                    import pdb
+                    pdb.set_trace()
                 rms1 = np.sqrt(np.mean((m[good] - value[good]) ** 2))
                 m[m == 0] = hp.UNSEEN
                 hp.gnomview(
                     m,
                     sub=[nrow, ncol, 4 + i],
                     reso=reso,
+                    xsize=xsize,
                     rot=rot,
                     title=f"Demodulated {stokes} : rms = {rms}",
                     min=np.amin(value[good]) - amp,
