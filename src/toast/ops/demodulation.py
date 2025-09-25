@@ -217,8 +217,12 @@ class Demodulate(Operator):
 
         # Demodulation only applies to observations with HWP.  Verify
         # that there are such observations in `data`.  We also cut all
+<<<<<<< HEAD
         # observations where more than self.keep_frac fraction of optical
         # detectors are cut.
+=======
+        # observations where more than 90% of optical detectors are cut.
+>>>>>>> 97954ec1 (Add stricter criteria for demodulating observations with many flagged detectors.)
 
         demodulate_input_obs = []
         for obs in data.obs:
