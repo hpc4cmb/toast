@@ -257,19 +257,27 @@ class DemodCommonModeFilter(Operator):
                 Udet = Qdet.replace("demod4r", "demod4i")
                 Q = ob.detdata[self.det_data][Qdet][good].copy()
                 U = ob.detdata[self.det_data][Udet][good].copy()
-                # Rotate from horizontal to radial polarization basis
-                theta, phi, psi = qa.to_iso_angles(fp[Qdet]["quat"])
-                phi = (phi + roll)[good]
-                Qr = Q * np.cos(2 * phi) + U * np.sin(2 * phi)
-                Ur = U * np.cos(2 * phi) - Q * np.sin(2 * phi)
+                if self.pol_frame == "radial":
+                    Qr = Q.copy()
+                    Ur = U.copy()
+                else:
+                    # Rotate from horizontal to radial polarization basis
+                    theta, phi, psi = qa.to_iso_angles(fp[Qdet]["quat"])
+                    phi = (phi + roll)[good]
+                    Qr = Q * np.cos(2 * phi) + U * np.sin(2 * phi)
+                    Ur = U * np.cos(2 * phi) - Q * np.sin(2 * phi)
                 # Clean Qr and Ur
                 Qmodes, Qcov = templates["Q"]
                 Umodes, Ucov = templates["U"]
                 self._regress(Qmodes, Qcov, Qr)
                 self._regress(Umodes, Ucov, Ur)
-                # Rotate back to horizontal basis
-                Q = Qr * np.cos(2 * phi) - Ur * np.sin(2 * phi)
-                U = Ur * np.cos(2 * phi) + Qr * np.sin(2 * phi)
+                if self.pol_frame == "radial":
+                    Q = Qr
+                    U = Ur
+                else:
+                    # Rotate back to horizontal basis
+                    Q = Qr * np.cos(2 * phi) - Ur * np.sin(2 * phi)
+                    U = Ur * np.cos(2 * phi) + Qr * np.sin(2 * phi)
                 # Save the cleaned data
                 ob.detdata[self.det_data][Qdet][good] = Q
                 ob.detdata[self.det_data][Udet][good] = U
