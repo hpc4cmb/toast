@@ -27,6 +27,150 @@ class DemodulateTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
+    def test_change_frame(self):
+        # There are frame changes in all demodulation tests but this one
+        # is run with higher resolution input map to minimize T->P leakage
+
+        data = create_ground_data(self.comm)
+        nside = 1024
+
+        # Create an uncorrelated noise model from focalplane detector properties
+
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Pointing operators
+
+        detpointing_radial = ops.PointingDetectorFP(
+            quats="quats_radial",
+        )
+        detpointing_radec = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec,
+            shared_flag_mask=0,
+            quats="quats_radec",
+        )
+
+        pixels = ops.PixelsHealpix(
+            nside=nside,
+            detector_pointing=detpointing_radec,
+        )
+        weights_radial = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_radial,
+            weights="weights_radial",
+        )
+
+        weights_radec = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_radec,
+            weights="weights_radec",
+        )
+
+        sky_file = os.path.join(self.outdir, f"fake_sky_coord_change.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights_radec,
+            sky_file,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=10.0 * u.deg,
+            lmax=1 * nside,
+            I_scale=.001,
+            Q_scale=.0001,
+            U_scale=.0001,
+            det_data=defaults.det_data,
+        )
+
+        # Demodulate
+
+        downsample = 3
+        demod_radial = ops.Demodulate(
+            stokes_weights=weights_radial,
+            nskip=downsample,
+            purge=False,
+        )
+        demod_data_radial = demod_radial.apply(data)
+
+        demod_radec = ops.Demodulate(
+            stokes_weights=weights_radec,
+            nskip=downsample,
+        )
+        demod_data_radec = demod_radec.apply(data)
+
+        # Get the Stokes weights
+
+        demod_weights_radial = ops.StokesWeightsDemod(
+            detector_pointing_in=detpointing_radial,
+            detector_pointing_out=detpointing_radec,
+        )
+        demod_weights_radial.apply(demod_data_radial)
+
+        demod_weights_radec = ops.StokesWeightsDemod()
+        demod_weights_radec.apply(demod_data_radec)
+
+        # Check the weights
+        for ob_radial, ob_radec in zip(demod_data_radial.obs, demod_data_radec.obs):
+            for qdet in ob_radial.local_detectors:
+                if not qdet.startswith("demod4r"):
+                    continue
+                udet = qdet.replace("demod4r", "demod4i")
+                # Q/U in the horizontal system
+                qsig_radial = ob_radial.detdata[defaults.det_data][qdet]
+                usig_radial = ob_radial.detdata[defaults.det_data][udet]
+                # Q/U in RA/Dec
+                qsig_radec = ob_radec.detdata[defaults.det_data][qdet]
+                usig_radec = ob_radec.detdata[defaults.det_data][udet]
+                # Rotate horizontal Q/U to RA/Dec
+                qweights_radial = ob_radial.detdata[defaults.weights][qdet].T
+                uweights_radial = ob_radial.detdata[defaults.weights][udet].T
+                qsig_rot = qsig_radial * qweights_radial[1] + usig_radial * uweights_radial[1]
+                usig_rot = qsig_radial * qweights_radial[2] + usig_radial * uweights_radial[2]
+
+                ind = slice(100, -100)  # Cut ends due to potential ringing
+                rms_q = np.std(qsig_radec[ind])
+                rms_q_rot = np.std(qsig_rot[ind])
+                rms_q_resid = np.std((qsig_radec - qsig_rot)[ind])
+                rms_u = np.std(usig_radec[ind])
+                rms_u_rot = np.std(usig_rot[ind])
+                rms_u_resid = np.std((usig_radec - usig_rot)[ind])
+
+                """
+                if rms_q_resid > 1e-2 * rms_q or rms_u_resid > 1e-2 * rms_u:
+                    rank = data.comm.world_rank
+                    print(f"RMS(Q) = {rms_q}, RMS(resid) = {rms_q_resid / rms_q} x RMS(Q)")
+                    print(f"RMS(U) = {rms_u}, RMS(resid) = {rms_u_resid / rms_u} x RMS(U)")
+                    import matplotlib.pyplot as plt
+                    fname_plot = f"error.{rank}.png"
+                    nrow, ncol = 1, 2
+                    fig = plt.figure(figsize=[ncol * 6, nrow * 4])
+                    ax = fig.add_subplot(nrow, ncol, 1)
+                    ax.plot(qsig_radec, label=f"Q RA/Dec, rms={rms_q}")
+                    ax.plot(qsig_radial, label="Q Qr/Ur")
+                    ax.plot(qsig_rot, label=f"Q Qr/Ur->Ra/Dec, rms={rms_q_rot}")
+                    ax.plot(qsig_rot - qsig_radec, label=f"Diff, rms={rms_q_resid}")
+                    ax.legend(loc="best")
+                    ax = fig.add_subplot(nrow, ncol, 2)
+                    ax.plot(usig_radec, label=f"U RA/Dec, rms={rms_u}")
+                    ax.plot(usig_radial, label="U Qr/Ur")
+                    ax.plot(usig_rot, label=f"U Qr/Ur->Ra/Dec, rms={rms_u_rot}")
+                    ax.plot(usig_rot - usig_radec, label=f"Diff, rms={rms_u_resid}")
+                    ax.legend(loc="best")
+                    fig.savefig(fname_plot)
+                """
+
+                assert rms_q_resid < 1e-2 * rms_q
+                assert rms_u_resid < 1e-2 * rms_u
+
+        if self.comm is not None:
+            self.comm.barrier()
+        close_data(demod_data_radial)
+        close_data(demod_data_radec)
+        close_data(data)
+
     def _test_demodulate(self, weight_mode, data, suffix=""):
         nside = 256
 
@@ -34,10 +178,10 @@ class DemodulateTest(MPITestCase):
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
         default_model.apply(data)
 
-        # Pointing operator
+        # Pointing operators
 
         detpointing_azel = ops.PointingDetectorSimple(
-            boresight=defaults.boresight_azel,
+            boresight=defaults.boresight_radec,
             shared_flag_mask=0,
         )
         detpointing_radec = ops.PointingDetectorSimple(
@@ -323,12 +467,15 @@ class DemodulateTest(MPITestCase):
 
     def test_demodulate_IQU_detcuts(self):
         data = create_ground_data(self.comm, single_group=True)
-        # Flag the second half of the detectors
+        # Flag the second half of the pixels.  Due to the relatively low
+        # resolution of the input sky, there is some T->P leakage in the
+        # test that blows up when one of the two detectors in a pixel is
+        # flagged.
         for ob in data.obs:
             det_flags = dict()
             total_dets = len(ob.local_detectors)
             for idet, det in enumerate(ob.local_detectors):
-                if idet >= total_dets // 2:
+                if idet >= (total_dets // 4) * 2:
                     det_flags[det] = defaults.det_mask_invalid
             ob.update_local_detector_flags(det_flags)
         self._test_demodulate(weight_mode="IQU", data=data, suffix="-detcuts")

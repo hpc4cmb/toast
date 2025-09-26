@@ -76,10 +76,6 @@ class Demodulate(Operator):
 
     hwp_angle = Unicode(defaults.hwp_angle, help="Observation shared key for HWP angle")
 
-    azimuth = Unicode(defaults.azimuth, help="Observation shared key for Azimuth")
-
-    elevation = Unicode(defaults.elevation, help="Observation shared key for Elevation")
-
     det_data = Unicode(
         defaults.det_data,
         help="Observation detdata key apply filtering to.  Use ';' if multiple "
@@ -463,6 +459,7 @@ class Demodulate(Operator):
                 msg = "Only shared objects using the group, row, and column "
                 msg += "communicators can be demodulated"
                 raise RuntimeError(msg)
+        return
 
     @function_timer
     def _demodulate_detsets(self, obs, all_dets):

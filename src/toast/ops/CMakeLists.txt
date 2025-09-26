@@ -31,6 +31,7 @@ install(FILES
     signal_diff_noise_model.py
     gainscrambler.py
     pointing.py
+    pointing_detector_fp.py
     interpolate_healpix.py
     scan_healpix.py
     scan_healpix_detector.py

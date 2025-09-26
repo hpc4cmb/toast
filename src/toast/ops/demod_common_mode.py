@@ -22,7 +22,8 @@ from .operator import Operator
 class DemodCommonModeFilter(Operator):
     """Operator that extracts and projects out the Qr/Ur common modes
 
-    The provided data must be demodulated in the horizontal (Az/El) frame.
+    The provided data must be demodulated in the radial (Qr/Ur) or
+    horizontal (Az/El) frame.
     """
 
     # Class traits
@@ -52,7 +53,7 @@ class DemodCommonModeFilter(Operator):
 
     boresight = Unicode(
         defaults.boresight_azel,
-        allow_none=False,
+        allow_none=True,
         help="Observation shared data key for boresight quaternions for deriving "
         "the boresight roll angle",
     )
@@ -61,6 +62,12 @@ class DemodCommonModeFilter(Operator):
     # view = Unicode(
     #     None, allow_none=True, help="Use this view of the data in all observations"
     # )
+
+    pol_frame = Unicode(
+        "horizontal",
+        allow_none=False,
+        help="Input Q/U basis. Either 'radial' or 'horizontal'",
+    )
 
     mode = Unicode(
         "IQU", allow_none=False, help="Stokes modes to filter (I, QU or IQU)"
@@ -83,6 +90,14 @@ class DemodCommonModeFilter(Operator):
         "target detectors with the highest RMS so outliers can degrade the "
         "operator performance.",
     )
+
+    @traitlets.validate("pol_frame")
+    def _check_pol_frame(self, proposal):
+        check = proposal["value"]
+        allowed = ["radial", "horizontal"]
+        if check not in allowed:
+            raise traitlets.TraitError(f"pol_frame should be one of {allowed}")
+        return check
 
     @traitlets.validate("mode")
     def _check_mode(self, proposal):
@@ -152,11 +167,18 @@ class DemodCommonModeFilter(Operator):
             Udet = Qdet.replace("demod4r", "demod4i")
             Q = ob.detdata[self.det_data][Qdet][good]
             U = ob.detdata[self.det_data][Udet][good]
-            # Rotate from horizontal to radial polarization basis
-            phi = qa.to_iso_angles(fp[Qdet]["quat"])[1]
-            phi = (phi + roll)[good]
-            Qr = Q * np.cos(2 * phi) + U * np.sin(2 * phi)
-            Ur = U * np.cos(2 * phi) - Q * np.sin(2 * phi)
+            if self.pol_frame == "radial":
+                Qr = Q
+                Ur = U
+            elif self.pol_frame == "horizontal":
+                # Rotate from horizontal to radial polarization basis
+                phi = qa.to_iso_angles(fp[Qdet]["quat"])[1]
+                phi = (phi + roll)[good]
+                Qr = Q * np.cos(2 * phi) + U * np.sin(2 * phi)
+                Ur = U * np.cos(2 * phi) - Q * np.sin(2 * phi)
+            else:
+                msg = f"Unknown polarization frame: {self.pol_frame}"
+                raise RuntimeError(msg)
             Qtod.append(Qr - np.mean(Qr))
             Utod.append(Ur - np.mean(Ur))
 
