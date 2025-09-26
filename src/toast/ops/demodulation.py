@@ -270,7 +270,7 @@ class Demodulate(Operator):
             # Create a new observation to hold the demodulated and downsampled data
 
             demod_telescope = self._demodulate_telescope(obs, all_dets)
-            demod_times = self._demodulate_times(obs)
+            demod_all_samples = self._demodulated_samples(obs)
             demod_detsets = self._demodulate_detsets(obs, all_dets)
             demod_sample_sets = self._demodulate_sample_sets(obs)
             demod_process_rows = obs.dist.process_rows
@@ -279,7 +279,7 @@ class Demodulate(Operator):
             demod_obs = Observation(
                 obs.comm,
                 demod_telescope,
-                demod_times.size,
+                demod_all_samples,
                 name=demod_name,
                 uid=name_UID(demod_name),
                 session=obs.session,
@@ -299,7 +299,6 @@ class Demodulate(Operator):
             for det in local_dets:
                 for prefix in self.prefixes:
                     demod_dets.append(f"{prefix}_{det}")
-            n_local = demod_obs.n_local_samples
 
             self._demodulate_shared_data(obs, demod_obs)
 
@@ -400,34 +399,70 @@ class Demodulate(Operator):
         return demod_telescope
 
     @function_timer
-    def _demodulate_times(self, obs):
-        """Downsample timestamps"""
-        times = obs.shared[self.times].data.copy()
-        if self.nskip != 1:
-            offset = obs.local_index_offset
-            times = np.array(times[offset % self.nskip :: self.nskip])
-        return times
+    def _demodulated_samples(self, obs):
+        """Compute number of samples in the demodulated observation."""
+        n_all = None
+        if obs.comm_row_rank == 0:
+            # First process row gathers the size of sample slices to the first process
+            off = obs.local_index_offset % self.nskip
+            slc = slice(off, None, self.nskip)
+            n_local = len(obs.shared[self.times].data[slc])
+            if obs.comm_row is None:
+                n_all = n_local
+            else:
+                n_all = obs.comm_row.reduce(n_local, op=MPI.SUM, root=0)
+        if obs.comm.comm_group is not None:
+            # Broadcast result to the whole group
+            n_all = obs.comm.comm_group.bcast(n_all, root=0)
+        return n_all
 
     @function_timer
     def _demodulate_shared_data(self, obs, demod_obs):
         """Downsample shared data"""
-        n_local = demod_obs.n_local_samples
-        for key in obs.shared.keys():
-            values = obs.shared[key].data.copy()
-            if self.nskip != 1:
-                offset = obs.local_index_offset
-                values = values[offset % self.nskip :: self.nskip]
-            demod_obs.shared.create_column(
-                key,
-                shape=values.shape,
-                dtype=values.dtype,
-            )
-            demod_obs.shared[key].set(
-                values,
-                offset=np.zeros_like(values.shape),
-                fromrank=0,
-            )
-        return
+        for field in obs.shared.keys():
+            shobj = obs.shared[field]
+            commtype = obs.shared.comm_type(field)
+            if commtype == "group":
+                # Using full group communicator, just copy to new obs.
+                demod_obs.shared.assign_mpishared(field, shobj, commtype)
+            elif commtype == "row":
+                # Shared in the sample direction (per-detector object like a beam,
+                # bandpass, etc).  This means that downsampling does not effect the
+                # shared object.  Just copy to the new obs.
+                demod_obs.shared.assign_mpishared(field, shobj, commtype)
+            elif commtype == "column":
+                # Shared in the detector direction.
+                # Set the data on one process
+                if obs.comm_col_rank == 0:
+                    off = obs.local_index_offset % self.nskip
+                    slc = slice(off, None, self.nskip)
+                    values = np.ascontiguousarray(obs.shared[field].data[slc])
+                    n_samp = len(values)
+                else:
+                    n_samp = None
+                    values = None
+
+                # Data type
+                dtype = shobj.dtype
+
+                # Downsampled shape
+                if obs.comm_col is not None:
+                    n_samp = obs.comm_col.bcast(n_samp, root=0)
+                shp = [n_samp]
+                shp.extend(shobj.shape[1:])
+                shp = tuple(shp)
+
+                # Create the object and set
+                demod_obs.shared.create_column(
+                    field,
+                    shape=shp,
+                    dtype=dtype,
+                )
+                demod_obs.shared[field].set(values, fromrank=0)
+            else:
+                msg = "Only shared objects using the group, row, and column "
+                msg += "communicators can be demodulated"
+                raise RuntimeError(msg)
 
     @function_timer
     def _demodulate_detsets(self, obs, all_dets):
