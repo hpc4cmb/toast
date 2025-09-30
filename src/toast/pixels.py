@@ -1477,7 +1477,7 @@ class PixelData(AcceleratorObject):
                         try:
                             value, comment = value
                             dset.attrs[key] = value
-                        except:
+                        except (TypeError, ValueError):
                             dset.attrs[key] = value
             else:
                 # All others wait for their turn to send
