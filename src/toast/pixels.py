@@ -3,7 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-from datetime import UTC, datetime
+from datetime import datetime
 
 import h5py
 import healpy as hp
@@ -1582,7 +1582,7 @@ class PixelData(AcceleratorObject):
         if extra_header is None:
             extra_header = {}
         extra_header["CREATED"] = (
-            datetime.now(tz=UTC).timestamp(),
+            datetime.utcnow().timestamp(),
             "Creation time [UTC]",
         )
         extra_header["VERSION"] = (__version__, "TOAST version")
