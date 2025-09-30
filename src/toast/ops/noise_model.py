@@ -647,7 +647,7 @@ class FlagNoiseFit(Operator):
     low_noise_limit = Float(
         0.1,
         allow_none=False,
-        help="Fraction of median NET or RMS to cut anomalously detectors at",
+        help="Fraction of median NET or RMS to cut anomalously low detectors at",
     )
 
     focalplane_key = Unicode(
