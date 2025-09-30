@@ -1,15 +1,17 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+from datetime import UTC, datetime
 
-import numpy as np
-import healpy as hp
 import h5py
+import healpy as hp
+import numpy as np
 from astropy import units as u
 from pshmem.utils import mpi_data_type
 
+from . import __version__
 from ._libtoast import global_to_local as libtoast_global_to_local
 from .accelerator import (
     AcceleratorObject,
@@ -26,6 +28,9 @@ from .accelerator import (
 from .dist import distribute_uniform
 from .io import have_hdf5_parallel
 from .mpi import MPI, use_mpi
+from .pixels_io_healpix import collect_healpix_submaps
+from .pixels_io_utils import filename_is_fits, filename_is_hdf5
+from .pixels_io_wcs import broadcast_image, collect_wcs_submaps, read_wcs, write_wcs
 from .timing import GlobalTimers, function_timer
 from .utils import (
     AlignedF32,
@@ -42,9 +47,6 @@ from .utils import (
     memreport,
     unit_conversion,
 )
-from .pixels_io_healpix import collect_healpix_submaps
-from .pixels_io_utils import filename_is_fits, filename_is_hdf5
-from .pixels_io_wcs import collect_wcs_submaps, broadcast_image, write_wcs, read_wcs
 
 
 class PixelDistribution(AcceleratorObject):
@@ -1575,6 +1577,15 @@ class PixelData(AcceleratorObject):
 
         """
         dist = self.distribution
+
+        # Set up basic header information
+        if extra_header is None:
+            extra_header = {}
+        extra_header["CREATED"] = (
+            datetime.now(tz=UTC).timestamp(),
+            "Creation time [UTC]",
+        )
+        extra_header["VERSION"] = (__version__, "TOAST version")
 
         # Check if we have WCS information
         if hasattr(dist, "wcs"):

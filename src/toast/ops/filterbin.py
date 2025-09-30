@@ -684,9 +684,9 @@ class FilterBin(Operator):
                 # memreport.apply(data)
 
                 if (
-                        template_covariance is None or
-                        template_covariance.shape[0] != det_templates.ntemplate or
-                        np.any(last_good_fit != good_fit)
+                    template_covariance is None
+                    or template_covariance.shape[0] != det_templates.ntemplate
+                    or np.any(last_good_fit != good_fit)
                 ):
                     template_covariance = self._build_template_covariance(
                         det_templates, good_fit
@@ -1343,7 +1343,9 @@ class FilterBin(Operator):
             else:
                 stop = max(stop, times[-1])
             all_dets.update(ob.select_local_detectors(detectors))
-            good_dets.update(ob.select_local_detectors(detectors, flagmask=self.det_mask))
+            good_dets.update(
+                ob.select_local_detectors(detectors, flagmask=self.det_mask)
+            )
         if self.comm is not None:
             start = self.comm.allreduce(start, op=MPI.MIN)
             stop = self.comm.allreduce(stop, op=MPI.MAX)
@@ -1355,6 +1357,7 @@ class FilterBin(Operator):
         extra_header["STOP"] = (stop, "Dataset stop time")
         extra_header["NDET"] = (len(all_dets), "Total number of detectors")
         extra_header["NGOOD"] = (len(good_dets), "Total number of usable detectors")
+        extra_header["OPERATOR"] = ("TOAST FilterBin", "Generating code")
 
         return extra_header
 

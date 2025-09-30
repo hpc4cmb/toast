@@ -603,11 +603,7 @@ class MapMaker(Operator):
             extra_header=extra_header,
         )
         self._write_del(
-            self.cov_name,
-            self.write_cov,
-            False,
-            self.name,
-            extra_header=extra_header
+            self.cov_name, self.write_cov, False, self.name, extra_header=extra_header
         )
 
         self._log.info_rank(
@@ -655,8 +651,13 @@ class MapMaker(Operator):
             else:
                 stop = max(stop, times[-1])
             all_dets.update(ob.select_local_detectors(detectors))
-            good_dets.update(ob.select_local_detectors(detectors, flagmask=self.det_mask))
-        if self.comm is not None:
+            good_dets.update(
+                ob.select_local_detectors(
+                    detectors,
+                    flagmask=self.binning.det_mask,
+                )
+            )
+        if self._comm is not None:
             start = self._comm.allreduce(start, op=MPI.MIN)
             stop = self._comm.allreduce(stop, op=MPI.MAX)
             all_dets_list = self._comm.allgather(all_dets)
@@ -667,6 +668,7 @@ class MapMaker(Operator):
         extra_header["STOP"] = (stop, "Dataset stop time")
         extra_header["NDET"] = (len(all_dets), "Total number of detectors")
         extra_header["NGOOD"] = (len(good_dets), "Total number of usable detectors")
+        extra_header["OPERATOR"] = ("TOAST MapMaker", "Generating code")
 
         return extra_header
 
