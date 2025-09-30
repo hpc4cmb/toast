@@ -69,6 +69,8 @@ class MapMaker(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
+
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key for the timestream data"
     )
