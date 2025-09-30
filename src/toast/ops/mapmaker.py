@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -25,7 +25,7 @@ from .scan_map import ScanMap, ScanMask
 
 @trait_docs
 class MapMaker(Operator):
-    """Operator for making maps.
+    r"""Operator for making maps.
 
     This operator first solves for a maximum likelihood set of template amplitudes
     that model the timestream contributions from noise, systematics, etc:
@@ -212,7 +212,7 @@ class MapMaker(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _write_del(self, prod_key, prod_write, force, rootname):
+    def _write_del(self, prod_key, prod_write, force, rootname, extra_header=None):
         """Write data object to file and delete it from cache"""
         log = Logger.get()
 
@@ -245,6 +245,7 @@ class MapMaker(Operator):
                     force_serial=self.write_hdf5_serial,
                     single_precision=True,
                     report_memory=self.report_memory,
+                    extra_header=extra_header,
                 )
             log.info_rank(f"Wrote {fname} in", comm=self._comm, timer=wtimer)
 
@@ -454,7 +455,7 @@ class MapMaker(Operator):
         return
 
     @function_timer
-    def _bin_and_write_raw_signal(self, map_binning):
+    def _bin_and_write_raw_signal(self, map_binning, extra_header=None):
         """Optionally bin and save an undestriped map"""
 
         if not self.write_binmap:
@@ -475,7 +476,13 @@ class MapMaker(Operator):
             comm=self._comm,
             timer=self._timer,
         )
-        self._write_del(self.binmap_name, self.write_binmap, True, self._mc_root)
+        self._write_del(
+            self.binmap_name,
+            self.write_binmap,
+            True,
+            self._mc_root,
+            extra_header=extra_header,
+        )
 
         self._memreport.prefix = "After binning final map"
         self._memreport.apply(self._data, use_accel=self._use_accel)
@@ -577,7 +584,7 @@ class MapMaker(Operator):
         return
 
     @function_timer
-    def _write_maps(self):
+    def _write_maps(self, extra_header=None):
         """Write and delete the outputs"""
 
         self._write_del(
@@ -586,8 +593,20 @@ class MapMaker(Operator):
             True,
             self._mc_root,
         )
-        self._write_del(self.map_name, self.write_map, True, self._mc_root)
-        self._write_del(self.cov_name, self.write_cov, False, self.name)
+        self._write_del(
+            self.map_name,
+            self.write_map,
+            True,
+            self._mc_root,
+            extra_header=extra_header,
+        )
+        self._write_del(
+            self.cov_name,
+            self.write_cov,
+            False,
+            self.name,
+            extra_header=extra_header
+        )
 
         self._log.info_rank(
             f"{self._log_prefix}  finished output write in",
@@ -615,6 +634,41 @@ class MapMaker(Operator):
         return
 
     @function_timer
+    def _get_extra_header(self, data, detectors):
+        """Extract useful information from the data object to record in
+        map headers"""
+        extra_header = {}
+        start = None
+        stop = None
+        all_dets = set()
+        good_dets = set()
+        for ob in data.obs:
+            times = ob.shared[self.times].data
+            if start is None:
+                start = times[0]
+            else:
+                start = min(start, times[0])
+            if stop is None:
+                stop = times[-1]
+            else:
+                stop = max(stop, times[-1])
+            all_dets.update(ob.select_local_detectors(detectors))
+            good_dets.update(ob.select_local_detectors(detectors, flagmask=self.det_mask))
+        if self.comm is not None:
+            start = self._comm.allreduce(start, op=MPI.MIN)
+            stop = self._comm.allreduce(stop, op=MPI.MAX)
+            all_dets_list = self._comm.allgather(all_dets)
+            good_dets_list = self._comm.allgather(good_dets)
+            all_dets.update(*all_dets_list)
+            good_dets.update(*good_dets_list)
+        extra_header["START"] = (start, "Dataset start time")
+        extra_header["STOP"] = (stop, "Dataset stop time")
+        extra_header["NDET"] = (len(all_dets), "Total number of detectors")
+        extra_header["NGOOD"] = (len(good_dets), "Total number of usable detectors")
+
+        return extra_header
+
+    @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         # First confirm that there is at least one valid detector
 
@@ -637,6 +691,8 @@ class MapMaker(Operator):
 
         self._setup(data, detectors, use_accel)
 
+        extra_header = self._get_extra_header(data, detectors)
+
         self._memreport.prefix = "Start of mapmaking"
         self._memreport.apply(self._data, use_accel=self._use_accel)
 
@@ -646,7 +702,7 @@ class MapMaker(Operator):
 
         self._build_pixel_covariance(map_binning)
 
-        self._bin_and_write_raw_signal(map_binning)
+        self._bin_and_write_raw_signal(map_binning, extra_header=extra_header)
 
         out_cleaned = self._clean_signal(template_amplitudes)
 
@@ -655,7 +711,7 @@ class MapMaker(Operator):
 
         self._purge_cleaned_tod()  # Potentially frees memory for writing maps
 
-        self._write_maps()
+        self._write_maps(extra_header=extra_header)
 
         self._memreport.prefix = "End of mapmaking"
         self._memreport.apply(self._data, use_accel=self._use_accel)
@@ -688,7 +744,7 @@ class MapMaker(Operator):
 
 @trait_docs
 class Calibrate(Operator):
-    """Operator for calibrating timestreams using solved templates.
+    r"""Operator for calibrating timestreams using solved templates.
 
     This operator first solves for a maximum likelihood set of template amplitudes
     that model the timestream contributions from noise, systematics, etc:

@@ -49,6 +49,13 @@ class PixelTest(MPITestCase):
             np.uint8,
         ]
         self.datatypes = [np.float64, np.float32, np.int64, np.int32]
+        self.extra_header = {
+            "key1" : "value1",
+            "key2" : 0,
+            "key3" : True,
+            "key4" : ("value4", "comment4"),
+            "key5" : (0.0, "comment5"),
+        }
 
     def tearDown(self):
         pass
@@ -104,7 +111,7 @@ class PixelTest(MPITestCase):
                     self.outdir,
                     "data_sub{}_type-{}.{}".format(nsb, np.dtype(tp).char, suffix),
                 )
-                pdata.write(wcsfile)
+                pdata.write(wcsfile, extra_header=self.extra_header)
                 check = self._make_pixdata(dist, tp, n_value, zero=True)
                 check.read(wcsfile)
                 nt.assert_equal(pdata.data, check.data)

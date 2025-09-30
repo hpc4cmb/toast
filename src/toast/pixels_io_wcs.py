@@ -248,7 +248,7 @@ def broadcast_image(image, fscale, pix, comm_bytes):
 
 
 @function_timer
-def write_wcs(filename, image, wcs, units=None, dtype=None):
+def write_wcs(filename, image, wcs, units=None, dtype=None, extra_header=None):
     """Write a FITS or HDF5 WCS map on the calling process
 
     Args:
@@ -256,6 +256,7 @@ def write_wcs(filename, image, wcs, units=None, dtype=None):
         image (ndarray): 2 or 3-dimensional image
         wcs (astropy.WCS):  The World Coordinate System
         units (str):  Image units
+        extra_header (dict):  Additional metadata to include with the map
 
     Returns:
         None
@@ -267,6 +268,9 @@ def write_wcs(filename, image, wcs, units=None, dtype=None):
 
     # Basic wcs header
     header = wcs.to_header(relax=True)
+
+    if extra_header is not None:
+        header.update(extra_header)
 
     # Output units
     if dtype is None:

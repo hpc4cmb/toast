@@ -206,7 +206,7 @@ def combine_observation_matrix(rootname):
 
 @trait_docs
 class FilterBin(Operator):
-    """FilterBin buids a template matrix and projects out
+    """FilterBin builds a template matrix and projects out
     compromised modes.  It then bins the signal and optionally
     writes out the sparse observation matrix that matches the
     filtering operations.
@@ -220,6 +220,8 @@ class FilterBin(Operator):
     # Class traits
 
     API = Int(0, help="Internal interface version for this operator")
+
+    times = Unicode(defaults.times, help="Observation shared key for timestamps")
 
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key for the timestream data"
@@ -542,6 +544,8 @@ class FilterBin(Operator):
 
         self._initialize_comm(data)
 
+        extra_header = self._get_extra_header(data, detectors)
+
         # Filter data
 
         self._initialize_obs_matrix()
@@ -556,7 +560,7 @@ class FilterBin(Operator):
             "FilterBin: Loaded deprojection map in", comm=self.comm, timer=timer
         )
 
-        self._bin_map(data, detectors, filtered=False)
+        self._bin_map(data, detectors, filtered=False, extra_header=extra_header)
         log.debug_rank(
             "FilterBin: Binned unfiltered map in", comm=self.comm, timer=timer
         )
@@ -746,7 +750,7 @@ class FilterBin(Operator):
 
         # Bin filtered signal
 
-        self._bin_map(data, detectors, filtered=True)
+        self._bin_map(data, detectors, filtered=True, extra_header=extra_header)
         log.debug_rank("FilterBin: Binned filtered map in", comm=self.comm, timer=timer)
 
         log.info_rank(
@@ -1320,6 +1324,41 @@ class FilterBin(Operator):
         return
 
     @function_timer
+    def _get_extra_header(self, data, detectors):
+        """Extract useful information from the data object to record in
+        map headers"""
+        extra_header = {}
+        start = None
+        stop = None
+        all_dets = set()
+        good_dets = set()
+        for ob in data.obs:
+            times = ob.shared[self.times].data
+            if start is None:
+                start = times[0]
+            else:
+                start = min(start, times[0])
+            if stop is None:
+                stop = times[-1]
+            else:
+                stop = max(stop, times[-1])
+            all_dets.update(ob.select_local_detectors(detectors))
+            good_dets.update(ob.select_local_detectors(detectors, flagmask=self.det_mask))
+        if self.comm is not None:
+            start = self.comm.allreduce(start, op=MPI.MIN)
+            stop = self.comm.allreduce(stop, op=MPI.MAX)
+            all_dets_list = self.comm.allgather(all_dets)
+            good_dets_list = self.comm.allgather(good_dets)
+            all_dets.update(*all_dets_list)
+            good_dets.update(*good_dets_list)
+        extra_header["START"] = (start, "Dataset start time")
+        extra_header["STOP"] = (stop, "Dataset stop time")
+        extra_header["NDET"] = (len(all_dets), "Total number of detectors")
+        extra_header["NGOOD"] = (len(good_dets), "Total number of usable detectors")
+
+        return extra_header
+
+    @function_timer
     def _initialize_obs_matrix(self):
         if self.write_obs_matrix:
             self.obs_matrix = scipy.sparse.csr_matrix(
@@ -1489,7 +1528,7 @@ class FilterBin(Operator):
         return
 
     @function_timer
-    def _bin_map(self, data, detectors, filtered):
+    def _bin_map(self, data, detectors, filtered, extra_header=None):
         """Bin the signal onto a map.  Optionally write out hits and
         white noise covariance matrices.
         """
@@ -1586,7 +1625,11 @@ class FilterBin(Operator):
                             f"Skipping existing file: {fname}", comm=self.comm
                         )
                         continue
-                data[key].write(fname, force_serial=self.write_hdf5_serial)
+                data[key].write(
+                    fname,
+                    force_serial=self.write_hdf5_serial,
+                    extra_header=extra_header,
+                )
                 log.info_rank(f"Wrote {fname} in", comm=self.comm, timer=timer)
             if not keep and not self.mc_mode:
                 if key in data:

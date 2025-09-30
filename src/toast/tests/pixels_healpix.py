@@ -38,6 +38,13 @@ class PixelTest(MPITestCase):
         # self.nsides = [2]
         # self.nsub = [8]
         # self.types = [np.int32]
+        self.extra_header = {
+            "key1" : "value1",
+            "key2" : 0,
+            "key3" : True,
+            "key4" : ("value4", "comment4"),
+            "key5" : (0.0, "comment5"),
+        }
 
     def tearDown(self):
         pass
@@ -158,7 +165,7 @@ class PixelTest(MPITestCase):
                             nside, nsb, np.dtype(tp).char
                         ),
                     )
-                    pdata.write(fitsfile)
+                    pdata.write(fitsfile, extra_header=self.extra_header)
                     check = self._make_pixdata(dist, tp, n_value, zero=True)
                     check.read(fitsfile)
                     nt.assert_equal(pdata.data, check.data)
@@ -234,7 +241,7 @@ class PixelTest(MPITestCase):
                             nside, nsb, np.dtype(tp).char
                         ),
                     )
-                    pdata.write(hdf5file)
+                    pdata.write(hdf5file, extra_header=self.extra_header)
                     check = self._make_pixdata(dist, tp, n_value, zero=True)
                     check.read(hdf5file)
                     nt.assert_equal(pdata.data, check.data)
