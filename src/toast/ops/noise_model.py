@@ -834,8 +834,8 @@ class FlagNoiseFit(Operator):
                         if not all_good[i]
                     }
                     msg = f"obs {obs.name}|{group}: flagged {len(group_flags)}"
-                    msg += " outlier detectors"
-                    log.debug(msg)
+                    msg += " noise model outlier detectors"
+                    log.info(msg)
                 if obs.comm.comm_group is not None:
                     group_flags = obs.comm.comm_group.bcast(group_flags, root=0)
 
