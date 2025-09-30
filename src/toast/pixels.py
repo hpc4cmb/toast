@@ -1297,7 +1297,7 @@ class PixelData(AcceleratorObject):
                         value, comment = value
                         # key, value, comment format
                         extra.append((key, value, comment))
-                    except:
+                    except (TypeError, ValueError):
                         # key, value format
                         extra.append((key, value))
             hp.write_map(
