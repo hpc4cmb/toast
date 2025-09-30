@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -644,6 +644,12 @@ class FlagNoiseFit(Operator):
         help="Flag detectors with knee frequency values outside this range",
     )
 
+    low_noise_limit = Float(
+        0.1,
+        allow_none=False,
+        help="Fraction of median NET or RMS to cut anomalously detectors at",
+    )
+
     focalplane_key = Unicode(
         None, allow_none=True, help="Process detectors in groups based on this column"
     )
@@ -665,6 +671,9 @@ class FlagNoiseFit(Operator):
         timer = Timer()
         timer.start()
 
+        nobs = 0
+        nbad = 0
+        ndet = 0
         for obs in data.obs:
             obs_timer = Timer()
             obs_timer.start()
@@ -789,6 +798,12 @@ class FlagNoiseFit(Operator):
                                 log.debug(msg)
                                 all_good[idet] = False
                                 n_cut += 1
+                            elif (net < net_med * self.low_noise_limit):
+                                msg = f"obs {obs.name}, det {name} has NET {net} "
+                                msg += f"that is < {net_med * self.low_noise_limit}"
+                                log.debug(msg)
+                                all_good[idet] = False
+                                n_cut += 1
                         if self.sigma_fknee is not None:
                             fknee_med = np.median(all_fknee[all_good])
                             fknee_std = np.std(all_fknee[all_good])
@@ -825,6 +840,12 @@ class FlagNoiseFit(Operator):
                                     log.debug(msg)
                                     all_good[idet] = False
                                     n_cut += 1
+                                elif (rms < rms_med * self.low_noise_limit):
+                                    msg = f"obs {obs.name}, det {name} has TOD RMS {rms} "
+                                    msg += f"that is < {rms_med * self.low_noise_limit}"
+                                    log.debug(msg)
+                                    all_good[idet] = False
+                                    n_cut += 1
                         msg = f"pass {flag_pass}, {n_cut} detectors flagged"
                         log.debug(msg)
                         flag_pass += 1
@@ -836,6 +857,9 @@ class FlagNoiseFit(Operator):
                     msg = f"obs {obs.name}|{group}: flagged {len(group_flags)}"
                     msg += " noise model outlier detectors"
                     log.info(msg)
+                    nobs += 1
+                    nbad += len(group_flags)
+                    ndet += len(all_names)
                 if obs.comm.comm_group is not None:
                     group_flags = obs.comm.comm_group.bcast(group_flags, root=0)
 
@@ -852,9 +876,13 @@ class FlagNoiseFit(Operator):
                 comm=data.comm.comm_group,
                 timer=obs_timer,
             )
+        if data.comm.comm_world is not None:
+            nobs = data.comm.comm_world.reduce(nobs)
+            nbad = data.comm.comm_world.reduce(nbad)
+            ndet = data.comm.comm_world.reduce(ndet)
         log.info_rank(
-            "Flagged noise outliers in",
-            comm=data.comm.comm_group,
+            f"Flagged {nbad} / {ndet} noise outliers over {nobs} observations in",
+            comm=data.comm.comm_world,
             timer=timer,
         )
 
