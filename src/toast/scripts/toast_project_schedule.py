@@ -220,7 +220,7 @@ def get_sso(args, schedule, period_times, comm, rank, sso, radius):
         log.info_rank(f"Loaded {cachefile}", comm=comm)
         nperiod_hits, npix_hits = hits.shape
         if nperiod_hits != nperiod or npix_hits != npix:
-            msg = f"{args.cache} is incompatible with arguments"
+            msg = f"{cachefile} is incompatible with arguments"
             raise RuntimeError(msg)
         return hits
 
@@ -352,6 +352,8 @@ def plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank):
                 disc = hits[iperiod]
             else:
                 disc = np.sum(hits, 0)
+            if np.all(disc) == 0:
+                continue
             disc /= np.amax(disc)
             hp.mollview(
                 disc,
@@ -532,6 +534,14 @@ def main():
         msg = f"Cache file does not end with .npy: {args.cache}"
         raise RuntimeError(msg)
 
+    if args.sso is not None:
+        if args.sso_radius_deg is None:
+            raise RuntimeError("--sso-radius-deg is required when using --sso")
+        nsso = args.sso.split(",")
+        radii = args.sso_radius_deg.split(",")
+        if len(radii) not in (1, nsso):
+            raise RuntimeError("Number of radii must be 1 or match number of SSOs")
+
     # Load the observing schedule
 
     schedule = toast.schedule.GroundSchedule()
@@ -557,7 +567,7 @@ def main():
             sso_hits[sso] = get_sso(
                 args, schedule, period_times, comm, rank, sso, radius
             )
-    log.info_rank(f"Made hits in", timer=timer1, comm=comm)
+            log.info_rank(f"Made {sso} hits in", timer=timer1, comm=comm)
 
     # Plot
 
