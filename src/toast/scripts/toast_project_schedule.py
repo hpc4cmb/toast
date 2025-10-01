@@ -124,6 +124,44 @@ def get_period_hits(args, schedule, period_times, iperiod, iscan):
     return hits, iscan
 
 
+def get_sso_period_hits(args, schedule, period_times, iperiod, iscan, sso, radius):
+    """Make an SSO hitmap for the given period"""
+
+    radius = np.radians(radius)
+    tstart, tstop = period_times[iperiod]
+    npix = hp.nside2npix(args.nside)
+    hits = np.zeros(npix)
+
+    observer = ephem.Observer()
+    observer.lon = schedule.site_lon.to_value(u.radian)
+    observer.lat = schedule.site_lat.to_value(u.radian)
+    observer.elevation = schedule.site_alt.to_value(u.meter)
+    observer.epoch = ephem.J2000
+    observer.compute_pressure()
+
+    sso = getattr(ephem, sso)()
+
+    # Find all scans that overlap with this period
+    for t in np.arange(tstart, tstop, args.timestep):
+        # Advance `iscan` until scan stop is after `t`
+        while schedule.scans[iscan].stop.timestamp() < t:
+            # This observation is before our reference time
+            iscan += 1
+        scan = schedule.scans[iscan]
+        if scan.start.timestamp() < t:
+            # `t` is between scan start and stop. Project hits according
+            # to the azimuth range at our reference time
+            observer.date = to_DJD(t)
+            sso.compute(observer)
+            lon = np.degrees(sso.a_ra)
+            lat = np.degrees(sso.a_dec)
+            vec = hp.dir2vec(lon, lat, lonlat=True)
+            pix = hp.query_disc(args.nside, vec, radius=radius)
+            hits[pix] += 1
+
+    return hits, iscan
+
+
 def get_hits(args, schedule, period_times, comm, rank):
     """Build or load the hitmaps for each period"""
 
@@ -165,6 +203,50 @@ def get_hits(args, schedule, period_times, comm, rank):
     return hits
 
 
+def get_sso(args, schedule, period_times, comm, rank, sso, radius):
+    """Build or load SSO hitmaps for each period"""
+
+    log = Logger.get()
+
+    nperiod = len(period_times)
+    npix = hp.nside2npix(args.nside)
+
+    cachefile = args.cache
+    if cachefile is not None:
+        cachefile = cachefile.replace(".npy", f".{sso}.npy")
+    if cachefile is not None and os.path.isfile(cachefile):
+        # Just load the cached hits
+        hits = np.load(cachefile)
+        log.info_rank(f"Loaded {cachefile}", comm=comm)
+        nperiod_hits, npix_hits = hits.shape
+        if nperiod_hits != nperiod or npix_hits != npix:
+            msg = f"{args.cache} is incompatible with arguments"
+            raise RuntimeError(msg)
+        return hits
+
+    log.info_rank(f"Computing {sso} hitmaps", comm=comm)
+    if rank == 0:
+        counter = tqdm
+    else:
+        counter = no_tqdm
+    hits = np.zeros([nperiod, npix])
+    iscan = 0  # Track the current observation
+    for iperiod in counter(range(nperiod)):
+        if comm is not None and iperiod % comm.size != rank:
+            continue
+        hits[iperiod], iscan = get_sso_period_hits(
+            args, schedule, period_times, iperiod, iscan, sso, radius
+        )
+    if comm is not None:
+        hits = comm.allreduce(hits)
+
+    if rank == 0 and cachefile is not None:
+        np.save(cachefile, hits)
+        log.info_rank(f"Wrote {cachefile}", comm=comm)
+
+    return hits
+
+
 def load_background(args):
     if args.bg is None:
         return None
@@ -187,7 +269,7 @@ def load_background(args):
     return bg
 
 
-def plot_hits(args, all_hits, period_times, period_names, comm, rank):
+def plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank):
     """Plot daily and total hits"""
 
     log = Logger.get()
@@ -228,6 +310,11 @@ def plot_hits(args, all_hits, period_times, period_names, comm, rank):
                 cbar=False,
                 alpha=np.ones(bg.size) * args.bg_alpha,
             )
+            reuse = True
+            alpha = mask * 0.75
+        else:
+            reuse = False
+            alpha = None
         hp.mollview(
             hits,
             cmap="magma",
@@ -235,9 +322,25 @@ def plot_hits(args, all_hits, period_times, period_names, comm, rank):
             xsize=1600,
             unit="Hits",
             rot=rot,
-            reuse_axes=True,
-            alpha=mask * 0.75,
+            reuse_axes=reuse,
+            alpha=alpha,
         )
+        for sso, hits in sso_hits.items():
+            if iperiod < nperiod:
+                disc = hits[iperiod]
+            else:
+                disc = np.sum(hits, 0)
+            disc /= np.amax(disc)
+            hp.mollview(
+                disc,
+                title=title,
+                cmap="jet",
+                rot=rot,
+                reuse_axes=True,
+                cbar=False,
+                alpha=(disc != 0) * 0.5,
+            )
+
         plt.savefig(fname_plot)
         plt.close()
     return
@@ -370,7 +473,22 @@ def parse_arguments():
     parser.add_argument(
         "--cache",
         required=False,
-        help="Optional file for saving hits (numpy save file)",
+        help="Optional file for saving hits (numpy save file).  "
+        "Must have a '.npy' suffix",
+    )
+
+    parser.add_argument(
+        "--sso",
+        required=False,
+        help="Comma-separated list of solar system objects (SSOs) to plot. "
+        "Use --sso-radius-deg to set the radius of the field",
+    )
+
+    parser.add_argument(
+        "--sso-radius-deg",
+        required=False,
+        help="Comma-separated list of SSO radii.  If no commas are found, the "
+        "same radius is applied to all SSOs.  See --sso.",
     )
 
     args = parser.parse_args()
@@ -388,6 +506,10 @@ def main():
 
     args = parse_arguments()
 
+    if args.cache is not None and not args.cache.endswith(".npy"):
+        msg = f"Cache file does not end with .npy: {args.cache}"
+        raise RuntimeError(msg)
+
     # Load the observing schedule
 
     schedule = toast.schedule.GroundSchedule()
@@ -402,9 +524,22 @@ def main():
     all_hits = get_hits(args, schedule, period_times, comm, rank)
     log.info_rank(f"Made hits in", timer=timer1, comm=comm)
 
+    sso_hits = {}
+    if args.sso is not None:
+        for isso, sso in enumerate(args.sso.split(",")):
+            radii = args.sso_radius_deg.split(",")
+            if len(radii) == 1:
+                radius = float(radii[0])
+            else:
+                radius = float(radii[isso])
+            sso_hits[sso] = get_sso(
+                args, schedule, period_times, comm, rank, sso, radius
+            )
+    log.info_rank(f"Made hits in", timer=timer1, comm=comm)
+
     # Plot
 
-    plot_hits(args, all_hits, period_times, period_names, comm, rank)
+    plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank)
     log.info_rank(f"Made plots in", timer=timer1, comm=comm)
 
     if comm is not None:
