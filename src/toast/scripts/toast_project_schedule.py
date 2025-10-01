@@ -270,8 +270,30 @@ def load_background(args):
 
 
 def plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank):
-    """Plot daily and total hits"""
+    """
+    Plot daily and total hitmaps for the provided schedule.
 
+    If SSO (Solar System Object) hitmaps are provided via `sso_hits`, overlays are
+    generated and normalized for visualization on top of the main hitmaps.
+    This helps to highlight the coverage and visibility of SSOs during each period.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        Command-line arguments.
+    all_hits : np.ndarray
+        Array of hit counts per pixel for each period.
+    sso_hits : np.ndarray or None
+        Array of SSO hit counts per pixel for each period, or None if not used.
+    period_times : list
+        List of times for each period.
+    period_names : list
+        List of names for each period.
+    comm : MPI.Comm or None
+        MPI communicator.
+    rank : int
+        MPI rank of the current process.
+    """
     log = Logger.get()
 
     bg = load_background(args)
