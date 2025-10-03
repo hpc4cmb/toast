@@ -18,7 +18,7 @@ from ..mpi import MPI
 from ..observation import Observation
 from ..timing import GlobalTimers, Timer, function_timer
 from ..utils import Environment, Logger, dtype_to_aligned, import_from_name
-from ..weather import SimWeather
+from ..weather import SimWeather, Weather
 from .compression import decompress_detdata
 from .hdf_utils import check_dataset_buffer_size, hdf5_config, hdf5_open
 from .observation_hdf_load_v0 import load_hdf5_detdata_v0
@@ -485,6 +485,24 @@ def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None)
                     max_pwv=weather_max_pwv,
                     median_weather=weather_median,
                 )
+            elif "site_weather_time" in inst_group.attrs:
+                # This is a generic weather object
+                props = dict()
+                for attr_name in [
+                    "time",
+                    "ice_water",
+                    "liquid_water",
+                    "pwv",
+                    "humidity",
+                    "surface_pressure",
+                    "surface_temperature",
+                    "air_temperature",
+                    "west_wind",
+                    "south_wind",
+                ]:
+                    file_attr = f"site_weather_{attr_name}"
+                    props[attr_name] = inst_group.attrs[file_attr]
+                weather = Weather(**props)
             site = site_class(
                 site_name,
                 site_lat_deg * u.degree,

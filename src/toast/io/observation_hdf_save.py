@@ -635,8 +635,23 @@ def save_instrument(parent_group, telescope, comm=None, session=None):
                         site.weather.median_weather
                     )
                 else:
-                    msg = "HDF5 saving currently only supports SimWeather instances"
-                    raise NotImplementedError(msg)
+                    # This is a generic weather object
+                    for attr_name in [
+                        "time",
+                        "ice_water",
+                        "liquid_water",
+                        "pwv",
+                        "humidity",
+                        "surface_pressure",
+                        "surface_temperature",
+                        "air_temperature",
+                        "west_wind",
+                        "south_wind",
+                    ]:
+                        file_attr = f"site_weather_{attr_name}"
+                        accessor = getattr(site.weather, attr_name)
+                        attr_val = accessor()
+                        inst_group.attrs[file_attr] = attr_val
         if session is not None:
             inst_group.attrs["session_name"] = session.name
             inst_group.attrs["session_class"] = object_fullname(session.__class__)
