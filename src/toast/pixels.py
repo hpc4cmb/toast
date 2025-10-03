@@ -3,7 +3,14 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
-from datetime import datetime
+
+try:
+    from datetime import datetime, UTC
+except ImportError:
+    # We are running an older version of Python
+    from datetime import datetime
+
+    UTC = None
 
 import h5py
 import healpy as hp
@@ -1581,10 +1588,13 @@ class PixelData(AcceleratorObject):
         # Set up basic header information
         if extra_header is None:
             extra_header = {}
-        extra_header["CREATED"] = (
-            datetime.utcnow().timestamp(),
-            "Creation time [UTC]",
-        )
+        if UTC is None:
+            # This branch can be eliminated once all supported versions
+            # of Python have the UTC timezone object
+            utctime = datetime.utcnow().timestamp()
+        else:
+            utctime = datetime.now(tz=UTC).timestamp()
+        extra_header["CREATED"] = ("Creation time [UTC]",)
         extra_header["VERSION"] = (__version__, "TOAST version")
 
         # Check if we have WCS information
