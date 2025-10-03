@@ -1594,7 +1594,7 @@ class PixelData(AcceleratorObject):
             utctime = datetime.utcnow().timestamp()
         else:
             utctime = datetime.now(tz=UTC).timestamp()
-        extra_header["CREATED"] = ("Creation time [UTC]",)
+        extra_header["CREATED"] = (utctime, "Creation time [UTC]")
         extra_header["VERSION"] = (__version__, "TOAST version")
 
         # Check if we have WCS information
