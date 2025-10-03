@@ -94,8 +94,10 @@ def coadd_observation_matrix(
         inmatrix(iterable) : One or more noise-weighted observation
             matrix files.  If a matrix is used to model several similar
             observations, append `+N` to the file name to indicate the
-             multiplicity.
-        outmatrix(string) : Name of output file
+            multiplicity.
+        outmatrix(string) : Name of output file.  If it includes the
+            string 'noiseweighted', the output matrix will be
+            noise-weighted like the inputs.
         file_invcov(string) : Name of output inverse covariance file
         file_cov(string) : Name of output covariance file
         nside_submap(int) : Submap size is 12 * nside_submap ** 2.
@@ -136,6 +138,13 @@ def coadd_observation_matrix(
     invcov_sum = None
     nnz = None
     npix = None
+    if "noiseweighted" in outmatrix:
+        deweight = False
+        log.info_rank(
+            f"Output matrix is labelled 'noiseweighted' and will not be de-weighted"
+        )
+    else:
+        deweight = True
 
     for ifine, infile_matrix in enumerate(infiles):
         infile_matrix = infile_matrix.strip()
@@ -237,29 +246,36 @@ def coadd_observation_matrix(
         )
         log.info_rank(f"Wrote {file_cov} in", timer=timer1, comm=comm)
 
-    # De-weight the observation matrix
-
-    log.info_rank("De-weighting obs matrix", comm=comm)
-    cc = scipy.sparse.dok_matrix((npixtot, npixtot), dtype=np.float64)
-    nsubmap = dist_cov.distribution.n_submap
-    npix_submap = dist_cov.distribution.n_pix_submap
-    for isubmap_local, isubmap_global in enumerate(dist_cov.distribution.local_submaps):
-        submap = dist_cov.data[isubmap_local]
-        offset = isubmap_global * npix_submap
-        for pix_local in range(npix_submap):
-            if np.all(submap[pix_local] == 0):
-                continue
-            pix = pix_local + offset
-            icov = 0
-            for inz in range(nnz):
-                for jnz in range(inz, nnz):
-                    cc[pix + inz * npix, pix + jnz * npix] = submap[pix_local, icov]
-                    if inz != jnz:
-                        cc[pix + jnz * npix, pix + inz * npix] = submap[pix_local, icov]
-                    icov += 1
-    cc = cc.tocsr()
-    obs_matrix_sum = cc.dot(obs_matrix_sum.matrix)
-    log.info_rank(f"De-weighted obs matrix in", timer=timer1, comm=comm)
+    if deweight:
+        # De-weight the observation matrix
+        log.info_rank("De-weighting obs matrix", comm=comm)
+        cc = scipy.sparse.dok_matrix((npixtot, npixtot), dtype=np.float64)
+        nsubmap = dist_cov.distribution.n_submap
+        npix_submap = dist_cov.distribution.n_pix_submap
+        for isubmap_local, isubmap_global in enumerate(
+            dist_cov.distribution.local_submaps
+        ):
+            submap = dist_cov.data[isubmap_local]
+            offset = isubmap_global * npix_submap
+            for pix_local in range(npix_submap):
+                if np.all(submap[pix_local] == 0):
+                    continue
+                pix = pix_local + offset
+                icov = 0
+                for inz in range(nnz):
+                    for jnz in range(inz, nnz):
+                        cc[pix + inz * npix, pix + jnz * npix] = submap[pix_local, icov]
+                        if inz != jnz:
+                            cc[pix + jnz * npix, pix + inz * npix] = submap[
+                                pix_local, icov
+                            ]
+                        icov += 1
+        cc = cc.tocsr()
+        obs_matrix_sum = cc.dot(obs_matrix_sum.matrix)
+        log.info_rank(f"De-weighted obs matrix in", timer=timer1, comm=comm)
+    else:
+        # No deweighting, just extract the sparse matrix from the ObsMat object
+        obs_matrix_sum = obs_matrix_sum.matrix
 
     # Write out the co-added and de-weighted matrix
 
