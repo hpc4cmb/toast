@@ -711,7 +711,7 @@ class FilterBinTest(MPITestCase):
         if data.comm.comm_world is not None:
             data.comm.comm_world.barrier()
 
-        filterbin.name = "noiseweighted_run"
+        filterbin.name = "noise-weighted_run"
         filterbin.reset_pix_dist = True
         filterbin.noiseweight_obs_matrix = True
         # First run changed the flags to reject samples that failed to
@@ -765,7 +765,7 @@ class FilterBinTest(MPITestCase):
                 fname_matrix = ops.combine_observation_matrix(rootname)
                 filenames.append(fname_matrix)
 
-            fname_matrix = f"{self.outdir}/noiseweighted_run_obs_matrix"
+            fname_matrix = f"{self.outdir}/noise-weighted_run_obs_matrix"
             if MPI is None:
                 comm_self = None
             else:
@@ -775,10 +775,10 @@ class FilterBinTest(MPITestCase):
             )
             split_file = os.path.join(self.outdir, "split_run_filtered_map.fits")
             self.plot_obsmatrix_result(
-                "noiseweighted_run",
+                "noise-weighted_run",
                 input_map_file,
                 fname_matrix,
-                "noiseweighted_run",
+                "noise-weighted_run",
                 pixels.nest,
                 filtered=hp.read_map(split_file, None, nest=pixels.nest),
             )
