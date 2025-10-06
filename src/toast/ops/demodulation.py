@@ -49,10 +49,11 @@ class Lowpass:
         self._offset = offset
         self._nskip = nskip
 
-    def __call__(self, signal):
+    def __call__(self, signal, downsample=True):
         lowpassed = fftconvolve(signal, self.lpf, mode="same").real
-        downsampled = lowpassed[self._offset % self._nskip :: self._nskip]
-        return downsampled
+        if downsample:
+            lowpassed = lowpassed[self._offset % self._nskip :: self._nskip]
+        return lowpassed
 
 
 @trait_docs
@@ -600,8 +601,8 @@ class Demodulate(Operator):
         # FIXME:    measuring the total flag within the filter window
         flags = flags.copy()
         # flag invalid samples in both ends
-        flags[: wkernel // 2] |= self.demod_flag_mask
-        flags[-(wkernel // 2) :] |= self.demod_flag_mask
+        flags[:wkernel] |= self.demod_flag_mask
+        flags[-wkernel:] |= self.demod_flag_mask
         new_flags = np.array(flags[offset % self.nskip :: self.nskip])
         return new_flags
 
@@ -634,8 +635,9 @@ class Demodulate(Operator):
                 if "I" in self.mode:
                     det_data[f"demod0_{det}"] = lowpass(signal)
                 if "QU" in self.mode:
-                    det_data[f"demod4r_{det}"] = lowpass(signal * 2 * qweights)
-                    det_data[f"demod4i_{det}"] = lowpass(signal * 2 * uweights)
+                    highpassed = signal - lowpass(signal, downsample=False)
+                    det_data[f"demod4r_{det}"] = lowpass(highpassed * 2 * qweights)
+                    det_data[f"demod4i_{det}"] = lowpass(highpassed * 2 * uweights)
                 if self.do_2f:
                     # Start by evaluating the 2f demodulation factors from the
                     # pointing matrix.  We use the half-angle formulas and some
@@ -658,8 +660,9 @@ class Demodulate(Operator):
                         bad = np.hstack([bad, False])
                         sig[bad] *= -1
                     # Demodulate and lowpass for 2f
-                    det_data[f"demod2r_{det}"] = lowpass(signal * signal_demod2r)
-                    det_data[f"demod2i_{det}"] = lowpass(signal * signal_demod2i)
+                    highpassed = signal - lowpass(signal, downsample=False)
+                    det_data[f"demod2r_{det}"] = lowpass(highpassed * signal_demod2r)
+                    det_data[f"demod2i_{det}"] = lowpass(highpassed * signal_demod2i)
 
         return
 
