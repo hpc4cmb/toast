@@ -15,6 +15,7 @@ from ..data import Data
 from ..io import load_hdf5, save_hdf5
 from ..mpi import MPI
 from ..observation_data import DetectorData
+from ..weather import Weather
 from .helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
 
@@ -24,7 +25,7 @@ class IoHdf5Test(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
-    def create_data(self, split=False):
+    def create_data(self, split=False, base_weather=False):
         # Create fake observing of a small patch.  Use a multifrequency
         # focalplane so we can test split sessions.
 
@@ -36,6 +37,25 @@ class IoHdf5Test(MPITestCase):
             pixel_per_process=ppp,
             split=split,
         )
+
+        if base_weather:
+            # Replace the simulated weather with the base class for testing
+            for ob in data.obs:
+                old_weather = ob.telescope.site.weather
+                new_weather = Weather(
+                    time=old_weather.time,
+                    ice_water=old_weather.ice_water,
+                    liquid_water=old_weather.liquid_water,
+                    pwv=old_weather.pwv,
+                    humidity=old_weather.humidity,
+                    surface_pressure=old_weather.surface_pressure,
+                    surface_temperature=old_weather.surface_temperature,
+                    air_temperature=old_weather.air_temperature,
+                    west_wind=old_weather.west_wind,
+                    south_wind=old_weather.south_wind,
+                )
+                ob.telescope.site.weather = new_weather
+                del old_weather
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
@@ -256,7 +276,7 @@ class IoHdf5Test(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
-        data, config = self.create_data(split=True)
+        data, config = self.create_data(split=True, base_weather=True)
 
         # Set detdata to an empty list so that no detector data is written or loaded.
         det_data_fields = []

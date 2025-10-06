@@ -488,8 +488,10 @@ def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None)
             elif "site_weather_time" in inst_group.attrs:
                 # This is a generic weather object
                 props = dict()
+                props["time"] = datetime.fromtimestamp(
+                    float(inst_group.attrs["site_weather_time"]), tz=timezone.utc
+                )
                 for attr_name in [
-                    "time",
                     "ice_water",
                     "liquid_water",
                     "pwv",
@@ -501,7 +503,7 @@ def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None)
                     "south_wind",
                 ]:
                     file_attr = f"site_weather_{attr_name}"
-                    props[attr_name] = inst_group.attrs[file_attr]
+                    props[attr_name] = u.Quantity(inst_group.attrs[file_attr])
                 weather = Weather(**props)
             site = site_class(
                 site_name,

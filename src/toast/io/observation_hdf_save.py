@@ -4,6 +4,7 @@
 
 import json
 import os
+from datetime import timezone
 
 import h5py
 import numpy as np
@@ -636,8 +637,10 @@ def save_instrument(parent_group, telescope, comm=None, session=None):
                     )
                 else:
                     # This is a generic weather object
+                    inst_group.attrs["site_weather_time"] = (
+                        site.weather.time.astimezone(timezone.utc).timestamp()
+                    )
                     for attr_name in [
-                        "time",
                         "ice_water",
                         "liquid_water",
                         "pwv",
@@ -649,9 +652,8 @@ def save_instrument(parent_group, telescope, comm=None, session=None):
                         "south_wind",
                     ]:
                         file_attr = f"site_weather_{attr_name}"
-                        accessor = getattr(site.weather, attr_name)
-                        attr_val = accessor()
-                        inst_group.attrs[file_attr] = attr_val
+                        attr_val = getattr(site.weather, attr_name)
+                        inst_group.attrs[file_attr] = str(attr_val)
         if session is not None:
             inst_group.attrs["session_name"] = session.name
             inst_group.attrs["session_class"] = object_fullname(session.__class__)
