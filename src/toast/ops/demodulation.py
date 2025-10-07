@@ -49,11 +49,34 @@ class Lowpass:
         self._offset = offset
         self._nskip = nskip
 
-    def __call__(self, signal, downsample=True):
+    def __call__(self, signal):
         lowpassed = fftconvolve(signal, self.lpf, mode="same").real
-        if downsample:
-            lowpassed = lowpassed[self._offset % self._nskip :: self._nskip]
-        return lowpassed
+        downsampled = lowpassed[self._offset % self._nskip :: self._nskip]
+        return downsampled
+
+
+class Bandpass:
+    """A callable class that applies the bandpass filter"""
+
+    def __init__(self, wkernel, fcenter, fradius, fsample, window="hamming"):
+        """
+        Args:
+            wkernel (int) : width of the filter kernel
+            fcenter (float) : center frequency of the passband
+            fradius (float) : radius of the passband
+            fsample (float) : signal sampling frequency
+        """
+        self.bpf = firwin(
+            wkernel,
+            [(fcenter - fradius).to_value(u.Hz), (fcenter + fradius).to_value(u.Hz)],
+            window=window,
+            pass_zero=False,
+            fs=fsample.to_value(u.Hz),
+        )
+
+    def __call__(self, signal, downsample=True):
+        bandpassed = fftconvolve(signal, self.bpf, mode="same").real
+        return bandpassed
 
 
 @trait_docs
@@ -304,10 +327,18 @@ class Demodulate(Operator):
             nsample = obs.n_local_samples
 
             fsample = obs.telescope.focalplane.sample_rate
-            fmax, hwp_rate = self._get_fmax(obs)
+            fmod = self._get_fmod(obs)
 
-            wkernel = self._get_wkernel(fmax, fsample)
-            lowpass = Lowpass(wkernel, fmax, fsample, offset, self.nskip, self.window)
+            wkernel = self._get_wkernel(fmod, fsample)
+            lowpass = Lowpass(
+                wkernel, 0.95 * fmod, fsample, offset, self.nskip, self.window
+            )
+            bandpass2f = Bandpass(
+                wkernel, 2 * fmod, 0.95 * fmod, fsample, self.window
+            )
+            bandpass4f = Bandpass(
+                wkernel, 4 * fmod, 0.95 * fmod, fsample, self.window
+            )
 
             # Create a new observation to hold the demodulated and downsampled data
 
@@ -356,9 +387,18 @@ class Demodulate(Operator):
             )
 
             self._demodulate_flags(obs, demod_obs, local_dets, wkernel, offset)
-            self._demodulate_signal(data, obs, demod_obs, local_dets, lowpass)
+            self._demodulate_signal(
+                data, obs, demod_obs, local_dets, lowpass, bandpass2f, bandpass4f
+            )
             self._demodulate_noise(
-                obs, demod_obs, local_dets, fsample, hwp_rate, lowpass
+                obs,
+                demod_obs,
+                local_dets,
+                fsample,
+                fmod,
+                lowpass,
+                bandpass2f,
+                bandpass4f,
             )
 
             self._demodulate_intervals(obs, demod_obs)
@@ -381,18 +421,14 @@ class Demodulate(Operator):
             self.demod_data.obs = demodulate_obs
 
     @function_timer
-    def _get_fmax(self, obs):
+    def _get_fmod(self, obs):
+        """Return the modulation frequency"""
         times = obs.shared[self.times].data
         hwp_angle = np.unwrap(obs.shared[self.hwp_angle].data)
         hwp_rate = np.absolute(
             np.mean(np.diff(hwp_angle) / np.diff(times)) / (2 * np.pi) * u.Hz
         )
-        if self.fmax is not None:
-            fmax = self.fmax
-        else:
-            # set low-pass filter cut-off frequency as same as HWP 1f
-            fmax = hwp_rate
-        return fmax, hwp_rate
+        return hwp_rate
 
     @function_timer
     def _get_wkernel(self, fmax, fsample):
@@ -607,7 +643,9 @@ class Demodulate(Operator):
         return new_flags
 
     @function_timer
-    def _demodulate_signal(self, data, obs, demod_obs, dets, lowpass):
+    def _demodulate_signal(
+            self, data, obs, demod_obs, dets, lowpass, bandpass2f, bandpass4f
+    ):
         """demodulate signal TOD"""
 
         for det in dets:
@@ -635,9 +673,9 @@ class Demodulate(Operator):
                 if "I" in self.mode:
                     det_data[f"demod0_{det}"] = lowpass(signal)
                 if "QU" in self.mode:
-                    highpassed = signal - lowpass(signal, downsample=False)
-                    det_data[f"demod4r_{det}"] = lowpass(highpassed * 2 * qweights)
-                    det_data[f"demod4i_{det}"] = lowpass(highpassed * 2 * uweights)
+                    bandpassed = bandpass4f(signal)
+                    det_data[f"demod4r_{det}"] = lowpass(bandpassed * 2 * qweights)
+                    det_data[f"demod4i_{det}"] = lowpass(bandpassed * 2 * uweights)
                 if self.do_2f:
                     # Start by evaluating the 2f demodulation factors from the
                     # pointing matrix.  We use the half-angle formulas and some
@@ -660,7 +698,7 @@ class Demodulate(Operator):
                         bad = np.hstack([bad, False])
                         sig[bad] *= -1
                     # Demodulate and lowpass for 2f
-                    highpassed = signal - lowpass(signal, downsample=False)
+                    highpassed = bandpass2f(signal)
                     det_data[f"demod2r_{det}"] = lowpass(highpassed * signal_demod2r)
                     det_data[f"demod2i_{det}"] = lowpass(highpassed * signal_demod2i)
 
@@ -699,6 +737,8 @@ class Demodulate(Operator):
         fsample,
         hwp_rate,
         lowpass,
+        bandpass2f,
+        bandpass4f,
     ):
         """Add Noise objects for the new detectors"""
         noise = obs[self.noise_model]
