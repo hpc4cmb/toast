@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -521,13 +521,18 @@ class NoiseEstim(Operator):
                     log.warning(msg)
                     det_units = u.K
                 psd_unit = det_units**2 * u.second
-                noise_dets.append(det1)
-                noise_freqs[det1] = nse_freqs[1:] * u.Hz
-                noise_psds[det1] = nse_psd[1:] * psd_unit
-                noise_indices[det1] = obs.telescope.focalplane[det1]["uid"]
+                # Store the results
+                if det1 != det2:
+                    key = f"{det1} x {det2}"
+                else:
+                    key = det1
+                noise_dets.append(key)
+                noise_freqs[key] = nse_freqs[1:] * u.Hz
+                noise_psds[key] = nse_psd[1:] * psd_unit
+                noise_indices[key] = obs.telescope.focalplane[det1]["uid"]
 
             if self.out_model is not None:
-                # Create a noise model for our local detectors.
+                # Create a noise model for the locally-measured PSDs
                 obs[self.out_model] = Noise(
                     detectors=noise_dets,
                     freqs=noise_freqs,
