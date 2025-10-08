@@ -84,6 +84,11 @@ class SimpleDeglitch(Operator):
         help="Glitch detection threshold in units of RMS",
     )
 
+    nglitch_limit = Int(
+        10,
+        help="Maximum number of glitches in a view",
+    )
+
     nsample_min = Int(
         100,
         help="Minimum number of good samples in an interval.",
@@ -200,7 +205,10 @@ class SimpleDeglitch(Operator):
                             # Not significant enough
                             break
                         nglitch += 1
-                        sig_view = sig_view_test
+                        if nglitch > self.nglitch_limit:
+                            sig_view[:] = np.nan
+                            break
+                        sig_view[:] = sig_view_test
                         rms = rms_test
                     if nglitch == 0:
                         continue
