@@ -234,6 +234,11 @@ class Demodulate(Operator):
             msg = "Cannot produce demodulated QU without QU Stokes weights"
             raise RuntimeError(msg)
 
+        if self.stokes_weights.hwp_angle is None:
+            msg = f"The Stokes weights operator (self.stokes_weights) "
+            msg += "does not have HWP angle"
+            raise RuntimeError(msg)
+
         if self.in_place:
             self.demod_data = None
         else:
@@ -333,12 +338,8 @@ class Demodulate(Operator):
             lowpass = Lowpass(
                 wkernel, 0.95 * fmod, fsample, offset, self.nskip, self.window
             )
-            bandpass2f = Bandpass(
-                wkernel, 2 * fmod, 0.95 * fmod, fsample, self.window
-            )
-            bandpass4f = Bandpass(
-                wkernel, 4 * fmod, 0.95 * fmod, fsample, self.window
-            )
+            bandpass2f = Bandpass(wkernel, 2 * fmod, 0.95 * fmod, fsample, self.window)
+            bandpass4f = Bandpass(wkernel, 4 * fmod, 0.95 * fmod, fsample, self.window)
 
             # Create a new observation to hold the demodulated and downsampled data
 
@@ -644,7 +645,7 @@ class Demodulate(Operator):
 
     @function_timer
     def _demodulate_signal(
-            self, data, obs, demod_obs, dets, lowpass, bandpass2f, bandpass4f
+        self, data, obs, demod_obs, dets, lowpass, bandpass2f, bandpass4f
     ):
         """demodulate signal TOD"""
 
@@ -676,6 +677,35 @@ class Demodulate(Operator):
                     bandpassed = bandpass4f(signal)
                     det_data[f"demod4r_{det}"] = lowpass(bandpassed * 2 * qweights)
                     det_data[f"demod4i_{det}"] = lowpass(bandpassed * 2 * uweights)
+                # DEBUG begin
+                """
+                import matplotlib.pyplot as plt
+                import pdb
+                print(f"Making debug plot", flush=True)
+                hwp_angle = obs.shared["hwp_angle"].data
+                times = obs.shared["times"].data
+                dt = np.median(np.diff(times))
+                lowpassed_times = times[::lowpass._nskip]
+                lowpassed_dt = np.median(np.diff(lowpassed_times))
+                psd_in = np.sqrt(np.abs(np.fft.rfft(signal)))
+                psd_in_lowpass = np.sqrt(np.abs(np.fft.rfft(lowpass(signal))))
+                psd_in_bandpass = np.sqrt(np.abs(np.fft.rfft(bandpass4f(signal))))
+                psd_q = np.sqrt(np.abs(np.fft.rfft(det_data[f"demod4r_{det}"])))
+                psd_u = np.sqrt(np.abs(np.fft.rfft(det_data[f"demod4i_{det}"])))
+                freq_in = np.fft.rfftfreq(times.size, dt)
+                freq_out = np.fft.rfftfreq(lowpassed_times.size, lowpassed_dt)
+                fig = plt.figure()
+                ax = fig.add_subplot(1, 1, 1)
+                ax.loglog(freq_in, psd_in, label="input")
+                ax.loglog(freq_in, psd_in_bandpass, label="bandpassed input")
+                ax.loglog(freq_out, psd_in_lowpass, label="lowpassed input")
+                ax.loglog(freq_out, psd_q, label="demod Q")
+                ax.loglog(freq_out, psd_u, label="demod U")
+                ax.legend(loc="best")
+                fig.savefig("test.png")
+                pdb.set_trace()
+                """
+                # DEBUG end
                 if self.do_2f:
                     # Start by evaluating the 2f demodulation factors from the
                     # pointing matrix.  We use the half-angle formulas and some
