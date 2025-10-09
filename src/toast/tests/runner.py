@@ -78,6 +78,7 @@ from . import ops_sim_tod_noise as test_ops_sim_tod_noise
 from . import ops_sim_tod_totalconvolve as test_ops_sim_tod_totalconvolve
 from . import ops_sss as test_ops_sss
 from . import ops_statistics as test_ops_statistics
+from . import ops_statcut as test_ops_statcut
 from . import ops_stokes_weights as test_ops_stokes_weights
 from . import ops_time_constant as test_ops_time_constant
 from . import ops_yield_cut as test_ops_yield_cut
@@ -211,6 +212,7 @@ def test(name=None, verbosity=2):
 
         suite.addTest(loader.loadTestsFromModule(test_ops_flag_sso))
         suite.addTest(loader.loadTestsFromModule(test_ops_statistics))
+        suite.addTest(loader.loadTestsFromModule(test_ops_statcut))
         suite.addTest(loader.loadTestsFromModule(test_ops_loader))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_utils))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_binning))

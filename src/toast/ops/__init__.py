@@ -73,6 +73,7 @@ from .sim_tod_dipole import SimDipole
 from .sim_tod_noise import SimNoise
 from .simple_deglitch import SimpleDeglitch
 from .simple_jumpcorrect import SimpleJumpCorrect
+from .simple_statcut import SimpleStatCut
 from .sss import SimScanSynchronousSignal
 from .statistics import Statistics
 from .stokes_weights import StokesWeights

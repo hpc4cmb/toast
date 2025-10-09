@@ -34,6 +34,7 @@ install(FILES
     ops_sim_tod_totalconvolve.py
     ops_flag_sso.py
     ops_statistics.py
+    ops_statcut.py
     ops_mapmaker_utils.py
     ops_mapmaker_binning.py
     ops_mapmaker_solve.py

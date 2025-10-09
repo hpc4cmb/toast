@@ -891,6 +891,11 @@ class StokesWeightsDemod(Operator):
         "Requires `detector_pointing_in` to be set.",
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     @traitlets.validate("mode")
     def _check_mode(self, proposal):
         mode = proposal["value"]
@@ -1004,7 +1009,7 @@ class StokesWeightsDemod(Operator):
             dtype = np.float64
 
         for obs in data.obs:
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 continue
 

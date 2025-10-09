@@ -13,6 +13,7 @@ install(FILES
     memory_counter.py
     simple_deglitch.py
     simple_jumpcorrect.py
+    simple_statcut.py
     sim_catalog.py
     sim_hwp.py
     sim_tod_noise.py
