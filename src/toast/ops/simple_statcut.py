@@ -212,17 +212,6 @@ class SimpleStatCut(Operator):
                             good[bad] = False
                         else:
                             break
-                    # DEBUG begin
-                    # if prefix == "demod0":
-                    #     det0 = "demod0_sch_ufm_mv18_1712010980_5_296"
-                    #     idet = np.argwhere(all_dets == det0).ravel()
-                    #     sig0 = ob.detdata["signal"][det0].copy()
-                    #     sig1 = sig0.copy()
-                    #     sig1[w:-w] -= medfilt(sig1, kernel_size=w)[w:-w]
-                    #     import pdb
-                    #     import matplotlib.pyplot as plt
-                    #     pdb.set_trace()
-                    # DEBUG end
                     local_bad = np.abs(local_stat - med) > rms * self.limit
                     for det in local_dets[local_bad]:
                         ob.local_detector_flags[det] |= defaults.det_mask_invalid
@@ -237,20 +226,6 @@ class SimpleStatCut(Operator):
                                     ob.local_detector_flags[alt_det] \
                                         |= defaults.det_mask_invalid
                                     nbad += 1
-
-                    # DEBUG begin
-                    #if det == "sch_ufm_mv18_1712010980_5_296":
-                    # if prefix == "demod0":
-                    #     import pdb
-                    #     import matplotlib.pyplot as plt
-                    #     pdb.set_trace()
-                    # DEBUG end
-
-                # DEBUG begin
-                # import pdb
-                # import matplotlib.pyplot as plt
-                # pdb.set_trace()
-                # DEBUG end
 
             if comm is not None:
                 nbad = comm.reduce(nbad)
