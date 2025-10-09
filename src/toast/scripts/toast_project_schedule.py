@@ -309,6 +309,8 @@ def plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank):
         if comm is not None and iperiod % comm.size != rank:
             continue
         if iperiod < nperiod:
+            if args.no_step_plots:
+                continue
             fname_plot = f"hits_{iperiod:04}.png"
             hits = all_hits[iperiod].copy()
             tstart, tstop = period_times[iperiod]
@@ -347,12 +349,15 @@ def plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank):
             reuse_axes=reuse,
             alpha=alpha,
         )
+        # Plot SSOs
+        npix = hp.nside2npix(args.nside)
+        lon, lat = hp.pix2ang(args.nside, np.arange(npix), lonlat=True)
         for sso, hits in sso_hits.items():
             if iperiod < nperiod:
                 disc = hits[iperiod]
             else:
                 disc = np.sum(hits, 0)
-            if np.all(disc) == 0:
+            if np.all(disc == 0):
                 continue
             disc /= np.amax(disc)
             hp.mollview(
@@ -364,6 +369,13 @@ def plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank):
                 cbar=False,
                 alpha=(disc != 0) * 0.5,
             )
+            # Label the SSO
+            hit_lat = lat.astype(float, copy=True)
+            hit_lat[disc == 0] = hp.UNSEEN
+            i = np.argmax(hit_lat)
+            top_lon = lon[i]
+            top_lat = lat[i]
+            hp.projtext(top_lon, top_lat, sso, lonlat=True)
 
         plt.savefig(fname_plot)
         plt.close()
@@ -515,6 +527,14 @@ def parse_arguments():
         "same radius is applied to all SSOs.  See --sso.",
     )
 
+    parser.add_argument(
+        "--no-step-plots",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Skip plotting step hit maps and only provide the total",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -537,10 +557,12 @@ def main():
     if args.sso is not None:
         if args.sso_radius_deg is None:
             raise RuntimeError("--sso-radius-deg is required when using --sso")
-        nsso = args.sso.split(",")
+        nsso = len(args.sso.split(","))
         radii = args.sso_radius_deg.split(",")
         if len(radii) not in (1, nsso):
-            raise RuntimeError("Number of radii must be 1 or match number of SSOs")
+            msg = "Number of radii must be 1 or match number of SSOs but "
+            msg += f"{len(radii)} != {nsso}"
+            raise RuntimeError(msg)
 
     # Load the observing schedule
 
@@ -564,6 +586,7 @@ def main():
                 radius = float(radii[0])
             else:
                 radius = float(radii[isso])
+            print(f"Projecting {sso} at radius {radius} deg")
             sso_hits[sso] = get_sso(
                 args, schedule, period_times, comm, rank, sso, radius
             )
