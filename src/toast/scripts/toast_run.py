@@ -50,7 +50,7 @@ def print_job(job):
     dump(job, 0)
 
 
-def main(opts=None):
+def main(opts=None, comm=None):
     log = toast.utils.Logger.get()
     gt = toast.timing.GlobalTimers.get()
     gt.start("toast_run (total)")
@@ -58,7 +58,11 @@ def main(opts=None):
     timer.start()
 
     # Get optional MPI parameters
-    comm, procs, rank = toast.get_world()
+    procs = 1
+    rank = 0
+    if comm is not None:
+        procs = comm.size
+        rank = comm.rank
 
     # If the user has not told us to use multiple threads,
     # then just use one.
@@ -172,4 +176,4 @@ def main(opts=None):
 if __name__ == "__main__":
     world, procs, rank = toast.mpi.get_world()
     with toast.mpi.exception_guard(comm=world):
-        main()
+        main(comm=world)
