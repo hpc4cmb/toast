@@ -5,10 +5,12 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 """
-This script runs a TOAST simulation and / or processing pipeline
-that is specified primarily with config files.  This parses all
-config and command line options and runs an operator (usually
-a Pipeline) named "main".
+This script runs a TOAST simulation and / or processing pipeline that is specified
+primarily with config files.  This parses all config and command line options and
+runs an operator (usually a Pipeline) named "main".
+
+In order to support batched use of this workflow, stdout / stderr is redirected to a
+log file within the specified output directory.
 
 You can see the automatically generated command line options with:
 
@@ -29,6 +31,7 @@ import toast
 import toast.config
 import toast.ops
 import toast.traits
+from toast.utils import stdouterr_redirected
 
 
 def print_job(job):
@@ -93,10 +96,18 @@ def main(opts=None, comm=None):
         help="The output directory",
     )
     parser.add_argument(
-        "--log_config",
+        "--out_config_name",
         required=False,
-        default=None,
-        help="Dump out config log to this file",
+        type=str,
+        default="run_config.yml",
+        help="Dump out config log to this file within `out_dir`",
+    )
+    parser.add_argument(
+        "--out_log_name",
+        required=False,
+        type=str,
+        default="run_log.txt",
+        help="Redirect stdout / stderr to this file within `out_dir`",
     )
     parser.add_argument(
         "--main",
@@ -120,9 +131,15 @@ def main(opts=None, comm=None):
     # Instantiate operators and templates
     job = toast.traits.create_from_config(config)
 
+    # One process makes output directory
+    if comm is None or comm.rank == 0:
+        os.makedirs(otherargs.out_dir, exist_ok=True)
+    if comm is not None:
+        comm.barrier()
+
     # Log the config that was actually used at runtime.
-    if otherargs.log_config is not None:
-        toast.config.dump_config(otherargs.log_config, config, comm=comm)
+    config_log = os.path.join(otherargs.out_dir, otherargs.out_config_name)
+    toast.config.dump_config(config_log, config, comm=comm)
 
     # Check that the required operator exists
     if not hasattr(job.operators, otherargs.main):
@@ -152,9 +169,12 @@ def main(opts=None, comm=None):
     toast_comm = toast.Comm(world=comm, groupsize=group_size)
     data = toast.Data(comm=toast_comm)
 
-    # Run the main pipeline
-    main = getattr(job.operators, otherargs.main)
-    main.apply(data)
+    # Redirect stdout / stderr during the run
+    out_log = os.path.join(otherargs.out_dir, otherargs.out_log_name)
+    with stdouterr_redirected(to=out_log, comm=comm, overwrite=False):
+        # Run the main pipeline
+        main = getattr(job.operators, otherargs.main)
+        main.apply(data)
 
     # Collect optional timing information
     alltimers = toast.timing.gather_timers(comm=comm)

@@ -1,20 +1,23 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import os
 import time
 
 import numpy as np
 import numpy.testing as nt
 
 from ..mpi import MPILock, MPIShared
-from ..utils import Environment
-from .helpers import create_comm
+from ..utils import Environment, stdouterr_redirected, Logger
+from .helpers import create_comm, create_outdir
 from .mpi import MPITestCase
 
 
 class EnvTest(MPITestCase):
     def setUp(self):
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.rank = 0
         self.nproc = 1
         if self.comm is not None:
@@ -25,6 +28,15 @@ class EnvTest(MPITestCase):
         env = Environment.get()
         if self.rank == 0:
             print(env, flush=True)
+
+    def test_redirect(self):
+        if self.rank == 0:
+            os.makedirs(self.outdir, exist_ok=True)
+        out_file = os.path.join(self.outdir, "redirected.txt")
+
+        log = Logger.get()
+        with stdouterr_redirected(to=out_file, comm=self.comm):
+            log.info(f"Message from {self.rank}")
 
     def test_comm(self):
         comm = create_comm(self.comm)

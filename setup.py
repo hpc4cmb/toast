@@ -305,12 +305,12 @@ conf["install_requires"] = [
     "astropy",
     "healpy",
     "ephem",
+    "wurlitzer",
 ]
 conf["extras_require"] = {
     "mpi": ["mpi4py>=3.0"],
     "totalconvolve": ["ducc0"],
     "interactive": [
-        "wurlitzer",
         "ipywidgets",
         "plotly",
         "plotly-resampler",

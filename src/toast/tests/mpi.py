@@ -229,7 +229,7 @@ class MPITestRunner(object):
         if use_mpi:
             self.comm = MPI.COMM_WORLD
         if stream is None:
-            stream = sys.stderr
+            stream = sys.__stderr__
         self.stream = _WritelnDecorator(stream)
         self.descriptions = descriptions
         self.verbosity = verbosity
