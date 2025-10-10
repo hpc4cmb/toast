@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -715,7 +715,7 @@ def create_from_config(conf):
         # This must be some other scalar trait with no references
         return obj
 
-    def _parse_traitconfig(value, parent_path, key, out):
+    def _parse_traitconfig(value, parent_path, key, out, remaining):
         instance_name = None
         ctor = dict()
         for tname, tprops in value.items():
@@ -736,6 +736,7 @@ def create_from_config(conf):
                 if check is None:
                     # This trait contained unresolved references
                     # print(f"{key} trait {tname} value unresolved", flush=True)
+                    remaining.add(tstring)
                     return 1
                 ctor[tname]["value"] = check
         # If we got this far, it means that we parsed all traits and can
@@ -746,7 +747,7 @@ def create_from_config(conf):
         _insert_element(obj, parent_path, key, out)
         return 0
 
-    def _parse_list(value, parent_path, key, out):
+    def _parse_list(value, parent_path, key, out, remaining):
         parent = _get_node(parent_path, out)
         # print(f"{parent_path}: parse_list parent = {parent}", flush=True)
         _insert_element(list(), parent_path, key, out)
@@ -756,18 +757,18 @@ def create_from_config(conf):
         unresolved = 0
         for val in value:
             if isinstance(val, list):
-                unresolved += _parse_list(val, child_path, None, out)
+                unresolved += _parse_list(val, child_path, None, out, remaining)
                 # print(f"parse_list: after {val} unresolved = {unresolved}", flush=True)
             elif isinstance(val, dict):
                 if "class" in val:
                     # This is a TraitConfig instance
-                    unresolved += _parse_traitconfig(val, child_path, None, out)
+                    unresolved += _parse_traitconfig(val, child_path, None, out, remaining)
                     # print(
                     #     f"parse_list: after {val} unresolved = {unresolved}", flush=True
                     # )
                 else:
                     # Just a normal dictionary
-                    unresolved += _parse_dict(val, child_path, None, out)
+                    unresolved += _parse_dict(val, child_path, None, out, remaining)
                     # print(
                     #     f"parse_list: after {val} unresolved = {unresolved}", flush=True
                     # )
@@ -776,7 +777,7 @@ def create_from_config(conf):
                 # print(f"parse_list: after {val} unresolved = {unresolved}", flush=True)
         return unresolved
 
-    def _parse_dict(value, parent_path, key, out):
+    def _parse_dict(value, parent_path, key, out, remaining):
         parent = _get_node(parent_path, out)
         # print(f"{parent_path}: parse_dict parent = {parent}", flush=True)
         _insert_element(OrderedDict(), parent_path, key, out)
@@ -786,18 +787,18 @@ def create_from_config(conf):
         unresolved = 0
         for k, val in value.items():
             if isinstance(val, list):
-                unresolved += _parse_list(val, child_path, k, out)
+                unresolved += _parse_list(val, child_path, k, out, remaining)
                 # print(f"parse_dict: after {k} unresolved = {unresolved}", flush=True)
             elif isinstance(val, dict):
                 if "class" in val:
                     # This is a TraitConfig instance
-                    unresolved += _parse_traitconfig(val, child_path, k, out)
+                    unresolved += _parse_traitconfig(val, child_path, k, out, remaining)
                     # print(
                     #     f"parse_dict: after {k} unresolved = {unresolved}", flush=True
                     # )
                 else:
                     # Just a normal dictionary
-                    unresolved += _parse_dict(val, child_path, k, out)
+                    unresolved += _parse_dict(val, child_path, k, out, remaining)
                     # print(
                     #     f"parse_dict: after {k} unresolved = {unresolved}", flush=True
                     # )
@@ -817,6 +818,7 @@ def create_from_config(conf):
         # print("PARSE iter ", it)
         done = True
         unresolved = 0
+        remaining = set()
 
         # Go through the top-level dictionary
         for topkey in list(conf.keys()):
@@ -824,13 +826,13 @@ def create_from_config(conf):
                 out[topkey] = conf[topkey]
                 continue
             if len(conf[topkey]) > 0:
-                unresolved += _parse_dict(conf[topkey], list(), topkey, out)
+                unresolved += _parse_dict(conf[topkey], list(), topkey, out, remaining)
                 # print(f"PARSE {it}: {topkey} unresolved now {unresolved}", flush=True)
 
         if last_unresolved is not None:
             if unresolved == last_unresolved:
                 msg = f"Cannot resolve all references ({unresolved} remaining)"
-                msg += f" in the configuration"
+                msg += f" in the configuration:  {remaining}"
                 log.error(msg)
                 raise RuntimeError(msg)
         last_unresolved = unresolved

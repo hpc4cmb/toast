@@ -4,17 +4,20 @@
 
 import datetime
 import gc
+import glob
 import hashlib
 import importlib
 import os
-import warnings
+import time
 from collections import UserDict
 from tempfile import TemporaryDirectory
+from contextlib import contextmanager
 
 import astropy.io.misc.hdf5 as aspy5
 import h5py
 import numpy as np
 from astropy.table import meta as aspymeta
+from wurlitzer import pipes, STDOUT
 
 from ._libtoast import (
     AlignedF32,
@@ -115,6 +118,132 @@ Logger.info_rank = _create_log_rank("INFO")
 Logger.warning_rank = _create_log_rank("WARNING")
 Logger.error_rank = _create_log_rank("ERROR")
 Logger.critical_rank = _create_log_rank("CRITICAL")
+
+
+@contextmanager
+def stdouterr_redirected(to=None, comm=None, overwrite=False):
+    """Redirect stdout and stderr to a file.
+
+    This uses wurlitzer to redirect I/O to separate files per process.  Then the
+    per-process files are concatenated into the final output.
+
+    Args:
+        to (str): The output file name.
+        comm (mpi4py.MPI.Comm): The optional MPI communicator.
+        overwrite (bool): if True overwrite file, otherwise backup to to.N first
+
+    """
+    log = Logger.get()
+    nproc = 1
+    rank = 0
+    if comm is not None:
+        nproc = comm.size
+        rank = comm.rank
+
+    def _rank_filename(basename, rank):
+        """Return standard filename for output file of individual rank.
+
+        Args:
+            basename (str): base filename with path of final output log
+            rank (int or str): MPI rank
+
+        Returns:
+            rank_filename (str): filename to use for temporary log of individual rank
+
+        `rank` can be a wildcard '*' to generate a glob string.
+        """
+        return f"{basename}-rank{rank}"
+
+    def _backup_filename(filename):
+        """Rename filename to next available filename.N
+
+        If filename == '/dev/null' or filename doesn't exist, just return filename.
+
+        Args:
+            filename (str): full path to original filename
+
+        Returns:
+            (str): New filename.N, or filename if original file didn't already exist
+
+        """
+        if filename == "/dev/null" or not os.path.exists(filename):
+            return filename
+        n = 0
+        while True:
+            altfile = f"{filename}.{n}"
+            if os.path.exists(altfile):
+                n += 1
+            else:
+                break
+        os.rename(filename, altfile)
+        return altfile
+
+    def _combine_individual_outputs(to, nproc=None):
+        """Combine individual {to}_{n} files into a single {to} file
+
+        If nproc is specified, assume there are exactly that many per-rank
+        files; otherwise glob to find out what is there.
+        """
+        if nproc is None:
+            individual_files = sorted(glob.glob(_rank_filename(to, "*")))
+        else:
+            individual_files = [_rank_filename(to, p) for p in range(nproc)]
+
+        with open(to, "w") as outfile:
+            for p, fname in enumerate(individual_files):
+                outfile.write(
+                    f"================ Start of Process {p} ================\n"
+                )
+                with open(fname) as infile:
+                    outfile.write(infile.read())
+                outfile.write(
+                    f"================= End of Process {p} =================\n\n"
+                )
+
+        # Only remove input files after successfully finishing merging
+        for fname in individual_files:
+            os.remove(fname)
+
+    # Redirect both stdout and stderr to the same file
+
+    if to is None:
+        to = "/dev/null"
+    if rank == 0:
+        log.info(f"Begin log redirection to {to} at {time.asctime()}")
+
+    # Determine individual per-rank output filenames and check if there are
+    # leftover per-rank files from a previous crash  that need to be merged
+    # before proceeding. Leftovers might have come from a run with a different
+    # nproc, so don't enforce that here.
+    pto = to
+    if to != "/dev/null":
+        pto = _rank_filename(to, rank)
+        if rank == 0 and os.path.exists(pto):
+            _combine_individual_outputs(to)
+
+    # Backup previous output file if needed
+    if rank == 0 and not overwrite:
+        _backup_filename(to)
+
+    # All ranks wait for logfile backup
+    if comm is not None:
+        comm.barrier()
+
+    try:
+        with open(pto, "w") as f, pipes(f, stderr=STDOUT):
+            yield  # Allow code to be run with the redirected output
+    finally:
+        if nproc > 1:
+            comm.barrier()
+
+        # Concatenate per-process files
+        if rank == 0 and to != "/dev/null":
+            _combine_individual_outputs(to, nproc)
+
+        if nproc > 1:
+            comm.barrier()
+        if rank == 0:
+            log.info(f"End log redirection to {to} at {time.asctime()}")
 
 
 # This function sets the numba threading layer to (hopefully) be compatible with TOAST.
@@ -518,9 +647,7 @@ def name_UID(name, int64=False):
     except:
         raise RuntimeError(
             "Cannot convert detector name {} to a unique integer-\
-            maybe it is too long?".format(
-                name
-            )
+            maybe it is too long?".format(name)
         )
     return uid
 

@@ -689,13 +689,17 @@ class ConfigTest(MPITestCase):
         # This tests the toast_run:main entry point
         from ..scripts.toast_run import main as run_main
 
+        testdir = os.path.join(self.outdir, "script_run_config")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
         # Create the telescope and schedule files
-        tele_file = os.path.join(self.outdir, "toast_run_telescope.h5:/leve1/level2")
+        tele_file = os.path.join(testdir, "toast_run_telescope.h5:/leve1/level2")
         tele = create_space_telescope(self.toastcomm.group_size)
         if self.toastcomm.world_rank == 0:
             save_instrument_file(tele_file, tele, None)
 
-        sch_file = os.path.join(self.outdir, "toast_run_schedule.ecsv")
+        sch_file = os.path.join(testdir, "toast_run_schedule.ecsv")
         sch = create_satellite_schedule(
             mission_start=datetime(2023, 2, 23), num_observations=self.toastcomm.ngroups
         )
@@ -721,7 +725,7 @@ class ConfigTest(MPITestCase):
         for tmpl_name, tmpl in testtmpl.items():
             conf_pipe = tmpl.get_config(input=conf_pipe)
 
-        conf_file = os.path.join(self.outdir, "toast_run_input.yml")
+        conf_file = os.path.join(testdir, "toast_run_input.yml")
         if self.toastcomm.world_rank == 0:
             dump_yaml(conf_file, conf_pipe)
         if self.toastcomm.comm_world is not None:
@@ -733,7 +737,7 @@ class ConfigTest(MPITestCase):
             "--main",
             "sim_pipe",
             "--out_dir",
-            self.outdir,
+            testdir,
         ]
 
-        run_main(opts=opts)
+        run_main(opts=opts, comm=self.comm)

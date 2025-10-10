@@ -5,10 +5,12 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 """
-This script runs a TOAST simulation and / or processing pipeline
-that is specified primarily with config files.  This parses all
-config and command line options and runs an operator (usually
-a Pipeline) named "main".
+This script runs a TOAST simulation and / or processing pipeline that is specified
+primarily with config files.  This parses all config and command line options and
+runs an operator (usually a Pipeline) named "main".
+
+In order to support batched use of this workflow, stdout / stderr is redirected to a
+log file within the specified output directory.
 
 You can see the automatically generated command line options with:
 
@@ -29,6 +31,7 @@ import toast
 import toast.config
 import toast.ops
 import toast.traits
+from toast.utils import stdouterr_redirected
 
 
 def print_job(job):
@@ -50,7 +53,7 @@ def print_job(job):
     dump(job, 0)
 
 
-def main(opts=None):
+def main(opts=None, comm=None):
     log = toast.utils.Logger.get()
     gt = toast.timing.GlobalTimers.get()
     gt.start("toast_run (total)")
@@ -58,7 +61,11 @@ def main(opts=None):
     timer.start()
 
     # Get optional MPI parameters
-    comm, procs, rank = toast.get_world()
+    procs = 1
+    rank = 0
+    if comm is not None:
+        procs = comm.size
+        rank = comm.rank
 
     # If the user has not told us to use multiple threads,
     # then just use one.
@@ -75,9 +82,6 @@ def main(opts=None):
     msg += f"{nthread} OpenMP threads at {datetime.datetime.now()}"
     log.info_rank(msg, comm=comm)
 
-    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
-    log.info_rank(f"Start of the workflow:  {mem}", comm=comm)
-
     # Argument parsing
     parser = argparse.ArgumentParser(description="Toast Pipeline Runner")
 
@@ -89,10 +93,18 @@ def main(opts=None):
         help="The output directory",
     )
     parser.add_argument(
-        "--log_config",
+        "--out_config_name",
         required=False,
-        default=None,
-        help="Dump out config log to this file",
+        type=str,
+        default="run_config.yml",
+        help="Dump out config log to this file within `out_dir`",
+    )
+    parser.add_argument(
+        "--out_log_name",
+        required=False,
+        type=str,
+        default="run_log.txt",
+        help="Redirect stdout / stderr to this file within `out_dir`",
     )
     parser.add_argument(
         "--main",
@@ -116,9 +128,15 @@ def main(opts=None):
     # Instantiate operators and templates
     job = toast.traits.create_from_config(config)
 
+    # One process makes output directory
+    if comm is None or comm.rank == 0:
+        os.makedirs(otherargs.out_dir, exist_ok=True)
+    if comm is not None:
+        comm.barrier()
+
     # Log the config that was actually used at runtime.
-    if otherargs.log_config is not None:
-        toast.config.dump_config(otherargs.log_config, config, comm=comm)
+    config_log = os.path.join(otherargs.out_dir, otherargs.out_config_name)
+    toast.config.dump_config(config_log, config, comm=comm)
 
     # Check that the required operator exists
     if not hasattr(job.operators, otherargs.main):
@@ -148,18 +166,18 @@ def main(opts=None):
     toast_comm = toast.Comm(world=comm, groupsize=group_size)
     data = toast.Data(comm=toast_comm)
 
-    # Run the main pipeline
-    main = getattr(job.operators, otherargs.main)
-    main.apply(data)
+    # Redirect stdout / stderr during the run
+    out_log = os.path.join(otherargs.out_dir, otherargs.out_log_name)
+    with stdouterr_redirected(to=out_log, comm=comm, overwrite=False):
+        # Run the main pipeline
+        main = getattr(job.operators, otherargs.main)
+        main.apply(data)
 
     # Collect optional timing information
     alltimers = toast.timing.gather_timers(comm=comm)
     if data.comm.world_rank == 0:
         out = os.path.join(otherargs.out_dir, "timing")
         toast.timing.dump(alltimers, out)
-
-    mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)
-    log.info_rank(f"End of the workflow:  {mem}", comm=comm)
     log.info_rank("Workflow completed in", comm=comm, timer=timer)
 
     # Cleanup
@@ -172,4 +190,4 @@ def main(opts=None):
 if __name__ == "__main__":
     world, procs, rank = toast.mpi.get_world()
     with toast.mpi.exception_guard(comm=world):
-        main()
+        main(comm=world)
