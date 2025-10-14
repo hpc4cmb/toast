@@ -290,7 +290,8 @@ class Demodulate(Operator):
             n_obs = data.comm.comm_world.allreduce(n_obs)
         if n_obs == 0:
             raise RuntimeError(
-                "None of the observations have a spinning HWP.  Nothing to demodulate."
+                "None of the observations have a spinning HWP and/or enough detectors. "
+                "Nothing to demodulate."
             )
 
         # Each modulated detector demodulates into one or more pseudo detectors
@@ -677,35 +678,6 @@ class Demodulate(Operator):
                     bandpassed = bandpass4f(signal)
                     det_data[f"demod4r_{det}"] = lowpass(bandpassed * 2 * qweights)
                     det_data[f"demod4i_{det}"] = lowpass(bandpassed * 2 * uweights)
-                # DEBUG begin
-                """
-                import matplotlib.pyplot as plt
-                import pdb
-                print(f"Making debug plot", flush=True)
-                hwp_angle = obs.shared["hwp_angle"].data
-                times = obs.shared["times"].data
-                dt = np.median(np.diff(times))
-                lowpassed_times = times[::lowpass._nskip]
-                lowpassed_dt = np.median(np.diff(lowpassed_times))
-                psd_in = np.sqrt(np.abs(np.fft.rfft(signal)))
-                psd_in_lowpass = np.sqrt(np.abs(np.fft.rfft(lowpass(signal))))
-                psd_in_bandpass = np.sqrt(np.abs(np.fft.rfft(bandpass4f(signal))))
-                psd_q = np.sqrt(np.abs(np.fft.rfft(det_data[f"demod4r_{det}"])))
-                psd_u = np.sqrt(np.abs(np.fft.rfft(det_data[f"demod4i_{det}"])))
-                freq_in = np.fft.rfftfreq(times.size, dt)
-                freq_out = np.fft.rfftfreq(lowpassed_times.size, lowpassed_dt)
-                fig = plt.figure()
-                ax = fig.add_subplot(1, 1, 1)
-                ax.loglog(freq_in, psd_in, label="input")
-                ax.loglog(freq_in, psd_in_bandpass, label="bandpassed input")
-                ax.loglog(freq_out, psd_in_lowpass, label="lowpassed input")
-                ax.loglog(freq_out, psd_q, label="demod Q")
-                ax.loglog(freq_out, psd_u, label="demod U")
-                ax.legend(loc="best")
-                fig.savefig("test.png")
-                pdb.set_trace()
-                """
-                # DEBUG end
                 if self.do_2f:
                     # Start by evaluating the 2f demodulation factors from the
                     # pointing matrix.  We use the half-angle formulas and some
