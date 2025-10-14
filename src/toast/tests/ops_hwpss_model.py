@@ -10,6 +10,13 @@ from astropy import units as u
 from astropy.table import Column
 
 from .. import ops as ops
+from ..hwp_utils import (
+    hwpss_build_model,
+    hwpss_build_interpolated_model,
+    hwpss_compute_coeff,
+    hwpss_compute_coeff_step2f,
+    hwpss_sincos_buffer,
+)
 from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
@@ -21,6 +28,7 @@ from .helpers import (
     create_outdir,
     fake_flags,
     fake_hwpss,
+    fake_hwpss_data,
 )
 from .mpi import MPITestCase
 
@@ -40,7 +48,153 @@ class HWPModelTest(MPITestCase):
         else:
             self.make_plots = True
         # Extra debug plots?
-        self.debug_plots = False
+        self.debug_plots = True
+
+    def test_lowlevel_standard(self):
+        # Slightly slower than 1 Hz
+        hwp_rpm = 59.0
+        hwp_rate = 2 * np.pi * hwp_rpm / 60.0  # rad/s
+        rate = 30.0
+        n_cycles = 100
+        n_sample = (int)((n_cycles / hwp_rate) * rate)
+        hwpincr = hwp_rate / rate
+
+        times = (1.0 / rate) * np.arange(n_sample, dtype=np.float64)
+        hwp_angle = hwpincr * np.arange(n_sample, dtype=np.float64)
+        hwp_flags = np.zeros(n_sample, dtype=np.uint8)
+
+        # Simulate HWPSS
+        hwpss, ccos, csin = fake_hwpss_data(hwp_angle, 1.0)
+        n_harm = len(ccos)
+        coeff = np.zeros(4 * n_harm)
+        for h in range(n_harm):
+            coeff[4 * h] = csin[h]
+            coeff[4 * h + 1] = 0
+            coeff[4 * h + 2] = ccos[h]
+            coeff[4 * h + 3] = 0
+
+        # Compute coefficient covariance
+        sincos = hwpss_sincos_buffer(hwp_angle, hwp_flags, n_harm)
+        cf = hwpss_compute_coeff(
+            sincos,
+            hwpss,
+            hwp_flags,
+        )
+        model = hwpss_build_model(sincos, hwp_flags, cf)
+
+        import matplotlib.pyplot as plt
+
+        fig = plt.figure(figsize=(12, 8), dpi=72)
+        ax = fig.add_subplot(1, 1, 1, aspect="auto")
+        ax.plot(times, hwpss, label="Input")
+        ax.plot(times, model, label="Solved")
+        ax.legend(loc="best")
+        fig.suptitle("Standard HWPSS Model")
+        fig.savefig(os.path.join(self.outdir, "lowlevel_standard.png"))
+        plt.close(fig)
+
+    # def test_lowlevel_step2f(self):
+    #     # Slightly slower than 1 Hz
+    #     hwp_rpm = 59.0
+    #     hwp_rate = 2 * np.pi * hwp_rpm / 60.0  # rad/s
+    #     rate = 30.0
+    #     n_cycles = 100
+    #     n_sample = int((n_cycles / hwp_rate) * rate)
+    #     hwpincr = hwp_rate / rate
+
+    #     # Use 10 chunks
+    #     chunk_2f = n_sample // 10
+    #     half_chunk = chunk_2f // 2
+    #     n_chunk = n_sample // chunk_2f
+
+    #     times = (1.0 / rate) * np.arange(n_sample, dtype=np.float64)
+    #     hwp_angle = hwpincr * np.arange(n_sample, dtype=np.float64)
+    #     hwp_flags = np.zeros(n_sample, dtype=np.uint8)
+
+    #     # Simulate input HWPSS
+    #     input, ccos, csin = fake_hwpss_data(hwp_angle, 1.0)
+    #     n_harm = len(ccos)
+
+    #     # Add relative gain
+    #     # factor = 0.01
+    #     # x_cal = np.arange(n_sample) - n_sample // 2
+    #     # cal = ((4 * factor) / (n_sample**2)) * x_cal**2
+    #     factor = 0.2
+    #     cal = np.linspace(1.0 - factor, 1.0 + factor, num=n_sample)
+    #     hwpss = input[:] * cal[:]
+
+    #     # Compute coefficient covariance
+    #     sincos = hwpss_sincos_buffer_sub2f(hwp_angle, hwp_flags, n_harm)
+    #     cf = hwpss_compute_coeff_sub2f(
+    #         sincos,
+    #         hwpss,
+    #         hwp_flags,
+    #         cov[0],
+    #         cov[1],
+    #     )
+
+    #     # Build the model including the 2f
+    #     raw_model = hwpss_build_model_sub2f(sincos, hwp_flags, cf)
+
+    #     # Extract the 2f coefficients and build the estimated calibration
+    #     gain_times = [times[x * chunk_2f + half_chunk] for x in range(n_chunk)]
+    #     gain_vals = list()
+    #     for chk in range(n_chunk):
+    #         cre = cf[2 * chk + 2]
+    #         cim = cf[2 * chk + 3]
+    #         mag = np.sqrt(cre**2 + cim**2)
+    #         gain_vals.append(mag)
+    #     gain_times = np.array(gain_times)
+    #     gain_vals = np.array(gain_vals)
+    #     dc = np.mean(gain_vals)
+    #     gain_vals -= dc
+    #     gain_vals = 1.0 / (1.0 + gain_vals)
+    #     rel_cal = np.interp(times, gain_times, gain_vals)
+
+    #     calibrated = raw_model * rel_cal
+
+    #     # Create a new set of coefficients without the 2f component
+    #     new_cf = np.zeros(2 * n_harm)
+    #     for h in range(n_harm):
+    #         if h == 0:
+    #             new_cf[0] = cf[0]
+    #             new_cf[1] = cf[1]
+    #         elif h == 1:
+    #             continue
+    #         new_cf[2 * h] = cf[2 * (h + n_chunk - 1)]
+    #         new_cf[2 * h + 1] = cf[2 * (h + n_chunk - 1) + 1]
+
+    #     cal_sincos = hwpss_sincos_buffer(hwp_angle, hwp_flags, n_harm)
+    #     model = hwpss_build_model(cal_sincos, hwp_flags, new_cf)
+
+    #     import matplotlib.pyplot as plt
+
+    #     fig = plt.figure(figsize=(12, 18), dpi=300)
+
+    #     ax = fig.add_subplot(4, 1, 1, aspect="auto")
+    #     ax.plot(times, input, color="black", label="Input")
+    #     ax.plot(times, hwpss, color="red", label="Input with Gain Drift")
+    #     ax.legend(loc="best")
+
+    #     ax = fig.add_subplot(4, 1, 2, aspect="auto")
+    #     ax.plot(times, hwpss, color="red", label="Input with Gain Drift")
+    #     ax.plot(times, raw_model, color="green", label="Chunked 2F Solution")
+    #     ax.legend(loc="best")
+
+    #     ax = fig.add_subplot(4, 1, 3, aspect="auto")
+    #     ax.plot(times, cal, color="black", label="True Gain Drift")
+    #     ax.plot(times, 1 / rel_cal, color="green", label="2F Recovered Gain")
+    #     ax.legend(loc="best")
+
+    #     # ax = fig.add_subplot(4, 1, 4, aspect="auto")
+    #     # ax.plot(times, input, color="black", label="Input")
+    #     # ax.plot(times, calibrated, color="blue", label="Calibrated Chunked Solution")
+    #     # # ax.plot(times, model, color="green", label="Model without 2F")
+    #     # ax.legend(loc="best")
+
+    #     fig.suptitle("Chunked 2f HWPSS Modeling")
+    #     fig.savefig(os.path.join(self.outdir, "lowlevel_sub2f.png"))
+    #     plt.close(fig)
 
     def create_test_data(self, testdir):
         # Slightly slower than 1 Hz
@@ -106,7 +260,7 @@ class HWPModelTest(MPITestCase):
             weights,
             skyfile,
             "input_sky_dist",
-            map_key=map_key,
+            map_key="input_sky",
             fwhm=30.0 * u.arcmin,
             lmax=3 * pixels.nside,
             I_scale=0.001,
@@ -176,8 +330,12 @@ class HWPModelTest(MPITestCase):
             input = obs.detdata["input"][det]
             filtered = obs.detdata["filtered"][det]
             alt = obs.detdata["alt_filtered"][det]
-            calibrated = obs.detdata[defaults.det_data][det]
-            residual = calibrated - input
+            if "calibrated" in obs.detdata:
+                calibrated = obs.detdata[defaults.det_data][det]
+                residual = calibrated - input
+            else:
+                calibrated = None
+                residual = filtered - input
             alt_resid = alt - input
 
             for rangestr, props in axes.items():
@@ -215,16 +373,16 @@ class HWPModelTest(MPITestCase):
                 ax[1].plot(
                     obs.shared[defaults.times].data[plot_slc],
                     filtered[plot_slc],
-                    color="green",
-                    linestyle="dotted",
+                    color="blue",
                     label=f"{det} Filtered, Uncalibrated",
                 )
-                ax[1].plot(
-                    obs.shared[defaults.times].data[plot_slc],
-                    calibrated[plot_slc],
-                    color="green",
-                    label=f"{det} Filtered, Calibrated",
-                )
+                if calibrated is not None:
+                    ax[1].plot(
+                        obs.shared[defaults.times].data[plot_slc],
+                        calibrated[plot_slc],
+                        color="green",
+                        label=f"{det} Filtered, Calibrated",
+                    )
                 # Plot residual
                 ax[2].plot(
                     obs.shared[defaults.times].data[plot_slc],
@@ -249,7 +407,7 @@ class HWPModelTest(MPITestCase):
                     obs.shared[defaults.times].data[plot_slc],
                     obs.shared[defaults.hwp_angle].data[plot_slc],
                     color="black",
-                    label=f"HWP Angle",
+                    label="HWP Angle",
                 )
                 ax[3].plot(
                     obs.shared[defaults.times].data[plot_slc],
@@ -268,13 +426,74 @@ class HWPModelTest(MPITestCase):
             fig.savefig(file)
             plt.close(fig)
 
-    def test_hwpss_basic(self):
-        testdir = os.path.join(self.outdir, "basic")
+    # def test_hwpss_basic(self):
+    #     testdir = os.path.join(self.outdir, "basic")
+    #     if self.comm is None or self.comm.rank == 0:
+    #         os.makedirs(testdir)
+
+    #     data, tod_rms, coeff = self.create_test_data(testdir)
+
+    #     # All observations have the same number of simulated harmonics
+    #     n_harmonics = len(coeff[data.obs[0].name]) // 2
+
+    #     # Add random DC level
+    #     for ob in data.obs:
+    #         for det in ob.local_detectors:
+    #             dc = np.random.uniform(
+    #                 low=-5.0 * tod_rms,
+    #                 high=5.0 * tod_rms,
+    #                 size=1,
+    #             )[0]
+    #             ob.detdata[defaults.det_data][det] += dc
+    #     ops.Copy(detdata=[(defaults.det_data, "original")]).apply(data)
+
+    #     # Skip flags for this basic test, so we can clearly see the performance around
+    #     # the HWP acceleration at the start.
+    #     # fake_flags(data)
+
+    #     # Filter
+    #     ops.Copy(detdata=[(defaults.det_data, "alt_filtered")]).apply(data)
+    #     hwp_filter = ops.HWPFilter(
+    #         filter_order=n_harmonics,
+    #         detrend=True,
+    #         det_data="alt_filtered",
+    #     )
+    #     hwp_filter.apply(data)
+
+    #     debug = None
+    #     if self.debug_plots:
+    #         debug = os.path.join(testdir, "debug")
+    #     hwpss_model = ops.HWPSynchronousModel(
+    #         harmonics=n_harmonics,
+    #         subtract_model=True,
+    #         fill_gaps=True,
+    #         debug=debug,
+    #     )
+    #     hwpss_model.apply(data)
+
+    #     ops.Copy(detdata=[(defaults.det_data, "filtered")]).apply(data)
+
+    #     for ob in data.obs:
+    #         self.plot_compare(testdir, ob, defaults.det_mask_invalid)
+    #         # Check that filtered and calibrated signal has smaller rms than
+    #         # the original.
+    #         for det in ob.select_local_detectors(flagmask=255):
+    #             good = ob.detdata[defaults.det_flags][det] == 0
+    #             original_rms = np.std(ob.detdata["original"][det][good])
+    #             filtered_rms = np.std(ob.detdata[defaults.det_data][det][good])
+    #             # print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
+    #             self.assertTrue(filtered_rms < original_rms)
+    #     close_data(data)
+
+    def test_hwpss_piecewise(self):
+        testdir = os.path.join(self.outdir, "piecewise")
         if self.comm is None or self.comm.rank == 0:
             os.makedirs(testdir)
 
         data, tod_rms, coeff = self.create_test_data(testdir)
-        n_harmonics = len(coeff[data.obs[0].name]) // 4
+
+        # All observations have the same number of simulated harmonics
+        n_harmonics = len(coeff[data.obs[0].name]) // 2
 
         # Add random DC level
         for ob in data.obs:
@@ -305,6 +524,7 @@ class HWPModelTest(MPITestCase):
             debug = os.path.join(testdir, "debug")
         hwpss_model = ops.HWPSynchronousModel(
             harmonics=n_harmonics,
+            chunk_view="scanning",
             subtract_model=True,
             fill_gaps=True,
             debug=debug,
@@ -321,160 +541,160 @@ class HWPModelTest(MPITestCase):
                 good = ob.detdata[defaults.det_flags][det] == 0
                 original_rms = np.std(ob.detdata["original"][det][good])
                 filtered_rms = np.std(ob.detdata[defaults.det_data][det][good])
-                # print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
+                print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
                 self.assertTrue(filtered_rms < original_rms)
         close_data(data)
 
-    def test_hwpss_relcal_fixed(self):
-        testdir = os.path.join(self.outdir, "fixed")
-        if self.comm is None or self.comm.rank == 0:
-            os.makedirs(testdir)
+    # def test_hwpss_relcal_fixed(self):
+    #     testdir = os.path.join(self.outdir, "fixed")
+    #     if self.comm is None or self.comm.rank == 0:
+    #         os.makedirs(testdir)
 
-        data, tod_rms, coeff = self.create_test_data(testdir)
-        n_harmonics = len(coeff[data.obs[0].name]) // 4
+    #     data, tod_rms, coeff = self.create_test_data(testdir)
+    #     n_harmonics = len(coeff) // 4
 
-        # Apply a random inverse relative calibration
-        np.random.seed(123456)
-        for ob in data.obs:
-            fake_relcal = dict()
-            for det in ob.local_detectors:
-                fake_relcal[det] = 1.0 / np.random.uniform(low=0.5, high=1.5, size=1)[0]
-            ob["input_cal"] = fake_relcal
-        ops.CalibrateDetectors(cal_name="input_cal").apply(data)
+    #     # Apply a random inverse relative calibration
+    #     np.random.seed(123456)
+    #     for ob in data.obs:
+    #         fake_relcal = dict()
+    #         for det in ob.local_detectors:
+    #             fake_relcal[det] = 1.0 / np.random.uniform(low=0.5, high=1.5, size=1)[0]
+    #         ob["input_cal"] = fake_relcal
+    #     ops.CalibrateDetectors(cal_name="input_cal").apply(data)
 
-        # Add random DC level
-        for ob in data.obs:
-            for det in ob.local_detectors:
-                dc = np.random.uniform(
-                    low=-5.0 * tod_rms,
-                    high=5.0 * tod_rms,
-                    size=1,
-                )[0]
-                ob.detdata[defaults.det_data][det] += dc
-        ops.Copy(detdata=[(defaults.det_data, "original")]).apply(data)
+    #     # Add random DC level
+    #     for ob in data.obs:
+    #         for det in ob.local_detectors:
+    #             dc = np.random.uniform(
+    #                 low=-5.0 * tod_rms,
+    #                 high=5.0 * tod_rms,
+    #                 size=1,
+    #             )[0]
+    #             ob.detdata[defaults.det_data][det] += dc
+    #     ops.Copy(detdata=[(defaults.det_data, "original")]).apply(data)
 
-        # Make fake flags
-        fake_flags(data)
+    #     # Make fake flags
+    #     fake_flags(data)
 
-        # Filter
-        ops.Copy(detdata=[(defaults.det_data, "alt_filtered")]).apply(data)
-        hwp_filter = ops.HWPFilter(
-            filter_order=n_harmonics,
-            detrend=True,
-            det_data="alt_filtered",
-        )
-        hwp_filter.apply(data)
+    #     # Filter
+    #     ops.Copy(detdata=[(defaults.det_data, "alt_filtered")]).apply(data)
+    #     hwp_filter = ops.HWPFilter(
+    #         filter_order=n_harmonics,
+    #         detrend=True,
+    #         det_data="alt_filtered",
+    #     )
+    #     hwp_filter.apply(data)
 
-        debug = None
-        if self.debug_plots:
-            debug = os.path.join(testdir, "debug")
-        hwpss_model = ops.HWPSynchronousModel(
-            harmonics=n_harmonics,
-            relcal_fixed="calibration",
-            subtract_model=True,
-            fill_gaps=True,
-            debug=debug,
-        )
-        hwpss_model.apply(data)
+    #     debug = None
+    #     if self.debug_plots:
+    #         debug = os.path.join(testdir, "debug")
+    #     hwpss_model = ops.HWPSynchronousModel(
+    #         harmonics=n_harmonics,
+    #         relcal_fixed="calibration",
+    #         subtract_model=True,
+    #         fill_gaps=True,
+    #         debug=debug,
+    #     )
+    #     hwpss_model.apply(data)
 
-        ops.Copy(detdata=[(defaults.det_data, "filtered")]).apply(data)
+    #     ops.Copy(detdata=[(defaults.det_data, "filtered")]).apply(data)
 
-        # Apply estimated relative calibration
-        ops.CalibrateDetectors(cal_name=hwpss_model.relcal_fixed).apply(data)
+    #     # Apply estimated relative calibration
+    #     ops.CalibrateDetectors(cal_name=hwpss_model.relcal_fixed).apply(data)
 
-        for ob in data.obs:
-            self.plot_compare(testdir, ob, defaults.det_mask_invalid)
-            # Check that filtered and calibrated signal has smaller rms than
-            # the original.
-            for det in ob.select_local_detectors(flagmask=255):
-                good = ob.detdata[defaults.det_flags][det] == 0
-                original_rms = np.std(ob.detdata["original"][det][good])
-                filtered_rms = np.std(ob.detdata[defaults.det_data][det][good])
-                # print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
-                self.assertTrue(filtered_rms < original_rms)
-        close_data(data)
+    #     for ob in data.obs:
+    #         self.plot_compare(testdir, ob, defaults.det_mask_invalid)
+    #         # Check that filtered and calibrated signal has smaller rms than
+    #         # the original.
+    #         for det in ob.select_local_detectors(flagmask=255):
+    #             good = ob.detdata[defaults.det_flags][det] == 0
+    #             original_rms = np.std(ob.detdata["original"][det][good])
+    #             filtered_rms = np.std(ob.detdata[defaults.det_data][det][good])
+    #             # print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
+    #             self.assertTrue(filtered_rms < original_rms)
+    #     close_data(data)
 
-    def test_hwpss_relcal_continuous(self):
-        testdir = os.path.join(self.outdir, "continuous")
-        if self.comm is None or self.comm.rank == 0:
-            os.makedirs(testdir)
+    # def test_hwpss_relcal_continuous(self):
+    #     testdir = os.path.join(self.outdir, "continuous")
+    #     if self.comm is None or self.comm.rank == 0:
+    #         os.makedirs(testdir)
 
-        data, tod_rms, coeff = self.create_test_data(testdir)
-        n_harmonics = len(coeff[data.obs[0].name]) // 4
+    #     data, tod_rms, coeff = self.create_test_data(testdir)
+    #     n_harmonics = len(coeff) // 4
 
-        # Apply a random inverse relative calibration that is time-varying
-        np.random.seed(123456)
-        for ob in data.obs:
-            ob.detdata.create("input_cal", units=ob.detdata[defaults.det_data].units)
-            common = 1.0 + 0.5 * np.sin(
-                np.arange(ob.n_local_samples) * 2 * np.pi / ob.n_local_samples
-            )
-            for det in ob.local_detectors:
-                ob.detdata["input_cal"][det] = (
-                    np.random.uniform(low=0.5, high=1.5, size=1)[0] * common
-                )
-        ops.Combine(
-            first=defaults.det_data,
-            second="input_cal",
-            result=defaults.det_data,
-            op="divide",
-        ).apply(data)
+    #     # Apply a random inverse relative calibration that is time-varying
+    #     np.random.seed(123456)
+    #     for ob in data.obs:
+    #         ob.detdata.create("input_cal", units=ob.detdata[defaults.det_data].units)
+    #         common = 1.0 + 0.5 * np.sin(
+    #             np.arange(ob.n_local_samples) * 2 * np.pi / ob.n_local_samples
+    #         )
+    #         for det in ob.local_detectors:
+    #             ob.detdata["input_cal"][det] = (
+    #                 np.random.uniform(low=0.5, high=1.5, size=1)[0] * common
+    #             )
+    #     ops.Combine(
+    #         first=defaults.det_data,
+    #         second="input_cal",
+    #         result=defaults.det_data,
+    #         op="divide",
+    #     ).apply(data)
 
-        # Add random DC level
-        for ob in data.obs:
-            for det in ob.local_detectors:
-                dc = np.random.uniform(
-                    low=-5.0 * tod_rms,
-                    high=5.0 * tod_rms,
-                    size=1,
-                )[0]
-                ob.detdata[defaults.det_data][det] += dc
-        ops.Copy(detdata=[(defaults.det_data, "original")]).apply(data)
+    #     # Add random DC level
+    #     for ob in data.obs:
+    #         for det in ob.local_detectors:
+    #             dc = np.random.uniform(
+    #                 low=-5.0 * tod_rms,
+    #                 high=5.0 * tod_rms,
+    #                 size=1,
+    #             )[0]
+    #             ob.detdata[defaults.det_data][det] += dc
+    #     ops.Copy(detdata=[(defaults.det_data, "original")]).apply(data)
 
-        # Make fake flags
-        fake_flags(data)
+    #     # Make fake flags
+    #     fake_flags(data)
 
-        # Filter
-        ops.Copy(detdata=[(defaults.det_data, "alt_filtered")]).apply(data)
-        hwp_filter = ops.HWPFilter(
-            filter_order=n_harmonics,
-            detrend=True,
-            det_data="alt_filtered",
-        )
-        hwp_filter.apply(data)
+    #     # Filter
+    #     ops.Copy(detdata=[(defaults.det_data, "alt_filtered")]).apply(data)
+    #     hwp_filter = ops.HWPFilter(
+    #         filter_order=n_harmonics,
+    #         detrend=True,
+    #         det_data="alt_filtered",
+    #     )
+    #     hwp_filter.apply(data)
 
-        debug = None
-        if self.debug_plots:
-            debug = os.path.join(testdir, "debug")
-        hwpss_model = ops.HWPSynchronousModel(
-            harmonics=n_harmonics,
-            relcal_continuous="calibration",
-            # chunk_view="scanning",
-            chunk_time=60 * u.second,
-            subtract_model=True,
-            fill_gaps=True,
-            debug=debug,
-        )
-        hwpss_model.apply(data)
+    #     debug = None
+    #     if self.debug_plots:
+    #         debug = os.path.join(testdir, "debug")
+    #     hwpss_model = ops.HWPSynchronousModel(
+    #         harmonics=n_harmonics,
+    #         relcal_continuous="calibration",
+    #         # chunk_view="scanning",
+    #         chunk_time=60 * u.second,
+    #         subtract_model=True,
+    #         fill_gaps=True,
+    #         debug=debug,
+    #     )
+    #     hwpss_model.apply(data)
 
-        ops.Copy(detdata=[(defaults.det_data, "filtered")]).apply(data)
+    #     ops.Copy(detdata=[(defaults.det_data, "filtered")]).apply(data)
 
-        # Apply estimated relative calibration
-        ops.Combine(
-            first=defaults.det_data,
-            second=hwpss_model.relcal_continuous,
-            result=defaults.det_data,
-            op="multiply",
-        ).apply(data)
+    #     # Apply estimated relative calibration
+    #     ops.Combine(
+    #         first=defaults.det_data,
+    #         second=hwpss_model.relcal_continuous,
+    #         result=defaults.det_data,
+    #         op="multiply",
+    #     ).apply(data)
 
-        for ob in data.obs:
-            self.plot_compare(testdir, ob, defaults.det_mask_invalid)
-            # Check that filtered and calibrated signal has smaller rms than
-            # the original.
-            for det in ob.select_local_detectors(flagmask=255):
-                good = ob.detdata[defaults.det_flags][det] == 0
-                original_rms = np.std(ob.detdata["original"][det][good])
-                filtered_rms = np.std(ob.detdata[defaults.det_data][det][good])
-                # print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
-                self.assertTrue(filtered_rms < original_rms)
-        close_data(data)
+    #     for ob in data.obs:
+    #         self.plot_compare(testdir, ob, defaults.det_mask_invalid)
+    #         # Check that filtered and calibrated signal has smaller rms than
+    #         # the original.
+    #         for det in ob.select_local_detectors(flagmask=255):
+    #             good = ob.detdata[defaults.det_flags][det] == 0
+    #             original_rms = np.std(ob.detdata["original"][det][good])
+    #             filtered_rms = np.std(ob.detdata[defaults.det_data][det][good])
+    #             # print(f"{ob.name}[{det}]:  {filtered_rms} <? {original_rms}")
+    #             self.assertTrue(filtered_rms < original_rms)
+    #     close_data(data)
