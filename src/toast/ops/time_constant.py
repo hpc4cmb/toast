@@ -124,7 +124,13 @@ class TimeConstant(Operator):
             # Get the timeconstants for all detectors
             tau_det = dict()
             for idet, det in enumerate(dets):
-                tau_det[idet] = self._get_tau(obs, det)
+                tau = self._get_tau(obs, det)
+                if np.isfinite(tau):
+                    tau_det[idet] = tau
+                else:
+                    # Tau is NaN. Flag the detector
+                    obs.local_detector_flags[det] |= defaults.det_mask_invalid
+                    tau_det[idet] = 0 * u.s
 
             def _filter_kernel(indx, kfreqs):
                 """Function to generate the filter kernel on demand.
@@ -141,6 +147,9 @@ class TimeConstant(Operator):
 
             # The slice of detector data we will use
             signal = obs.detdata[self.det_data][dets, :]
+            if len(dets) == 1:
+                # Corner case, signal is a vector, not a list of vectors
+                signal = [signal]
 
             if self.batch:
                 # Use the internal batched (threaded) implementation.  This
