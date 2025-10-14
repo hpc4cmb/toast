@@ -124,6 +124,8 @@ class SimpleStatCut(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         comm = data.comm.comm_group
+        timer = Timer()
+        timer.start()
 
         for ob in data.obs:
             if not ob.is_distributed_by_detector:
@@ -136,15 +138,23 @@ class SimpleStatCut(Operator):
 
             all_local_dets = ob.select_local_detectors(flagmask=self.det_mask)
 
-            if all_local_dets[0].startswith("demod"):
+            if len(all_local_dets) > 0 and all_local_dets[0].startswith("demod"):
+                demod = True
+            else:
+                demod = False
+            if comm is not None:
+                demod = comm.allreduce(demod, op=MPI.LOR)
+            if demod:
                 # Demodulated case. Process I/Q/U detectors separately
                 prefixes = ["demod0", "demod4r", "demod4i"]
             else:
+                # Standad processing
                 prefixes = [""]
 
             shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
 
-            nbad = 0
+            cut_obs = set()
+            ndet_obs = len(all_local_dets)
             for prefix in prefixes:
                 local_dets = []
                 for det in all_local_dets:
@@ -159,7 +169,7 @@ class SimpleStatCut(Operator):
                 local_kurtosis = np.zeros(ndet)
                 for idet, det in enumerate(local_dets):
                     sig = ob.detdata[self.det_data][det].copy()
-                    det_flags = ob.detdata[self.det_flags][det] % self.det_flag_mask
+                    det_flags = ob.detdata[self.det_flags][det] & self.det_flag_mask
                     good = np.logical_and(shared_flags == 0, det_flags == 0)
                     nsample = sig.size
                     w = self.medfilt_kernel_size
@@ -186,7 +196,7 @@ class SimpleStatCut(Operator):
                     all_skew = local_skew
                     all_kurtosis = local_kurtosis
 
-                if len(all_dets) == 0:
+                if len(local_dets) == 0:
                     continue
 
                 stat_dict = {}
@@ -215,7 +225,7 @@ class SimpleStatCut(Operator):
                     local_bad = np.abs(local_stat - med) > rms * self.limit
                     for det in local_dets[local_bad]:
                         ob.local_detector_flags[det] |= defaults.det_mask_invalid
-                        nbad += 1
+                        cut_obs.add(det)
                         if prefix != "":
                             # Demodulated case, flag the associated pseudo detectors
                             for alt_prefix in ["demod0", "demod4r", "demod4i"]:
@@ -225,12 +235,17 @@ class SimpleStatCut(Operator):
                                 if alt_det in ob.local_detector_flags:
                                     ob.local_detector_flags[alt_det] \
                                         |= defaults.det_mask_invalid
-                                    nbad += 1
+                                    cut_obs.add(alt_det)
 
+            nbad_obs = len(cut_obs)
             if comm is not None:
-                nbad = comm.reduce(nbad)
-            log.debug(
-                f"Flagged {nbad} additional detectors in {ob.name} due to statistics"
+                ndet_obs = comm.reduce(ndet_obs)
+                nbad_obs = comm.reduce(nbad_obs)
+            log.debug_rank(
+                f"Flagged {nbad_obs} / {ndet_obs} additional detectors in "
+                f"{ob.name} due to statistics in",
+                comm=comm,
+                timer=timer,
             )
 
         return
