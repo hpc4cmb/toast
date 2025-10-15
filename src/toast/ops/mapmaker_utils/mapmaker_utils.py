@@ -1258,6 +1258,11 @@ class CovarianceAndHits(Operator):
             rcond_min = data.comm.comm_world.reduce(rcond_min, root=0, op=MPI.MIN)
             rcond_max = data.comm.comm_world.reduce(rcond_max, root=0, op=MPI.MAX)
         if data.comm.world_rank == 0:
+            if rcond_max < 1e-10:
+                log.warning(
+                    f"There are no valid pixels. rcond_max = {rcond_max}. "
+                    "Check detector weights and pixel distribution."
+                )
             msg = f"  Pixel covariance condition number range = "
             msg += f"{rcond_min:1.3e} ... {rcond_max:1.3e}"
             log.debug(msg)
