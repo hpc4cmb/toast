@@ -104,7 +104,7 @@ def main(opts=None, comm=None):
         required=False,
         type=str,
         default="run_log.txt",
-        help="Redirect stdout / stderr to this file within `out_dir`",
+        help="Redirect stdout / stderr to this file within `out_dir`, 'NONE' disables",
     )
     parser.add_argument(
         "--main",
@@ -167,11 +167,16 @@ def main(opts=None, comm=None):
     data = toast.Data(comm=toast_comm)
 
     # Redirect stdout / stderr during the run
-    out_log = os.path.join(otherargs.out_dir, otherargs.out_log_name)
-    with stdouterr_redirected(to=out_log, comm=comm, overwrite=False):
-        # Run the main pipeline
+    if otherargs.out_log_name == "NONE":
+        # Do not redirect
         main = getattr(job.operators, otherargs.main)
         main.apply(data)
+    else:
+        out_log = os.path.join(otherargs.out_dir, otherargs.out_log_name)
+        with stdouterr_redirected(to=out_log, comm=comm, overwrite=False):
+            # Run the main pipeline
+            main = getattr(job.operators, otherargs.main)
+            main.apply(data)
 
     # Collect optional timing information
     alltimers = toast.timing.gather_timers(comm=comm)
