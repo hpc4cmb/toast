@@ -104,7 +104,14 @@ def main(opts=None, comm=None):
         required=False,
         type=str,
         default="run_log.txt",
-        help="Redirect stdout / stderr to this file within `out_dir`, 'NONE' disables",
+        help="Redirect stdout / stderr to this file within `out_dir`",
+    )
+    parser.add_argument(
+        "--no_redirect",
+        required=False,
+        action="store_true",
+        default=False,
+        help="Disable redirect of stdout / stderr",
     )
     parser.add_argument(
         "--main",
@@ -167,7 +174,7 @@ def main(opts=None, comm=None):
     data = toast.Data(comm=toast_comm)
 
     # Redirect stdout / stderr during the run
-    if otherargs.out_log_name == "NONE":
+    if otherargs.no_redirect:
         # Do not redirect
         main = getattr(job.operators, otherargs.main)
         main.apply(data)
