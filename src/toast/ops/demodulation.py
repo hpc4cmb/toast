@@ -58,17 +58,17 @@ class Lowpass:
 class Bandpass:
     """A callable class that applies the bandpass filter"""
 
-    def __init__(self, wkernel, fcenter, fradius, fsample, window="hamming"):
+    def __init__(self, wkernel, fmin, fmax, fsample, window="hamming"):
         """
         Args:
             wkernel (int) : width of the filter kernel
-            fcenter (float) : center frequency of the passband
-            fradius (float) : radius of the passband
+            fmin (float) : minimum frequency of the passband
+            fmax (float) : maximum frequency of the passband
             fsample (float) : signal sampling frequency
         """
         self.bpf = firwin(
             wkernel,
-            [(fcenter - fradius).to_value(u.Hz), (fcenter + fradius).to_value(u.Hz)],
+            [fmin.to_value(u.Hz), fmax.to_value(u.Hz)],
             window=window,
             pass_zero=False,
             fs=fsample.to_value(u.Hz),
@@ -143,8 +143,24 @@ class Demodulate(Operator):
 
     wkernel = Int(None, allow_none=True, help="Override automatic filter kernel size")
 
-    fmax = Quantity(
-        None, allow_none=True, help="Override automatic lowpass cut-off frequency"
+    fcut = Float(
+        0.95, help="Low pass cut-off frequency in units if HWP frequency"
+    )
+
+    fmin2f = Float(
+        1.05, help="Low frequency end of the 2f-bandpass filter in units of HWP frequency"
+    )
+
+    fmax2f = Float(
+        2.95, help="High frequency end of the 2f-bandpass filter in units of HWP frequency"
+    )
+
+    fmin4f = Float(
+        3.05, help="Low frequency end of the 4f-bandpass filter in units of HWP frequency"
+    )
+
+    fmax4f = Float(
+        4.95, help="High frequency end of the 4fbandpass filter in units of HWP frequency"
     )
 
     nskip = Int(3, help="Downsampling factor")
@@ -333,14 +349,19 @@ class Demodulate(Operator):
             nsample = obs.n_local_samples
 
             fsample = obs.telescope.focalplane.sample_rate
+            # fmod is the HWP spin frequency.  Polarization signal is at 4 x fmod
             fmod = self._get_fmod(obs)
 
             wkernel = self._get_wkernel(fmod, fsample)
             lowpass = Lowpass(
-                wkernel, 0.95 * fmod, fsample, offset, self.nskip, self.window
+                wkernel, self.fcut * fmod, fsample, offset, self.nskip, self.window
             )
-            bandpass2f = Bandpass(wkernel, 2 * fmod, 0.95 * fmod, fsample, self.window)
-            bandpass4f = Bandpass(wkernel, 4 * fmod, 0.95 * fmod, fsample, self.window)
+            bandpass2f = Bandpass(
+                wkernel, self.fmin_2f * fmod, self.fmax_2f * fmod, fsample, self.window
+            )
+            bandpass4f = Bandpass(
+                wkernel, self.fmin_4f * fmod, self.fmax_4f * fmod, fsample, self.window
+            )
 
             # Create a new observation to hold the demodulated and downsampled data
 
