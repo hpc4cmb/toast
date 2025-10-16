@@ -760,6 +760,10 @@ class Focalplane(object):
         return list(self._det_to_row.keys())
 
     @property
+    def properties(self):
+        return list(self.detector_data.colnames)
+
+    @property
     def n_detectors(self):
         return len(self._det_to_row.keys())
 
