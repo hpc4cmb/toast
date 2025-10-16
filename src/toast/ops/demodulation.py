@@ -147,19 +147,19 @@ class Demodulate(Operator):
         0.95, help="Low pass cut-off frequency in units if HWP frequency"
     )
 
-    fmin2f = Float(
+    fmin_2f = Float(
         1.05, help="Low frequency end of the 2f-bandpass filter in units of HWP frequency"
     )
 
-    fmax2f = Float(
+    fmax_2f = Float(
         2.95, help="High frequency end of the 2f-bandpass filter in units of HWP frequency"
     )
 
-    fmin4f = Float(
+    fmin_4f = Float(
         3.05, help="Low frequency end of the 4f-bandpass filter in units of HWP frequency"
     )
 
-    fmax4f = Float(
+    fmax_4f = Float(
         4.95, help="High frequency end of the 4fbandpass filter in units of HWP frequency"
     )
 
