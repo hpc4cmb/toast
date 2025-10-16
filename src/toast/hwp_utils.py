@@ -162,13 +162,22 @@ def hwpss_build_interpolated_model(sincos, flags, coeff, coeff_indx, coeff_wts=N
         return out
 
     if coeff_wts is None:
-        wts = np.ones(n_chunk)
+        wts = np.ones(n_chunk, dtype=np.float64)
     else:
         wts = coeff_wts
 
-    smoothing = int(max(n_chunk - np.sqrt(2 * n_chunk), 4))
+    smoothing = float(max(n_chunk - np.sqrt(2 * n_chunk), 4))
     samp_indx = np.arange(n_samp)
     cf_interp = np.empty(n_samp)
+
+    fcoeff_indx = np.array(coeff_indx, dtype=np.float64)
+    f_n_samp = float(n_samp)
+
+    # print(f"coeff_indx = {fcoeff_indx}")
+    # print(f"coeff = {coeff}")
+    # print(f"wts = {wts}")
+    # print(f"n_samp = {n_samp}")
+    # print(f"smoothing = {smoothing}", flush=True)
 
     for h in range(n_harmonics):
         # Sine term
@@ -176,25 +185,20 @@ def hwpss_build_interpolated_model(sincos, flags, coeff, coeff_indx, coeff_wts=N
             coeff_indx,
             np.ascontiguousarray(coeff[2 * h, :]),
             w=wts,
-            xb=0,
-            xe=n_samp,
+            xb=0.0,
+            xe=f_n_samp,
             k=3,
             s=smoothing,
         )
         cf_interp[:] = scipy.interpolate.splev(samp_indx, splrep, ext=0)
         out[good] += cf_interp[good] * sincos[good, 2 * h]
-        print(coeff_indx)
-        print(coeff[2 * h + 1, :])
-        print(wts)
-        print(n_samp)
-        print(smoothing, flush=True)
         # Cosine term
         splrep = scipy.interpolate.make_splrep(
             coeff_indx,
             np.ascontiguousarray(coeff[2 * h + 1, :]),
             w=wts,
-            xb=0,
-            xe=n_samp,
+            xb=0.0,
+            xe=f_n_samp,
             k=3,
             s=smoothing,
         )

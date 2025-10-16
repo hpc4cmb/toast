@@ -550,8 +550,6 @@ class HWPSynchronousModel(Operator):
                     sincos[chunk_slc[ich]["abs_slc"]],
                     sh_flags[chunk_slc[ich]["abs_slc"]],
                     ch_coeff,
-                    times=reltime[chunk_slc[ich]["abs_slc"]],
-                    time_drift=self.time_drift,
                 )
                 ax.plot(
                     reltime[chunk_slc[ich]["plt_overlap"]],
