@@ -40,10 +40,17 @@ def load_map(fname, prefix=None):
     return m
 
 
-def main():
+def main(opts=None, comm=None):
     env = Environment.get()
     log = Logger.get()
-    comm, ntask, rank = get_world()
+
+    # Get optional MPI parameters
+    ntask = 1
+    rank = 0
+    if comm is not None:
+        ntask = comm.size
+        rank = comm.rank
+
     timer0 = Timer()
     timer1 = Timer()
     timer = Timer()
@@ -84,6 +91,13 @@ def main():
     )
 
     parser.add_argument(
+        "--hits",
+        required=False,
+        default=None,
+        help="Name of output hits file",
+    )
+
+    parser.add_argument(
         "--nside_submap",
         default=16,
         type=int,
@@ -114,7 +128,7 @@ def main():
         help="Scale the output map with the provided factor",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=opts)
 
     if args.double_precision:
         dtype = np.float64
@@ -123,19 +137,35 @@ def main():
 
     noiseweighted_sum = None
     invcov_sum = None
+    hits_sum = None
     nnz, nnz2, npix = None, None, None
     hit_pixels = None
+    if args.hits is None:
+        have_hits = False
+    else:
+        have_hits = True
     if len(args.inmap) == 1:
         # Only one file provided, try interpreting it as a text file with a list
         try:
+            weights = dict()
+            infiles = list()
             with open(args.inmap[0], "r") as listfile:
-                infiles = listfile.readlines()
+                raw = listfile.readlines()
+            for line in raw:
+                flds = line.split()
+                infiles.append(flds[0])
+                if len(flds) > 1:
+                    weights[flds[0]] = float(flds[1])
+                else:
+                    weights[flds[0]] = 1.0
             log.info_rank(f"Loaded {args.inmap[0]} in", timer=timer1, comm=comm)
         except UnicodeDecodeError:
             # Didn't work. Assume that user supplied a single map file
             infiles = args.inmap
+            weights = {infiles[0]: 1.0}
     else:
         infiles = args.inmap
+        weights = {x: 1.0 for x in infiles}
     nfile = len(infiles)
     for ifile, infile_map in enumerate(infiles):
         infile_map = infile_map.strip()
@@ -182,6 +212,9 @@ def main():
             raise RuntimeError(
                 f"Failed to derive name of a covariance matrix file from {infile_map}."
             )
+        infile_hits = infile_map.replace(f"_{mapstring}.", "_hits.")
+        if infile_hits == infile_map:
+            raise RuntimeError(f"Failed to derive name of hits file from {infile_map}.")
 
         if os.path.isfile(infile_invcov):
             invcov = load_map(infile_invcov, prefix)
@@ -231,6 +264,17 @@ def main():
             )
             del cov
 
+        hits = None
+        if have_hits:
+            if os.path.isfile(infile_hits):
+                hits = load_map(infile_hits, prefix)
+                hits = hits[:, good].copy()
+            else:
+                msg = f"No hits map found for {infile_hits}, disabling "
+                msg += "accumulation of hits"
+                log.warning(msg)
+                have_hits = False
+
         # Trim off empty pixels
         inmap = inmap[:, good].copy()
 
@@ -241,6 +285,13 @@ def main():
             else:
                 inmap *= args.scale
             invcov /= args.scale**2
+
+        # Apply per-map weights
+        if noiseweighted:
+            inmap /= weights[infile_map]
+        else:
+            inmap *= weights[infile_map]
+        invcov /= weights[infile_map] ** 2
 
         if not noiseweighted:
             # Must reverse the multiplication with the
@@ -256,14 +307,20 @@ def main():
         if noiseweighted_sum is None:
             noiseweighted_sum = np.zeros([nnz, npix], dtype=float)
             invcov_sum = np.zeros([nnz2, npix], dtype=float)
+            if have_hits:
+                hits_sum = np.zeros([1, npix], dtype=float)
+
         noiseweighted_sum[:, good] += inmap
         invcov_sum[:, good] += invcov
+        if have_hits:
+            hits_sum[:, good] += hits
         log.info_rank(f"{prefix}Co-added maps in", timer=timer1, comm=None)
 
+        del hits
         del invcov
         del inmap
 
-    log.info_rank(f"Processed inputs in", timer=timer, comm=comm)
+    log.info_rank("Processed inputs in", timer=timer, comm=comm)
 
     if ntask != 1:
         nnz = comm.bcast(nnz)
@@ -278,17 +335,25 @@ def main():
         if noiseweighted_sum is None:
             noiseweighted_sum = np.zeros([nnz, ngood], dtype=float)
             invcov_sum = np.zeros([nnz2, ngood], dtype=float)
+            if have_hits:
+                hits_sum = np.zeros([1, ngood], dtype=float)
         else:
             noiseweighted_sum = noiseweighted_sum[:, good].copy()
             invcov_sum = invcov_sum[:, good].copy()
+            if have_hits:
+                hits_sum = hits_sum[:, good].copy()
         comm.Allreduce(MPI.IN_PLACE, noiseweighted_sum, op=MPI.SUM)
         comm.Allreduce(MPI.IN_PLACE, invcov_sum, op=MPI.SUM)
-        log.info_rank(f"Reduced inputs in", timer=timer, comm=comm)
+        if have_hits:
+            comm.Allreduce(MPI.IN_PLACE, hits_sum, op=MPI.SUM)
+        log.info_rank("Reduced inputs in", timer=timer, comm=comm)
     else:
         good = hit_pixels
         ngood = np.sum(hit_pixels)
         noiseweighted_sum = noiseweighted_sum[:, good]
         invcov_sum = invcov_sum[:, good]
+        if have_hits:
+            hits_sum = hits_sum[:, good]
     fsky = ngood / npix
     log.info_rank(f"fsky = {fsky:.4f}", comm=comm)
 
@@ -302,6 +367,15 @@ def main():
             )
             del full_invcov
         log.info_rank(f"Wrote {args.invcov} in", timer=timer, comm=comm)
+
+    if have_hits:
+        log.info_rank(f"Writing {args.hits}", comm=comm)
+        if rank == 0:
+            full_hits = np.zeros([1, npix])
+            full_hits[:, good] = hits_sum
+            write_healpix(args.hits, full_hits, nest=True, overwrite=True, dtype=dtype)
+            del full_hits
+        log.info_rank(f"Wrote {args.hits} in", timer=timer, comm=comm)
 
     # Each task processes a segment of hit pixels
 
@@ -327,7 +401,7 @@ def main():
         my_cov = np.zeros([nnz2, 0], dtype=float)
         my_rcond = np.zeros([0], dtype=float)
 
-    log.info_rank(f"Inverted and applied covariance in", timer=timer, comm=comm)
+    log.info_rank("Inverted and applied covariance in", timer=timer, comm=comm)
 
     # Gather to root process and write
 
@@ -339,7 +413,7 @@ def main():
         total_map = comm.gather(my_map, root=0)
         total_cov = comm.gather(my_cov, root=0)
         total_rcond = comm.gather(my_rcond, root=0)
-        log.info_rank(f"Gathered map and covariance in", timer=timer, comm=comm)
+        log.info_rank("Gathered map and covariance in", timer=timer, comm=comm)
 
     if rank == 0:
         if args.double_precision:
@@ -373,7 +447,7 @@ def main():
         write_healpix(args.outmap, full_map, nest=True, dtype=dtype, overwrite=True)
         log.info_rank(f"Wrote {args.outmap}", timer=timer, comm=None)
 
-    log.info_rank(f"Co-add done in", timer=timer0, comm=comm)
+    log.info_rank("Co-add done in", timer=timer0, comm=comm)
 
     if comm is not None:
         comm.Barrier()
@@ -384,4 +458,4 @@ def main():
 if __name__ == "__main__":
     world, procs, rank = toast.mpi.get_world()
     with toast.mpi.exception_guard(comm=world):
-        main()
+        main(comm=world)

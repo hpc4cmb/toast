@@ -51,6 +51,7 @@ install(FILES
     ops_scan_wcs_detector.py
     ops_madam.py
     ops_gainscrambler.py
+    schedule.py
     template_periodic.py
     template_amplitudes.py
     template_offset.py

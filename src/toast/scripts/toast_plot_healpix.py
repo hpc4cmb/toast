@@ -11,7 +11,7 @@ from toast.mpi import exception_guard, get_world
 from toast.vis import plot_healpix_maps
 
 
-def main():
+def main(opts=None):
     parser = argparse.ArgumentParser(
         description="This program plots output healpix maps.",
         usage="toast_plot_healpix <options>",
@@ -116,7 +116,15 @@ def main():
         help="The colormap name (e.g. 'inferno')",
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        "--out_dir",
+        required=False,
+        type=str,
+        default=None,
+        help="Place plots in this directory",
+    )
+
+    args = parser.parse_args(args=opts)
 
     range_I = None
     if (args.min_I is not None) and (args.max_I is not None):
@@ -139,6 +147,7 @@ def main():
         gnomview=args.gnomview,
         gnomres=args.gnomres,
         cmap=args.cmap,
+        out_dir=args.out_dir,
     )
 
 

@@ -10,6 +10,8 @@ import dateutil
 import dateutil.parser
 import ephem
 import numpy as np
+import healpy as hp
+import astropy.io
 from astropy import units as u
 from astropy.table import Column, QTable
 
@@ -226,6 +228,15 @@ class GroundSchedule(object):
         site_alt (Quantity):  The site altitude.
     """
 
+    META_KEYS = [
+        "site_name",
+        "telescope_name",
+        "site_lat",
+        "site_lon",
+        "site_alt",
+    ]
+    """Standard metadata keys stored in file headers."""
+
     def __init__(
         self,
         scans=None,
@@ -271,6 +282,382 @@ class GroundSchedule(object):
         val += "\n>"
         return val
 
+    def _read_v5(
+        self,
+        schedule_file,
+        file_split=None,
+        comm=None,
+    ):
+        """Attempt to read version 5 format schedule files.
+
+        Args:
+            schedule_file (str):  The path to the file.
+            file_split (int):  Only accept (1 / file_split) of the rising and setting
+                scans in a given patch name.
+            comm (MPI.Comm):  The MPI communicator to use for read and broadcast.
+
+        Returns:
+            (bool):  True if the schedule was loaded, else False.
+
+        """
+        log = Logger.get()
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+        header = None
+        scans = None
+        success = None
+        if rank == 0:
+            last_name = None
+            isplit = None
+            nsplit = None
+            if file_split is not None:
+                isplit, nsplit = file_split
+            scan_counters = dict()
+            try:
+                raw = astropy.io.ascii.read(schedule_file, format="ecsv", guess=False)
+                # Extract header info
+                header = dict()
+                for meta_key in self.META_KEYS:
+                    if meta_key in raw.meta:
+                        header[meta_key] = raw.meta[meta_key]
+                # Build the scans
+                scans = list()
+                total_time = 0
+                for row in raw:
+                    gscan = GroundScan(
+                        row["name"],
+                        datetime.fromisoformat(row["start_time"]),
+                        datetime.fromisoformat(row["stop_time"]),
+                        row["boresight_angle"],
+                        row["azmin"],
+                        row["azmax"],
+                        row["el"],
+                        row["scan_index"],
+                        row["subscan_index"],
+                    )
+                    name = gscan.name
+                    if nsplit is not None:
+                        # Only accept 1 / `nsplit` of the rising and setting
+                        # scans in patch `name`.  Selection is performed
+                        # during the first subscan.
+                        if name != last_name:
+                            if name not in scan_counters:
+                                scan_counters[name] = dict()
+                            counter = scan_counters[name]
+                            # Separate counters for rising and setting scans
+                            ckey = "S"
+                            if gscan.rising:
+                                ckey = "R"
+                            if ckey not in counter:
+                                counter[ckey] = 0
+                            else:
+                                counter[ckey] += 1
+                            iscan = counter[ckey]
+                        last_name = name
+                        if iscan % nsplit != isplit:
+                            continue
+                    total_time += (gscan.stop - gscan.start).total_seconds()
+                    scans.append(gscan)
+                success = True
+                if total_time > 2 * 86400:
+                    total_time = f"{total_time / 86400:.3f} days"
+                elif total_time > 2 * 3600:
+                    total_time = f"{total_time / 3600:.3} hours"
+                else:
+                    total_time = f"{total_time / 60:.3} minutes"
+                log.info(
+                    f"Loaded {len(self.scans)} scans from {schedule_file} totaling {total_time}."
+                )
+            except Exception as e:
+                msg = f"Schedule file {schedule_file} is not version 5 format, skipping"
+                log.debug(msg)
+                success = False
+        if comm is not None:
+            success = comm.bcast(success, root=0)
+            header = comm.bcast(header, root=0)
+            scans = comm.bcast(scans, root=0)
+        if success:
+            for meta_key in self.META_KEYS:
+                setattr(self, meta_key, header[meta_key])
+            self.scans = scans
+        return success
+
+    def _parse_line_text(self, line, version, field_separator):
+        """Parse one line of a text schedule file.
+
+        Args:
+            line (str):  The line to parse.
+            version (int):  The version spec to enforce.
+            field_separator (str):  The field separator character.
+
+        Returns:
+            (GroundScan):  If parsed, the scan, otherwise None.
+
+        """
+        if line.startswith("#"):
+            return None
+        fields = line.split(field_separator)
+        if len(fields) == 1:
+            # Failed ... try with white space
+            fields = line.split()
+        else:
+            # Separating with anything but white space can
+            # leave excess space
+            fields = [field.strip() for field in fields]
+        nfield = len(fields)
+        if version == 4:
+            if nfield != 9:
+                raise RuntimeError("Version 4 schedule line does not have 9 fields")
+            # Concise schedule format with correct date/time parsing
+            (
+                start_time,
+                stop_time,
+                boresight_angle,
+                name,
+                azmin,
+                azmax,
+                el,
+                scan,
+                subscan,
+            ) = fields
+        elif version == 3:
+            if nfield != 11:
+                raise RuntimeError("Version 3 schedule line does not have 11 fields")
+            # Concise schedule format is default after 2023-02-13
+            (
+                start_date,
+                start_time,
+                stop_date,
+                stop_time,
+                boresight_angle,
+                name,
+                azmin,
+                azmax,
+                el,
+                scan,
+                subscan,
+            ) = fields
+            start_time = start_date + " " + start_time
+            stop_time = stop_date + " " + stop_time
+        elif version == 2:
+            if nfield != 22:
+                raise RuntimeError("Version 2 schedule line does not have 22 fields")
+            # Verbose format with correct date/time parsing
+            (
+                start_time,
+                stop_time,
+                mjdstart,
+                mjdstop,
+                boresight_angle,
+                name,
+                azmin,
+                azmax,
+                el,
+                rs,
+                sun_el1,
+                sun_az1,
+                sun_el2,
+                sun_az2,
+                moon_el1,
+                moon_az1,
+                moon_el2,
+                moon_az2,
+                moon_phase,
+                scan,
+                subscan,
+                cumulative_fraction,
+            ) = fields
+        else:
+            if nfield != 24:
+                raise RuntimeError("Version 1 schedule line does not have 24 fields")
+            # Old (verbose) schedule
+            (
+                start_date,
+                start_time,
+                stop_date,
+                stop_time,
+                mjdstart,
+                mjdstop,
+                boresight_angle,
+                name,
+                azmin,
+                azmax,
+                el,
+                rs,
+                sun_el1,
+                sun_az1,
+                sun_el2,
+                sun_az2,
+                moon_el1,
+                moon_az1,
+                moon_el2,
+                moon_az2,
+                moon_phase,
+                scan,
+                subscan,
+                cumulative_fraction,
+            ) = fields
+            start_time = start_date + " " + start_time
+            stop_time = stop_date + " " + stop_time
+        try:
+            start_time = dateutil.parser.parse(start_time + " +0000")
+            stop_time = dateutil.parser.parse(stop_time + " +0000")
+        except Exception:
+            start_time = dateutil.parser.parse(start_time)
+            stop_time = dateutil.parser.parse(stop_time)
+        return GroundScan(
+            name,
+            start_time,
+            stop_time,
+            float(boresight_angle) * u.degree,
+            float(azmin) * u.degree,
+            float(azmax) * u.degree,
+            float(el) * u.degree,
+            scan,
+            subscan,
+        )
+
+    def _parse_header_text(self, line, field_separator):
+        """Parse the header line of a text schedule file.
+
+        Args:
+            line (str):  The line to parse.
+            field_separator (str):  The field separator character.
+
+        Returns:
+            (dict):  Dictionary of header parameters.
+
+        """
+        ret = dict()
+        fields = line.split(field_separator)
+        if len(fields) == 1:
+            # Failed ... try with white space
+            fields = line.split()
+        else:
+            # Separating with anything but white space can
+            # leave excess space
+            fields = [field.strip() for field in fields]
+        (
+            site_name,
+            telescope_name,
+            site_lat,
+            site_lon,
+            site_alt,
+        ) = fields
+        ret["site_name"] = site_name
+        ret["telescope_name"] = telescope_name
+        ret["site_lat"] = float(site_lat) * u.degree
+        ret["site_lon"] = float(site_lon) * u.degree
+        ret["site_alt"] = float(site_alt) * u.meter
+        return ret
+
+    def _read_text(
+        self,
+        schedule_file,
+        version,
+        file_split=None,
+        comm=None,
+        field_separator="|",
+    ):
+        """Attempt to read text format schedule files.
+
+        Args:
+            schedule_file (str):  The path to the file.
+            version (int):  The format version to use.
+            file_split (int):  Only accept (1 / file_split) of the rising and setting
+                scans in a given patch name.
+            comm (MPI.Comm):  The MPI communicator to use for read and broadcast.
+            field_separator (str):  The separator between column values in each row.
+
+        Returns:
+            (bool):  True if the schedule was loaded, else False.
+
+        """
+        log = Logger.get()
+        rank = 0
+        if comm is not None:
+            rank = comm.rank
+
+        header = None
+        scans = None
+        success = None
+        if rank == 0:
+            header = dict()
+            scans = list()
+            success = True
+
+            isplit = None
+            nsplit = None
+            if file_split is not None:
+                isplit, nsplit = file_split
+            scan_counters = dict()
+
+            read_header = True
+            last_name = None
+            total_time = 0
+
+            with open(schedule_file, "r") as f:
+                for line in f:
+                    if line.startswith("#"):
+                        continue
+                    if "SPECIAL" in line:
+                        continue
+                    if read_header:
+                        header = self._parse_header_text(line, field_separator)
+                        read_header = False
+                        continue
+                    try:
+                        gscan = self._parse_line_text(line, version, field_separator)
+                    except Exception:
+                        success = False
+                        break
+                    if gscan is None:
+                        continue
+                    name = gscan.name
+                    if nsplit is not None:
+                        # Only accept 1 / `nsplit` of the rising and setting
+                        # scans in patch `name`.  Selection is performed
+                        # during the first subscan.
+                        if name != last_name:
+                            if name not in scan_counters:
+                                scan_counters[name] = dict()
+                            counter = scan_counters[name]
+                            # Separate counters for rising and setting scans
+                            ckey = "S"
+                            if gscan.rising:
+                                ckey = "R"
+                            if ckey not in counter:
+                                counter[ckey] = 0
+                            else:
+                                counter[ckey] += 1
+                            iscan = counter[ckey]
+                        last_name = name
+                        if iscan % nsplit != isplit:
+                            continue
+                    total_time += (gscan.stop - gscan.start).total_seconds()
+                    scans.append(gscan)
+            if success:
+                if total_time > 2 * 86400:
+                    total_time = f"{total_time / 86400:.3f} days"
+                elif total_time > 2 * 3600:
+                    total_time = f"{total_time / 3600:.3} hours"
+                else:
+                    total_time = f"{total_time / 60:.3} minutes"
+                msg = f"Loaded {len(scans)} scans from {schedule_file} "
+                msg += f"totaling {total_time}."
+                log.info(msg)
+
+        if comm is not None:
+            success = comm.bcast(success, root=0)
+            header = comm.bcast(header, root=0)
+            scans = comm.bcast(scans, root=0)
+        if success:
+            for meta_key in self.META_KEYS:
+                setattr(self, meta_key, header[meta_key])
+            self.scans = scans
+        return success
+
     @function_timer
     def read(
         self,
@@ -298,204 +685,29 @@ class GroundSchedule(object):
 
         """
         log = Logger.get()
+        log.info_rank(f"Loading schedule from {schedule_file}", comm=comm)
 
-        def _parse_line(line):
-            """Parse one line of the schedule file"""
-            if line.startswith("#"):
-                return None
-            fields = line.split(field_separator)
-            if len(fields) == 1:
-                # Failed ... try with white space
-                fields = line.split()
+        # Try to read all known versions
+        if self._read_v5(
+            schedule_file,
+            file_split=file_split,
+            comm=comm,
+        ):
+            log.debug_rank("Successfully loaded version 5 format file", comm=comm)
+        else:
+            for version in [4, 3, 2, 1]:
+                if self._read_text(
+                    schedule_file,
+                    version,
+                    file_split=file_split,
+                    comm=comm,
+                ):
+                    msg = f"Successfully loaded version {version} format file"
+                    log.debug_rank(msg, comm=comm)
+                    break
             else:
-                # Separating with anything but white space can
-                # leave excess space
-                fields = [field.strip() for field in fields]
-            nfield = len(fields)
-            if nfield == 9:
-                # Concise schedule format with correct date/time parsing
-                (
-                    start_time,
-                    stop_time,
-                    boresight_angle,
-                    name,
-                    azmin,
-                    azmax,
-                    el,
-                    scan,
-                    subscan,
-                ) = fields
-            elif nfield == 11:
-                # Concise schedule format is default after 2023-02-13
-                (
-                    start_date,
-                    start_time,
-                    stop_date,
-                    stop_time,
-                    boresight_angle,
-                    name,
-                    azmin,
-                    azmax,
-                    el,
-                    scan,
-                    subscan,
-                ) = fields
-                start_time = start_date + " " + start_time
-                stop_time = stop_date + " " + stop_time
-            elif nfield == 22:
-                # Verbose format with correct date/time parsing
-                (
-                    start_time,
-                    stop_time,
-                    mjdstart,
-                    mjdstop,
-                    boresight_angle,
-                    name,
-                    azmin,
-                    azmax,
-                    el,
-                    rs,
-                    sun_el1,
-                    sun_az1,
-                    sun_el2,
-                    sun_az2,
-                    moon_el1,
-                    moon_az1,
-                    moon_el2,
-                    moon_az2,
-                    moon_phase,
-                    scan,
-                    subscan,
-                    cumulative_fraction,
-                ) = fields
-            else:
-                # Old (verbose) schedule
-                (
-                    start_date,
-                    start_time,
-                    stop_date,
-                    stop_time,
-                    mjdstart,
-                    mjdstop,
-                    boresight_angle,
-                    name,
-                    azmin,
-                    azmax,
-                    el,
-                    rs,
-                    sun_el1,
-                    sun_az1,
-                    sun_el2,
-                    sun_az2,
-                    moon_el1,
-                    moon_az1,
-                    moon_el2,
-                    moon_az2,
-                    moon_phase,
-                    scan,
-                    subscan,
-                    cumulative_fraction,
-                ) = fields
-                start_time = start_date + " " + start_time
-                stop_time = stop_date + " " + stop_time
-            try:
-                start_time = dateutil.parser.parse(start_time + " +0000")
-                stop_time = dateutil.parser.parse(stop_time + " +0000")
-            except Exception:
-                start_time = dateutil.parser.parse(start_time)
-                stop_time = dateutil.parser.parse(stop_time)
-            return GroundScan(
-                name,
-                start_time,
-                stop_time,
-                float(boresight_angle) * u.degree,
-                float(azmin) * u.degree,
-                float(azmax) * u.degree,
-                float(el) * u.degree,
-                scan,
-                subscan,
-            )
-
-        if comm is None or comm.rank == 0:
-            log.info(f"Loading schedule from {schedule_file}")
-            isplit = None
-            nsplit = None
-            if file_split is not None:
-                isplit, nsplit = file_split
-            scan_counters = dict()
-
-            read_header = True
-            last_name = None
-            total_time = 0
-
-            with open(schedule_file, "r") as f:
-                for line in f:
-                    if line.startswith("#"):
-                        continue
-                    if "SPECIAL" in line:
-                        continue
-                    if read_header:
-                        fields = line.split(field_separator)
-                        if len(fields) == 1:
-                            # Failed ... try with white space
-                            fields = line.split()
-                        else:
-                            # Separating with anything but white space can
-                            # leave excess space
-                            fields = [field.strip() for field in fields]
-                        (
-                            site_name,
-                            telescope_name,
-                            site_lat,
-                            site_lon,
-                            site_alt,
-                        ) = fields
-                        self.site_name = site_name
-                        self.telescope_name = telescope_name
-                        self.site_lat = float(site_lat) * u.degree
-                        self.site_lon = float(site_lon) * u.degree
-                        self.site_alt = float(site_alt) * u.meter
-                        read_header = False
-                        continue
-                    gscan = _parse_line(line)
-                    if nsplit is not None:
-                        # Only accept 1 / `nsplit` of the rising and setting
-                        # scans in patch `name`.  Selection is performed
-                        # during the first subscan.
-                        if name != last_name:
-                            if name not in scan_counters:
-                                scan_counters[name] = dict()
-                            counter = scan_counters[name]
-                            # Separate counters for rising and setting scans
-                            ckey = "S"
-                            if gscan.rising:
-                                ckey = "R"
-                            if ckey not in counter:
-                                counter[ckey] = 0
-                            else:
-                                counter[ckey] += 1
-                            iscan = counter[ckey]
-                        last_name = name
-                        if iscan % nsplit != isplit:
-                            continue
-                    total_time += (gscan.stop - gscan.start).total_seconds()
-                    self.scans.append(gscan)
-            if total_time > 2 * 86400:
-                total_time = f"{total_time / 86400:.3f} days"
-            elif total_time > 2 * 3600:
-                total_time = f"{total_time / 3600:.3} hours"
-            else:
-                total_time = f"{total_time / 60:.3} minutes"
-            log.info(
-                f"Loaded {len(self.scans)} scans from {schedule_file} totaling {total_time}."
-            )
-        if comm is not None:
-            self.site_name = comm.bcast(self.site_name, root=0)
-            self.telescope_name = comm.bcast(self.telescope_name, root=0)
-            self.site_lat = comm.bcast(self.site_lat, root=0)
-            self.site_lon = comm.bcast(self.site_lon, root=0)
-            self.site_alt = comm.bcast(self.site_alt, root=0)
-            self.scans = comm.bcast(self.scans, root=0)
+                msg = "Schedule file does not have a recognized format"
+                raise RuntimeError(msg)
 
     @function_timer
     def sort_by_name(self):
@@ -518,9 +730,82 @@ class GroundSchedule(object):
 
     @function_timer
     def write(self, schedule_file):
-        # FIXME:  We should have more robust format here (e.g. ECSV) and then use
-        # This class when building the schedule as well.
-        raise NotImplementedError("New ground schedule format not yet implemented")
+        """Write to schedule to a file.
+
+        If the `schedule_file` ends in ".ecsv" or ".ECSV", then an astropy table
+        format (version 5) is written.  Otherwise a legacy text format is written.
+
+        Args:
+            schedule_file (str):  The file to write.
+
+        Returns:
+            None
+
+        """
+        root, ext = os.path.splitext(schedule_file)
+        if ext in [".ecsv", ".ECSV"]:
+            legacy = False
+        else:
+            legacy = True
+        if legacy:
+            date_format = "%Y-%m-%d %H:%M:%S"
+            with open(schedule_file, "w") as f:
+                # Write header info
+                f.write(
+                    "# Site | Telescope | Latitude [deg] | Longitude [deg] | Elevation [m]\n"
+                )
+                f.write(f"{self.site_name:15} | {self.telescope_name:15} | ")
+                f.write(f"{self.site_lat.to_value(u.deg):15.3f} |")
+                f.write(f"{self.site_lon.to_value(u.deg):15.3f} |")
+                f.write(f"{self.site_alt.to_value(u.m):15.1f}\n")
+                f.write("# Start time UTC | Stop time UTC | Rotation | Patch name | ")
+                f.write("Az min. | Az max. | Elev. | Pass | Sub\n")
+                for scan in self.scans:
+                    f.write(f"{scan.start.strftime(date_format):>20} | ")
+                    f.write(f"{scan.stop.strftime(date_format):>20} | ")
+                    f.write(f"{scan.boresight_angle.to_value(u.deg):8.2f} | ")
+                    f.write(f"{scan.name:35} | ")
+                    f.write(f"{scan.az_min.to_value(u.deg):8.2f} | ")
+                    f.write(f"{scan.az_max.to_value(u.deg):8.2f} | ")
+                    f.write(f"{scan.el.to_value(u.deg):8.2f} | ")
+                    f.write(f"{scan.scan_indx:5} | ")
+                    f.write(f"{scan.subscan_indx:3}\n")
+        else:
+            names = list()
+            start_times = list()
+            stop_times = list()
+            rotation = list()
+            azmin = list()
+            azmax = list()
+            elev = list()
+            scan_indx = list()
+            subscan_indx = list()
+            for scan in self.scans:
+                names.append(scan.name)
+                start_times.append(scan.start.isoformat(timespec="seconds"))
+                stop_times.append(scan.stop.isoformat(timespec="seconds"))
+                rotation.append(scan.boresight_angle.to_value(u.deg))
+                azmin.append(scan.az_min.to_value(u.deg))
+                azmax.append(scan.az_max.to_value(u.deg))
+                elev.append(scan.el.to_value(u.deg))
+                scan_indx.append(scan.scan_indx)
+                subscan_indx.append(scan.subscan_indx)
+            scan_table = QTable(
+                [
+                    Column(name="start_time", data=start_times),
+                    Column(name="stop_time", data=stop_times),
+                    Column(name="boresight_angle", data=rotation, unit=u.deg),
+                    Column(name="name", data=names),
+                    Column(name="azmin", data=azmin, unit=u.deg),
+                    Column(name="azmax", data=azmax, unit=u.deg),
+                    Column(name="el", data=elev, unit=u.deg),
+                    Column(name="scan_index", data=scan_indx),
+                    Column(name="subscan_index", data=subscan_indx),
+                ]
+            )
+            for meta_key in self.META_KEYS:
+                scan_table.meta[meta_key] = getattr(self, meta_key)
+            scan_table.write(schedule_file, format="ascii.ecsv", overwrite=True)
 
 
 class SatelliteSchedule(object):

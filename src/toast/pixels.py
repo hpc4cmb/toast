@@ -512,8 +512,12 @@ class PixelData(AcceleratorObject):
         )
         self._n_submap_value = self._dist.n_pix_submap * self._n_value
 
-        self.raw = self.storage_class.zeros(self._flatshape)
-        self.data = self.raw.array().reshape(self._shape)
+        if self._flatshape > 0:
+            self.raw = self.storage_class.zeros(self._flatshape)
+            self.data = self.raw.array().reshape(self._shape)
+        else:
+            self.raw = np.zeros(self._flatshape, dtype=dtype)
+            self.data = np.zeros(self._shape, dtype=dtype)
 
         # Allreduce quantities
         self._all_comm_submap = None
@@ -547,27 +551,29 @@ class PixelData(AcceleratorObject):
         if hasattr(self, "raw"):
             if self.accel_exists():
                 self.accel_delete()
-            if self.raw is not None:
+            if self.raw is not None and hasattr(self.raw, "clear"):
                 self.raw.clear()
             del self.raw
         if hasattr(self, "receive"):
             del self.receive
-            if self._receive_raw is not None:
+            if self._receive_raw is not None and hasattr(self._receive_raw, "clear"):
                 self._receive_raw.clear()
             del self._receive_raw
         if hasattr(self, "reduce_buf"):
             del self.reduce_buf
-            if self._reduce_buf_raw is not None:
+            if self._reduce_buf_raw is not None and hasattr(
+                self._reduce_buf_raw, "clear"
+            ):
                 self._reduce_buf_raw.clear()
             del self._reduce_buf_raw
         if hasattr(self, "_all_send"):
             del self._all_send
-            if self._all_send_raw is not None:
+            if self._all_send_raw is not None and hasattr(self._all_send_raw, "clear"):
                 self._all_send_raw.clear()
             del self._all_send_raw
         if hasattr(self, "_all_recv"):
             del self._all_recv
-            if self._all_recv_raw is not None:
+            if self._all_recv_raw is not None and hasattr(self._all_recv_raw, "clear"):
                 self._all_recv_raw.clear()
             del self._all_recv_raw
 

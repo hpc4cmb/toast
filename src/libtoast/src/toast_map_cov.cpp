@@ -18,6 +18,9 @@ void toast::cov_accum_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                            double scale, double const * signal, double * zdata,
                            int64_t * hits, double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
+    if (nsub < 1) {
+        return;
+    }
     #pragma omp parallel
     {
         #ifdef _OPENMP
@@ -64,6 +67,9 @@ void toast::cov_accum_diag_hits(int64_t nsub, int64_t subsize, int64_t nnz,
                                 int64_t nsamp,
                                 int64_t const * indx_submap,
                                 int64_t const * indx_pix, int64_t * hits) {
+    if (nsub < 1) {
+        return;
+    }
     #pragma omp parallel
     {
         #ifdef _OPENMP
@@ -96,6 +102,9 @@ void toast::cov_accum_diag_invnpp(int64_t nsub, int64_t subsize, int64_t nnz,
                                   double scale,
                                   double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
+    if (nsub < 1) {
+        return;
+    }
     #pragma omp parallel
     {
         #ifdef _OPENMP
@@ -151,6 +160,9 @@ void toast::cov_accum_diag_invnpp_hits(int64_t nsub, int64_t subsize, int64_t nn
                                        double scale, int64_t * hits,
                                        double * invnpp) {
     const int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
+    if (nsub < 1) {
+        return;
+    }
     #pragma omp parallel
     {
         #ifdef _OPENMP
@@ -195,6 +207,9 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
                            int64_t const * indx_pix, double const * weights,
                            double scale, double const * signal,
                            double * zdata) {
+    if (nsub < 1) {
+        return;
+    }
     #pragma omp parallel
     {
         #ifdef _OPENMP
@@ -231,6 +246,9 @@ void toast::cov_accum_zmap(int64_t nsub, int64_t subsize, int64_t nnz,
 void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                                     double * data, double * cond,
                                     double threshold, bool invert) {
+    if (nsub < 1) {
+        return;
+    }
     if (nnz == 1) {
         // shortcut for NNZ == 1
         if (!invert) {
@@ -379,6 +397,9 @@ void toast::cov_eigendecompose_diag(int64_t nsub, int64_t subsize, int64_t nnz,
 
 void toast::cov_mult_diag(int64_t nsub, int64_t subsize, int64_t nnz,
                           double * data1, double const * data2) {
+    if (nsub < 1) {
+        return;
+    }
     if (nnz == 1) {
         // shortcut for NNZ == 1
         int64_t block = (int64_t)(nnz * (nnz + 1) / 2);
@@ -454,6 +475,9 @@ void toast::cov_apply_diag(int64_t nsub, int64_t subsize, int64_t nnz,
     int64_t mpx;
     int64_t vpx;
 
+    if (nsub < 1) {
+        return;
+    }
     if (nnz == 1) {
         // shortcut for NNZ == 1
 

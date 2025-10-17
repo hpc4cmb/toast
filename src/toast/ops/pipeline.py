@@ -132,7 +132,8 @@ class Pipeline(Operator):
                 else:
                     if op.det_mask != det_mask:
                         msg = "All operators in a Pipeline which use a det_mask"
-                        msg += " must have the same mask value"
+                        msg += f" must have the same mask value ({op.det_mask} != "
+                        msg += f"{det_mask}) in ops {[x.name for x in self.operators]}"
                         log.error(msg)
                         raise RuntimeError(msg)
         if det_mask is None:

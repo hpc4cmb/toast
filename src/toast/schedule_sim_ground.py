@@ -743,7 +743,6 @@ class WeightedHorizontalPatch(HorizontalPatch):
 
 
 class SiderealPatch(HorizontalPatch):
-
     def __init__(
         self,
         name,
@@ -1467,7 +1466,7 @@ def get_constant_elevation_pole(
     return el
 
 
-def check_sun_el(t, observer, sun, sun_el_max, args, not_visible):
+def check_sun_el(t, observer, patch, sun, sun_el_max, args, not_visible):
     log = Logger.get()
     observer.date = to_DJD(t)
     if sun_el_max < np.pi / 2:
@@ -1476,8 +1475,9 @@ def check_sun_el(t, observer, sun, sun_el_max, args, not_visible):
             not_visible.append(
                 (
                     patch.name,
-                    "Sun too high {:.2f} rising = {}"
-                    "".format(np.degrees(sun.alt), rising),
+                    "Sun too high {:.2f} rising = {}".format(
+                        np.degrees(sun.alt), patch.rising
+                    ),
                 )
             )
             log.debug(f"NOT VISIBLE: {not_visible[-1]}")
@@ -1510,7 +1510,7 @@ def scan_patch(
             )  # Make sure azimuth ranges are up to date
         if rising and not patch.rising:
             return False, azmins, azmaxs, aztimes, t
-        if check_sun_el(t, observer, sun, sun_el_max, args, not_visible):
+        if check_sun_el(t, observer, patch, sun, sun_el_max, args, not_visible):
             return False, azmins, azmaxs, aztimes, t
         azmins = [patch.az_min]
         azmaxs = [patch.az_max]
@@ -1528,7 +1528,7 @@ def scan_patch(
             not_visible.append((patch.name, f"Ran out of time rising = {rising}"))
             log.debug(f"NOT VISIBLE: {not_visible[-1]}")
             break
-        if check_sun_el(tstop, observer, sun, sun_el_max, args, not_visible):
+        if check_sun_el(tstop, observer, patch, sun, sun_el_max, args, not_visible):
             break
         azs, els = patch.corner_coordinates(observer)
         has_extent = current_extent(
@@ -1637,7 +1637,7 @@ def get_pole_raster_scan(
         t_el_step = 2 * np.sqrt(el_step / el_accel)
     else:
         # length of constant elevation rate scan
-        el_scan = el_step - el_accel * t_accel**2
+        el_scan = el_step - el_accel * t_accel_el**2
         # The elevation step is made of acceleration,
         # constant scan and deceleration
         t_el_step = 2 * t_accel_el + el_scan / el_rate
@@ -2629,9 +2629,7 @@ def parse_args(opts=None):
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    parser.add_argument(
-        "--site-name", default="LBL", help="Observing site name"
-    )
+    parser.add_argument("--site-name", default="LBL", help="Observing site name")
     parser.add_argument(
         "--telescope",
         default="Telescope",
@@ -2971,9 +2969,7 @@ where YEAR, MONTH and DAY are integers. END days are inclusive""",
         type=float,
         help="Time to scan at constant elevation in pole mode",
     )
-    parser.add_argument(
-        "--out", default="schedule.txt", help="Output filename"
-    )
+    parser.add_argument("--out", default="schedule.txt", help="Output filename")
     parser.add_argument(
         "--boresight-offset-el-deg",
         default=0,
@@ -3612,7 +3608,7 @@ def parse_patches(args, observer, sun, moon, start_timestamp, stop_timestamp):
                     continue
                 lon.append(lon[0])
                 lat.append(lat[0])
-                log.info(f"{patch.name,} corners:\n lon = {lon}\n lat= {lat}")
+                log.info(f"{patch.name} corners:\n lon = {lon}\n lat= {lat}")
                 hp.projplot(
                     lon,
                     lat,

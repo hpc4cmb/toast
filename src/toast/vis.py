@@ -115,6 +115,20 @@ def plot_noise_estim(
     plt.close()
 
 
+def plot_map_path(in_file, format, suffix=None, out_dir=None):
+    in_dir = os.path.dirname(in_file)
+    in_base = os.path.basename(in_file)
+    in_root, in_ext = os.path.splitext(in_base)
+    if suffix is None:
+        out_file = f"{in_root}.{format}"
+    else:
+        out_file = f"{in_root}{suffix}.{format}"
+    if out_dir is None:
+        return os.path.join(in_dir, out_file)
+    else:
+        return os.path.join(out_dir, out_file)
+
+
 def plot_wcs_maps(
     hitfile=None,
     mapfile=None,
@@ -130,6 +144,7 @@ def plot_wcs_maps(
     is_azimuth=False,
     cmap="viridis",
     format="pdf",
+    out_dir=None,
 ):
     """Plot WCS projected output maps.
 
@@ -227,7 +242,14 @@ def plot_wcs_maps(
         maxhits = 0.5 * np.amax(hdu.data[0, :, :])
         if max_hits is not None:
             maxhits = max_hits
-        plot_single(wcs, hdu.data, 0, 0, maxhits, f"{hitfile}.{format}")
+        plot_single(
+            wcs,
+            hdu.data,
+            0,
+            0,
+            maxhits,
+            plot_map_path(hitfile, format, out_dir=out_dir),
+        )
         del hdu
         hdulist.close()
 
@@ -248,32 +270,74 @@ def plot_wcs_maps(
         mmin, mmax = sym_range(mapdata[0, :, :])
         if range_I is not None:
             mmin, mmax = range_I
-        plot_single(wcs, mapdata, 0, mmin, mmax, f"{mapfile}_I.{format}")
+        plot_single(
+            wcs,
+            mapdata,
+            0,
+            mmin,
+            mmax,
+            plot_map_path(mapfile, format, suffix="_I", out_dir=out_dir),
+        )
         if truth is not None:
             tmin, tmax = sym_range(thdu.data[0, :, :])
             mapdata[0, :, :] -= thdu.data[0, :, :]
-            plot_single(wcs, mapdata, 0, tmin, tmax, f"{mapfile}_resid_I.{format}")
+            plot_single(
+                wcs,
+                mapdata,
+                0,
+                tmin,
+                tmax,
+                plot_map_path(mapfile, format, suffix="_resid_I", out_dir=out_dir),
+            )
 
         if mapdata.shape[0] > 1:
             sub_mono(mapdata[1])
             mmin, mmax = sym_range(mapdata[1, :, :])
             if range_Q is not None:
                 mmin, mmax = range_Q
-            plot_single(wcs, mapdata, 1, mmin, mmax, f"{mapfile}_Q.{format}")
+            plot_single(
+                wcs,
+                mapdata,
+                1,
+                mmin,
+                mmax,
+                plot_map_path(mapfile, format, suffix="_Q", out_dir=out_dir),
+            )
             if truth is not None:
                 tmin, tmax = sym_range(thdu.data[1, :, :])
                 mapdata[1, :, :] -= thdu.data[1, :, :]
-                plot_single(wcs, mapdata, 1, tmin, tmax, f"{mapfile}_resid_Q.{format}")
+                plot_single(
+                    wcs,
+                    mapdata,
+                    1,
+                    tmin,
+                    tmax,
+                    plot_map_path(mapfile, format, suffix="_resid_Q", out_dir=out_dir),
+                )
 
             sub_mono(mapdata[2])
             mmin, mmax = sym_range(mapdata[2, :, :])
             if range_U is not None:
                 mmin, mmax = range_U
-            plot_single(wcs, mapdata, 2, mmin, mmax, f"{mapfile}_U.{format}")
+            plot_single(
+                wcs,
+                mapdata,
+                2,
+                mmin,
+                mmax,
+                plot_map_path(mapfile, format, suffix="_U", out_dir=out_dir),
+            )
             if truth is not None:
                 tmin, tmax = sym_range(thdu.data[2, :, :])
                 mapdata[2, :, :] -= thdu.data[2, :, :]
-                plot_single(wcs, mapdata, 2, tmin, tmax, f"{mapfile}_resid_U.{format}")
+                plot_single(
+                    wcs,
+                    mapdata,
+                    2,
+                    tmin,
+                    tmax,
+                    plot_map_path(mapfile, format, suffix="_resid_U", out_dir=out_dir),
+                )
 
         if truth is not None:
             del thdu
@@ -456,6 +520,7 @@ def plot_healpix_maps(
     gnomres=None,
     cmap="viridis",
     format="pdf",
+    out_dir=None,
 ):
     """Plot Healpix projected output maps.
 
@@ -556,7 +621,7 @@ def plot_healpix_maps(
             hitdata,
             0,
             maxhits,
-            f"{hitfile}.{format}",
+            plot_map_path(hitfile, format, out_dir=out_dir),
             gnomrot=gnomrot,
             reso=gnomres,
             xsize=xsize,
@@ -591,7 +656,7 @@ def plot_healpix_maps(
             imapdata,
             mmin,
             mmax,
-            f"{mapfile}_I.{format}",
+            plot_map_path(mapfile, format, suffix="_I", out_dir=out_dir),
             gnomrot=gnomrot,
             reso=gnomres,
             xsize=xsize,
@@ -603,7 +668,7 @@ def plot_healpix_maps(
                 truthdata[0],
                 tmin,
                 tmax,
-                f"{mapfile}_input_I.{format}",
+                plot_map_path(mapfile, format, suffix="_input_I", out_dir=out_dir),
                 gnomrot=gnomrot,
                 reso=gnomres,
                 xsize=xsize,
@@ -613,7 +678,7 @@ def plot_healpix_maps(
                 imapdata,
                 tmin,
                 tmax,
-                f"{mapfile}_resid_I.{format}",
+                plot_map_path(mapfile, format, suffix="_resid_I", out_dir=out_dir),
                 gnomrot=gnomrot,
                 reso=gnomres,
                 xsize=xsize,
@@ -631,7 +696,7 @@ def plot_healpix_maps(
                 qmapdata,
                 mmin,
                 mmax,
-                f"{mapfile}_Q.{format}",
+                plot_map_path(mapfile, format, suffix="_Q", out_dir=out_dir),
                 gnomrot=gnomrot,
                 reso=gnomres,
                 xsize=xsize,
@@ -643,7 +708,7 @@ def plot_healpix_maps(
                     truthdata[1],
                     tmin,
                     tmax,
-                    f"{mapfile}_input_Q.{format}",
+                    plot_map_path(mapfile, format, suffix="_input_Q", out_dir=out_dir),
                     gnomrot=gnomrot,
                     reso=gnomres,
                     xsize=xsize,
@@ -653,7 +718,7 @@ def plot_healpix_maps(
                     qmapdata,
                     tmin,
                     tmax,
-                    f"{mapfile}_resid_Q.{format}",
+                    plot_map_path(mapfile, format, suffix="_resid_Q", out_dir=out_dir),
                     gnomrot=gnomrot,
                     reso=gnomres,
                     xsize=xsize,
@@ -667,7 +732,7 @@ def plot_healpix_maps(
                 umapdata,
                 mmin,
                 mmax,
-                f"{mapfile}_U.{format}",
+                plot_map_path(mapfile, format, suffix="_U", out_dir=out_dir),
                 gnomrot=gnomrot,
                 reso=gnomres,
                 xsize=xsize,
@@ -679,7 +744,7 @@ def plot_healpix_maps(
                     truthdata[2],
                     tmin,
                     tmax,
-                    f"{mapfile}_input_U.{format}",
+                    plot_map_path(mapfile, format, suffix="_input_U", out_dir=out_dir),
                     gnomrot=gnomrot,
                     reso=gnomres,
                     xsize=xsize,
@@ -689,7 +754,7 @@ def plot_healpix_maps(
                     umapdata,
                     tmin,
                     tmax,
-                    f"{mapfile}_resid_U.{format}",
+                    plot_map_path(mapfile, format, suffix="_resid_U", out_dir=out_dir),
                     gnomrot=gnomrot,
                     reso=gnomres,
                     xsize=xsize,

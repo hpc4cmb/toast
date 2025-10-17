@@ -85,6 +85,7 @@ from . import pixels_healpix as test_pixels_healpix
 from . import pixels_wcs as test_pixels_wcs
 from . import qarray as test_qarray
 from . import rng as test_rng
+from . import schedule as test_schedule
 from . import template_amplitudes as test_template_amplitudes
 from . import template_fourier2d as test_template_fourier2d
 from . import template_gain as test_template_gain
@@ -250,6 +251,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_signal_diff_noise))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
+        suite.addTest(loader.loadTestsFromModule(test_schedule))
 
         suite.addTest(loader.loadTestsFromModule(test_template_amplitudes))
         suite.addTest(loader.loadTestsFromModule(test_template_periodic))

@@ -11,7 +11,7 @@ from toast.mpi import exception_guard, get_world
 from toast.vis import plot_wcs_maps
 
 
-def main():
+def main(opts=None):
     parser = argparse.ArgumentParser(
         description="This program plots output maps in WCS projections.",
         usage="toast_plot_wcs <options>",
@@ -139,7 +139,15 @@ def main():
         help="Data is Azimuth / Elevation, so invert the X-axis",
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        "--out_dir",
+        required=False,
+        type=str,
+        default=None,
+        help="Place plots in this directory",
+    )
+
+    args = parser.parse_args(args=opts)
 
     range_I = None
     if (args.min_I is not None) and (args.max_I is not None):
@@ -165,6 +173,7 @@ def main():
         ymax=args.Ymax,
         is_azimuth=args.azimuth,
         cmap=args.cmap,
+        out_dir=args.out_dir,
     )
 
 
