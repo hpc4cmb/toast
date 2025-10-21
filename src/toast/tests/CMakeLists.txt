@@ -75,6 +75,7 @@ install(FILES
     ops_sss.py
     ops_demodulate.py
     ops_demod_common_mode.py
+    ops_detrend.py
     ops_perturbhwp.py
     ops_filterbin.py
     io_hdf5.py

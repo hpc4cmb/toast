@@ -34,6 +34,7 @@ from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_demodulate as test_ops_demodulate
 from . import ops_demod_common_mode as test_ops_demod_common_mode
+from . import ops_detrend as test_ops_detrend
 from . import ops_elevation_noise as test_ops_elevation_noise
 from . import ops_example_ground as test_ops_example_ground
 from . import ops_fill_gaps as test_ops_fill_gaps
@@ -244,6 +245,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_stokes_weights))
         suite.addTest(loader.loadTestsFromModule(test_ops_demodulate))
         suite.addTest(loader.loadTestsFromModule(test_ops_demod_common_mode))
+        suite.addTest(loader.loadTestsFromModule(test_ops_detrend))
         suite.addTest(loader.loadTestsFromModule(test_ops_perturbhwp))
         suite.addTest(loader.loadTestsFromModule(test_ops_filterbin))
         suite.addTest(loader.loadTestsFromModule(test_ops_noise_estim))
