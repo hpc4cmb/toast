@@ -38,6 +38,10 @@ class IoHdf5Test(MPITestCase):
             split=split,
         )
 
+        ob = data.obs[0]
+        det = ob.local_detectors[0]
+        ob.update_local_detector_flags({det : 5})
+
         if base_weather:
             # Replace the simulated weather with the base class for testing
             for ob in data.obs:

@@ -622,6 +622,9 @@ class Observation(MutableMapping):
         if self.detdata != other.detdata:
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs detdata not equal")
+        if self.local_detector_flags != other.local_detector_flags:
+            fail = 1
+            log.verbose(f"Proc {self.comm.world_rank}:  Obs detector_flags not equal")
         if self.intervals != other.intervals:
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs intervals not equal")
