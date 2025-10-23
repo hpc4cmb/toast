@@ -114,11 +114,6 @@ class SimpleStatCut(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.net_factors = []
-        self.total_factors = []
-        self.weights_in = []
-        self.weights_out = []
-        self.rates = []
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
