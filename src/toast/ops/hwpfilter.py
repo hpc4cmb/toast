@@ -119,7 +119,7 @@ class HWPFilter(Operator):
     )
 
     detrend = Bool(
-        False, help="Subtract the fitted trend along with the ground template"
+        False, help="Subtract the fitted trend along with the HWP template"
     )
 
     @traitlets.validate("det_mask")
@@ -404,10 +404,6 @@ class HWPFilter(Operator):
         }
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)
-        if self.azimuth is not None:
-            req["shared"].append(self.azimuth)
-        if self.boresight_azel is not None:
-            req["shared"].append(self.boresight_azel)
         if self.det_flags is not None:
             req["detdata"].append(self.det_flags)
         return req

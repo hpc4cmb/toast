@@ -5,6 +5,7 @@ set(ENTRY_POINTS
     toast_env.py
     toast_run.py
     toast_fake_focalplane.py
+    toast_fake_telescope.py
     toast_ground_schedule.py
     toast_satellite_schedule.py
     toast_timing_plot.py
@@ -25,6 +26,7 @@ set(ENTRY_POINTS
     toast_project_schedule.py
     toast_analyze_schedule.py
     toast_overlap_schedule.py
+    toast_map_stats.py
 )
 
 foreach(pyscript ${ENTRY_POINTS})

@@ -964,7 +964,13 @@ def save_instrument_file(path, telescope, session):
     The internal path should be to the *parent* group of the "instrument" group.
 
     """
-    file, internal = path.split(":")
+    parts = path.split(":")
+    if len(parts) == 1:
+        file = parts[0]
+        internal = "/"
+    else:
+        file = parts[0]
+        internal = parts[1]
     grouptree = internal.split(os.path.sep)
     with h5py.File(file, "w") as hf:
         parent = hf

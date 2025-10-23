@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -26,7 +26,7 @@ class CalibrateDetectors(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     cal_name = Unicode(
-        "calibration", help="The observation key containing the calibration dictionary"
+        "calibration", help="The observation or focalplane key containing the gains"
     )
 
     det_data = Unicode(
@@ -68,17 +68,24 @@ class CalibrateDetectors(Operator):
         for ob in data.obs:
             if self.det_data not in ob.detdata:
                 continue
-            if self.cal_name not in ob:
-                msg = f"{ob.name}: Calibration dictionary {self.cal_name} does "
-                msg += f"not exist, skipping"
-                if data.comm.group_rank == 0:
-                    log.warning(msg)
-                continue
-            cal = ob[self.cal_name]
 
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 continue
+
+            fp = ob.telescope.focalplane
+            if self.cal_name in ob:
+                # Observation has a separate calibration table
+                cal = ob[self.cal_name]
+            elif self.cal_name in fp.properties:
+                # Gains are in the focalplane database
+                cal = {}
+                for det in dets:
+                    cal[det] = fp[det][self.cal_name]
+            else:
+                msg = f"{ob.name}: Gains '{self.cal_name}' do not exist "
+                msg += f"as a dictionary nor in the focalplane database"
+                raise RuntimeError(msg)
 
             # Process all detectors
             det_flags = dict(ob.local_detector_flags)

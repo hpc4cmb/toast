@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2019-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -758,6 +758,10 @@ class Focalplane(object):
     @property
     def detectors(self):
         return list(self._det_to_row.keys())
+
+    @property
+    def properties(self):
+        return list(self.detector_data.colnames)
 
     @property
     def n_detectors(self):

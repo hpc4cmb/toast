@@ -15,6 +15,7 @@ from .crosslinking import CrossLinking
 from .delete import Delete
 from .demodulation import Demodulate, StokesWeightsDemod
 from .demod_common_mode import DemodCommonModeFilter
+from .detrend import Detrend
 from .elevation_noise import ElevationNoise
 from .fill_gaps import FillGaps
 from .filterbin import FilterBin, combine_observation_matrix
@@ -23,6 +24,7 @@ from .flag_sso import FlagSSO
 from .gainscrambler import GainScrambler
 from .groundfilter import GroundFilter
 from .hwpfilter import HWPFilter
+from .t2pfilter import T2PFilter
 from .hwpss_model import HWPSynchronousModel
 from .interpolate_healpix import InterpolateHealpixMap
 from .load_hdf5 import LoadHDF5
@@ -73,6 +75,7 @@ from .sim_tod_dipole import SimDipole
 from .sim_tod_noise import SimNoise
 from .simple_deglitch import SimpleDeglitch
 from .simple_jumpcorrect import SimpleJumpCorrect
+from .simple_statcut import SimpleStatCut
 from .sss import SimScanSynchronousSignal
 from .statistics import Statistics
 from .stokes_weights import StokesWeights

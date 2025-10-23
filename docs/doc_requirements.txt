@@ -2,7 +2,7 @@ mkdocs
 mkdocstrings
 mkdocstrings-python
 mkdocs-material
-mkdocs-jupyter
+mkdocs-jupyter>=0.24.7
 nbconvert
 wurlitzer
 sympy

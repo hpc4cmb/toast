@@ -38,6 +38,38 @@ class TimeConstantTest(MPITestCase):
         else:
             self.make_plots = True
 
+    def test_phase_shift(self):
+        # Create a fake satellite data set for testing
+        data = create_satellite_data(self.comm, flagged_pixels=False)
+
+        # Create impulse delta
+        for ob in data.obs:
+            nsamp = ob.n_local_samples
+            mid = nsamp // 2
+            nramp = 50
+            ramp = np.arange(nramp) / nramp
+            for det in ob.local_detectors:
+                sig = ob.detdata[defaults.det_data][det]
+                sig[mid - nramp : mid] = ramp
+                sig[mid : mid + nramp] = 1 - ramp
+
+        # Convolve
+        time_constant = ops.TimeConstant(
+            tau=1.0 * u.second,
+            det_data="signal",
+        )
+        time_constant.apply(data)
+
+        for ob in data.obs:
+            nsamp = ob.n_local_samples
+            mid = nsamp // 2
+            for det in ob.local_detectors:
+                sig = ob.detdata[defaults.det_data][det]
+                peak = np.amax(sig)
+                peak_loc = np.argmax(sig)
+                self.assertTrue(peak < 1.0)
+                self.assertTrue(peak_loc > mid)
+
     def test_time_constant(self):
         # Create a fake satellite data set for testing
         data = create_satellite_data(self.comm)

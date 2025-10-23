@@ -331,6 +331,7 @@ conf["entry_points"] = {
         "toast_env = toast.scripts.toast_env:main",
         "toast_run = toast.scripts.toast_run:main",
         "toast_fake_focalplane = toast.scripts.toast_fake_focalplane:main",
+        "toast_fake_telescope = toast.scripts.toast_fake_telescope:main",
         "toast_ground_schedule = toast.scripts.toast_ground_schedule:main",
         "toast_project_schedule = toast.scripts.toast_project_schedule:main",
         "toast_analyze_schedule = toast.scripts.toast_analyze_schedule:main",
@@ -350,6 +351,7 @@ conf["entry_points"] = {
         "toast_plot_wcs = toast.scripts.toast_plot_wcs:main",
         "toast_plot_healpix = toast.scripts.toast_plot_healpix:main",
         "toast_overlap_schedule = toast.scripts.toast_overlap_schedule:main",
+        "toast_map_stats = toast.scripts.toast_map_stats:main",
     ]
 }
 conf["cmdclass"] = {"build_ext": CMakeBuild}

@@ -134,6 +134,12 @@ class SimGround(Operator):
         help="Use qpoint to convert between horizontal and equatorial systems",
     )
 
+    so3g_compat_mode = Bool(
+        False,
+        help="Implies use_qpoint=True. Tweak weather in azel_to_radec to match "
+        "so3g and disable certain qpoint defaults.",
+    )
+
     scan_rate_az = Quantity(
         1.0 * u.degree / u.second,
         help="The sky or mount azimuth scanning rate.  See `fix_rate_on_sky`",
@@ -360,14 +366,14 @@ class SimGround(Operator):
     def _check_use_ephem(self, proposal):
         use_ephem = proposal["value"]
         if use_ephem:
-            if self.use_qpoint:
+            if self.use_qpoint or self.so3g_compat_mode:
                 raise traitlets.TraitError("Cannot use both ephem and qpoint")
         return use_ephem
 
     @traitlets.validate("use_qpoint")
     def _check_use_qpoint(self, proposal):
         use_qpoint = proposal["value"]
-        if use_qpoint:
+        if use_qpoint or self.so3g_compat_mode:
             if self.use_ephem:
                 raise traitlets.TraitError("Cannot use both ephem and qpoint")
             try:
@@ -756,6 +762,7 @@ class SimGround(Operator):
                         bore_azel,
                         use_ephem=self.use_ephem,
                         use_qpoint=self.use_qpoint,
+                        so3g_compat_mode=self.so3g_compat_mode,
                     )
 
             ob.shared[self.times].set(stamps, offset=(0,), fromrank=0)

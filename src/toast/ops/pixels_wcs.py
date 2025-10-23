@@ -603,8 +603,9 @@ class PixelsWCS(Operator):
 
                     # Turn position relative to the center into row and column
                     world_in = np.column_stack([rel_lon, rel_lat])
-                    rdpix = self.wcs.wcs_world2pix(world_in, 0)
-                    col, row = np.array(np.around(rdpix), dtype=np.int64).T
+                    dcol, drow = self.wcs.wcs_world2pix(world_in, 0).T
+                    col = np.array(np.around(dcol), dtype=np.int64)
+                    row = np.array(np.around(drow), dtype=np.int64)
 
                     # Turn row and column into flat pixel numbers assuming
                     # row-major ordering

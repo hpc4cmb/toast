@@ -34,7 +34,7 @@ jobs:
       - name: Create Build Env
         run: |
           source ~/conda/etc/profile.d/conda.sh \
-            && ./platforms/conda_dev_setup.sh docs
+            && ./platforms/conda_dev_setup.sh docs 3.13
 
       - name: Install Package
         run: |

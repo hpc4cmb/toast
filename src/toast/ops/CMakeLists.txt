@@ -13,6 +13,7 @@ install(FILES
     memory_counter.py
     simple_deglitch.py
     simple_jumpcorrect.py
+    simple_statcut.py
     sim_catalog.py
     sim_hwp.py
     sim_tod_noise.py
@@ -49,6 +50,7 @@ install(FILES
     totalconvolve.py
     groundfilter.py
     hwpfilter.py
+    t2pfilter.py
     hwpss_model.py
     statistics.py
     sim_cosmic_rays.py
@@ -73,6 +75,7 @@ install(FILES
     azimuth_intervals.py
     calibrate.py
     demod_common_mode.py
+    detrend.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
 

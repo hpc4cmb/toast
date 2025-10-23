@@ -1,4 +1,4 @@
-# Copyright (c) 2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -124,7 +124,13 @@ class TimeConstant(Operator):
             # Get the timeconstants for all detectors
             tau_det = dict()
             for idet, det in enumerate(dets):
-                tau_det[idet] = self._get_tau(obs, det)
+                tau = self._get_tau(obs, det)
+                if np.isfinite(tau):
+                    tau_det[idet] = tau
+                else:
+                    # Tau is NaN. Flag the detector
+                    obs.local_detector_flags[det] |= defaults.det_mask_invalid
+                    tau_det[idet] = 0 * u.s
 
             def _filter_kernel(indx, kfreqs):
                 """Function to generate the filter kernel on demand.
@@ -137,10 +143,15 @@ class TimeConstant(Operator):
                 kernel = np.zeros(len(kfreqs), dtype=np.complex128)
                 kernel.real[:] = 1
                 kernel.imag[:] = 2.0 * np.pi * tau * kfreqs
+                if not self.deconvolve:
+                    kernel = 1.0 / kernel
                 return kernel
 
             # The slice of detector data we will use
             signal = obs.detdata[self.det_data][dets, :]
+            if len(dets) == 1:
+                # Corner case, signal is a vector, not a list of vectors
+                signal = [signal]
 
             if self.batch:
                 # Use the internal batched (threaded) implementation.  This
@@ -161,7 +172,7 @@ class TimeConstant(Operator):
                 signal,
                 fsample,
                 kernel_func=_filter_kernel,
-                deconvolve=self.deconvolve,
+                deconvolve=False,
                 algorithm=algo,
                 debug=debug_root,
             )

@@ -84,6 +84,11 @@ class SimpleDeglitch(Operator):
         help="Glitch detection threshold in units of RMS",
     )
 
+    nglitch_limit = Int(
+        10,
+        help="Maximum number of glitches in a view",
+    )
+
     nsample_min = Int(
         100,
         help="Minimum number of good samples in an interval.",
@@ -139,10 +144,42 @@ class SimpleDeglitch(Operator):
         self.rates = []
 
     @function_timer
+    def _get_coupled_detectors(self, det, dets):
+        """See if other detectors should be flagged symmetrically"""
+        coupled = [det]
+        if det.startswith("demod0"):
+            qdet = det.replace("demod0", "demod4r")
+            udet = det.replace("demod0", "demod4i")
+            alt_dets = [qdet, udet]
+        elif det.startswith("demod4r"):
+            idet = det.replace("demod4r", "demod0")
+            udet = det.replace("demod4r", "demod4i")
+            alt_dets = [idet, udet]
+        elif det.startswith("demod4i"):
+            idet = det.replace("demod4i", "demod0")
+            qdet = det.replace("demod4i", "demod4r")
+            alt_dets = [idet, qdet]
+        else:
+            alt_dets = []
+        for alt_det in alt_dets:
+            if alt_det in dets:
+                coupled.append(alt_det)
+        return coupled
+
+    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        timer = Timer()
+        timer.start()
 
+        nobs = 0
+        nbad = 0
+        ndet = 0
+        obstimer = Timer()
+        obstimer.start()
         for ob in data.obs:
+            if ob.comm.comm_group is None or ob.comm.comm_group.rank == 0:
+                nobs += 1
             if not ob.is_distributed_by_detector:
                 msg = "Observation data must be distributed by detector, not samples"
                 log.error(msg)
@@ -151,12 +188,19 @@ class SimpleDeglitch(Operator):
             focalplane = ob.telescope.focalplane
 
             local_dets = ob.select_local_detectors(flagmask=self.det_mask)
+            ndet += len(local_dets)
             shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
+            if self.reset_det_flags:
+                for det in local_dets:
+                    ob.detdata[self.det_flags][det][:] = 0
+            bad_detectors = set()
             for det in local_dets:
+                if det in bad_detectors:
+                    # This detector was coupled to a detector with too many glitches
+                    continue
+                coupled_detectors = self._get_coupled_detectors(det, local_dets)
                 sig = ob.detdata[self.det_data][det]
                 det_flags = ob.detdata[self.det_flags][det]
-                if self.reset_det_flags:
-                    det_flags[:] = 0
                 bad = np.logical_or(
                     shared_flags != 0,
                     (det_flags & self.det_flag_mask) != 0,
@@ -172,13 +216,11 @@ class SimpleDeglitch(Operator):
                         # Special treatment for the ends
                         sig_view[:w] -= np.median(sig_view[:w])
                         sig_view[-w:] -= np.median(sig_view[-w:])
-                    trend = sig[ind] - sig_view
                     sig_view[bad[ind]] = np.nan
                     if np.all(np.isnan(sig_view)):
                         continue
                     offset = np.nanmedian(sig_view)
                     sig_view -= offset
-                    trend += offset
                     rms = np.nanstd(sig_view)
                     nglitch = 0
                     while True:
@@ -200,25 +242,56 @@ class SimpleDeglitch(Operator):
                             # Not significant enough
                             break
                         nglitch += 1
-                        sig_view = sig_view_test
+                        if nglitch > self.nglitch_limit:
+                            sig_view[:] = np.nan
+                            break
+                        sig_view[:] = sig_view_test
                         rms = rms_test
                     if nglitch == 0:
                         continue
                     bad_view = np.isnan(sig_view)
-                    det_flags[ind][bad_view] |= self.glitch_mask
+                    for alt_det in coupled_detectors:
+                        # Raise the same flags in all coupled detectors
+                        alt_flags = ob.detdata[self.det_flags][alt_det]
+                        alt_flags[ind][bad_view] |= self.glitch_mask
 
-                if np.all(det_flags != 0):
+                if np.all((det_flags & self.det_flag_mask) != 0):
                     # This detector is a total loss. Raise the detector flag
-                    ob.local_detector_flags[det] |= defaults.det_mask_invalid
+                    for alt_det in coupled_detectors:
+                        ob.local_detector_flags[alt_det] |= defaults.det_mask_invalid
+                        bad_detectors.add(alt_det)
                 elif self.fill_gaps:
                     # 1 second buffer
                     buffer_ = int(focalplane.sample_rate.to_value(u.Hz))
-                    flagged_noise_fill(
-                        sig,
-                        det_flags,
-                        buffer_,
-                        poly_order=1,
-                    )
+                    for alt_det in coupled_detectors:
+                        flagged_noise_fill(
+                            ob.detdata[self.det_data][alt_det],
+                            ob.detdata[self.det_flags][alt_det],
+                            buffer_,
+                            poly_order=1,
+                        )
+            nbad_obs = len(bad_detectors)
+            ndet_obs = len(local_dets)
+            nbad += nbad_obs
+            if ob.comm.comm_group is not None:
+                nbad_obs = ob.comm.comm_group.reduce(nbad_obs)
+                ndet_obs = ob.comm.comm_group.reduce(ndet_obs)
+            log.debug_rank(
+                f"Flagged {nbad_obs} / {ndet_obs} badly glitched detectors "
+                f"in {ob.name} in",
+                comm=ob.comm.comm_group,
+                timer=obstimer,
+            )
+        if data.comm.comm_world is not None:
+            nobs = data.comm.comm_world.reduce(nobs)
+            nbad = data.comm.comm_world.reduce(nbad)
+            ndet = data.comm.comm_world.reduce(ndet)
+        log.info_rank(
+            f"Flagged {nbad} / {ndet} badly glitched detectors over {nobs} "
+            f"observations in",
+            comm=data.comm.comm_world,
+            timer=timer,
+        )
 
         return
 

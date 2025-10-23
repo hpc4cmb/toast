@@ -87,7 +87,7 @@ jobs:
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate base \
             && ./platforms/conda_dev_setup.sh toast ${{ matrix.python }} yes \
-            && python3 -m pip install spt3g
+            && python3 -m pip install 'spt3g==1.0.0'
 
       - name: Install
         run: |

@@ -26,13 +26,16 @@ def main():
     parser.add_argument(
         "inmatrix",
         nargs="+",
-        help="One or more noise-weighted observation matrices",
+        help="One or more noise-weighted observation matrices.  "
+        "Each filename must contain 'noiseweighted'.  "
+        "Multiplicities can be indicated by appending +N to the filename.",
     )
 
     parser.add_argument(
         "--outmatrix",
         required=False,
-        help="Name of output file",
+        help="Name of output file.  If the filename contains 'noiseweighted' in it, "
+        "the output matrix will not be deweighted.",
     )
 
     parser.add_argument(

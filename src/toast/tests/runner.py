@@ -34,6 +34,7 @@ from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_crosslinking as test_ops_crosslinking
 from . import ops_demodulate as test_ops_demodulate
 from . import ops_demod_common_mode as test_ops_demod_common_mode
+from . import ops_detrend as test_ops_detrend
 from . import ops_elevation_noise as test_ops_elevation_noise
 from . import ops_example_ground as test_ops_example_ground
 from . import ops_fill_gaps as test_ops_fill_gaps
@@ -42,6 +43,7 @@ from . import ops_flag_sso as test_ops_flag_sso
 from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_groundfilter as test_ops_groundfilter
 from . import ops_hwpfilter as test_ops_hwpfilter
+from . import ops_t2pfilter as test_ops_t2pfilter
 from . import ops_hwpss_model as test_ops_hwpss_model
 from . import ops_interpolate_healpix as test_ops_interpolate_healpix
 from . import ops_loader as test_ops_loader
@@ -78,6 +80,7 @@ from . import ops_sim_tod_noise as test_ops_sim_tod_noise
 from . import ops_sim_tod_totalconvolve as test_ops_sim_tod_totalconvolve
 from . import ops_sss as test_ops_sss
 from . import ops_statistics as test_ops_statistics
+from . import ops_statcut as test_ops_statcut
 from . import ops_stokes_weights as test_ops_stokes_weights
 from . import ops_time_constant as test_ops_time_constant
 from . import ops_yield_cut as test_ops_yield_cut
@@ -85,6 +88,7 @@ from . import pixels_healpix as test_pixels_healpix
 from . import pixels_wcs as test_pixels_wcs
 from . import qarray as test_qarray
 from . import rng as test_rng
+from . import schedule as test_schedule
 from . import template_amplitudes as test_template_amplitudes
 from . import template_fourier2d as test_template_fourier2d
 from . import template_gain as test_template_gain
@@ -211,6 +215,7 @@ def test(name=None, verbosity=2):
 
         suite.addTest(loader.loadTestsFromModule(test_ops_flag_sso))
         suite.addTest(loader.loadTestsFromModule(test_ops_statistics))
+        suite.addTest(loader.loadTestsFromModule(test_ops_statcut))
         suite.addTest(loader.loadTestsFromModule(test_ops_loader))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_utils))
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker_binning))
@@ -229,6 +234,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_fill_gaps))
         suite.addTest(loader.loadTestsFromModule(test_ops_groundfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_hwpfilter))
+        suite.addTest(loader.loadTestsFromModule(test_ops_t2pfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_hwpss_model))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_crosstalk))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_catalog))
@@ -241,6 +247,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_stokes_weights))
         suite.addTest(loader.loadTestsFromModule(test_ops_demodulate))
         suite.addTest(loader.loadTestsFromModule(test_ops_demod_common_mode))
+        suite.addTest(loader.loadTestsFromModule(test_ops_detrend))
         suite.addTest(loader.loadTestsFromModule(test_ops_perturbhwp))
         suite.addTest(loader.loadTestsFromModule(test_ops_filterbin))
         suite.addTest(loader.loadTestsFromModule(test_ops_noise_estim))
@@ -250,6 +257,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_signal_diff_noise))
 
         suite.addTest(loader.loadTestsFromModule(test_covariance))
+        suite.addTest(loader.loadTestsFromModule(test_schedule))
 
         suite.addTest(loader.loadTestsFromModule(test_template_amplitudes))
         suite.addTest(loader.loadTestsFromModule(test_template_periodic))

@@ -34,6 +34,7 @@ install(FILES
     ops_sim_tod_totalconvolve.py
     ops_flag_sso.py
     ops_statistics.py
+    ops_statcut.py
     ops_mapmaker_utils.py
     ops_mapmaker_binning.py
     ops_mapmaker_solve.py
@@ -51,6 +52,7 @@ install(FILES
     ops_scan_wcs_detector.py
     ops_madam.py
     ops_gainscrambler.py
+    schedule.py
     template_periodic.py
     template_amplitudes.py
     template_offset.py
@@ -62,6 +64,7 @@ install(FILES
     ops_polyfilter.py
     ops_groundfilter.py
     ops_hwpfilter.py
+    ops_t2pfilter.py
     ops_hwpss_model.py
     ops_sim_tod_catalog.py
     ops_sim_cosmic_rays.py
@@ -73,6 +76,7 @@ install(FILES
     ops_sss.py
     ops_demodulate.py
     ops_demod_common_mode.py
+    ops_detrend.py
     ops_perturbhwp.py
     ops_filterbin.py
     io_hdf5.py

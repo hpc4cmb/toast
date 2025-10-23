@@ -15,11 +15,13 @@ from .. import qarray as qa
 from ..data import Data
 from ..instrument import Focalplane, GroundSite, Telescope
 from ..instrument_sim import fake_hexagon_focalplane
+from ..io.observation_hdf_load import load_instrument_file
 from ..mpi import MPI, Comm
 from ..observation import default_values as defaults
 from ..schedule import GroundSchedule
 from ..schedule_sim_ground import run_scheduler
 from ..vis import plot_projected_quats, set_matplotlib_backend
+from ..scripts.toast_fake_telescope import main as fake_tele_main
 from .helpers import close_data, create_comm, create_outdir
 from .mpi import MPITestCase
 
@@ -323,3 +325,69 @@ class SimGroundTest(MPITestCase):
 
         del data2
         close_data(data1)
+
+    def test_telescope_file(self):
+        # Verify that we can run with a telescope file dumped to disk
+        tele_file = sch_file = os.path.join(self.outdir, "ground_telescope.h5")
+        tele = None
+        if self.toastcomm.world_rank == 0:
+            fake_tele_main(
+                opts=[
+                    "--out",
+                    tele_file,
+                    "--ground_site_loc",
+                    "chajnantor",
+                    "--telescope_name",
+                    "CCAT",
+                ]
+            )
+            tele, _ = load_instrument_file(tele_file)
+        if self.toastcomm.comm_world is not None:
+            tele = self.toastcomm.comm_world.bcast(tele, root=0)
+
+        sch_file = os.path.join(self.outdir, "fake_telescope_schedule.txt")
+        schedule = None
+
+        if self.comm is None or self.comm.rank == 0:
+            run_scheduler(
+                opts=[
+                    "--site-name",
+                    "chajnantor",
+                    "--telescope",
+                    "CCAT",
+                    "--site-lon",
+                    f"{tele.site.earthloc.lon.to_value(u.degree)}",
+                    "--site-lat",
+                    f"{tele.site.earthloc.lat.to_value(u.degree)}",
+                    "--site-alt",
+                    f"{tele.site.earthloc.height.to_value(u.meter)}",
+                    "--patch",
+                    "small_patch,1,40,-40,44,-44",
+                    "--start",
+                    "2020-01-01 00:00:00",
+                    "--stop",
+                    "2020-01-01 12:00:00",
+                    "--out",
+                    sch_file,
+                    "--verbose",
+                ]
+            )
+            schedule = GroundSchedule()
+            schedule.read(sch_file)
+        if self.comm is not None:
+            schedule = self.comm.bcast(schedule, root=0)
+
+        data = Data(self.toastcomm)
+
+        sim_ground = ops.SimGround(
+            name="sim_ground",
+            telescope_file=tele_file,
+            schedule=schedule,
+            hwp_angle=defaults.hwp_angle,
+            hwp_rpm=1.0,
+            max_pwv=5 * u.mm,
+        )
+        sim_ground.apply(data)
+
+        close_data(data)
+        del data

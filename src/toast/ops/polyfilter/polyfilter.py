@@ -517,10 +517,7 @@ class PolyFilter(Operator):
         # Kernel selection
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
-        if self.pattern is None:
-            pat = None
-        else:
-            pat = re.compile(self.pattern)
+        pat = re.compile(self.pattern)
 
         for obs in data.obs:
             # Get the detectors we are using for this observation

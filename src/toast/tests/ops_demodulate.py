@@ -79,9 +79,9 @@ class DemodulateTest(MPITestCase):
             map_key=map_key,
             fwhm=10.0 * u.deg,
             lmax=1 * nside,
-            I_scale=.001,
-            Q_scale=.0001,
-            U_scale=.0001,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
             det_data=defaults.det_data,
         )
 
@@ -127,8 +127,12 @@ class DemodulateTest(MPITestCase):
                 # Rotate horizontal Q/U to RA/Dec
                 qweights_radial = ob_radial.detdata[defaults.weights][qdet].T
                 uweights_radial = ob_radial.detdata[defaults.weights][udet].T
-                qsig_rot = qsig_radial * qweights_radial[1] + usig_radial * uweights_radial[1]
-                usig_rot = qsig_radial * qweights_radial[2] + usig_radial * uweights_radial[2]
+                qsig_rot = (
+                    qsig_radial * qweights_radial[1] + usig_radial * uweights_radial[1]
+                )
+                usig_rot = (
+                    qsig_radial * qweights_radial[2] + usig_radial * uweights_radial[2]
+                )
 
                 ind = slice(100, -100)  # Cut ends due to potential ringing
                 rms_q = np.std(qsig_radec[ind])
@@ -479,3 +483,88 @@ class DemodulateTest(MPITestCase):
                     det_flags[det] = defaults.det_mask_invalid
             ob.update_local_detector_flags(det_flags)
         self._test_demodulate(weight_mode="IQU", data=data, suffix="-detcuts")
+
+    def test_demodulate_leakage(self):
+        data = create_ground_data(self.comm)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Pointing operators
+
+        detpointing_azel = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec,
+            shared_flag_mask=0,
+        )
+
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_azel,
+        )
+
+        # Insert a pure intensity signal into the data object
+        for ob in data.obs:
+            ob.detdata.ensure(defaults.det_data, detectors=ob.local_detectors)
+            trend = np.arange(ob.n_local_samples)
+            for det in ob.local_detectors:
+                ob.detdata[defaults.det_data][det][:] = trend
+
+        # Demodulate
+
+        demod_weights_in = ops.StokesWeights(
+            weights="demod_weights_in",
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_azel,
+        )
+
+        demod = ops.Demodulate(
+            stokes_weights=demod_weights_in,
+            nskip=1,
+            purge=False,
+            mode="IQU",
+        )
+        demod_data = demod.apply(data)
+
+        # Confirm that there is no signal in the demodulated Q/U TOD
+
+        for ob, demod_ob in zip(data.obs, demod_data.obs):
+            t = ob.shared[defaults.times].data
+            for det in ob.select_local_detectors(flagmask=demod.det_mask):
+                idet = f"demod0_{det}"
+                qdet = f"demod4r_{det}"
+                udet = f"demod4i_{det}"
+                sig = ob.detdata[defaults.det_data][det]
+                isig = demod_ob.detdata[defaults.det_data][idet]
+                qsig = demod_ob.detdata[defaults.det_data][qdet]
+                usig = demod_ob.detdata[defaults.det_data][udet]
+
+                good = (demod_ob.shared[defaults.shared_flags].data & 1) == 0
+
+                rms = np.std(sig[good])
+                irms = np.std(isig[good])
+                qrms = np.std(qsig[good]) / irms
+                urms = np.std(usig[good]) / irms
+
+                limit = 1e-6
+                if qrms > limit or urms > limit:
+                    set_matplotlib_backend()
+                    import matplotlib.pyplot as plt
+
+                    nrow, ncol = 2, 1
+                    fig = plt.figure(figsize=[6 * ncol, 4 * nrow])
+                    ax = fig.add_subplot(nrow, ncol, 1)
+                    ax.set_title("I -> I")
+                    ax.plot(t[good], sig[good], label=f"raw, rms = {rms}")
+                    ax.plot(t[good], isig[good], label=f"demod I, rms = {irms}")
+                    ax.legend(loc="best")
+                    ax = fig.add_subplot(nrow, ncol, 2)
+                    ax.set_title("I -> P leakage")
+                    ax.plot(t[good], qsig[good], label=f"demod Q, rms = {qrms} x I")
+                    ax.plot(t[good], usig[good], label=f"demod U, rms = {urms} x I")
+                    ax.legend(loc="best")
+                    fname_plot = os.path.join(self.outdir, "i2p_leakage.pdf")
+                    plt.savefig(fname_plot)
+                    assert False

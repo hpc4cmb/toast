@@ -55,6 +55,30 @@ class Lowpass:
         return downsampled
 
 
+class Bandpass:
+    """A callable class that applies the bandpass filter"""
+
+    def __init__(self, wkernel, fmin, fmax, fsample, window="hamming"):
+        """
+        Args:
+            wkernel (int) : width of the filter kernel
+            fmin (float) : minimum frequency of the passband
+            fmax (float) : maximum frequency of the passband
+            fsample (float) : signal sampling frequency
+        """
+        self.bpf = firwin(
+            wkernel,
+            [fmin.to_value(u.Hz), fmax.to_value(u.Hz)],
+            window=window,
+            pass_zero=False,
+            fs=fsample.to_value(u.Hz),
+        )
+
+    def __call__(self, signal, downsample=True):
+        bandpassed = fftconvolve(signal, self.bpf, mode="same").real
+        return bandpassed
+
+
 @trait_docs
 class Demodulate(Operator):
     """Demodulate and downsample HWP-modulated data"""
@@ -119,8 +143,24 @@ class Demodulate(Operator):
 
     wkernel = Int(None, allow_none=True, help="Override automatic filter kernel size")
 
-    fmax = Quantity(
-        None, allow_none=True, help="Override automatic lowpass cut-off frequency"
+    fcut = Float(
+        0.95, help="Low pass cut-off frequency in units if HWP frequency"
+    )
+
+    fmin_2f = Float(
+        1.05, help="Low frequency end of the 2f-bandpass filter in units of HWP frequency"
+    )
+
+    fmax_2f = Float(
+        2.95, help="High frequency end of the 2f-bandpass filter in units of HWP frequency"
+    )
+
+    fmin_4f = Float(
+        3.05, help="Low frequency end of the 4f-bandpass filter in units of HWP frequency"
+    )
+
+    fmax_4f = Float(
+        4.95, help="High frequency end of the 4fbandpass filter in units of HWP frequency"
     )
 
     nskip = Int(3, help="Downsampling factor")
@@ -210,6 +250,11 @@ class Demodulate(Operator):
             msg = "Cannot produce demodulated QU without QU Stokes weights"
             raise RuntimeError(msg)
 
+        if self.stokes_weights.hwp_angle is None:
+            msg = f"The Stokes weights operator (self.stokes_weights) "
+            msg += "does not have HWP angle"
+            raise RuntimeError(msg)
+
         if self.in_place:
             self.demod_data = None
         else:
@@ -261,7 +306,8 @@ class Demodulate(Operator):
             n_obs = data.comm.comm_world.allreduce(n_obs)
         if n_obs == 0:
             raise RuntimeError(
-                "None of the observations have a spinning HWP.  Nothing to demodulate."
+                "None of the observations have a spinning HWP and/or enough detectors. "
+                "Nothing to demodulate."
             )
 
         # Each modulated detector demodulates into one or more pseudo detectors
@@ -303,10 +349,19 @@ class Demodulate(Operator):
             nsample = obs.n_local_samples
 
             fsample = obs.telescope.focalplane.sample_rate
-            fmax, hwp_rate = self._get_fmax(obs)
+            # fmod is the HWP spin frequency.  Polarization signal is at 4 x fmod
+            fmod = self._get_fmod(obs)
 
-            wkernel = self._get_wkernel(fmax, fsample)
-            lowpass = Lowpass(wkernel, fmax, fsample, offset, self.nskip, self.window)
+            wkernel = self._get_wkernel(fmod, fsample)
+            lowpass = Lowpass(
+                wkernel, self.fcut * fmod, fsample, offset, self.nskip, self.window
+            )
+            bandpass2f = Bandpass(
+                wkernel, self.fmin_2f * fmod, self.fmax_2f * fmod, fsample, self.window
+            )
+            bandpass4f = Bandpass(
+                wkernel, self.fmin_4f * fmod, self.fmax_4f * fmod, fsample, self.window
+            )
 
             # Create a new observation to hold the demodulated and downsampled data
 
@@ -355,9 +410,18 @@ class Demodulate(Operator):
             )
 
             self._demodulate_flags(obs, demod_obs, local_dets, wkernel, offset)
-            self._demodulate_signal(data, obs, demod_obs, local_dets, lowpass)
+            self._demodulate_signal(
+                data, obs, demod_obs, local_dets, lowpass, bandpass2f, bandpass4f
+            )
             self._demodulate_noise(
-                obs, demod_obs, local_dets, fsample, hwp_rate, lowpass
+                obs,
+                demod_obs,
+                local_dets,
+                fsample,
+                fmod,
+                lowpass,
+                bandpass2f,
+                bandpass4f,
             )
 
             self._demodulate_intervals(obs, demod_obs)
@@ -380,18 +444,14 @@ class Demodulate(Operator):
             self.demod_data.obs = demodulate_obs
 
     @function_timer
-    def _get_fmax(self, obs):
+    def _get_fmod(self, obs):
+        """Return the modulation frequency"""
         times = obs.shared[self.times].data
         hwp_angle = np.unwrap(obs.shared[self.hwp_angle].data)
         hwp_rate = np.absolute(
             np.mean(np.diff(hwp_angle) / np.diff(times)) / (2 * np.pi) * u.Hz
         )
-        if self.fmax is not None:
-            fmax = self.fmax
-        else:
-            # set low-pass filter cut-off frequency as same as HWP 1f
-            fmax = hwp_rate
-        return fmax, hwp_rate
+        return hwp_rate
 
     @function_timer
     def _get_wkernel(self, fmax, fsample):
@@ -600,19 +660,21 @@ class Demodulate(Operator):
         # FIXME:    measuring the total flag within the filter window
         flags = flags.copy()
         # flag invalid samples in both ends
-        flags[: wkernel // 2] |= self.demod_flag_mask
-        flags[-(wkernel // 2) :] |= self.demod_flag_mask
+        flags[:wkernel] |= self.demod_flag_mask
+        flags[-wkernel:] |= self.demod_flag_mask
         new_flags = np.array(flags[offset % self.nskip :: self.nskip])
         return new_flags
 
     @function_timer
-    def _demodulate_signal(self, data, obs, demod_obs, dets, lowpass):
+    def _demodulate_signal(
+        self, data, obs, demod_obs, dets, lowpass, bandpass2f, bandpass4f
+    ):
         """demodulate signal TOD"""
 
         for det in dets:
             # Get weights
             obs_data = data.select(obs_uid=obs.uid)
-            self.stokes_weights.apply(obs_data, dets=[det])
+            self.stokes_weights.apply(obs_data, detectors=[det])
             weights = obs.detdata[self.stokes_weights.weights][det]
             # iweights = 1
             # qweights = eta * cos(2 * psi_det + 4 * psi_hwp)
@@ -634,8 +696,9 @@ class Demodulate(Operator):
                 if "I" in self.mode:
                     det_data[f"demod0_{det}"] = lowpass(signal)
                 if "QU" in self.mode:
-                    det_data[f"demod4r_{det}"] = lowpass(signal * 2 * qweights)
-                    det_data[f"demod4i_{det}"] = lowpass(signal * 2 * uweights)
+                    bandpassed = bandpass4f(signal)
+                    det_data[f"demod4r_{det}"] = lowpass(bandpassed * 2 * qweights)
+                    det_data[f"demod4i_{det}"] = lowpass(bandpassed * 2 * uweights)
                 if self.do_2f:
                     # Start by evaluating the 2f demodulation factors from the
                     # pointing matrix.  We use the half-angle formulas and some
@@ -658,8 +721,9 @@ class Demodulate(Operator):
                         bad = np.hstack([bad, False])
                         sig[bad] *= -1
                     # Demodulate and lowpass for 2f
-                    det_data[f"demod2r_{det}"] = lowpass(signal * signal_demod2r)
-                    det_data[f"demod2i_{det}"] = lowpass(signal * signal_demod2i)
+                    highpassed = bandpass2f(signal)
+                    det_data[f"demod2r_{det}"] = lowpass(highpassed * signal_demod2r)
+                    det_data[f"demod2i_{det}"] = lowpass(highpassed * signal_demod2i)
 
         return
 
@@ -696,6 +760,8 @@ class Demodulate(Operator):
         fsample,
         hwp_rate,
         lowpass,
+        bandpass2f,
+        bandpass4f,
     ):
         """Add Noise objects for the new detectors"""
         noise = obs[self.noise_model]
@@ -818,6 +884,11 @@ class StokesWeightsDemod(Operator):
         "Requires `detector_pointing_in` to be set.",
     )
 
+    det_mask = Int(
+        defaults.det_mask_nonscience,
+        help="Bit mask value for per-detector flagging",
+    )
+
     @traitlets.validate("mode")
     def _check_mode(self, proposal):
         mode = proposal["value"]
@@ -931,7 +1002,7 @@ class StokesWeightsDemod(Operator):
             dtype = np.float64
 
         for obs in data.obs:
-            dets = obs.select_local_detectors(detectors)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 continue
 

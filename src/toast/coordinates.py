@@ -96,7 +96,7 @@ def _ephem_transform(site, t):
     return quat
 
 
-def _qpoint_transform(site, t, quats_azel):
+def _qpoint_transform(site, t, quats_azel, so3g_compat_mode=False):
     """Get the Az/El -> Ra/Dec conversion quaternion for boresight."""
     import qpoint
 
@@ -115,6 +115,24 @@ def _qpoint_transform(site, t, quats_azel):
         pressure = 0
         humidity = 0
 
+    if so3g_compat_mode:
+        # so3g typical weather for toco
+        temperature = 0.
+        humidity = 0.2
+        pressure = 550.
+        kwargs = {}
+    else:
+        # Keeping these defaults for now.  If qpoint is *only*
+        # used in so3g_compact_mode we might get rid of them.
+        # Not sure about their provenance.
+        kwargs = {
+            "update_iers" : True,
+            "rate_dut1" : "always",
+            "rate_wobble" : "always",
+            "rate_npb" : "always",
+            "rate_aaber" : "always",
+        }
+
     qp = qpoint.QPoint(
         accuracy="high",
         fast_math=True,
@@ -123,11 +141,7 @@ def _qpoint_transform(site, t, quats_azel):
         temperature=temperature,
         pressure=pressure,
         humidity=humidity,
-        update_iers=True,
-        rate_dut1="always",
-        rate_wobble="always",
-        rate_npb="always",
-        rate_aaber="always",
+        **kwargs,
     )
     theta, phi, psi = qa.to_iso_angles(quats_azel)
     q = qp.azel2bore(
@@ -218,7 +232,9 @@ def _transform(site, obstime):
 
 
 @function_timer
-def azel_to_radec(site, times, azel, use_ephem=False, use_qpoint=False):
+def azel_to_radec(
+        site, times, azel, use_ephem=False, use_qpoint=False, so3g_compat_mode=False
+):
     """Transform Az / El quaternions to RA / DEC.
 
     This uses the Earth location of the ground site to convert timestamped Az / El
@@ -235,14 +251,15 @@ def azel_to_radec(site, times, azel, use_ephem=False, use_qpoint=False):
         azel (array):  The Az / El boresight quaternions.
         use_ephem (bool):  Use pyephem instead of astropy
         use_qpoint (bool):  Use qpoint instead of astropy
+        so3g_compat_mode (bool):  Provide pointing maximally compatible with so3g
 
     Returns:
         (array):  The RA / DEC boresight quaternions.
 
     """
 
-    if use_qpoint:
-        return _qpoint_transform(site, times, azel)
+    if use_qpoint or so3g_compat_mode:
+        return _qpoint_transform(site, times, azel, so3g_compat_mode=so3g_compat_mode)
 
     x_axis = np.array([1.0, 0.0, 0.0])
     y_axis = np.array([0.0, 1.0, 0.0])

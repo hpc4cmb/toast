@@ -11,7 +11,7 @@ from toast.mpi import exception_guard, get_world
 from toast.vis import plot_healpix_maps
 
 
-def main():
+def main(opts=None):
     parser = argparse.ArgumentParser(
         description="This program plots output healpix maps.",
         usage="toast_plot_healpix <options>",
@@ -109,14 +109,46 @@ def main():
     )
 
     parser.add_argument(
+        "--cartview",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Plot with cartview instead of mollview",
+    )
+
+    parser.add_argument(
+        "--graticule",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Enable the graticule on the plot",
+    )
+
+    parser.add_argument(
         "--cmap",
         required=False,
         type=str,
-        default="viridis",
+        default="bwr",
         help="The colormap name (e.g. 'inferno')",
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        "--out_dir",
+        required=False,
+        type=str,
+        default=None,
+        help="Place plots in this directory",
+    )
+
+    parser.add_argument(
+        "--format",
+        required=False,
+        type=str,
+        default="pdf",
+        help="The format of the output files ('pdf', 'png')",
+    )
+
+    args = parser.parse_args(args=opts)
 
     range_I = None
     if (args.min_I is not None) and (args.max_I is not None):
@@ -138,7 +170,11 @@ def main():
         truth=args.truth_file,
         gnomview=args.gnomview,
         gnomres=args.gnomres,
+        cartview=args.cartview,
         cmap=args.cmap,
+        out_dir=args.out_dir,
+        graticule=args.graticule,
+        image_format=args.format,
     )
 
 
