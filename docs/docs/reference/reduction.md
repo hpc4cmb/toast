@@ -103,7 +103,6 @@
 ::: toast.templates.Periodic
 ::: toast.templates.SubHarmonic
 ::: toast.templates.Fourier2D
-::: toast.templates.Hwpss
 ::: toast.templates.GainTemplate
 
 ::: toast.ops.TemplateMatrix
