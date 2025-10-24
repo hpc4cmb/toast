@@ -212,7 +212,10 @@ def oscillate_el(
     scan_max_el,
     el_mod_amplitude,
     el_mod_rate,
+    ival_scan_leftright,
+    ival_scan_rightleft,
     el_mod_sine=False,
+    el_mod_sine_phase=None,
 ):
     """Simulate oscillating elevation.
 
@@ -231,6 +234,18 @@ def oscillate_el(
     tt += np.random.rand() / el_mod_rate
 
     if el_mod_sine:
+        if el_mod_sine_phase is not None:
+            scan_intervals = [None] * (len(ival_scan_leftright)+len(ival_scan_rightleft))
+            scan_intervals[::2] = ival_scan_leftright
+            scan_intervals[1::2] = ival_scan_leftright
+            for i, (t0, t1) in scan_intervals:
+                subscan_start_idx = (np.abs(tt - t0)).argmin()
+                subscan_stop_idx = (np.abs(tt - t1)).argmin()
+                if type(el_mod_sine_phase)==float:
+                    tt[subscan_start_idx:subscan_stop_idx+1] += i * el_mod_sine_phase / el_mod_rate
+                else:#Random extra phase
+                    tt[subscan_start_idx:subscan_stop_idx+1] += np.random.rand() / el_mod_rate
+        
         # elevation is modulated along a sine wave
         angular_rate = 2 * np.pi * el_mod_rate
         el += el_mod_amplitude * np.sin(tt * angular_rate)

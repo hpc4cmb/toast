@@ -995,7 +995,10 @@ class SimGround(Operator):
                 scan_max_el,
                 self.el_mod_amplitude.to_value(u.radian),
                 self.el_mod_rate.to_value(u.Hz),
+                ival_scan_leftright,
+                ival_scan_rightleft,
                 el_mod_sine=self.el_mod_sine,
+                el_mod_sine_phase=None,
             )
         if self.el_mod_step.to_value(u.radian) > 0:
             scan_min_el, scan_max_el = step_el(
