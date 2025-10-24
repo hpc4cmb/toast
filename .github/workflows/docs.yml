@@ -2,6 +2,9 @@ name:  Deploy Documentation
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - toast3
   push:
     tags:
       - '*'

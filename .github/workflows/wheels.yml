@@ -5,9 +5,9 @@ on:
   # workflow_dispatch:
   # FIXME:  Remove these lines once this workflow merged
   # to main branch.
-  pull_request:
-    branches:
-      - toast3
+  # pull_request:
+  #   branches:
+  #     - toast3
   # FIXME:  Remove tags stanza after we are doing releases
   # from main, and restore release stanza.
   push:
@@ -161,22 +161,22 @@ jobs:
           name: toast-cp${{ matrix.python }}-${{ matrix.builder }}_${{ matrix.arch }}
           path: ./wheelhouse/toast*cp${{ matrix.python }}-${{ matrix.builder }}*${{ matrix.arch }}*.whl
 
-  # # FIXME: before merge to main, comment out this whole block when
-  # # testing without upload.
-  # upload_pypi:
-  #   needs: build_wheels
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     id-token: write
-  #   # FIXME: restore release / published conditional here after merge
-  #   # to main.
-  #   # if: github.event_name == 'release' && github.event.action == 'published'
-  #   steps:
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         # Unpacks all artifacts into dist/
-  #         pattern: toast-*
-  #         path: dist
-  #         merge-multiple: true
+  # FIXME: before merge to main, comment out this whole block when
+  # testing without upload.
+  upload_pypi:
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    # FIXME: restore release / published conditional here after merge
+    # to main.
+    # if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          # Unpacks all artifacts into dist/
+          pattern: toast-*
+          path: dist
+          merge-multiple: true
 
-  #     - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@release/v1
