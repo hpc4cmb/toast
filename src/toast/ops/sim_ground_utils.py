@@ -212,8 +212,8 @@ def oscillate_el(
     scan_max_el,
     el_mod_amplitude,
     el_mod_rate,
-    ival_scan_leftright,
-    ival_scan_rightleft,
+    ival_throw_leftright,
+    ival_throw_rightleft,
     el_mod_sine=False,
     el_mod_sine_phase=None,
 ):
@@ -235,16 +235,15 @@ def oscillate_el(
 
     if el_mod_sine:
         if el_mod_sine_phase is not None:
-            scan_intervals = [None] * (len(ival_scan_leftright)+len(ival_scan_rightleft))
-            scan_intervals[::2] = ival_scan_leftright
-            scan_intervals[1::2] = ival_scan_leftright
-            for i, (t0, t1) in scan_intervals:
-                subscan_start_idx = (np.abs(tt - t0)).argmin()
-                subscan_stop_idx = (np.abs(tt - t1)).argmin()
-                if type(el_mod_sine_phase)==float:
-                    tt[subscan_start_idx:subscan_stop_idx+1] += i * el_mod_sine_phase / el_mod_rate
-                else:#Random extra phase
-                    tt[subscan_start_idx:subscan_stop_idx+1] += np.random.rand() / el_mod_rate
+            throw_intervals = [None] * (len(ival_throw_leftright)+len(ival_throw_rightleft))
+            throw_intervals[::2] = ival_throw_leftright
+            throw_intervals[1::2] = ival_throw_rightleft
+            for i, (t0, t1) in throw_intervals:
+                substart_idx = (np.abs(tt - t0)).argmin()
+                substop_idx = (np.abs(tt - t1)).argmin()
+                phase_off = i * el_mod_sine_phase / el_mod_rate if el_mod_sine_phase >= 0 else np.random.rand() / el_mod_rate
+                tt[substart_idx:substop_idx+1] += phase_off
+
         
         # elevation is modulated along a sine wave
         angular_rate = 2 * np.pi * el_mod_rate
