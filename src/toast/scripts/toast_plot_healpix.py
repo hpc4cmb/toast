@@ -109,10 +109,26 @@ def main(opts=None):
     )
 
     parser.add_argument(
+        "--cartview",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Plot with cartview instead of mollview",
+    )
+
+    parser.add_argument(
+        "--graticule",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Enable the graticule on the plot",
+    )
+
+    parser.add_argument(
         "--cmap",
         required=False,
         type=str,
-        default="viridis",
+        default="coolwarm",
         help="The colormap name (e.g. 'inferno')",
     )
 
@@ -122,6 +138,14 @@ def main(opts=None):
         type=str,
         default=None,
         help="Place plots in this directory",
+    )
+
+    parser.add_argument(
+        "--format",
+        required=False,
+        type=str,
+        default="pdf",
+        help="The format of the output files ('pdf', 'png')",
     )
 
     args = parser.parse_args(args=opts)
@@ -146,8 +170,11 @@ def main(opts=None):
         truth=args.truth_file,
         gnomview=args.gnomview,
         gnomres=args.gnomres,
+        cartview=args.cartview,
         cmap=args.cmap,
         out_dir=args.out_dir,
+        graticule=args.graticule,
+        image_format=args.format,
     )
 
 

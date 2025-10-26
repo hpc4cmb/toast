@@ -230,7 +230,6 @@ def plot_wcs_maps(
             mdata != 0,
         )
         mono = np.mean(mdata[goodpix])
-        print(f"Monopole = {mono}")
         mdata[goodpix] -= mono
 
     hitmask = None
@@ -518,9 +517,12 @@ def plot_healpix_maps(
     truth=None,
     gnomview=False,
     gnomres=None,
-    cmap="viridis",
-    format="pdf",
+    cartview=False,
+    cmap="coolwarm",
+    image_format="pdf",
     out_dir=None,
+    graticule=False,
+    **kwargs,
 ):
     """Plot Healpix projected output maps.
 
@@ -538,43 +540,94 @@ def plot_healpix_maps(
             mean of hit pixel locations.
         gnomres (float):  The resolution in arcminutes to pass to gnomview.
             If None, it will be estimated from the data.
+        cartview (bool):  If True, use a cartesian projection centered on the
+            mean of hit pixel locations.
         cmap (str): The color map name to use.
-        format (str): The output image format.
+        image_format (str): The output image format.
+        out_dir (str): The output directory for the plots.
+        graticule (bool): If True, draw a grid on the plot.
 
     """
     set_matplotlib_backend()
 
     import matplotlib.pyplot as plt
 
-    figsize = (12, 6)
-    figdpi = 100
+    if gnomview and cartview:
+        raise RuntimeError("Only one of gnomview and cartview can be used")
 
-    def plot_single(data, vmin, vmax, out, gnomrot=None, reso=4.0, xsize=1000):
+    def plot_single_mollview(data, vmin, vmax, out, xsize=1000):
         file_base = os.path.splitext(os.path.basename(out))[0]
-        if gnomrot is not None:
-            hp.gnomview(
-                map=data,
-                rot=gnomrot,
-                xsize=xsize,
-                reso=reso,
-                nest=True,
-                cmap=cmap,
-                min=vmin,
-                max=vmax,
-                title=file_base,
-            )
-        else:
-            hp.mollview(
-                data,
-                xsize=xsize,
-                nest=True,
-                cmap=cmap,
-                min=vmin,
-                max=vmax,
-                title=file_base,
-            )
-        plt.savefig(out, format=format)
+        hp.mollview(
+            map=data,
+            rot=rot,
+            xsize=xsize,
+            nest=True,
+            cmap=cmap,
+            min=vmin,
+            max=vmax,
+            title=file_base,
+        )
+        if graticule:
+            hp.graticule()
+        plt.savefig(out, format=image_format)
         plt.close()
+
+    def plot_single_gnomview(data, vmin, vmax, out, xsize=1000, rot=None, reso=None):
+        file_base = os.path.splitext(os.path.basename(out))[0]
+        grat_res = int((reso / 60.0) * (xsize / 10))
+        hp.gnomview(
+            map=data,
+            rot=rot,
+            xsize=xsize,
+            reso=reso,
+            nest=True,
+            cmap=cmap,
+            min=vmin,
+            max=vmax,
+            title=file_base,
+        )
+        if graticule:
+            hp.graticule(dpar=grat_res, dmer=grat_res)
+        plt.savefig(out, format=image_format)
+        plt.close()
+
+    def plot_single_cartview(
+        data, vmin, vmax, out, xsize=1000, rot=None, lonra=None, latra=None
+    ):
+        file_base = os.path.splitext(os.path.basename(out))[0]
+        if lonra is None:
+            grat_res = None
+        else:
+            grat_res = int((lonra[1] - lonra[0]) / 10)
+        hp.cartview(
+            map=data,
+            # Cartesian projection defaults to centered on coverage
+            rot=None,
+            xsize=xsize,
+            latra=latra,
+            lonra=lonra,
+            nest=True,
+            cmap=cmap,
+            min=vmin,
+            max=vmax,
+            title=file_base,
+        )
+        if graticule:
+            hp.graticule(dpar=grat_res, dmer=grat_res)
+        plt.savefig(out, format=image_format)
+        plt.close()
+
+    def plot_single(
+        data, vmin, vmax, out, xsize=1000, rot=None, reso=None, lonra=None, latra=None
+    ):
+        if cartview:
+            plot_single_cartview(
+                data, vmin, vmax, out, xsize=xsize, rot=rot, lonra=lonra, latra=latra
+            )
+        elif gnomview:
+            plot_single_gnomview(data, vmin, vmax, out, xsize=xsize, rot=rot, reso=reso)
+        else:
+            plot_single_mollview(data, vmin, vmax, out, xsize=xsize)
 
     def map_range(data):
         minval = np.amin(data)
@@ -591,41 +644,65 @@ def plot_healpix_maps(
         ext = max(np.absolute(minval), np.absolute(maxval))
         return -ext, ext
 
+    def lonlat_range(nside, pix):
+        lon, lat = hp.pix2ang(
+            nside,
+            pix,
+            nest=True,
+            lonlat=True,
+        )
+        sortlon = np.sort(lon)
+        safelon = np.unwrap(sortlon, period=360.0)
+        maxlon = np.amax(safelon)
+        minlon = np.amin(safelon)
+        maxlat = np.amax(lat)
+        minlat = np.amin(lat)
+
+        loncenter = (maxlon + minlon) / 2
+        latcenter = (maxlat + minlat) / 2
+        lonhalf = 1.2 * ((maxlon - minlon) / 2)
+        lathalf = 1.2 * ((maxlat - minlat) / 2)
+        lonspan = [loncenter - lonhalf, loncenter + lonhalf]
+        latspan = [latcenter - lathalf, latcenter + lathalf]
+
+        prot = (loncenter, latcenter, 0.0)
+        return prot, lonspan, latspan
+
     hitdata = None
-    gnomrot = None
+    rot = None
     xsize = 1600
     goodhits = slice(None)
+    lonspan = None
+    latspan = None
+
     if hitfile is not None:
         hitdata = read_healpix(hitfile, field=None, nest=True)
         maxhits = np.amax(hitdata)
         if max_hits is not None:
             maxhits = max_hits
         npix = len(hitdata)
+        nside = hp.npix2nside(npix)
+
         goodhits = hitdata > 0
         goodindx = np.arange(npix, dtype=np.int32)[goodhits]
-        lon, lat = hp.pix2ang(
-            hp.npix2nside(len(hitdata)),
-            goodindx,
-            nest=True,
-            lonlat=True,
-        )
-        mlon = np.mean(lon)
-        mlat = np.mean(lat)
+        rot, lonspan, latspan = lonlat_range(nside, goodindx)
+
         if gnomres is None:
-            gnomres = 1.1 * (np.amax(lat) - np.amin(lat)) / xsize
+            gnomres = 1.2 * (latspan[1] - latspan[0]) / xsize
             gnomres *= 60
-        if gnomview:
-            gnomrot = (mlon, mlat, 0.0)
-            print(f"Using gnomview reso={gnomres}, gnomrot={gnomrot}")
+
         plot_single(
             hitdata,
             0,
             maxhits,
-            plot_map_path(hitfile, format, out_dir=out_dir),
-            gnomrot=gnomrot,
-            reso=gnomres,
+            plot_map_path(hitfile, image_format, out_dir=out_dir),
             xsize=xsize,
+            rot=rot,
+            reso=gnomres,
+            lonra=lonspan,
+            latra=latspan,
         )
+
     badhits = np.logical_not(goodhits)
 
     mapdata = None
@@ -638,126 +715,69 @@ def plot_healpix_maps(
         if len(mapdata.shape) > 1:
             # We have Q/U data too
             imapdata = mapdata[0]
-            qmapdata = mapdata[1]
-            umapdata = mapdata[2]
+            complist = ["I", "Q", "U"]
+            mlist = mapdata
+            rglist = [range_I, range_Q, range_U]
         else:
             # Only I
             imapdata = mapdata
-        # Stokes I
-        imapdata[badhits] = hp.UNSEEN
+            complist = ["I", "Q", "U"]
+            mlist = [mapdata]
+            rglist = [range_I]
+
+        # Subtract monopole from intensity map
+        # imapdata[badhits] = hp.UNSEEN
+        imapdata[badhits] = np.nan
         mono = np.mean(imapdata[goodhits])
-        print(f"Monopole = {mono}")
         imapdata[goodhits] -= mono
 
-        mmin, mmax = sym_range(imapdata[goodhits])
-        if range_I is not None:
-            mmin, mmax = range_I
-        plot_single(
-            imapdata,
-            mmin,
-            mmax,
-            plot_map_path(mapfile, format, suffix="_I", out_dir=out_dir),
-            gnomrot=gnomrot,
-            reso=gnomres,
-            xsize=xsize,
-        )
-        if truth is not None:
-            truthdata[0][badhits] = hp.UNSEEN
-            tmin, tmax = sym_range(truthdata[0][goodhits])
+        for icomp, (comp, rge, mdata) in enumerate(zip(complist, rglist, mlist)):
+            mmin, mmax = sym_range(mdata[goodhits])
+            if rge is not None:
+                mmin, mmax = rge
             plot_single(
-                truthdata[0],
-                tmin,
-                tmax,
-                plot_map_path(mapfile, format, suffix="_input_I", out_dir=out_dir),
-                gnomrot=gnomrot,
-                reso=gnomres,
-                xsize=xsize,
-            )
-            imapdata[goodhits] -= truthdata[0][goodhits]
-            plot_single(
-                imapdata,
-                tmin,
-                tmax,
-                plot_map_path(mapfile, format, suffix="_resid_I", out_dir=out_dir),
-                gnomrot=gnomrot,
-                reso=gnomres,
-                xsize=xsize,
-            )
-
-        if len(mapdata.shape) > 1:
-            qmapdata[badhits] = hp.UNSEEN
-            umapdata[badhits] = hp.UNSEEN
-
-            # Stokes Q
-            mmin, mmax = sym_range(qmapdata[goodhits])
-            if range_Q is not None:
-                mmin, mmax = range_Q
-            plot_single(
-                qmapdata,
+                mdata,
                 mmin,
                 mmax,
-                plot_map_path(mapfile, format, suffix="_Q", out_dir=out_dir),
-                gnomrot=gnomrot,
-                reso=gnomres,
+                plot_map_path(
+                    mapfile, image_format, suffix=f"_{comp}", out_dir=out_dir
+                ),
                 xsize=xsize,
+                rot=rot,
+                reso=gnomres,
+                lonra=lonspan,
+                latra=latspan,
             )
             if truth is not None:
-                truthdata[1][badhits] = hp.UNSEEN
-                tmin, tmax = sym_range(truthdata[1][goodhits])
+                # truthdata[0][badhits] = hp.UNSEEN
+                truthdata[icomp][badhits] = np.nan
+                tmin, tmax = sym_range(truthdata[icomp][goodhits])
                 plot_single(
-                    truthdata[1],
+                    truthdata[icomp],
                     tmin,
                     tmax,
-                    plot_map_path(mapfile, format, suffix="_input_Q", out_dir=out_dir),
-                    gnomrot=gnomrot,
-                    reso=gnomres,
+                    plot_map_path(
+                        mapfile, image_format, suffix=f"_input_{comp}", out_dir=out_dir
+                    ),
                     xsize=xsize,
+                    rot=rot,
+                    reso=gnomres,
+                    lonra=lonspan,
+                    latra=latspan,
                 )
-                qmapdata[goodhits] -= truthdata[1][goodhits]
+                mdata[goodhits] -= truthdata[icomp][goodhits]
                 plot_single(
-                    qmapdata,
+                    mdata,
                     tmin,
                     tmax,
-                    plot_map_path(mapfile, format, suffix="_resid_Q", out_dir=out_dir),
-                    gnomrot=gnomrot,
-                    reso=gnomres,
+                    plot_map_path(
+                        mapfile, image_format, suffix=f"_resid_{comp}", out_dir=out_dir
+                    ),
                     xsize=xsize,
-                )
-
-            # Stokes U
-            mmin, mmax = sym_range(umapdata[goodhits])
-            if range_U is not None:
-                mmin, mmax = range_U
-            plot_single(
-                umapdata,
-                mmin,
-                mmax,
-                plot_map_path(mapfile, format, suffix="_U", out_dir=out_dir),
-                gnomrot=gnomrot,
-                reso=gnomres,
-                xsize=xsize,
-            )
-            if truth is not None:
-                truthdata[2][badhits] = hp.UNSEEN
-                tmin, tmax = sym_range(truthdata[2][goodhits])
-                plot_single(
-                    truthdata[2],
-                    tmin,
-                    tmax,
-                    plot_map_path(mapfile, format, suffix="_input_U", out_dir=out_dir),
-                    gnomrot=gnomrot,
+                    rot=rot,
                     reso=gnomres,
-                    xsize=xsize,
-                )
-                umapdata[goodhits] -= truthdata[2][goodhits]
-                plot_single(
-                    umapdata,
-                    tmin,
-                    tmax,
-                    plot_map_path(mapfile, format, suffix="_resid_U", out_dir=out_dir),
-                    gnomrot=gnomrot,
-                    reso=gnomres,
-                    xsize=xsize,
+                    lonra=lonspan,
+                    latra=latspan,
                 )
 
     del truthdata
