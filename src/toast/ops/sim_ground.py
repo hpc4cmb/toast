@@ -1001,8 +1001,8 @@ class SimGround(Operator):
                 scan_max_el,
                 self.el_mod_amplitude.to_value(u.radian),
                 self.el_mod_rate.to_value(u.Hz),
-                ival_throw_leftright,
-                ival_throw_rightleft,
+                ival_scan_leftright,
+                ival_scan_rightleft,
                 el_mod_sine=self.el_mod_sine,
                 el_mod_sine_phase=self.el_mod_sine_phase.to_value(u.radian),
             )

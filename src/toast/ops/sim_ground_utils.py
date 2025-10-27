@@ -212,8 +212,8 @@ def oscillate_el(
     scan_max_el,
     el_mod_amplitude,
     el_mod_rate,
-    ival_throw_leftright,
-    ival_throw_rightleft,
+    ival_scan_leftright,
+    ival_scan_rightleft,
     el_mod_sine=False,
     el_mod_sine_phase=None,
 ):
@@ -235,13 +235,17 @@ def oscillate_el(
 
     if el_mod_sine:
         if el_mod_sine_phase is not None:
-            throw_intervals = [None] * (len(ival_throw_leftright)+len(ival_throw_rightleft))
-            throw_intervals[::2] = ival_throw_leftright
-            throw_intervals[1::2] = ival_throw_rightleft
-            for i, (t0, t1) in throw_intervals:
-                substart_idx = (np.abs(tt - t0)).argmin()
-                substop_idx = (np.abs(tt - t1)).argmin()
-                phase_off = i * el_mod_sine_phase / el_mod_rate if el_mod_sine_phase >= 0 else np.random.rand() / el_mod_rate
+            throw_intervals = [None] * (len(ival_scan_leftright)+len(ival_scan_rightleft))
+            throw_intervals[::2] = ival_scan_leftright
+            throw_intervals[1::2] = ival_scan_rightleft
+            for i, (t0, t1) in enumerate(throw_intervals):
+                substart_idx = (np.abs(tt+times[0] - t0)).argmin()
+                substop_idx = (np.abs(tt+times[0] - t1)).argmin()
+                if el_mod_sine_phase >= 0:
+                    phase_off = i * el_mod_sine_phase  / el_mod_rate
+                else:
+                    np.random.seed(int(-1000*el_mod_sine_phase+i))
+                    phase_off = np.random.rand() / el_mod_rate
                 tt[substart_idx:substop_idx+1] += phase_off
 
         
