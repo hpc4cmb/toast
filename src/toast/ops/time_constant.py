@@ -1,4 +1,4 @@
-# Copyright (c) 2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -143,6 +143,8 @@ class TimeConstant(Operator):
                 kernel = np.zeros(len(kfreqs), dtype=np.complex128)
                 kernel.real[:] = 1
                 kernel.imag[:] = 2.0 * np.pi * tau * kfreqs
+                if not self.deconvolve:
+                    kernel = 1.0 / kernel
                 return kernel
 
             # The slice of detector data we will use
@@ -170,7 +172,7 @@ class TimeConstant(Operator):
                 signal,
                 fsample,
                 kernel_func=_filter_kernel,
-                deconvolve=self.deconvolve,
+                deconvolve=False,
                 algorithm=algo,
                 debug=debug_root,
             )
