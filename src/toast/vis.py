@@ -518,7 +518,7 @@ def plot_healpix_maps(
     gnomview=False,
     gnomres=None,
     cartview=False,
-    cmap="coolwarm",
+    cmap="bwr",
     image_format="pdf",
     out_dir=None,
     graticule=False,

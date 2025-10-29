@@ -128,7 +128,7 @@ def main(opts=None):
         "--cmap",
         required=False,
         type=str,
-        default="coolwarm",
+        default="bwr",
         help="The colormap name (e.g. 'inferno')",
     )
 
