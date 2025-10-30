@@ -674,7 +674,7 @@ class Demodulate(Operator):
         for det in dets:
             # Get weights
             obs_data = data.select(obs_uid=obs.uid)
-            self.stokes_weights.apply(obs_data, dets=[det])
+            self.stokes_weights.apply(obs_data, detectors=[det])
             weights = obs.detdata[self.stokes_weights.weights][det]
             # iweights = 1
             # qweights = eta * cos(2 * psi_det + 4 * psi_hwp)
