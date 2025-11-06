@@ -286,14 +286,6 @@ def main(opts=None, comm=None):
                 inmap *= args.scale
             invcov /= args.scale**2
 
-        # Apply per-map weights.  The weights loaded from the file
-        # are assumed to be inverse noise weights for each map.
-        if noiseweighted:
-            inmap *= weights[infile_map]
-        else:
-            inmap /= weights[infile_map]
-        invcov *= weights[infile_map]
-
         if not noiseweighted:
             # Must reverse the multiplication with the
             # white noise covariance matrix
@@ -304,6 +296,11 @@ def main(opts=None, comm=None):
             inmap = inmap.reshape(ngood, -1).T.copy()
             invcov = invcov.reshape(ngood, -1).T.copy()
             log.info_rank(f"{prefix}Applied inverse matrix in", timer=timer1, comm=None)
+
+        # Apply per-map weights.  The weights loaded from the file
+        # are assumed to be inverse noise weights for each map.
+        inmap *= weights[infile_map]
+        invcov *= weights[infile_map]
 
         if noiseweighted_sum is None:
             noiseweighted_sum = np.zeros([nnz, npix], dtype=float)
