@@ -234,24 +234,26 @@ def oscillate_el(
     tt += np.random.rand() / el_mod_rate
 
     if el_mod_sine:
-        if el_mod_sine_phase is not None:
-            throw_intervals = [None] * (len(ival_scan_leftright)+len(ival_scan_rightleft))
-            throw_intervals[::2] = ival_scan_leftright
-            throw_intervals[1::2] = ival_scan_rightleft
-            for i, (t0, t1) in enumerate(throw_intervals):
-                substart_idx = (np.abs(tt+times[0] - t0)).argmin()
-                substop_idx = (np.abs(tt+times[0] - t1)).argmin()
-                if el_mod_sine_phase >= 0:
-                    phase_off = i * el_mod_sine_phase  / el_mod_rate
-                else:
-                    np.random.seed(int(-1000*el_mod_sine_phase+i))
-                    phase_off = np.random.rand() / el_mod_rate
-                tt[substart_idx:substop_idx+1] += phase_off
-
-        
-        # elevation is modulated along a sine wave
+        # elevation is modulated along a sine wave per subscan
         angular_rate = 2 * np.pi * el_mod_rate
-        el += el_mod_amplitude * np.sin(tt * angular_rate)
+        #Array of throw interval times
+        scan_intervals = [None] * (len(ival_scan_leftright)+len(ival_scan_rightleft))
+        scan_intervals[::2] = ival_scan_leftright
+        scan_intervals[1::2] = ival_scan_rightleft
+        for i, (t0, t1) in enumerate(scan_intervals):
+            substart_idx = (np.abs(times - t0)).argmin()
+            substop_idx = (np.abs(times - t1)).argmin()
+            subscan_tt = times[substart_idx:substop_idx+1] - t0
+            if el_mod_sine_phase is not None and el_mod_sine_phase>=0:
+                phase_off = i * el_mod_sine_phase  / el_mod_rate
+                subscan_tt += phase_off
+            elif el_mod_sine_phase is not None and el_mod_sine_phase<0:
+                np.random.seed(int(-1000*el_mod_sine_phase+i))
+                phase_off = np.random.rand() / el_mod_rate
+                subscan_tt += phase_off
+                
+            #Modulate with phase reference in 
+            el[substart_idx:substop_idx+1] += el_mod_amplitude * np.sin(subscan_tt * angular_rate)
 
         # Check that we did not breach tolerances 
         # (simple harmonic motion derivatives)
