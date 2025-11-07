@@ -331,6 +331,7 @@ conf["entry_points"] = {
         "toast_env = toast.scripts.toast_env:main",
         "toast_run = toast.scripts.toast_run:main",
         "toast_fake_focalplane = toast.scripts.toast_fake_focalplane:main",
+        "toast_fake_telescope = toast.scripts.toast_fake_telescope:main",
         "toast_ground_schedule = toast.scripts.toast_ground_schedule:main",
         "toast_project_schedule = toast.scripts.toast_project_schedule:main",
         "toast_analyze_schedule = toast.scripts.toast_analyze_schedule:main",

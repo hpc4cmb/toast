@@ -5,6 +5,7 @@ set(ENTRY_POINTS
     toast_env.py
     toast_run.py
     toast_fake_focalplane.py
+    toast_fake_telescope.py
     toast_ground_schedule.py
     toast_satellite_schedule.py
     toast_timing_plot.py
