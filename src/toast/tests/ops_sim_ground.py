@@ -329,17 +329,21 @@ class SimGroundTest(MPITestCase):
     def test_telescope_file(self):
         # Verify that we can run with a telescope file dumped to disk
         tele_file = sch_file = os.path.join(self.outdir, "ground_telescope.h5")
-        fake_tele_main(
-            opts=[
-                "--out",
-                tele_file,
-                "--ground_site_loc",
-                "chajnantor",
-                "--telescope_name",
-                "CCAT",
-            ]
-        )
-        tele, _ = load_instrument_file(tele_file)
+        tele = None
+        if self.toastcomm.world_rank == 0:
+            fake_tele_main(
+                opts=[
+                    "--out",
+                    tele_file,
+                    "--ground_site_loc",
+                    "chajnantor",
+                    "--telescope_name",
+                    "CCAT",
+                ]
+            )
+            tele, _ = load_instrument_file(tele_file)
+        if self.toastcomm.comm_world is not None:
+            tele = self.toastcomm.comm_world.bcast(tele, root=0)
 
         sch_file = os.path.join(self.outdir, "fake_telescope_schedule.txt")
         schedule = None
