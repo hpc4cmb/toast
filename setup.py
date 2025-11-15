@@ -301,6 +301,7 @@ conf["install_requires"] = [
     "psutil",
     "h5py",
     "pshmem>=1.3.0",
+    "flacarray>=0.3.4",
     "ruamel.yaml",
     "astropy",
     "healpy",

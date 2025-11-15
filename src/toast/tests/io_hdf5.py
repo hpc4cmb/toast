@@ -1,10 +1,9 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import glob
 import os
-import sys
 
 import numpy as np
 from astropy import units as u
@@ -13,11 +12,41 @@ from .. import ops as ops
 from ..config import build_config
 from ..data import Data
 from ..io import load_hdf5, save_hdf5
-from ..mpi import MPI
-from ..observation_data import DetectorData
+from ..ops.save_hdf5 import obs_approx_equal
 from ..weather import Weather
 from .helpers import close_data, create_ground_data, create_outdir
 from .mpi import MPITestCase
+
+
+class ExtraMeta(object):
+    """Class to test Observation attribute save / load."""
+
+    def __init__(self):
+        self._data = np.random.normal(size=100)
+
+    def save_hdf5(self, group, obs):
+        if group is not None:
+            hdata = group.create_dataset(
+                "ExtraMeta", self._data.shape, dtype=self._data.dtype
+            )
+        if obs.comm.group_rank == 0:
+            hdata.write_direct(self._data, (slice(0, 100, 1),), (slice(0, 100, 1),))
+
+    def load_hdf5(self, group, obs):
+        if group is not None:
+            ds = group["ExtraMeta"]
+            if obs.comm.group_rank == 0:
+                self._data = np.empty(ds.shape, dtype=ds.dtype)
+                hslc = tuple([slice(0, x, 1) for x in ds.shape])
+                ds.read_direct(self._data, hslc, hslc)
+        if obs.comm.comm_group is not None:
+            self._data = obs.comm.comm_group.bcast(self._data, root=0)
+
+    def __eq__(self, other):
+        if np.allclose(self._data, other._data):
+            return True
+        else:
+            return False
 
 
 class IoHdf5Test(MPITestCase):
@@ -25,7 +54,7 @@ class IoHdf5Test(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
-    def create_data(self, split=False, base_weather=False):
+    def create_data(self, split=False, base_weather=False, no_meta=False):
         # Create fake observing of a small patch.  Use a multifrequency
         # focalplane so we can test split sessions.
 
@@ -37,6 +66,11 @@ class IoHdf5Test(MPITestCase):
             pixel_per_process=ppp,
             split=split,
         )
+
+        # Add extra metadata attribute
+        if not no_meta:
+            for ob in data.obs:
+                ob.extra = ExtraMeta()
 
         if base_weather:
             # Replace the simulated weather with the base class for testing
@@ -138,65 +172,13 @@ class IoHdf5Test(MPITestCase):
 
             # Verify
             for ob, orig in zip(check_data.obs, original):
-                if ob != orig:
+                if not obs_approx_equal(ob, orig):
                     print(
                         f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}"
                     )
-                self.assertTrue(ob == orig)
+                    self.assertTrue(False)
 
             close_data(data)
-
-    def test_save_load_float32(self):
-        rank = 0
-        if self.comm is not None:
-            rank = self.comm.rank
-
-        datadir = os.path.join(self.outdir, "save_load_float32")
-        if rank == 0:
-            os.makedirs(datadir)
-        if self.comm is not None:
-            self.comm.barrier()
-
-        data, config = self.create_data()
-        det_data_fields = ["signal", "flags", "alt_signal"]
-
-        # Make a copy for later comparison.  Convert float64 detdata to
-        # float32.
-        original = dict()
-        for ob in data.obs:
-            original[ob.name] = ob.duplicate(times="times")
-            for field, ddata in original[ob.name].detdata.items():
-                if ddata.dtype.char == "d":
-                    # Hack in a replacement
-                    new_dd = DetectorData(
-                        ddata.detectors,
-                        ddata.detector_shape,
-                        np.float32,
-                        units=ddata.units,
-                    )
-                    new_dd[:] = original[ob.name].detdata[field][:]
-                    original[ob.name].detdata._internal[field] = new_dd
-
-        saver = ops.SaveHDF5(
-            volume=datadir, detdata=det_data_fields, config=config, detdata_float32=True
-        )
-        saver.apply(data)
-
-        if data.comm.comm_world is not None:
-            data.comm.comm_world.barrier()
-
-        check_data = Data(data.comm)
-        loader = ops.LoadHDF5(volume=datadir, detdata=det_data_fields)
-        loader.apply(check_data)
-
-        # Verify
-        for ob in check_data.obs:
-            orig = original[ob.name]
-            if ob != orig:
-                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
-            self.assertTrue(ob == orig)
-
-        close_data(data)
 
     def test_save_load_ops(self):
         rank = 0
@@ -232,9 +214,9 @@ class IoHdf5Test(MPITestCase):
         # Verify
         for ob in check_data.obs:
             orig = original[ob.name]
-            if ob != orig:
+            if not obs_approx_equal(ob, orig):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
-            self.assertTrue(ob == orig)
+                self.assertTrue(False)
         del check_data
 
         # Also test loading explicit files
@@ -245,22 +227,23 @@ class IoHdf5Test(MPITestCase):
 
         for ob in check_data.obs:
             orig = original[ob.name]
-            if ob != orig:
+            if not obs_approx_equal(ob, orig):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
-            self.assertTrue(ob == orig)
+                self.assertTrue(False)
         del check_data
 
         # Also check loading by regex, in this case only one frequency
         check_data = Data(data.comm)
+        loader.files = []
         loader.volume = datadir
         loader.pattern = r".*100\.0-GHz.*\.h5"
         loader.apply(check_data)
 
         for ob in check_data.obs:
             orig = original[ob.name]
-            if ob != orig:
+            if not obs_approx_equal(ob, orig):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
-            self.assertTrue(ob == orig)
+                self.assertTrue(False)
         del check_data
 
         close_data(data)
@@ -302,26 +285,31 @@ class IoHdf5Test(MPITestCase):
         for ob in check_data.obs:
             orig = original[ob.name]
             orig.detdata.clear()
-            if ob != orig:
+            if not obs_approx_equal(ob, orig):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
-            self.assertTrue(ob == orig)
+                self.assertTrue(False)
         del check_data
 
         close_data(data)
 
-    def test_save_load_ops_f32(self):
+    def test_save_load_ops_compression(self):
         rank = 0
         if self.comm is not None:
             rank = self.comm.rank
 
-        datadir = os.path.join(self.outdir, "save_load_ops_f32")
+        datadir = os.path.join(self.outdir, "save_load_ops_compression")
         if rank == 0:
             os.makedirs(datadir)
         if self.comm is not None:
             self.comm.barrier()
 
         data, config = self.create_data(split=True)
-        det_data_fields = ["signal", "flags", "alt_signal"]
+        det_data_fields = [
+            ("signal", {"quanta": 1.0e-7}),
+            ("flags", {}),
+            ("alt_signal", {"quanta": 1.0e-12}),
+        ]
+        det_data_names = ["signal", "flags", "alt_signal"]
 
         # Make a copy for later comparison.
         original = dict()
@@ -329,15 +317,80 @@ class IoHdf5Test(MPITestCase):
             original[ob.name] = ob.duplicate(times="times")
 
         saver = ops.SaveHDF5(
-            volume=datadir,
-            detdata=det_data_fields,
-            config=config,
-            detdata_float32=True,
-            verify=True,
+            volume=datadir, detdata=det_data_fields, config=config, verify=True
         )
         saver.apply(data)
 
         if data.comm.comm_world is not None:
             data.comm.comm_world.barrier()
+
+        check_data = Data(data.comm)
+        loader = ops.LoadHDF5(volume=datadir, detdata=det_data_names)
+        loader.apply(check_data)
+
+        # Verify
+        for ob in check_data.obs:
+            orig = original[ob.name]
+            if not obs_approx_equal(ob, orig):
+                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
+                self.assertTrue(False)
+        del check_data
+
+        close_data(data)
+
+    def test_save_load_version1(self):
+        # Here we test loading an old version 1 format file (the original
+        # version 1 saving code is kept around for this purpose).
+        from ..io.observation_hdf_save_v1 import save_hdf5 as save_v1
+
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        datadir = os.path.join(self.outdir, "save_load_v1")
+        if rank == 0:
+            os.makedirs(datadir)
+        if self.comm is not None:
+            self.comm.barrier()
+
+        data, config = self.create_data(split=True, no_meta=True)
+        det_data_names = ["signal", "flags", "alt_signal"]
+        det_data_fields = [
+            ("signal", {"type": "flac", "quanta": 1.0e-7}),
+            ("flags", {"type": "gzip"}),
+            ("alt_signal", {"type": "flac", "quanta": 1.0e-7}),
+        ]
+
+        # Export the data, and make a copy for later comparison.
+        original = list()
+        obfiles = list()
+        for ob in data.obs:
+            original.append(ob.duplicate(times="times"))
+            obf = save_v1(
+                ob,
+                datadir,
+                detdata=det_data_fields,
+                config=config,
+                force_serial=False,
+                detdata_float32=False,
+            )
+            obfiles.append(obf)
+
+        if self.comm is not None:
+            self.comm.barrier()
+
+        # Import the data
+        check_data = Data(comm=data.comm)
+
+        for hfile in obfiles:
+            check_data.obs.append(
+                load_hdf5(hfile, check_data.comm, detdata=det_data_names)
+            )
+
+        # Verify
+        for ob, orig in zip(check_data.obs, original):
+            if not obs_approx_equal(ob, orig):
+                print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
+                self.assertTrue(False)
 
         close_data(data)

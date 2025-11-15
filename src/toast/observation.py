@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -197,6 +197,7 @@ class Observation(MutableMapping):
     """
 
     view = ViewInterface()
+    _reserved = set(["dist", "detdata", "shared", "intervals"])
 
     @function_timer
     def __init__(
@@ -599,6 +600,11 @@ class Observation(MutableMapping):
         if self.dist != other.dist:
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs distributions not equal")
+        if self.local_detector_flags != other.local_detector_flags:
+            fail = 1
+            log.verbose(
+                f"Proc {self.comm.world_rank}:  Obs local_detector_flags not equal"
+            )
         if set(self._internal.keys()) != set(other._internal.keys()):
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs metadata keys not equal")
@@ -625,6 +631,37 @@ class Observation(MutableMapping):
         if self.intervals != other.intervals:
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs intervals not equal")
+
+        # Handle other arbitrary attributes.
+        self_attrs = list()
+        for k, v in vars(self).items():
+            if k.startswith("_"):
+                continue
+            if k in self._reserved:
+                continue
+            self_attrs.append(k)
+        other_attrs = list()
+        for k, v in vars(other).items():
+            if k.startswith("_"):
+                continue
+            if k in self._reserved:
+                continue
+            other_attrs.append(k)
+        if other_attrs != self_attrs:
+            fail = 1
+            msg = f"Proc {self.comm.world_rank}:  Obs attr lists not equal "
+            msg += f"{other_attrs} != {self_attrs}"
+            log.verbose(msg)
+        else:
+            for attr in self_attrs:
+                self_obj = getattr(self, attr)
+                other_obj = getattr(other, attr)
+                if self_obj != other_obj:
+                    fail = 1
+                    log.verbose(
+                        f"Proc {self.comm.world_rank}:  Obs attr {attr} not equal"
+                    )
+
         if self.comm.comm_group is not None:
             fail = self.comm.comm_group.allreduce(fail, op=MPI.SUM)
         return fail == 0
@@ -633,7 +670,13 @@ class Observation(MutableMapping):
         return not self.__eq__(other)
 
     def duplicate(
-        self, times=None, meta=None, shared=None, detdata=None, intervals=None
+        self,
+        times=None,
+        meta=None,
+        attr=None,
+        shared=None,
+        detdata=None,
+        intervals=None,
     ):
         """Return a copy of the observation and all its data.
 
@@ -650,6 +693,7 @@ class Observation(MutableMapping):
         Args:
             times (str):  The name of the timestamps shared field.
             meta (list):  List of metadata objects to copy, or None.
+            attr (list):  List of other observation attributes to copy, or None.
             shared (list):  List of shared objects to copy, or None.
             detdata (list):  List of detdata objects to copy, or None.
             intervals (list):  List of intervals objects to copy, or None.
@@ -697,6 +741,17 @@ class Observation(MutableMapping):
                 new_obs.intervals[name] = IntervalList(
                     new_obs.shared[times], timespans=timespans
                 )
+        # Handle other arbitrary attributes
+        for k, v in vars(self).items():
+            if k.startswith("_"):
+                # We skip internal objects
+                continue
+            if hasattr(new_obs, k):
+                # This is some object already instantiated above
+                continue
+            if attr is None or k in attr:
+                # Copy this object
+                setattr(new_obs, k, copy.deepcopy(v))
         return new_obs
 
     def memory_use(self):

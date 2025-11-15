@@ -1,6 +1,9 @@
 # Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
+"""This deprecated v1 format save functionality is kept here for
+unit tests that check the ability to load v1 data.
+"""
 
 import json
 import os
@@ -10,10 +13,10 @@ import h5py
 import numpy as np
 from astropy import units as u
 
-import flacarray
-
 from ..instrument import GroundSite
+from ..mpi import MPI
 from ..observation import default_values as defaults
+from ..observation_data import DetectorData
 from ..observation_dist import global_interval_times
 from ..timing import Timer, function_timer
 from ..utils import (
@@ -23,6 +26,7 @@ from ..utils import (
     hdf5_use_serial,
     object_fullname,
 )
+from .deprecated_compression import compress_detdata, decompress_detdata
 from .hdf_utils import check_dataset_buffer_size, hdf5_open
 
 
@@ -186,7 +190,7 @@ def save_hdf5_shared(obs, hgrp, fields, log_prefix):
 
 
 @function_timer
-def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
+def save_hdf5_detdata(obs, hgrp, fields, log_prefix, use_float32=False, in_place=False):
     log = Logger.get()
 
     timer = Timer()
@@ -205,14 +209,6 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
 
     # Are we doing serial I/O?
     use_serial = hdf5_use_serial(hgrp, comm)
-
-    # Valid flacarray dtypes
-    flac_dtypes = [
-        np.dtype(np.float64),
-        np.dtype(np.float32),
-        np.dtype(np.int64),
-        np.dtype(np.int32),
-    ]
 
     for ifield, (field, fieldcomp) in enumerate(fields):
         tag_offset = (obs.comm.group * 1000 + ifield) * obs.comm.group_size
@@ -237,21 +233,22 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
 
         # Compute properties of the full set of data across the observation
         ddtype = local_data.dtype
-        if ddtype in flac_dtypes:
-            hdtype = ddtype
-        else:
-            # Cast flag bytes to int for compression
-            hdtype = np.int32
         dshape = (len(obs.all_detectors), obs.n_all_samples)
         dvalshape = None
         if len(local_data.detector_shape) > 1:
             dvalshape = local_data.detector_shape[1:]
             dshape += dvalshape
-        local_n_det = local_data.shape[0]
 
-        if fieldcomp is None:
-            # We are not using compression.
+        fdtype = ddtype
+        if ddtype.char == "d" and use_float32:
+            # We are truncating to single precision
+            fdtype = np.dtype(np.float32)
 
+        # If we are using our own internal compression, each process compresses their
+        # local data and sends it to one process for insertion into the overall blob
+        # of bytes.
+
+        if fieldcomp is None or "type_hdf5" in fieldcomp:
             # The buffer class to use for allocating receive buffers
             bufclass, _ = dtype_to_aligned(ddtype)
 
@@ -259,7 +256,14 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
             hdata = None
             if hgrp is not None:
                 # This process is participating.
-                hdata = hgrp.create_dataset(field, dshape, dtype=ddtype)
+                #
+                # Future NOTE:  Here is where we could extract the "type_hdf5" parameter
+                # from the dictionary and create the dataset with appropriate compression
+                # and chunking settings.  Detector data would then be written to the
+                # dataset in the usual way, with compression "under the hood" done by
+                # HDF5.
+                #
+                hdata = hgrp.create_dataset(field, dshape, dtype=fdtype)
                 hdata.attrs["units"] = local_data.units.to_string()
 
             if use_serial:
@@ -288,7 +292,7 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
                         # Root process writes local data
                         if rank == 0:
                             hdata.write_direct(
-                                local_data.data.astype(ddtype), detdata_slice, hf_slice
+                                local_data.data.astype(fdtype), detdata_slice, hf_slice
                             )
                     elif proc == rank:
                         # We are sending
@@ -298,7 +302,7 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
                         recv = bufclass(nflat)
                         comm.Recv(recv, source=proc, tag=tag_offset + proc)
                         hdata.write_direct(
-                            recv.array().astype(ddtype).reshape(shp),
+                            recv.array().astype(fdtype).reshape(shp),
                             detdata_slice,
                             hf_slice,
                         )
@@ -326,7 +330,7 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
 
                 with hdata.collective:
                     hdata.write_direct(
-                        local_data.data.astype(ddtype), detdata_slice, hf_slice
+                        local_data.data.astype(fdtype), detdata_slice, hf_slice
                     )
             del hdata
             log.verbose_rank(
@@ -335,68 +339,205 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
                 timer=timer,
             )
         else:
-            fgrp = None
-            if hgrp is not None:
-                # This process is participating.  Create a subgroup for this
-                # field.
-                fgrp = hgrp.create_group(field)
-                # Add attributes for the original data properties
-                fgrp.attrs["units"] = local_data.units.to_string()
-                fgrp.attrs["dtype"] = ddtype.char
-                fgrp.attrs["detector_shape"] = str(
-                    [int(x) for x in local_data.detector_shape]
+            # Compress our local detector data.  The starting dictionary of properties
+            # is passed in and additional metadata is appended.
+            if ddtype.char == "d" and use_float32:
+                temp_detdata = DetectorData(
+                    obs.detdata[field].detectors,
+                    obs.detdata[field].detector_shape,
+                    np.float32,
+                    units=obs.detdata[field].units,
                 )
-            if "level" in fieldcomp:
-                level = int(fieldcomp["level"])
-            else:
-                level = 5
-            quanta = None
-            precision = None
-
-            if ddtype.char == "d" or ddtype.char == "f":
-                # Floating point type
-                if "quanta" in fieldcomp:
-                    quanta = float(fieldcomp["quanta"])
-                elif "precision" in fieldcomp:
-                    precision = float(fieldcomp["precision"])
-                if quanta is None and precision is None:
-                    msg = "When compressing floating point data, you"
-                    msg += " must specify the quanta or precision."
-                    raise RuntimeError("You must specify the quanta")
-
-            # We flatten all the per-sample data when compressing
-            flacarray.hdf5.write_array(
-                local_data.data.astype(hdtype).reshape((local_n_det, -1)),
-                fgrp,
-                level=level,
-                quanta=quanta,
-                precision=precision,
-                mpi_comm=comm,
-                use_threads=False,
-            )
-            if in_place:
-                # Decompress data back into original location, to capture
-                # any truncation effects.
-                det_off = dist_dets[obs.comm.group_rank].offset
-                det_nelem = dist_dets[obs.comm.group_rank].n_elem
-                mpi_dist = [(x.offset, x.offset + x.n_elem) for x in dist_dets]
-
-                flcdata = (
-                    flacarray.hdf5.read_array(
-                        fgrp,
-                        keep=None,
-                        stream_slice=None,
-                        keep_indices=False,
-                        mpi_comm=comm,
-                        mpi_dist=mpi_dist,
-                        use_threads=False,
+                temp_detdata.data[:] = obs.detdata[field].data.astype(np.float32)
+                comp_bytes, comp_ranges, comp_props = compress_detdata(
+                    temp_detdata, fieldcomp
+                )
+                if in_place:
+                    # Decompress
+                    decompress_detdata(
+                        comp_bytes, comp_ranges, comp_props, detdata=temp_detdata
                     )
-                    .astype(ddtype)
-                    .reshape(local_data.shape)
+                    # upcast back to float64 and and overwrite the original detector data
+                    obs.detdata[field].data[:] = temp_detdata.data[:]
+                del temp_detdata
+            else:
+                temp_detdata = None
+                comp_bytes, comp_ranges, comp_props = compress_detdata(
+                    obs.detdata[field], fieldcomp
                 )
-                for idet, det in enumerate(local_data.detectors):
-                    local_data.data[idet] = flcdata[idet]
-                del flcdata
+                if in_place:
+                    # Decompress and overwrite the original detector data
+                    decompress_detdata(
+                        comp_bytes, comp_ranges, comp_props, detdata=obs.detdata[field]
+                    )
+
+            # Extract per-detector quantities for communicating / writing later
+            comp_data_offsets = None
+            if "data_offsets" in comp_props:
+                comp_data_offsets = comp_props["data_offsets"]
+            comp_data_gains = None
+            if "data_gains" in comp_props:
+                comp_data_gains = comp_props["data_gains"]
+
+            # Get the total number of bytes
+            n_local_bytes = len(comp_bytes)
+            if comm is None:
+                n_all_bytes = n_local_bytes
+            else:
+                n_all_bytes = comm.allreduce(n_local_bytes, op=MPI.SUM)
+
+            # Create the datasets
+            hdata_bytes = None
+            hdata_ranges = None
+            hdata_offsets = None
+            hdata_gains = None
+            cgrp = None
+            if hgrp is not None:
+                # This process is participating.
+                cgrp = hgrp.create_group(field)
+                hdata_bytes = cgrp.create_dataset(
+                    "compressed", n_all_bytes, dtype=np.uint8
+                )
+                hdata_bytes.attrs["units"] = local_data.units.to_string()
+                # Write common properties of many compression schemes
+                hdata_bytes.attrs["dtype"] = str(comp_props["dtype"])
+                hdata_bytes.attrs["det_shape"] = str(
+                    tuple([int(x) for x in comp_props["det_shape"]])
+                )
+                hdata_bytes.attrs["comp_type"] = comp_props["type"]
+                if "level" in comp_props:
+                    hdata_bytes.attrs["comp_level"] = comp_props["level"]
+                hdata_ranges = cgrp.create_dataset(
+                    "ranges",
+                    (len(obs.all_detectors), 2),
+                    dtype=np.int64,
+                )
+                if comp_data_offsets is not None:
+                    hdata_offsets = cgrp.create_dataset(
+                        "offsets",
+                        (len(obs.all_detectors),),
+                        dtype=np.float64,
+                    )
+                if comp_data_gains is not None:
+                    hdata_gains = cgrp.create_dataset(
+                        "gains",
+                        (len(obs.all_detectors),),
+                        dtype=np.float64,
+                    )
+
+            # Send data to rank zero of the group for writing.
+            hf_det = 0
+            hf_bytes = 0
+            for proc in range(nproc):
+                if rank == 0:
+                    if proc == 0:
+                        # Root process writes local data
+                        det_ranges = np.array(
+                            [(x[0] + hf_bytes, x[1] + hf_bytes) for x in comp_ranges],
+                            dtype=np.int64,
+                        ).reshape((-1, 2))
+                        dslc = (
+                            slice(0, len(det_ranges), 1),
+                            slice(0, 2, 1),
+                        )
+                        hslc = (
+                            slice(hf_det, hf_det + len(det_ranges), 1),
+                            slice(0, 2, 1),
+                        )
+                        hdata_ranges.write_direct(det_ranges, dslc, hslc)
+
+                        dslc = (slice(0, n_local_bytes, 1),)
+                        hslc = (slice(hf_bytes, hf_bytes + n_local_bytes, 1),)
+                        hdata_bytes.write_direct(comp_bytes, dslc, hslc)
+
+                        dslc = (slice(0, len(comp_ranges), 1),)
+                        hslc = (slice(hf_det, hf_det + len(comp_ranges), 1),)
+                        if comp_data_offsets is not None:
+                            hdata_offsets.write_direct(comp_data_offsets, dslc, hslc)
+                        if comp_data_gains is not None:
+                            hdata_gains.write_direct(comp_data_gains, dslc, hslc)
+
+                        hf_bytes += n_local_bytes
+                        hf_det += len(comp_ranges)
+                    else:
+                        # Receive data and write
+                        n_recv_bytes = comm.recv(
+                            source=proc, tag=tag_offset + 10 * proc
+                        )
+                        n_recv_dets = comm.recv(
+                            source=proc, tag=tag_offset + 10 * proc + 1
+                        )
+
+                        recv_bytes = np.zeros(n_recv_bytes, dtype=np.uint8)
+                        comm.Recv(
+                            recv_bytes, source=proc, tag=tag_offset + 10 * proc + 2
+                        )
+                        dslc = (slice(0, n_recv_bytes, 1),)
+                        hslc = (slice(hf_bytes, hf_bytes + n_recv_bytes, 1),)
+                        hdata_bytes.write_direct(recv_bytes, dslc, hslc)
+                        del recv_bytes
+
+                        recv_ranges = np.zeros(n_recv_dets * 2, dtype=np.int64)
+                        comm.Recv(
+                            recv_ranges,
+                            source=proc,
+                            tag=tag_offset + 10 * proc + 3,
+                        )
+                        recv_ranges[:] += hf_bytes
+                        dslc = (
+                            slice(0, n_recv_dets, 1),
+                            slice(0, 2, 1),
+                        )
+                        hslc = (
+                            slice(hf_det, hf_det + n_recv_dets, 1),
+                            slice(0, 2, 1),
+                        )
+                        hdata_ranges.write_direct(
+                            recv_ranges.reshape((n_recv_dets, 2)), dslc, hslc
+                        )
+                        del recv_ranges
+
+                        recv_buf = np.zeros(n_recv_dets, dtype=np.float64)
+                        dslc = (slice(0, n_recv_dets, 1),)
+                        hslc = (slice(hf_det, hf_det + n_recv_dets, 1),)
+                        if comp_data_offsets is not None:
+                            comm.Recv(
+                                recv_buf, source=proc, tag=tag_offset + 10 * proc + 4
+                            )
+                            hdata_offsets.write_direct(recv_buf, dslc, hslc)
+                        if comp_data_gains is not None:
+                            comm.Recv(
+                                recv_buf, source=proc, tag=tag_offset + 10 * proc + 5
+                            )
+                            hdata_gains.write_direct(recv_buf, dslc, hslc)
+                        del recv_buf
+
+                        hf_bytes += n_recv_bytes
+                        hf_det += n_recv_dets
+
+                elif proc == rank:
+                    # We are sending.  First send the number of bytes and detectors
+                    det_ranges = np.zeros(
+                        (len(comp_ranges), 2),
+                        dtype=np.int64,
+                    )
+                    for d in range(len(comp_ranges)):
+                        det_ranges[d, :] = comp_ranges[d]
+                    comm.send(n_local_bytes, dest=0, tag=tag_offset + 10 * proc)
+                    comm.send(len(det_ranges), dest=0, tag=tag_offset + 10 * proc + 1)
+
+                    comm.Send(comp_bytes, dest=0, tag=tag_offset + 10 * proc + 2)
+                    comm.Send(
+                        det_ranges.flatten(), dest=0, tag=tag_offset + 10 * proc + 3
+                    )
+                    if comp_data_offsets is not None:
+                        comm.Send(
+                            comp_data_offsets, dest=0, tag=tag_offset + 10 * proc + 4
+                        )
+                    if comp_data_gains is not None:
+                        comm.Send(
+                            comp_data_gains, dest=0, tag=tag_offset + 10 * proc + 5
+                        )
 
 
 @function_timer
@@ -460,7 +601,7 @@ def save_instrument(parent_group, telescope, comm=None, session=None):
     if parent_group is not None:
         # Instrument properties
         inst_group = parent_group.create_group("instrument")
-        inst_group.attrs["toast_format_version"] = 2
+        inst_group.attrs["toast_format_version"] = 1
         inst_group.attrs["telescope_name"] = telescope.name
         inst_group.attrs["telescope_class"] = object_fullname(telescope.__class__)
         inst_group.attrs["telescope_uid"] = telescope.uid
@@ -543,6 +684,7 @@ def save_hdf5(
     config=None,
     times=defaults.times,
     force_serial=False,
+    detdata_float32=False,
     detdata_in_place=False,
 ):
     """Save an observation to HDF5.
@@ -580,6 +722,8 @@ def save_hdf5(
         times (str):  The name of the shared timestamp field.
         force_serial (bool):  If True, do not use HDF5 parallel support,
             even if it is available.
+        detdata_float32 (bool):  If True, cast any float64 detector fields
+            to float32 on write.  Integer detdata is not affected.
         detdata_in_place (bool):  If True, input detdata will be replaced
             with a compressed and decompressed version that includes the
             digitization error.
@@ -618,18 +762,6 @@ def save_hdf5(
     hf = hdf5_open(hfpath_temp, "w", comm=comm, force_serial=force_serial)
     hgroup = hf
 
-    # Gather the local detector flags to all writing processes
-    if comm is None:
-        all_det_flags = obs.local_detector_flags
-    else:
-        proc_det_flags = comm.gather(obs.local_detector_flags, root=0)
-        all_det_flags = None
-        if rank == 0:
-            all_det_flags = dict()
-            for pflags in proc_det_flags:
-                all_det_flags.update(pflags)
-        all_det_flags = comm.bcast(all_det_flags, root=0)
-
     shared_group = None
     detdata_group = None
     intervals_group = None
@@ -639,7 +771,7 @@ def save_hdf5(
         hgroup.attrs["toast_version"] = env.version()
         if config is not None:
             hgroup.attrs["job_config"] = json.dumps(config)
-        hgroup.attrs["toast_format_version"] = 2
+        hgroup.attrs["toast_format_version"] = 1
 
         # Observation properties
         hgroup.attrs["observation_name"] = obs.name
@@ -658,9 +790,6 @@ def save_hdf5(
         hgroup.attrs["observation_detector_sets"] = obs_all_det_sets
         hgroup.attrs["observation_samples"] = obs.n_all_samples
         hgroup.attrs["observation_sample_sets"] = obs_all_samp_sets
-
-        # Per detector flags.
-        hgroup.attrs["observation_detector_flags"] = json.dumps(all_det_flags)
 
     log.verbose_rank(
         f"{log_prefix}  Wrote observation attributes in",
@@ -686,7 +815,6 @@ def save_hdf5(
     if hgroup is not None:
         meta_group = hgroup.create_group("metadata")
 
-    # Process all metadata in the observation dictionary
     for k, v in obs.items():
         if meta is not None and k not in meta:
             continue
@@ -726,21 +854,6 @@ def save_hdf5(
                 msg += "load_hdf5() methods."
                 log.verbose(msg)
     del meta_group
-
-    # Now pass through observation attributes and look for things to save
-    attr_group = None
-    if hgroup is not None:
-        attr_group = hgroup.create_group("attr")
-    for k, v in vars(obs).items():
-        if k.startswith("_"):
-            continue
-        if hasattr(v, "save_hdf5"):
-            kgroup = None
-            if attr_group is not None:
-                kgroup = attr_group.create_group(k)
-                kgroup.attrs["class"] = object_fullname(v.__class__)
-            v.save_hdf5(kgroup, obs)
-            del kgroup
 
     log.verbose_rank(
         f"{log_prefix}  Wrote other metadata in",
@@ -783,7 +896,6 @@ def save_hdf5(
     )
 
     if detdata is None:
-        # We are writing all detector data without, compression
         fields = [(x, None) for x in obs.detdata.keys()]
     else:
         fields = list()
@@ -800,6 +912,7 @@ def save_hdf5(
         detdata_group,
         fields,
         log_prefix,
+        use_float32=detdata_float32,
         in_place=detdata_in_place,
     )
     del detdata_group

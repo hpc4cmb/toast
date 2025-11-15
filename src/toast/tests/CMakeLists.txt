@@ -79,7 +79,6 @@ install(FILES
     ops_perturbhwp.py
     ops_filterbin.py
     io_hdf5.py
-    io_compression.py
     ops_noise_estim.py
     ops_noise_filter.py
     ops_yield_cut.py
