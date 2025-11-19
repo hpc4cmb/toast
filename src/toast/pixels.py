@@ -1655,8 +1655,7 @@ class PixelData(AcceleratorObject):
                 funits = self.units
             elif funits != self.units:
                 scale = 1.0 * funits
-                scale.to(self.units)
-                fscale = scale.value
+                fscale = scale.to_value(self.units)
 
             # Check dimensions
             impix = np.prod(image.shape)
@@ -1665,6 +1664,7 @@ class PixelData(AcceleratorObject):
                 raise RuntimeError(
                     f"Input file has {impix} pixel values instead of {tot_pix}"
                 )
+
         broadcast_image(image, fscale, self, comm_bytes)
 
     def _read_healpix_fits(self, path, comm_bytes=10000000):
@@ -1863,8 +1863,7 @@ class PixelData(AcceleratorObject):
                 funits = self.units
             if funits != self.units:
                 scale = 1.0 * funits
-                scale.to(self.units)
-                fscale = scale.value
+                fscale = scale.to_value(self.units)
 
             nnz, npix = dset.shape
             if nnz < self.n_value:
