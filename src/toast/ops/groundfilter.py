@@ -6,6 +6,7 @@ from time import time
 
 import numpy as np
 import traitlets
+import re
 from astropy import units as u
 
 from .. import qarray as qa
@@ -63,6 +64,13 @@ class GroundFilter(Operator):
     det_data = Unicode(
         defaults.det_data,
         help="Observation detdata key",
+    )
+
+    pattern = Unicode(
+        f".*",
+        allow_none=True,
+        help="Regex pattern to match against detector names. Only detectors that "
+        "match the pattern are filtered.",
     )
 
     view = Unicode(
@@ -399,6 +407,8 @@ class GroundFilter(Operator):
         # Each group loops over its own CES:es
         nobs = len(data.obs)
         for iobs, obs in enumerate(data.obs):
+            
+            pat = re.compile(self.pattern)
             if obs.comm_row is not None and obs.comm_row.size != 1:
                 raise RuntimeError("GroundFilter assumes data is split by detector")
 
@@ -435,6 +445,8 @@ class GroundFilter(Operator):
             last_rcond = None
 
             for det in obs.select_local_detectors(detectors, flagmask=self.det_mask):
+                if pat.match(det) is None:
+                    continue
                 if data.comm.group_rank == 0:
                     msg = f"{log_prefix} OpGroundFilter: " f"Processing detector {det}"
                     log.verbose(msg)
