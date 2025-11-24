@@ -604,8 +604,6 @@ class PixelsWCS(Operator):
                     # Turn position relative to the center into row and column
                     world_in = np.column_stack([rel_lon, rel_lat])
                     dcol, drow = self.wcs.wcs_world2pix(world_in, 0).T
-                    # This offset is needed to match ang2pix in so3g...
-                    drow -= 0.5
                     col = np.array(np.around(dcol), dtype=np.int64)
                     row = np.array(np.around(drow), dtype=np.int64)
 
