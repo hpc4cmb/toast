@@ -325,6 +325,7 @@ def read_wcs(filename, units=False, extension=0, dtype=None):
 
     filename = filename.strip()
     funits = None
+    bunit = ""
 
     if filename_is_fits(filename):
         # Load a FITS format image
