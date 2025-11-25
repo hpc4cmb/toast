@@ -1,10 +1,11 @@
-# Copyright (c) 2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
 import re
 
+import healpy as hp
 import numpy as np
 import scipy.io
 import scipy.sparse
@@ -14,15 +15,15 @@ from ..mpi import get_world
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import read_healpix
 from ..timing import Timer, function_timer
-from ..utils import Logger
+from ..utils import Logger, memreport
 
 
 class ObsMat(object):
     """Observation Matrix class"""
 
-    def __init__(self, filename=None):
+    def __init__(self, filename=None, matrix=None):
         self.filename = filename
-        self.matrix = None
+        self.matrix = matrix
         self.load()
         return
 
@@ -30,12 +31,13 @@ class ObsMat(object):
     def load(self, filename=None):
         if filename is not None:
             self.filename = filename
-        if self.filename is None:
             self.matrix = None
+        if self.matrix is None and self.filename is not None:
+            self.matrix = scipy.sparse.load_npz(self.filename)
+        if self.matrix is None:
             self.nnz = 0
             self.nrow, self.ncol = 0, 0
             return
-        self.matrix = scipy.sparse.load_npz(self.filename)
         self.nnz = self.matrix.nnz
         if self.nnz < 0:
             msg = f"Overflow in {self.filename}: nnz = {self.nnz}"
@@ -63,6 +65,10 @@ class ObsMat(object):
     def data(self):
         return self.matrix.data
 
+    @property
+    def dtype(self):
+        return self.matrix.data.dtype
+
     def __iadd__(self, other):
         if hasattr(other, "matrix"):
             self.matrix += other.matrix
@@ -81,12 +87,14 @@ class ObsMat(object):
 def coadd_observation_matrix(
     inmatrix,
     outmatrix,
+    file_mask=None,
     file_invcov=None,
     file_cov=None,
     nside_submap=16,
     rcond_limit=1e-3,
     double_precision=False,
     comm=None,
+    save_memory=False,
 ):
     """Co-add noise-weighted observation matrices
 
@@ -98,12 +106,15 @@ def coadd_observation_matrix(
         outmatrix(string) : Name of output file.  If it includes the
             string 'noiseweighted', the output matrix will be
             noise-weighted like the inputs.
+        file_mask(string) : If provided, only pixels with non-zero value
+            in the mask will be present in `outmatrix`.
         file_invcov(string) : Name of output inverse covariance file
         file_cov(string) : Name of output covariance file
         nside_submap(int) : Submap size is 12 * nside_submap ** 2.
             Number of submaps is (nside / nside_submap) ** 2
         rcond_limit(float) : "Reciprocal condition number limit
         double_precision(bool) : Output in double precision
+        save_memory(bool) : Save memory by loading the indices repeated
     """
 
     log = Logger.get()
@@ -134,6 +145,11 @@ def coadd_observation_matrix(
     else:
         infiles = inmatrix
 
+    if file_mask is None:
+        mask = None
+    else:
+        mask = hp.read_map(file_mask, nest=True)
+
     obs_matrix_sum = None
     invcov_sum = None
     nnz = None
@@ -146,7 +162,14 @@ def coadd_observation_matrix(
     else:
         deweight = True
 
-    for ifine, infile_matrix in enumerate(infiles):
+    mem = memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"Before loading any matrices:  {mem}", comm)
+
+    infiles_invcov = []
+    infiles_obsmat = {}  # filename : multiplicity
+
+    # Process matrix names and multiplicities
+    for infile_matrix in infiles:
         infile_matrix = infile_matrix.strip()
         if "noiseweighted" not in infile_matrix:
             msg = (
@@ -162,18 +185,9 @@ def coadd_observation_matrix(
         if not os.path.isfile(infile_matrix):
             msg = f"Matrix not found: {infile_matrix}"
             raise RuntimeError(msg)
-        prefix = ""
-        log.info(f"{prefix}Loading {infile_matrix}")
-        obs_matrix = ObsMat(infile_matrix)
-        if N != 1:
-            obs_matrix *= N
-        if obs_matrix_sum is None:
-            obs_matrix_sum = obs_matrix
-        else:
-            obs_matrix_sum += obs_matrix
-        log.info_rank(f"{prefix}Loaded {infile_matrix} in", timer=timer1, comm=None)
-
-        # We'll need the white noise covariance as well
+        infiles_obsmat[infile_matrix] = N
+        # We'll need the white noise covariance as well.  Synthesize the name here but
+        # load the invcov matrices separately
         infile_invcov = infile_matrix.replace("noiseweighted_obs_matrix.npz", "invcov")
         if os.path.isfile(infile_invcov + ".fits"):
             infile_invcov += ".fits"
@@ -185,9 +199,157 @@ def coadd_observation_matrix(
                 "with '{infile_matrix}'"
             )
             raise RuntimeError(msg)
-        log.info(f"{prefix}Loading {infile_invcov}")
+        infiles_invcov.append(infile_invcov)
+
+    # Now process the observation matrix
+    if save_memory or mask is not None:
+        # Assume that we cannot keep three observation matrices in memory at
+        # the same time.  We can save memory by loading the matrix indices repeatedly
+        indices_by_row = {}
+        nrow, ncol = None, None
+        for infile_matrix in infiles_obsmat:
+            log.info_rank(f"Loading indices from {infile_matrix}", comm)
+            with np.load(infile_matrix) as obsmat:
+                indices = obsmat["indices"].astype(np.int32)
+                indptr = obsmat["indptr"]
+                format_ = obsmat["format"]
+                shape = obsmat["shape"]
+            del obsmat
+            log.info_rank(f"Loaded indices from {infile_matrix} in", timer=timer1, comm=None)
+            mem = memreport(msg="(whole node)", comm=comm, silent=True)
+            log.info_rank(f"After loading indices from {infile_matrix}:  {mem}", comm)
+            log.info_rank(f"Processing indices from {infile_matrix}", comm)
+            if format_ != b"csr":
+                msg = f"{infile_matrix} format is {format_}, not CSR"
+                raise RuntimeError(msg)
+            if nrow is None:
+                nrow, ncol = shape
+            elif shape[0] != nrow or shape[1] != ncol:
+                msg = f"{infile_matrix} shape is {shape}, not {[nrow, ncol]}"
+                raise RuntimeError(msg)
+            # Loop over the rows, accumulating hit columns
+            for row in range(nrow):
+                if mask is not None and mask[row % mask.size] == 0:
+                    continue
+                istart = indptr[row]
+                istop = indptr[row + 1]
+                if istop == istart:
+                    continue
+                print(f"DEBUG : {row} / {nrow}", flush=True)  # DEBUG
+                cols = indices[istart : istop]
+                if row not in indices_by_row:
+                    indices_by_row[row] = cols
+                else:
+                    # Merge old and new indices but reject duplicates
+                    old = indices_by_row[row]
+                    new = cols
+                    ind = np.searchsorted(old, new)
+                    # Isolate the last elements of `new` that are larger
+                    # than any element in `old`
+                    end = np.searchsorted(ind, old.size)
+                    new_start = cols[:end]
+                    new_end = cols[end:]
+                    ind_start = ind[:end]
+                    good = old[ind_start] != new_start
+                    indices_by_row[row] = np.sort(np.hstack(
+                        [old, new_start[good], new_end]
+                    ))
+            del indices
+            del indptr
+            log.info_rank(f"Processed indices from {infile_matrix} in", timer=timer1, comm=None)
+            mem = memreport(msg="(whole node)", comm=comm, silent=True)
+            log.info_rank(f"After processing indices from {infile_matrix}:  {mem}", comm)
+        # Turn sets into integer vectors
+        log.info_rank(f"Sorting indices", comm)
+        ndata = 0
+        for row in indices_by_row:
+            if mask is not None and mask[row % mask.size] == 0:
+                continue
+            ndata += indices_by_row[row].size
+        log.info_rank(f"Sorted {ndata} indices in", timer=timer1, comm=None)
+        # Now load the observation matrices *again*, accumulating the
+        # data directly in the target matrix
+        total_data = np.zeros(ndata, np.float64)
+        total_indices = np.zeros(ndata, np.int32)
+        total_indptr = np.zeros(nrow + 1, np.int64)
+        mem = memreport(msg="(whole node)", comm=comm, silent=True)
+        log.info_rank(f"After allocating total matrix:  {mem}", comm)
+        offset = 0
+        for row in range(nrow):
+            if row in indices_by_row:
+                cols = indices_by_row[row]
+                n = cols.size
+                total_indices[offset : offset + n] = cols
+                offset += n
+            total_indptr[row + 1] = offset
+        del indices_by_row
+        for infile_matrix in infiles_obsmat:
+            log.info_rank(f"Loading data from {infile_matrix}", comm)
+            with np.load(infile_matrix) as obsmat:
+                indices = obsmat["indices"].astype(np.int32)
+                indptr = obsmat["indptr"]
+                data = obsmat["data"].astype(np.float32)
+            del obsmat
+            log.info_rank(f"Loaded {infile_matrix} in", timer=timer1, comm=None)
+            mem = memreport(msg="(whole node)", comm=comm, silent=True)
+            log.info_rank(f"After loading {infile_matrix}:  {mem}", comm)
+            # Loop over the rows, accumulating hit columns
+            log.info_rank(f"Co-adding data from {infile_matrix}", comm)
+            for row in range(nrow):
+                if mask is not None and mask[row % mask.size] == 0:
+                    continue
+                istart = indptr[row]
+                istop = indptr[row + 1]
+                if istart == istop:
+                    continue
+                col_ind = indices[istart : istop]
+                col_data = data[istart : istop]
+                total_slice = slice(total_indptr[row], total_indptr[row + 1])
+                total_ind = total_indices[total_slice]
+                ind = np.searchsorted(total_ind, col_ind)
+                total_data[total_slice][ind] += col_data
+            del indices
+            del indptr
+            del data
+            log.info_rank(f"Co-added data from {infile_matrix} in", timer=timer1, comm=None)
+            mem = memreport(msg="(whole node)", comm=comm, silent=True)
+            log.info_rank(f"After co-adding data from {infile_matrix}:  {mem}", comm)
+        log.info_rank(f"Instantiating the observation matrix", comm)
+        matrix = scipy.sparse.csr_matrix(
+            (total_data, total_indices, total_indptr),
+            shape=(nrow, ncol),
+            dtype=np.float32,
+        )
+        del total_data
+        del total_indices
+        del total_indptr
+        obs_matrix_sum = ObsMat(matrix=matrix)
+        del matrix
+        log.info_rank(f"Instantiated observation matrix in", timer=timer1, comm=None)
+    else:
+        for infile_matrix, N in infiles_obsmat.items():
+            log.info_rank(f"Loading {infile_matrix}", comm)
+            obs_matrix = ObsMat(infile_matrix)
+            log.info_rank(f"Loaded {infile_matrix} in", timer=timer1, comm=None)
+            mem = memreport(msg="(whole node)", comm=comm, silent=True)
+            log.info_rank(f"After loading {infile_matrix}:  {mem}", comm)
+            if N != 1:
+                obs_matrix *= N
+            if obs_matrix_sum is None:
+                obs_matrix_sum = obs_matrix
+            else:
+                log.info(f"Co-adding {infile_matrix}")
+                obs_matrix_sum += obs_matrix
+                log.info_rank(f"Co-added {infile_matrix} in", timer=timer1, comm=None)
+            del obs_matrix
+            mem = memreport(msg="(whole node)", comm=comm, silent=True)
+            log.info_rank(f"After adding {infile_matrix}:  {mem}", comm)
+
+    for infile_invcov in infiles_invcov:
+        log.info(f"Loading {infile_invcov}")
+        # Always co-add in double precision
         invcov = read_healpix(
-            infile_invcov, None, nest=True, dtype=float, verbose=False
+            infile_invcov, None, nest=True, dtype=np.float64, verbose=False
         )
         invcov = np.atleast_2d(invcov)
         if N != 1:
@@ -201,7 +363,9 @@ def coadd_observation_matrix(
             npixtot = npix * nnz
         else:
             invcov_sum += invcov
-        log.info_rank(f"{prefix}Loaded {infile_invcov} in", timer=timer1, comm=None)
+        log.info_rank(f"Loaded {infile_invcov} in", timer=timer1, comm=None)
+        mem = memreport(msg="(whole node)", comm=comm, silent=True)
+        log.info_rank(f"After loading {infile_invcov}:  {mem}", comm)
 
     # Put the inverse white noise covariance in a TOAST pixel object
 
@@ -212,12 +376,14 @@ def coadd_observation_matrix(
         n_pix=npix, n_submap=nsubmap, local_submaps=local_submaps, comm=comm
     )
     dist.nest = True
-    dist_cov = PixelData(dist, float, n_value=nnzcov)
+    dist_cov = PixelData(dist, np.float64, n_value=nnzcov)
     for local_submap, global_submap in enumerate(local_submaps):
         pix_start = global_submap * npix_submap
         pix_stop = pix_start + npix_submap
         dist_cov.data[local_submap] = invcov_sum[:, pix_start:pix_stop].T
     del invcov_sum
+    mem = memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"After distributing inverse covariance:  {mem}", comm)
 
     # Optionally write out the inverse white noise covariance
 
@@ -235,6 +401,8 @@ def coadd_observation_matrix(
     dist_rcond = PixelData(dist, float, n_value=1)
     covariance_invert(dist_cov, rcond_limit, rcond=dist_rcond, use_alltoallv=True)
     log.info_rank("Inverted white noise matrices in", timer=timer1, comm=comm)
+    mem = memreport(msg="(whole node)", comm=comm, silent=True)
+    log.info_rank(f"After inverting inverse covariance:  {mem}", comm)
 
     # Optionally write out the white noise covariance
 
@@ -249,7 +417,7 @@ def coadd_observation_matrix(
     if deweight:
         # De-weight the observation matrix
         log.info_rank("De-weighting obs matrix", comm=comm)
-        cc = scipy.sparse.dok_matrix((npixtot, npixtot), dtype=np.float64)
+        cc = scipy.sparse.dok_matrix((npixtot, npixtot), dtype=obs_matrix_sum.dtype)
         nsubmap = dist_cov.distribution.n_submap
         npix_submap = dist_cov.distribution.n_pix_submap
         for isubmap_local, isubmap_global in enumerate(
@@ -271,8 +439,12 @@ def coadd_observation_matrix(
                             ]
                         icov += 1
         cc = cc.tocsr()
+        mem = memreport(msg="(whole node)", comm=comm, silent=True)
+        log.info_rank(f"Before de-weighting obs matrix:  {mem}", comm)
         obs_matrix_sum = cc.dot(obs_matrix_sum.matrix)
         log.info_rank(f"De-weighted obs matrix in", timer=timer1, comm=comm)
+        mem = memreport(msg="(whole node)", comm=comm, silent=True)
+        log.info_rank(f"After de-weighting obs matrix:  {mem}", comm)
     else:
         # No deweighting, just extract the sparse matrix from the ObsMat object
         obs_matrix_sum = obs_matrix_sum.matrix

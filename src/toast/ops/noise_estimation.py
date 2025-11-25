@@ -148,7 +148,7 @@ class NoiseEstim(Operator):
     lagmax = Int(
         10000,
         help="Maximum lag to consider for the covariance function. "
-        "Will be truncated the length of the longest view.",
+        "Will be truncated to the length of the longest view.",
     )
 
     stationary_period = Quantity(

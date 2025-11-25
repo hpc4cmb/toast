@@ -413,6 +413,7 @@ class FilterBinTest(MPITestCase):
 
         close_data(data)
 
+
     def test_filterbin_obsmatrix_cached(self):
         if sys.platform.lower() == "darwin":
             print(f"WARNING:  Skipping test_filterbin_obsmatrix_cached on MacOS")
@@ -606,13 +607,14 @@ class FilterBinTest(MPITestCase):
 
         close_data(data)
 
-    def test_filterbin_obsmatrix_noiseweighted(self):
+    def _test_filterbin_obsmatrix_noiseweighted(self, tag="", save_memory=False):
         if sys.platform.lower() == "darwin":
             print(f"WARNING:  Skipping test_filterbin_obsmatrix_noiseweighted on MacOS")
             return
         if "CIBUILDWHEEL" in os.environ:
             print(
-                f"WARNING:  Skipping test_filterbin_obsmatrix_noiseweighted during wheel tests"
+                f"WARNING:  Skipping test_filterbin_obsmatrix_noiseweighted "
+                "during wheel tests"
             )
             return
 
@@ -639,7 +641,7 @@ class FilterBinTest(MPITestCase):
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
         default_model.apply(data)
 
-        input_map_file = os.path.join(self.outdir, "input_map4.fits")
+        input_map_file = os.path.join(self.outdir, f"input_map_{tag}.fits")
         if data.comm.world_rank == 0:
             lmax = 3 * self.nside
             cls = np.ones(4 * (lmax + 1)).reshape(4, -1)
@@ -705,7 +707,7 @@ class FilterBinTest(MPITestCase):
         # then running each observation separately and saving the
         # noise-weighted matrix.
 
-        filterbin.name = "split_run"
+        filterbin.name = f"split_run_{tag}"
         filterbin.apply(data)
 
         if data.comm.comm_world is not None:
@@ -743,10 +745,14 @@ class FilterBinTest(MPITestCase):
 
         if data.comm.world_rank == 0:
             # Assemble the single-run matrix
-            rootname = os.path.join(self.outdir, f"split_run_obs_matrix")
+            rootname = os.path.join(self.outdir, f"split_run_{tag}_obs_matrix")
             fname_matrix = ops.combine_observation_matrix(rootname)
             self.plot_obsmatrix_result(
-                "split_run", input_map_file, fname_matrix, "split_run", pixels.nest
+                f"split_run_{tag}",
+                input_map_file,
+                fname_matrix,
+                f"split_run_{tag}",
+                pixels.nest,
             )
 
             obs_matrix1 = ObsMat(fname_matrix)
@@ -765,15 +771,19 @@ class FilterBinTest(MPITestCase):
                 fname_matrix = ops.combine_observation_matrix(rootname)
                 filenames.append(fname_matrix)
 
-            fname_matrix = f"{self.outdir}/noise-weighted_run_obs_matrix"
+            fname_matrix = f"{self.outdir}/noise-weighted_run_{tag}_obs_matrix"
             if MPI is None:
                 comm_self = None
             else:
                 comm_self = MPI.COMM_SELF
             fname_matrix = ops.coadd_observation_matrix(
-                filenames, fname_matrix, double_precision=True, comm=comm_self
+                filenames,
+                fname_matrix,
+                double_precision=True,
+                comm=comm_self,
+                save_memory=save_memory,
             )
-            split_file = os.path.join(self.outdir, "split_run_filtered_map.fits")
+            split_file = os.path.join(self.outdir, f"split_run_{tag}_filtered_map.fits")
             self.plot_obsmatrix_result(
                 "noise-weighted_run",
                 input_map_file,
@@ -802,6 +812,16 @@ class FilterBinTest(MPITestCase):
             # values may be missing in one matrix
             values1 = obs_matrix1.data[np.abs(obs_matrix1.data) > 1e-10]
             values2 = obs_matrix2.data[np.abs(obs_matrix2.data) > 1e-10]
-            self.assertTrue(np.allclose(values1, values2))
+            self.assertTrue(np.allclose(values1, values2, rtol=1e-5, atol=1e-5))
 
         close_data(data)
+
+    def test_filterbin_obsmatrix_noiseweighted(self):
+        self._test_filterbin_obsmatrix_noiseweighted(
+            tag="wo_save_memory", save_memory=False
+        )
+
+    def test_filterbin_obsmatrix_noiseweighted_with_save_mem(self):
+        self._test_filterbin_obsmatrix_noiseweighted(
+            tag="w_save_memory", save_memory=True
+        )

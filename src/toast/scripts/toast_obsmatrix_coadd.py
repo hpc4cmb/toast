@@ -39,6 +39,12 @@ def main():
     )
 
     parser.add_argument(
+        "--mask",
+        required=False,
+        help="Name of mask file. Zero-valued pixels are cut out during co-add.",
+    )
+
+    parser.add_argument(
         "--invcov",
         required=False,
         help="Name of output inverse covariance file",
@@ -72,16 +78,25 @@ def main():
         help="Output in double precision",
     )
 
+    parser.add_argument(
+        "--save_memory",
+        default=False,
+        action="store_true",
+        help="Save memory by loading the matrices repeatedly",
+    )
+
     args = parser.parse_args()
 
     coadd_observation_matrix(
         args.inmatrix,
         outmatrix=args.outmatrix,
+        file_mask=args.mask,
         file_invcov=args.invcov,
         file_cov=args.cov,
         nside_submap=args.nside_submap,
         rcond_limit=args.rcond_limit,
         double_precision=args.double_precision,
+        save_memory=args.save_memory,
     )
 
     return
