@@ -24,6 +24,7 @@ from .flag_sso import FlagSSO
 from .gainscrambler import GainScrambler
 from .groundfilter import GroundFilter
 from .hwpfilter import HWPFilter
+from .t2pfilter import T2PFilter
 from .hwpss_model import HWPSynchronousModel
 from .interpolate_healpix import InterpolateHealpixMap
 from .load_hdf5 import LoadHDF5
