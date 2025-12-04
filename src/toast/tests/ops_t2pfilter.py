@@ -14,8 +14,6 @@ from .helpers import (
     close_data,
     create_ground_data,
     create_outdir,
-    fake_flags,
-    fake_hwpss,
 )
 from .mpi import MPITestCase
 
