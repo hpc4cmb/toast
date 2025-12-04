@@ -9,7 +9,6 @@ import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops as ops
-from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..vis import set_matplotlib_backend
