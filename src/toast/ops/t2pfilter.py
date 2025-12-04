@@ -112,7 +112,7 @@ class T2PFilter(Operator):
         for ob in data.obs:
             # Cache the common flags
             if self.shared_flags is None:
-                common_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
+                common_flags = np.zeros(ob.n_local_samples, dtype=np.uint8)
             else:
                 common_flags = (
                     ob.shared[self.shared_flags].data & self.shared_flag_mask
