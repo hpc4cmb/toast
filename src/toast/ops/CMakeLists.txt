@@ -50,6 +50,7 @@ install(FILES
     totalconvolve.py
     groundfilter.py
     hwpfilter.py
+    t2pfilter.py
     hwpss_model.py
     statistics.py
     sim_cosmic_rays.py

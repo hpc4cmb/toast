@@ -43,6 +43,7 @@ from . import ops_flag_sso as test_ops_flag_sso
 from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_groundfilter as test_ops_groundfilter
 from . import ops_hwpfilter as test_ops_hwpfilter
+from . import ops_t2pfilter as test_ops_t2pfilter
 from . import ops_hwpss_model as test_ops_hwpss_model
 from . import ops_interpolate_healpix as test_ops_interpolate_healpix
 from . import ops_loader as test_ops_loader
@@ -233,6 +234,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_fill_gaps))
         suite.addTest(loader.loadTestsFromModule(test_ops_groundfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_hwpfilter))
+        suite.addTest(loader.loadTestsFromModule(test_ops_t2pfilter))
         suite.addTest(loader.loadTestsFromModule(test_ops_hwpss_model))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_crosstalk))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_catalog))

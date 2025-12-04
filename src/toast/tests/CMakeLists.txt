@@ -64,6 +64,7 @@ install(FILES
     ops_polyfilter.py
     ops_groundfilter.py
     ops_hwpfilter.py
+    ops_t2pfilter.py
     ops_hwpss_model.py
     ops_sim_tod_catalog.py
     ops_sim_cosmic_rays.py
