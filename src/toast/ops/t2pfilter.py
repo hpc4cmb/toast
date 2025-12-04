@@ -140,7 +140,7 @@ class T2PFilter(Operator):
                         flag = np.zeros(ob.n_local_samples, dtype=np.uint8)
                     else:
                         flag = ob.detdata[self.det_flags][det]
-                    good = (common_flags & flagI & (flag & self.det_flag_mask)) == 0
+                    good = (common_flags | flagI | (flag & self.det_flag_mask)) == 0
                     bad = np.logical_not(good)
                     # Project intensity out of polarization in each view
                     not_filtered = np.ones(ob.n_local_samples, dtype=bool)
