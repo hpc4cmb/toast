@@ -7,7 +7,6 @@ import os
 import numpy as np
 import numpy.testing as nt
 from astropy import units as u
-from astropy.table import Column
 
 from .. import ops as ops
 from ..noise import Noise
