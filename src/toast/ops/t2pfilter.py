@@ -62,12 +62,6 @@ class T2PFilter(Operator):
         help="Bit mask value for flagging unfiltered samples",
     )
 
-    save_amplitudes = Unicode(
-        None,
-        allow_none=True,
-        help="Store the template amplitudes in observation metadata using this key."
-    )
-
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
     )
@@ -113,9 +107,7 @@ class T2PFilter(Operator):
             if self.shared_flags is None:
                 common_flags = np.zeros(ob.n_local_samples, dtype=np.uint8)
             else:
-                common_flags = (
-                    ob.shared[self.shared_flags].data & self.shared_flag_mask
-                )
+                common_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             dets = set(dets)
             # Find the intensity streams
@@ -146,10 +138,12 @@ class T2PFilter(Operator):
                     for ival in ob.intervals[self.view]:
                         ind = slice(ival.first, ival.last)
                         # Build template matrix
-                        templates = np.vstack([
-                            np.ones(np.sum(good[ind])),
-                            sigI[ind][good[ind]],
-                        ])
+                        templates = np.vstack(
+                            [
+                                np.ones(np.sum(good[ind])),
+                                sigI[ind][good[ind]],
+                            ]
+                        )
                         # Get regression coefficients
                         invcov = np.dot(templates, templates.T)
                         try:
