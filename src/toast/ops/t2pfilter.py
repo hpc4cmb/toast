@@ -177,6 +177,7 @@ class T2PFilter(Operator):
         req = {
             "shared": list(),
             "detdata": [self.det_data],
+            "intervals": list(),
         }
         if self.shared_flags is not None:
             req["shared"].append(self.shared_flags)
