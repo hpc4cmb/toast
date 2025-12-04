@@ -10,7 +10,6 @@ from astropy import units as u
 
 from .. import ops as ops
 from ..observation import default_values as defaults
-from ..pixels import PixelData, PixelDistribution
 from .helpers import (
     close_data,
     create_ground_data,
