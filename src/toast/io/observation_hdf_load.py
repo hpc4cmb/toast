@@ -14,6 +14,7 @@ from astropy import units as u
 from astropy.table import QTable
 import flacarray
 
+from ..instrument import Focalplane
 from ..observation import Observation
 from ..timing import Timer, function_timer
 from ..utils import Environment, Logger, import_from_name

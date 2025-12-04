@@ -32,7 +32,7 @@ class LoadHDF5(Operator):
         None, allow_none=True, help="Top-level directory containing the data volume"
     )
 
-    pattern = Unicode("obs_.*_.*\.h5", help="Regexp pattern to match files against")
+    pattern = Unicode(r"obs_.*_.*\.h5", help="Regexp pattern to match files against")
 
     files = List([], help="Override `volume` and load a list of files")
 
