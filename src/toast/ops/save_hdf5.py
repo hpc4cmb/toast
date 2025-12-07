@@ -51,23 +51,10 @@ def obs_approx_equal(obs1, obs2):
     if obs1.dist != obs2.dist:
         fail = 1
         log.verbose(f"Proc {obs1.comm.world_rank}:  Obs distributions not equal")
-    if set(obs1._internal.keys()) != set(obs2._internal.keys()):
+
+    if not obs1.meta_equal(obs2, f"Proc {obs1.comm.world_rank}:  Obs _internal"):
         fail = 1
-        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs metadata keys not equal")
-    for k, v in obs1._internal.items():
-        if v != obs2._internal[k]:
-            feq = True
-            try:
-                feq = np.allclose(v, obs2._internal[k])
-            except Exception:
-                # Not floating point data
-                feq = False
-            if not feq:
-                fail = 1
-                log.verbose(
-                    f"Proc {obs1.comm.world_rank}:  Obs metadata[{k}]:  {v} != {obs2[k]}"
-                )
-                break
+        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs metadata not equal")
 
     # Compare any extra metadata class instances
     extra_objs1 = list()

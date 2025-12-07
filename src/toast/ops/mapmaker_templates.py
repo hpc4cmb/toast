@@ -418,7 +418,7 @@ class SolveAmplitudes(Operator):
     that model the timestream contributions from noise, systematics, etc:
 
     .. math::
-        \left[ M^T N^{-1} Z M + M_p \right] a = M^T N^{-1} Z d
+        \\left[ M^T N^{-1} Z M + M_p \\right] a = M^T N^{-1} Z d
 
     Where `a` are the solved amplitudes and `d` is the input data.  `N` is the
     diagonal time domain noise covariance.  `M` is a matrix of templates that

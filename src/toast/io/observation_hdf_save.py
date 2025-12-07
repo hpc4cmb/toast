@@ -23,7 +23,7 @@ from ..utils import (
     hdf5_use_serial,
     object_fullname,
 )
-from .hdf_utils import check_dataset_buffer_size, hdf5_open
+from .hdf_utils import check_dataset_buffer_size, hdf5_open, save_meta_object
 
 
 @function_timer
@@ -683,8 +683,10 @@ def save_hdf5(
     )
 
     meta_group = None
+    meta_other = None
     if hgroup is not None:
         meta_group = hgroup.create_group("metadata")
+        meta_other = meta_group.create_group("other")
 
     # Process all metadata in the observation dictionary
     for k, v in obs.items():
@@ -697,34 +699,10 @@ def save_hdf5(
                 kgroup.attrs["class"] = object_fullname(v.__class__)
             v.save_hdf5(kgroup, obs)
             del kgroup
-        elif isinstance(v, u.Quantity):
-            if isinstance(v.value, np.ndarray):
-                # Array quantity
-                if meta_group is not None:
-                    qdata = meta_group.create_dataset(k, data=v.value)
-                    qdata.attrs["units"] = v.unit.to_string()
-                    del qdata
-            else:
-                # Must be a scalar
-                if meta_group is not None:
-                    meta_group.attrs[f"{k}"] = v.value
-                    meta_group.attrs[f"{k}_units"] = v.unit.to_string()
-        elif isinstance(v, np.ndarray):
-            if meta_group is not None:
-                marr = meta_group.create_dataset(k, data=v)
-                del marr
-        elif meta_group is not None:
-            try:
-                if isinstance(v, u.Quantity):
-                    meta_group.attrs[k] = v.value
-                else:
-                    meta_group.attrs[k] = v
-            except (ValueError, TypeError) as e:
-                msg = f"Failed to store obs key '{k}' = '{v}' as an attribute ({e})."
-                msg += " Try casting it to a supported type when storing in the "
-                msg += "observation dictionary or implement save_hdf5() and "
-                msg += "load_hdf5() methods."
-                log.verbose(msg)
+        else:
+            # Process this object recursively
+            save_meta_object(meta_other, k, v)
+    del meta_other
     del meta_group
 
     # Now pass through observation attributes and look for things to save

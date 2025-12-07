@@ -19,7 +19,12 @@ from ..observation import Observation
 from ..timing import Timer, function_timer
 from ..utils import Environment, Logger, import_from_name
 from ..weather import SimWeather, Weather
-from .hdf_utils import check_dataset_buffer_size, hdf5_config, hdf5_open
+from .hdf_utils import (
+    check_dataset_buffer_size,
+    hdf5_config,
+    hdf5_open,
+    load_meta_object,
+)
 
 from .observation_hdf_load_v1 import load_hdf5 as load_hdf5_v1
 from .observation_hdf_load_v1 import load_instrument as load_instrument_v1
@@ -620,6 +625,9 @@ def load_hdf5_obs_meta(
     if hgroup is not None:
         meta_group = hgroup["metadata"]
         for obj_name in meta_group.keys():
+            if obj_name == "other":
+                # Simple python metadata- will process below
+                continue
             obj = meta_group[obj_name]
             if meta is not None and obj_name not in meta:
                 # The user restricted the list of things to load, and this is
@@ -639,34 +647,16 @@ def load_hdf5_obs_meta(
                         msg += f"{obj.attrs['class']}, but instantiated "
                         msg += "object does not have a load_hdf5() method"
                         log.error(msg)
-                else:
-                    # This must be some other custom user dataset.  Ignore it.
-                    pass
-            else:
-                # Array-like dataset that we can load
-                if "units" in obj.attrs:
-                    # This array is a quantity
-                    meta_load[obj_name] = u.Quantity(
-                        np.array(obj), unit=u.Unit(obj.attrs["units"])
-                    )
-                else:
-                    meta_load[obj_name] = np.array(obj)
-            del obj
-
-        # Now extract attributes (scalars)
-        units_pat = re.compile(r"(.*)_units")
-        for k, v in meta_group.attrs.items():
-            if meta is not None and k not in meta:
-                continue
-            if units_pat.match(k) is not None:
-                # unit field, skip
-                continue
-            # Check for quantity
-            unit_name = f"{k}_units"
-            if unit_name in meta_group.attrs:
-                meta_load[k] = u.Quantity(v, unit=u.Unit(meta_group.attrs[unit_name]))
-            else:
-                meta_load[k] = v
+                    continue
+            # Warn that we are not loading this object
+            msg = f"Found un-loadable metadata object '{obj_name}'.  Skipping."
+            log.warn(msg)
+        # Now load regular metadata into a python dictionary
+        meta_other = meta_group["other"]
+        other = load_meta_object(meta_other)
+        meta_load.update(other)
+        del other
+        del meta_other
         del meta_group
 
         # Now process observation attribute objects
@@ -687,6 +677,11 @@ def load_hdf5_obs_meta(
                         msg += f"{obj.attrs['class']}, but instantiated "
                         msg += "object does not have a load_hdf5() method"
                         log.error(msg)
+                    continue
+            # Warn that we are not loading this object
+            msg = f"Found un-loadable attribute object '{obj_name}'.  Skipping."
+            log.warn(msg)
+        del attr_group
 
     # Communicate the partial metadata
     if not parallel and nproc > 1:

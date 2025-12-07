@@ -49,6 +49,68 @@ class ExtraMeta(object):
             return False
 
 
+def create_other_meta():
+    """Helper function to generate python containers of metadata for testing"""
+    # Create nested containers of all types, with scalars and arrays
+    scalar = 1.234
+    qscalar = 1.234 * u.second
+    arr = np.arange(10, dtype=np.float64)
+    qarr = arr * u.meter
+
+    def _leaf_dict():
+        return {
+            "scalar": scalar,
+            "qscalar": qscalar,
+            "arr": arr,
+            "qarr": qarr,
+        }
+
+    def _leaf_list():
+        return [
+            scalar,
+            qscalar,
+            arr,
+            qarr,
+        ]
+
+    def _leaf_tuple():
+        return (
+            scalar,
+            qscalar,
+            arr,
+            qarr,
+        )
+
+    def _node_dict():
+        return {
+            "dict": _leaf_dict(),
+            "list": _leaf_list(),
+            "tuple": _leaf_tuple(),
+        }
+
+    def _node_list():
+        return [
+            _leaf_dict(),
+            _leaf_list(),
+            _leaf_tuple(),
+        ]
+
+    def _node_tuple():
+        return (
+            _leaf_dict(),
+            _leaf_list(),
+            _leaf_tuple(),
+        )
+
+    root = {
+        "top_dict": _node_dict(),
+        "top_list": _node_list(),
+        "top_tuple": _node_tuple(),
+    }
+
+    return root
+
+
 class IoHdf5Test(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -71,6 +133,8 @@ class IoHdf5Test(MPITestCase):
         if not no_meta:
             for ob in data.obs:
                 ob.extra = ExtraMeta()
+            other = create_other_meta()
+            ob.update(other)
 
         if base_weather:
             # Replace the simulated weather with the base class for testing
