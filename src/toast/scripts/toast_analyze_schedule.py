@@ -119,27 +119,27 @@ def main():
             return f"{t / 86400:.1f} d"
 
     print(
-        f"{'':>24} | "
-        f"{'rising':<20} | "
-        f"{'setting':<20} | "
-        f"{'transit':<20} | "
-        f"{'total':<20}"
+        f"{'':>30} | "
+        f"{'rising':<22} | "
+        f"{'setting':<22} | "
+        f"{'transit':<22} | "
+        f"{'total':<22}"
     )
     print(
-        f"{'name':>24} | "
-        f"{'count':>6} {'time':>6} {'frac':>6} | "
-        f"{'count':>6} {'time':>6} {'frac':>6} | "
-        f"{'count':>6} {'time':>6} {'frac':>6} | "
-        f"{'count':>6} {'time':>6} {'frac':>6}"
+        f"{'name':>30} | "
+        f"{'count':>6} {'time':>8} {'frac':>6} | "
+        f"{'count':>6} {'time':>8} {'frac':>6} | "
+        f"{'count':>6} {'time':>8} {'frac':>6} | "
+        f"{'count':>6} {'time':>8} {'frac':>6}"
     )
-    print(25 * "-" + "+" + 22 * "-" + "+" + 22 * "-" + "+" + 22 * "-" + "+" + 22 * "-")
+    print(31 * "-" + "+" + 24 * "-" + "+" + 24 * "-" + "+" + 24 * "-" + "+" + 24 * "-")
     for name in sorted(scan_targets):
-        print(f"{name:>24}", end="")
+        print(f"{name[:30]:>30}", end="")
         for direction in "rising", "setting", "transit", "total":
             totals = scan_targets[name]
             n = getattr(totals, f"{direction}_count")
             t = getattr(totals, f"{direction}_time")
-            print(f" | {n:>6} {neat_time(t):>6} {t / t_tot * 100:4.1f} %", end="")
+            print(f" | {n:>6} {neat_time(t):>8} {t / t_tot * 100:4.1f} %", end="")
         print()
 
     t_delta_tot = (t_stop - t_start).total_seconds()
@@ -149,7 +149,7 @@ def main():
         f"days = {t_tot / t_delta_tot:.3f} efficiency"
     )
 
-    el_mean = el_sum / t_delta_tot
+    el_mean = el_sum / t_tot
     print(
         f"el_min = {el_min:.1f} deg, "
         f"el_max = {el_max:.1f} deg, "
