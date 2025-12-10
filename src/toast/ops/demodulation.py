@@ -30,7 +30,7 @@ from .operator import Operator
 class Lowpass:
     """A callable class that applies the low pass filter"""
 
-    def __init__(self, wkernel, fmax, fsample, offset=0, nskip=1, window="hamming"):
+    def __init__(self, fmax, fsample, wkernel=None, offset=0, nskip=1, window="hamming"):
         """
         Args:
             wkernel (int) : width of the filter kernel
@@ -62,7 +62,7 @@ class Lowpass:
 class Bandpass:
     """A callable class that applies the bandpass filter"""
 
-    def __init__(self, wkernel, fmin, fmax, fsample, window="hamming"):
+    def __init__(self, fmin, fmax, fsample, wkernel=None, window="hamming"):
         """
         Args:
             wkernel (int) : width of the filter kernel
@@ -361,13 +361,26 @@ class Demodulate(Operator):
             fmod = self._get_fmod(obs)
 
             lowpass = Lowpass(
-                self.wkernel, self.fcut * fmod, fsample, offset, self.nskip, self.window
+                self.fcut * fmod,
+                fsample,
+                wkernel=self.wkernel,
+                offset=offset,
+                nskip=self.nskip,
+                window=self.window,
             )
             bandpass2f = Bandpass(
-                self.wkernel, self.fmin_2f * fmod, self.fmax_2f * fmod, fsample, self.window
+                self.fmin_2f * fmod,
+                self.fmax_2f * fmod,
+                fsample,
+                wkernel=self.wkernel,
+                window=self.window,
             )
             bandpass4f = Bandpass(
-                self.wkernel, self.fmin_4f * fmod, self.fmax_4f * fmod, fsample, self.window
+                self.fmin_4f * fmod,
+                self.fmax_4f * fmod,
+                fsample,
+                wkernel=self.wkernel,
+                window=self.window,
             )
 
             # Create a new observation to hold the demodulated and downsampled data
