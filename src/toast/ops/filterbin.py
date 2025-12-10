@@ -409,6 +409,22 @@ class FilterBin(Operator):
 
     report_memory = Bool(False, help="Report memory throughout the execution")
 
+    precomputed_templates = Unicode(
+        None,
+        allow_none=True,
+        help="Observation key to a dictionary of time domain templates to project out."
+        " The dictionary must include a `det_to_key` dictionary which maps each "
+        "detector to a key in the dictionary.  That key will then return a list of "
+        "templates to fit against that detector.  See `precomputed_template_view`."
+        ,
+    )
+
+    precomputed_template_view = Unicode(
+        "throw",
+        allow_none=True,
+        help="Intervals for precomputed template filtering. See `precomputed_templates`"
+    )
+
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
@@ -654,12 +670,6 @@ class FilterBin(Operator):
                         flags |= self.filter_flag_mask
                         continue
 
-                # Find all samples that remain good after filtering cuts
-                good_bin = np.logical_and(
-                    (common_flags & self.binning.shared_flag_mask) == 0,
-                    (flags & self.binning.det_flag_mask) == 0,
-                )
-
                 if (
                     self.deproject_map is not None
                     and self._deproject_pattern.match(det) is not None
@@ -675,6 +685,44 @@ class FilterBin(Operator):
                         f"ntemplate = {det_templates.ntemplate}",
                     )
                     t1 = time()
+
+                if self.precomputed_templates is not None:
+                    self._add_precomputed_templates(obs, det, det_templates)
+                    # Must re-evaluate the template covariance
+                    template_covariance = None
+
+                if self.grank == 0:
+                    log.debug(
+                        f"{self.group:4} : FilterBin:   Built precomputed "
+                        f"templates in {time() - t1:.2f} s. "
+                        f"ntemplate = {det_templates.ntemplate}",
+                    )
+                    t1 = time()
+
+                # Deprojection templates or precomputed templates may also
+                # need to be discarded due to flagging
+
+                det_templates, failed = det_templates.mask(good_fit)
+
+                # Mask samples that cannot be filtered
+
+                if len(failed) != 0:
+                    for ind in failed:
+                        flags[ind] |= self.filter_flag_mask
+                    good_fit = np.logical_and(
+                        (common_flags & self.shared_flag_mask) == 0,
+                        (flags & self.det_flag_mask) == 0,
+                    )
+                    if np.sum(good_fit) == 0:
+                        flags |= self.filter_flag_mask
+                        continue
+
+                # Find all samples that remain good after filtering cuts
+
+                good_bin = np.logical_and(
+                    (common_flags & self.binning.shared_flag_mask) == 0,
+                    (flags & self.binning.det_flag_mask) == 0,
+                )
 
                 if det_templates.ntemplate == 0:
                     # No templates to fit
@@ -990,7 +1038,6 @@ class FilterBin(Operator):
         weights = np.zeros([nsample, nnz], dtype=np.float64)
         dptemplate_raw = AlignedF64.zeros(nsample)
         dptemplate = dptemplate_raw.array()
-        norm = np.dot(common_templates[0], common_templates[0])
         for inz in range(self._deproject_nnz):
             weights[:] = 0
             weights[:, inz] = 1
@@ -1003,8 +1050,31 @@ class FilterBin(Operator):
                 weights.reshape(-1),
                 template,
             )
-            dptemplate *= np.sqrt(norm / np.dot(dptemplate, dptemplate))
             templates.append(dptemplate)
+        return
+
+    @function_timer
+    def _add_precomputed_templates(self, obs, det, templates):
+        if self.precomputed_templates not in obs:
+            raise RuntimeError()
+
+        precomputed = obs[self.precomputed_templates]
+        if det not in precomputed["det_to_key"]:
+            # This detector does not have precomputed templates
+            return
+
+        intervals = obs.intervals[self.precomputed_template_view]
+        key = precomputed["det_to_key"][det]
+        tod_templates = precomputed[key]
+        for ival in intervals:
+            istart = ival.first
+            istop = ival.last
+            ind = slice(istart, istop)
+            slice_templates = []
+            for name, tod_template in tod_templates.items():
+                slice_templates.append(tod_template[ind])
+            templates.append(np.vstack(slice_templates), start=istart, stop=istop)
+
         return
 
     @function_timer
