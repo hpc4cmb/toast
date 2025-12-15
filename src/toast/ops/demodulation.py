@@ -403,11 +403,6 @@ class Demodulate(Operator):
                 process_rows=demod_process_rows,
                 sample_sets=demod_sample_sets,
             )
-            for key, value in obs.items():
-                if key == self.noise_model:
-                    # Will be generated later
-                    continue
-                demod_obs[key] = value
 
             # Allocate storage
 
@@ -445,6 +440,8 @@ class Demodulate(Operator):
             )
 
             self._demodulate_intervals(obs, demod_obs)
+
+            self._demodulate_metadata(obs, demod_obs)
 
             demodulate_obs.append(demod_obs)
 
@@ -577,6 +574,38 @@ class Demodulate(Operator):
                 msg = "Only shared objects using the group, row, and column "
                 msg += "communicators can be demodulated"
                 raise RuntimeError(msg)
+        return
+
+    @function_timer
+    def _demodulate_metadata(self, obs, demod_obs):
+        """Copy over and optionally downsample metadata"""
+
+        demod_times = demod_obs.shared[self.times].data
+
+        # Metadata dictionary
+
+        for key, value in obs.items():
+            if key in demod_obs:
+                # Already demodulated
+                continue
+            if hasattr(key, "downsample"):
+                demod_obs[key] = value.downsample(demod_times)
+            else:
+                demod_obs[key] = value
+
+        # Other observation attributes
+
+        for key, value in vars(obs).items():
+            if key.startswith("_"):
+                continue
+            if hasattr(demod_obs, key):
+                # Already demodulated
+                continue
+            if hasattr(value, "downsample"):
+                setattr(demod_obs, key, value.downsample(demod_times))
+            else:
+                setattr(demod_obs, key, value)
+
         return
 
     @function_timer
