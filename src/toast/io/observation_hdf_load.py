@@ -372,11 +372,15 @@ def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None)
     """Load instrument information from an HDF5 group."""
     new_detsets = file_det_sets
     toast_version = None
+    has_session = False
     if parent_group is not None:
         inst_group = parent_group["instrument"]
         toast_version = int(inst_group.attrs["toast_format_version"])
+        if "session_class" in inst_group.attrs:
+            has_session = True
     if comm is not None:
         toast_version = comm.bcast(toast_version, root=0)
+        has_session = comm.bcast(has_session, root=0)
 
     if toast_version < 2:
         return load_instrument_v1(
@@ -388,7 +392,10 @@ def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None)
         raise RuntimeError(msg)
 
     tele = Telescope.load_hdf5(inst_group, comm=comm)
-    session = Session.load_hdf5(inst_group, comm=comm)
+    if has_session:
+        session = Session.load_hdf5(inst_group, comm=comm)
+    else:
+        session = None
 
     # If we are selecting only a subset of detectors, make a restricted
     # focalplane now and also modify detsets.
