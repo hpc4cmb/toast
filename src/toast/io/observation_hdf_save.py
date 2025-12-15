@@ -461,74 +461,10 @@ def save_instrument(parent_group, telescope, comm=None, session=None):
         # Instrument properties
         inst_group = parent_group.create_group("instrument")
         inst_group.attrs["toast_format_version"] = 2
-        inst_group.attrs["telescope_name"] = telescope.name
-        inst_group.attrs["telescope_class"] = object_fullname(telescope.__class__)
-        inst_group.attrs["telescope_uid"] = telescope.uid
-        site = telescope.site
-        inst_group.attrs["site_name"] = site.name
-        inst_group.attrs["site_class"] = object_fullname(site.__class__)
-        inst_group.attrs["site_uid"] = site.uid
-        if isinstance(site, GroundSite):
-            inst_group.attrs["site_lat_deg"] = float(
-                site.earthloc.lat.to_value(u.degree)
-            )
-            inst_group.attrs["site_lon_deg"] = float(
-                site.earthloc.lon.to_value(u.degree)
-            )
-            inst_group.attrs["site_alt_m"] = float(
-                site.earthloc.height.to_value(u.meter)
-            )
-            if site.weather is not None:
-                if hasattr(site.weather, "name"):
-                    # This is a simulated weather object, dump it.
-                    inst_group.attrs["site_weather_name"] = str(site.weather.name)
-                    inst_group.attrs["site_weather_realization"] = int(
-                        site.weather.realization
-                    )
-                    if site.weather.max_pwv is None:
-                        inst_group.attrs["site_weather_max_pwv"] = "NONE"
-                    else:
-                        inst_group.attrs["site_weather_max_pwv"] = float(
-                            site.weather.max_pwv.to_value(u.mm)
-                        )
-                    inst_group.attrs["site_weather_time"] = (
-                        site.weather.time.timestamp()
-                    )
-                    inst_group.attrs["site_weather_median"] = (
-                        site.weather.median_weather
-                    )
-                else:
-                    # This is a generic weather object
-                    inst_group.attrs["site_weather_time"] = (
-                        site.weather.time.astimezone(timezone.utc).timestamp()
-                    )
-                    for attr_name in [
-                        "ice_water",
-                        "liquid_water",
-                        "pwv",
-                        "humidity",
-                        "surface_pressure",
-                        "surface_temperature",
-                        "air_temperature",
-                        "west_wind",
-                        "south_wind",
-                    ]:
-                        file_attr = f"site_weather_{attr_name}"
-                        attr_val = getattr(site.weather, attr_name)
-                        inst_group.attrs[file_attr] = str(attr_val)
-        if session is not None:
-            inst_group.attrs["session_name"] = session.name
-            inst_group.attrs["session_class"] = object_fullname(session.__class__)
-            inst_group.attrs["session_uid"] = session.uid
-            if session.start is None:
-                inst_group.attrs["session_start"] = "NONE"
-            else:
-                inst_group.attrs["session_start"] = session.start.timestamp()
-            if session.end is None:
-                inst_group.attrs["session_end"] = "NONE"
-            else:
-                inst_group.attrs["session_end"] = session.end.timestamp()
-    telescope.focalplane.save_hdf5(inst_group, comm=comm)
+
+    telescope.save_hdf5(inst_group, comm=comm)
+    if session is not None:
+        session.save_hdf5(inst_group, comm=comm)
     del inst_group
 
 

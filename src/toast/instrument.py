@@ -1,10 +1,20 @@
 # Copyright (c) 2019-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
+"""Classes for describing the instrument model.
+
+Note that these classes usually are stored under the Observation.telescope
+object.  Since these must be instantiated before creating an observation,
+The interface to the load_hdf5 and save_hdf5 methods are different than
+for objects designed to be saved / loaded with a pre-existing Observation
+instance.
+
+"""
 
 import datetime
 import os
 import sys
+from datetime import timezone
 
 import astropy.coordinates as coord
 import astropy.time as astime
@@ -32,7 +42,9 @@ from .utils import (
     Logger,
     hdf5_use_serial,
     name_UID,
+    object_fullname,
     table_write_parallel_hdf5,
+    import_from_name,
 )
 
 # CMB temperature
@@ -123,6 +135,55 @@ class Site(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    @classmethod
+    def _load_hdf5(cls, handle, comm=None, **kwargs):
+        raise NotImplementedError("Derived class must implement _load_hdf5()")
+
+    @classmethod
+    def load_hdf5(cls, handle, comm=None, **kwargs):
+        """Load the site from an HDF5 group.
+
+        This checks for the site_class attribute and dispatches to the correct
+        class method.
+
+        Args:
+            handle (h5py.Group):  The group containing the site information.
+            comm (MPI.Comm):  If loading from a file, optional communicator.
+
+        Returns:
+            None
+
+        """
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        site_class_name = None
+        if handle is not None:
+            site_class_name = str(handle.attrs["site_class"])
+        if need_bcast:
+            site_class_name = comm.bcast(site_class_name, root=0)
+        site_class = import_from_name(site_class_name)
+        return site_class._load_hdf5(handle, comm=comm, **kwargs)
+
+    def _save_hdf5(self, handle, comm=None, **kwargs):
+        raise NotImplementedError("Derived class must implement _save_hdf5()")
+
+    def save_hdf5(self, handle, comm=None, **kwargs):
+        """Save the site to an HDF5 group.
+
+        Args:
+            handle (h5py.Group):  The parent group for saving site properties.
+            comm (MPI.Comm):  If saving to a file, optional communicator.
+
+        Returns:
+            None
+
+        """
+        if handle is not None:
+            handle.attrs["site_class"] = object_fullname(self.__class__)
+        self._save_hdf5(handle, comm=comm, **kwargs)
 
 
 class GroundSite(Site):
@@ -224,6 +285,69 @@ class GroundSite(Site):
         p, v = self._position_velocity(times)
         return v
 
+    @classmethod
+    def _load_hdf5(cls, handle, comm=None, **kwargs):
+        """Load the site from an HDF5 group.
+
+        Args:
+            handle (h5py.Group):  The group containing the site information.
+            comm (MPI.Comm):  If loading from a file, optional communicator.
+
+        Returns:
+            None
+
+        """
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        site_name = None
+        site_uid = None
+        site_alt_m = None
+        site_lat_deg = None
+        site_lon_deg = None
+        weather_class_name = None
+        if handle is not None:
+            site_name = str(handle.attrs["site_name"])
+            site_uid = int(handle.attrs["site_uid"])
+            site_alt_m = float(handle.attrs["site_alt_m"])
+            site_lat_deg = float(handle.attrs["site_lat_deg"])
+            site_lon_deg = float(handle.attrs["site_lon_deg"])
+            if "weather_class" in handle.attrs:
+                weather_class_name = str(handle.attrs["weather_class"])
+
+        if need_bcast:
+            site_name = comm.bcast(site_name, root=0)
+            site_uid = comm.bcast(site_uid, root=0)
+            site_alt_m = comm.bcast(site_alt_m, root=0)
+            site_lat_deg = comm.bcast(site_lat_deg, root=0)
+            site_lon_deg = comm.bcast(site_lon_deg, root=0)
+            weather_class_name = comm.bcast(weather_class_name, root=0)
+
+        weather = None
+        if weather_class_name is not None:
+            weather_class = import_from_name(weather_class_name)
+            weather = weather_class.load_hdf5(handle, comm=comm, **kwargs)
+
+        return cls(
+            site_name,
+            site_lat_deg * u.degree,
+            site_lon_deg * u.degree,
+            site_alt_m * u.meter,
+            uid=site_uid,
+            weather=weather,
+        )
+
+    def _save_hdf5(self, handle, comm=None, **kwargs):
+        if handle is not None:
+            handle.attrs["site_name"] = self.name
+            handle.attrs["site_uid"] = self.uid
+            handle.attrs["site_lat_deg"] = float(self.earthloc.lat.to_value(u.degree))
+            handle.attrs["site_lon_deg"] = float(self.earthloc.lon.to_value(u.degree))
+            handle.attrs["site_alt_m"] = float(self.earthloc.height.to_value(u.meter))
+            if self.weather is not None:
+                self.weather.save_hdf5(handle, comm=comm, **kwargs)
+
 
 class SpaceSite(Site):
     """Site with no atmosphere.
@@ -297,6 +421,39 @@ class SpaceSite(Site):
     def _velocity(self, times):
         p, v = self._position_velocity(times)
         return v
+
+    @classmethod
+    def _load_hdf5(cls, handle, comm=None, **kwargs):
+        """Load the site from an HDF5 group.
+
+        Args:
+            handle (h5py.Group):  The group containing the site information.
+            comm (MPI.Comm):  If loading from a file, optional communicator.
+
+        Returns:
+            None
+
+        """
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        site_name = None
+        site_uid = None
+        if handle is not None:
+            site_name = str(handle.attrs["site_name"])
+            site_uid = int(handle.attrs["site_uid"])
+
+        if need_bcast:
+            site_name = comm.bcast(site_name, root=0)
+            site_uid = comm.bcast(site_uid, root=0)
+
+        return cls(site_name, uid=site_uid)
+
+    def _save_hdf5(self, handle, comm=None, **kwargs):
+        if handle is not None:
+            handle.attrs["site_name"] = self.name
+            handle.attrs["site_uid"] = self.uid
 
 
 class Bandpass(object):
@@ -826,65 +983,88 @@ class Focalplane(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def load_hdf5(self, handle, comm=None, **kwargs):
+    @classmethod
+    def _load_hdf5(
+        cls, handle, comm=None, detectors=None, file_det_sets=None, **kwargs
+    ):
+        """Load a base class Focalplane"""
+        log = Logger.get()
+
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        detector_data = None
+        sample_rate = None
+        field_of_view = None
+        if handle is not None:
+            detector_data = read_table_hdf5(handle, path="focalplane")
+            sample_rate = detector_data.meta["sample_rate"]
+            field_of_view = detector_data.meta["field_of_view"]
+
+        if need_bcast:
+            detector_data = comm.bcast(detector_data, root=0)
+            sample_rate = comm.bcast(sample_rate, root=0)
+            field_of_view = comm.bcast(field_of_view, root=0)
+
+        log.debug_rank(
+            f"Focalplane has {len(detector_data)} detectors that span "
+            f"{field_of_view.to_value(u.deg):.3f} degrees and are sampled at "
+            f"{sample_rate.to_value(u.Hz)} Hz.",
+            comm=comm,
+        )
+
+        return cls(
+            detector_data=detector_data,
+            field_of_view=field_of_view,
+            sample_rate=sample_rate,
+            **kwargs,
+        )
+
+    @classmethod
+    def load_hdf5(cls, handle, comm=None, **kwargs):
         """Load the focalplane from an HDF5 group.
 
         Args:
             handle (h5py.Group):  The group containing the "focalplane" dataset.
-            comm (MPI.Comm):  If loading from a file, optional communicator to broadcast
-                across.
+            comm (MPI.Comm):  If loading from a file, optional communicator.
 
         Returns:
             None
 
         """
-        log = Logger.get()
-
         # Determine if we need to broadcast results.  This occurs if only one process
         # has the file open but the communicator has more than one process.
-        need_bcast = hdf5_use_serial(handle, comm)
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
 
-        if self.detector_data is not None:
-            raise RuntimeError("Reading detector data over existing table")
-
+        focalplane_class_name = None
         if handle is not None:
-            self.detector_data = read_table_hdf5(handle, path="focalplane")
+            focalplane_class_name = handle.attrs["focalplane_class"]
+        if need_bcast:
+            focalplane_class_name = comm.bcast(focalplane_class_name, root=0)
 
-        if need_bcast and comm is not None:
-            self.detector_data = comm.bcast(self.detector_data, root=0)
+        focalplane_class = import_from_name(focalplane_class_name)
+        return focalplane_class._load_hdf5(handle, comm=comm, **kwargs)
 
-        # Only use the sampling rate recorded in the file if it was not
-        # overridden in the constructor
-        if self.sample_rate is None:
-            self.sample_rate = self.detector_data.meta["sample_rate"]
-        if self.field_of_view is None and "field_of_view" in self.detector_data.meta:
-            self.field_of_view = self.detector_data.meta["field_of_view"]
-
-        # Initialize other properties
-        self._initialize()
-
-        log.debug_rank(
-            f"Focalplane has {len(self.detector_data)} detectors that span "
-            f"{self.field_of_view.to_value(u.deg):.3f} degrees and are sampled at "
-            f"{self.sample_rate.to_value(u.Hz)} Hz.",
-            comm=comm,
-        )
+    def _save_hdf5(self, handle, comm=None, **kwargs):
+        self.detector_data.meta["sample_rate"] = self.sample_rate
+        self.detector_data.meta["field_of_view"] = self.field_of_view
+        table_write_parallel_hdf5(self.detector_data, handle, "focalplane", comm=comm)
 
     def save_hdf5(self, handle, comm=None, **kwargs):
         """Save the focalplane to an HDF5 group.
 
         Args:
             handle (h5py.Group):  The parent group of the focalplane dataset.
-            comm (MPI.Comm):  If loading from a file, optional communicator to broadcast
-                across.
+            comm (MPI.Comm):  If saving to a file, optional communicator.
 
         Returns:
             None
 
         """
-        self.detector_data.meta["sample_rate"] = self.sample_rate
-        self.detector_data.meta["field_of_view"] = self.field_of_view
-        table_write_parallel_hdf5(self.detector_data, handle, "focalplane", comm=comm)
+        if handle is not None:
+            handle.attrs["focalplane_class"] = object_fullname(self.__class__)
+        self._save_hdf5(handle, comm=comm, **kwargs)
 
 
 class Session(object):
@@ -945,6 +1125,103 @@ class Session(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    @classmethod
+    def _load_hdf5(cls, handle, comm=None, **kwargs):
+        """Load the base class session"""
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        session_name = None
+        session_uid = None
+        session_start = None
+        session_end = None
+        if handle is not None:
+            session_name = str(handle.attrs["session_name"])
+            session_uid = int(handle.attrs["session_uid"])
+            session_start = handle.attrs["session_start"]
+            if str(session_start) == "NONE":
+                session_start = None
+            else:
+                session_start = datetime.datetime.fromtimestamp(
+                    float(handle.attrs["session_start"]),
+                    tz=timezone.utc,
+                )
+            session_end = handle.attrs["session_end"]
+            if str(session_end) == "NONE":
+                session_end = None
+            else:
+                session_end = datetime.datetime.fromtimestamp(
+                    float(handle.attrs["session_end"]),
+                    tz=timezone.utc,
+                )
+
+        if need_bcast:
+            session_name = comm.bcast(session_name, root=0)
+            session_uid = comm.bcast(session_uid, root=0)
+            session_start = comm.bcast(session_start, root=0)
+            session_end = comm.bcast(session_end, root=0)
+
+        return cls(session_name, uid=session_uid, start=session_start, end=session_end)
+
+    @classmethod
+    def load_hdf5(cls, handle, comm=None, **kwargs):
+        """Load the session from an HDF5 group.
+
+        Args:
+            handle (h5py.Group):  The group containing the session information.
+            comm (MPI.Comm):  If loading from a file, optional communicator.
+
+        Returns:
+            None
+
+        """
+        log = Logger.get()
+
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        session_class_name = None
+        if handle is not None:
+            session_class_name = str(handle.attrs["session_class"])
+
+        if need_bcast:
+            session_class_name = comm.bcast(session_class_name, root=0)
+
+        session_class = import_from_name(session_class_name)
+        return session_class._load_hdf5(handle, comm=comm, **kwargs)
+
+    def _save_hdf5(self, handle, comm=None, **kwargs):
+        """Save the base class session"""
+        if handle is not None:
+            handle.attrs["session_name"] = self.name
+            handle.attrs["session_uid"] = self.uid
+            if self.start is None:
+                handle.attrs["session_start"] = "NONE"
+            else:
+                handle.attrs["session_start"] = self.start.timestamp()
+            if self.end is None:
+                handle.attrs["session_end"] = "NONE"
+            else:
+                handle.attrs["session_end"] = self.end.timestamp()
+
+    def save_hdf5(self, handle, comm=None, **kwargs):
+        """Save the session to an HDF5 group.
+
+        Args:
+            handle (h5py.Group):  The parent group for saving session properties.
+            comm (MPI.Comm):  If saving to a file, optional communicator to broadcast
+                across.
+
+        Returns:
+            None
+
+        """
+        if handle is not None:
+            handle.attrs["session_class"] = object_fullname(self.__class__)
+        self._save_hdf5(handle, comm=comm, **kwargs)
+
 
 class Telescope(object):
     """Class representing telescope properties for one observation.
@@ -993,3 +1270,74 @@ class Telescope(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    @classmethod
+    def _load_hdf5(cls, handle, comm=None, **kwargs):
+        """Load the base class telescope."""
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        telescope_name = None
+        telescope_uid = None
+        if handle is not None:
+            telescope_name = str(handle.attrs["telescope_name"])
+            telescope_uid = int(handle.attrs["telescope_uid"])
+
+        if need_bcast:
+            telescope_name = comm.bcast(telescope_name, root=0)
+            telescope_uid = comm.bcast(telescope_uid, root=0)
+
+        focalplane = Focalplane.load_hdf5(handle, comm=comm, **kwargs)
+        site = Site.load_hdf5(handle, comm=comm, **kwargs)
+
+        return cls(telescope_name, uid=telescope_uid, focalplane=focalplane, site=site)
+
+    @classmethod
+    def load_hdf5(cls, handle, comm=None, **kwargs):
+        """Load the telescope from an HDF5 group.
+
+        Args:
+            handle (h5py.Group):  The group containing the telescope information.
+            comm (MPI.Comm):  If loading from a file, optional communicator.
+
+        Returns:
+            None
+
+        """
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        tele_class_name = None
+        if handle is not None:
+            tele_class_name = str(handle.attrs["telescope_class"])
+
+        if need_bcast:
+            tele_class_name = comm.bcast(tele_class_name, root=0)
+
+        tele_class = import_from_name(tele_class_name)
+        return tele_class._load_hdf5(handle, comm=comm, **kwargs)
+
+    def _save_hdf5(self, handle, comm=None, **kwargs):
+        """Load a base class telescope"""
+        if handle is not None:
+            handle.attrs["telescope_name"] = self.name
+            handle.attrs["telescope_uid"] = self.uid
+        self.focalplane.save_hdf5(handle, comm=comm, **kwargs)
+        self.site.save_hdf5(handle, comm=comm, **kwargs)
+
+    def save_hdf5(self, handle, comm=None, **kwargs):
+        """Save the telescope to an HDF5 group.
+
+        Args:
+            handle (h5py.Group):  The parent group for saving telescope properties.
+            comm (MPI.Comm):  If saving to a file, optional communicator.
+
+        Returns:
+            None
+
+        """
+        if handle is not None:
+            handle.attrs["telescope_class"] = object_fullname(self.__class__)
+        self._save_hdf5(handle, comm=comm, **kwargs)

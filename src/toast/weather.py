@@ -5,6 +5,7 @@
 import datetime
 import os
 from collections import OrderedDict
+from datetime import timezone
 from importlib import resources
 
 import h5py
@@ -13,7 +14,7 @@ from astropy import units as u
 
 from . import rng as rng
 from .timing import function_timer
-from .utils import Logger, name_UID
+from .utils import Logger, name_UID, hdf5_use_serial, import_from_name, object_fullname
 
 
 class Weather(object):
@@ -223,6 +224,94 @@ class Weather(object):
         """10-meter northward wind [m/s]."""
         return self._south_wind()
 
+    @classmethod
+    def _load_hdf5(cls, handle, comm=None, **kwargs):
+        """Load base class weather"""
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        props = dict()
+
+        if handle is not None:
+            props["time"] = datetime.datetime.fromtimestamp(
+                float(handle.attrs["weather_time"]), tz=timezone.utc
+            )
+            for attr_name in [
+                "ice_water",
+                "liquid_water",
+                "pwv",
+                "humidity",
+                "surface_pressure",
+                "surface_temperature",
+                "air_temperature",
+                "west_wind",
+                "south_wind",
+            ]:
+                file_attr = f"weather_{attr_name}"
+                props[attr_name] = u.Quantity(handle.attrs[file_attr])
+        if need_bcast:
+            props = comm.bcast(props, root=0)
+        return cls(**props)
+
+    @classmethod
+    def load_hdf5(cls, handle, comm=None, **kwargs):
+        """Load the weather from an HDF5 group.
+
+        Args:
+            handle (h5py.Group):  The group containing the "focalplane" dataset.
+            comm (MPI.Comm):  If loading from a file, optional communicator.
+
+        Returns:
+            None
+
+        """
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        weather_class_name = None
+        if handle is not None:
+            weather_class_name = str(handle.attrs["weather_class"])
+
+        if need_bcast:
+            weather_class_name = comm.bcast(weather_class_name, root=0)
+
+        weather_class = import_from_name(weather_class_name)
+        return weather_class._load_hdf5(handle, comm=comm, **kwargs)
+
+    def _save_hdf5(self, handle, comm=None, **kwargs):
+        handle.attrs["weather_time"] = self.time.astimezone(timezone.utc).timestamp()
+        for attr_name in [
+            "ice_water",
+            "liquid_water",
+            "pwv",
+            "humidity",
+            "surface_pressure",
+            "surface_temperature",
+            "air_temperature",
+            "west_wind",
+            "south_wind",
+        ]:
+            file_attr = f"weather_{attr_name}"
+            attr_val = getattr(self, attr_name)
+            handle.attrs[file_attr] = str(attr_val)
+
+    def save_hdf5(self, handle, comm=None, **kwargs):
+        """Save the weather to an HDF5 group.
+
+        Args:
+            handle (h5py.Group):  The parent group for saving site properties.
+            comm (MPI.Comm):  If saving to a file, optional communicator.
+
+        Returns:
+            None
+
+        """
+        if handle is not None:
+            handle.attrs["weather_class"] = object_fullname(self.__class__)
+        self._save_hdf5(handle, comm=comm, **kwargs)
+
 
 def read_weather(file):
     """Helper function to read HDF5 format weather file.
@@ -328,11 +417,14 @@ class SimWeather(Weather):
         median_weather=False,
     ):
         if time is None:
-            raise RuntimeError("you must specify the time")
+            time = datetime.datetime.now()
         self._name = name
         if self._name is None:
             if file is None:
-                raise RuntimeError("you must specify a name or file")
+                # Load a default weather site, useful if we
+                # are instantiating the class before loading from
+                # HDF5.
+                self._data = load_package_weather("atacama")
             else:
                 self._data = read_weather(file)
                 self._name = file
@@ -525,3 +617,60 @@ class SimWeather(Weather):
 
     def __ne__(self, other):
         return not self.__eq__(other)
+
+    @classmethod
+    def _load_hdf5(cls, handle, comm=None, **kwargs):
+        # Determine if we need to broadcast results.  This occurs if only one process
+        # has the file open but the communicator has more than one process.
+        need_bcast = hdf5_use_serial(handle, comm) and comm is not None
+
+        weather_name = None
+        weather_realization = None
+        weather_max_pwv = None
+        weather_time = None
+        weather_median = None
+        site_uid = 0
+        if handle is not None:
+            weather_name = str(handle.attrs["weather_name"])
+            weather_realization = int(handle.attrs["weather_realization"])
+            weather_max_pwv = None
+            if handle.attrs["weather_max_pwv"] != "NONE":
+                weather_max_pwv = u.Quantity(
+                    float(handle.attrs["weather_max_pwv"]), u.mm
+                )
+            weather_time = datetime.datetime.fromtimestamp(
+                float(handle.attrs["weather_time"]), tz=timezone.utc
+            )
+            weather_median = bool(handle.attrs["weather_median"])
+            if "site_uid" in handle.attrs:
+                site_uid = handle.attrs["site_uid"]
+
+        if need_bcast:
+            weather_name = comm.bcast(weather_name, root=0)
+            weather_realization = comm.bcast(weather_realization, root=0)
+            weather_max_pwv = comm.bcast(weather_max_pwv, root=0)
+            weather_time = comm.bcast(weather_time, root=0)
+            weather_median = comm.bcast(weather_median, root=0)
+            site_uid = comm.bcast(site_uid, root=0)
+
+        return cls(
+            time=weather_time,
+            name=weather_name,
+            site_uid=site_uid,
+            realization=weather_realization,
+            max_pwv=weather_max_pwv,
+            median_weather=weather_median,
+        )
+
+    def _save_hdf5(self, handle, comm=None, **kwargs):
+        if handle is not None:
+            handle.attrs["weather_name"] = str(self.name)
+            handle.attrs["weather_realization"] = int(self.realization)
+            if self.max_pwv is None:
+                handle.attrs["weather_max_pwv"] = "NONE"
+            else:
+                handle.attrs["weather_max_pwv"] = float(self.max_pwv.to_value(u.mm))
+            handle.attrs["weather_time"] = self.time.astimezone(
+                timezone.utc
+            ).timestamp()
+            handle.attrs["weather_median"] = self.median_weather

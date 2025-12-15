@@ -546,8 +546,7 @@ def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None)
                 session_name, uid=session_uid, start=session_start, end=session_end
             )
 
-        raw_focalplane = Focalplane()
-        raw_focalplane.load_hdf5(inst_group, comm=None)
+        raw_focalplane = Focalplane.load_hdf5(inst_group, comm=None)
 
         if detectors is None:
             focalplane = raw_focalplane
