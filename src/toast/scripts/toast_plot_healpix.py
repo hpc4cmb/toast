@@ -148,6 +148,14 @@ def main(opts=None):
         help="The format of the output files ('pdf', 'png')",
     )
 
+    parser.add_argument(
+        "--legacy",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Use legacy healpy plotting functions",
+    )
+
     args = parser.parse_args(args=opts)
 
     range_I = None
@@ -175,6 +183,7 @@ def main(opts=None):
         out_dir=args.out_dir,
         graticule=args.graticule,
         image_format=args.format,
+        legacy=args.legacy,
     )
 
 

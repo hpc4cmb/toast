@@ -10,6 +10,7 @@ import healpy as hp
 import numpy as np
 from astropy import units as u
 from astropy.wcs import WCS
+from healpy.newvisufunc import projview
 
 from . import qarray as qa
 from .pixels_io_healpix import read_healpix
@@ -522,6 +523,7 @@ def plot_healpix_maps(
     image_format="pdf",
     out_dir=None,
     graticule=False,
+    legacy=False,
     **kwargs,
 ):
     """Plot Healpix projected output maps.
@@ -572,13 +574,16 @@ def plot_healpix_maps(
         plt.savefig(out, format=image_format)
         plt.close()
 
-    def plot_single_gnomview(data, vmin, vmax, out, xsize=1000, rot=None, reso=None):
+    def plot_single_gnomview(
+        data, vmin, vmax, out, xsize=1000, ysize=1000, rot=None, reso=None
+    ):
         file_base = os.path.splitext(os.path.basename(out))[0]
         grat_res = int((reso / 60.0) * (xsize / 10))
         hp.gnomview(
             map=data,
             rot=rot,
             xsize=xsize,
+            ysize=ysize,
             reso=reso,
             nest=True,
             cmap=cmap,
@@ -592,40 +597,88 @@ def plot_healpix_maps(
         plt.close()
 
     def plot_single_cartview(
-        data, vmin, vmax, out, xsize=1000, rot=None, lonra=None, latra=None
+        data, vmin, vmax, out, xsize=1000, ysize=1000, rot=None, lonra=None, latra=None
     ):
         file_base = os.path.splitext(os.path.basename(out))[0]
-        if lonra is None:
-            grat_res = None
-        else:
-            grat_res = int((lonra[1] - lonra[0]) / 10)
-        hp.cartview(
-            map=data,
-            # Cartesian projection defaults to centered on coverage
+        # if lonra is None:
+        #     lonra_res = None
+        # else:
+
+        # if lonra is None:
+        #     grat_res = None
+        # else:
+        #     grat_res = int((lonra[1] - lonra[0]) / 10)
+
+        projview(
+            data,
+            nest=True,
+            coord=["C"],
+            graticule=graticule,
+            graticule_labels=True,
             rot=None,
             xsize=xsize,
             latra=latra,
             lonra=lonra,
-            nest=True,
+            # longitude_grid_spacing=60,
+            # latitude_grid_spacing=30,
             cmap=cmap,
             min=vmin,
             max=vmax,
+            unit="Value",
+            xlabel="Longitude",
+            ylabel="Latitude",
+            cb_orientation="horizontal",
+            projection_type="cart",
             title=file_base,
         )
-        if graticule:
-            hp.graticule(dpar=grat_res, dmer=grat_res)
+
+        # hp.cartview(
+        #     map=data,
+        #     # Cartesian projection defaults to centered on coverage
+        #     rot=None,
+        #     xsize=xsize,
+        #     ysize=ysize,
+        #     latra=latra,
+        #     lonra=lonra,
+        #     nest=True,
+        #     cmap=cmap,
+        #     min=vmin,
+        #     max=vmax,
+        #     title=file_base,
+        # )
+        # if graticule:
+        #     hp.graticule(dpar=grat_res, dmer=grat_res)
         plt.savefig(out, format=image_format)
         plt.close()
 
     def plot_single(
-        data, vmin, vmax, out, xsize=1000, rot=None, reso=None, lonra=None, latra=None
+        data,
+        vmin,
+        vmax,
+        out,
+        xsize=1000,
+        ysize=1000,
+        rot=None,
+        reso=None,
+        lonra=None,
+        latra=None,
     ):
         if cartview:
             plot_single_cartview(
-                data, vmin, vmax, out, xsize=xsize, rot=rot, lonra=lonra, latra=latra
+                data,
+                vmin,
+                vmax,
+                out,
+                xsize=xsize,
+                ysize=ysize,
+                rot=rot,
+                lonra=lonra,
+                latra=latra,
             )
         elif gnomview:
-            plot_single_gnomview(data, vmin, vmax, out, xsize=xsize, rot=rot, reso=reso)
+            plot_single_gnomview(
+                data, vmin, vmax, out, xsize=xsize, ysize=ysize, rot=rot, reso=reso
+            )
         else:
             plot_single_mollview(data, vmin, vmax, out, xsize=xsize)
 
@@ -670,7 +723,8 @@ def plot_healpix_maps(
 
     hitdata = None
     rot = None
-    xsize = 1600
+    xsize = 1000
+    ysize = 1000
     goodhits = slice(None)
     lonspan = None
     latspan = None
@@ -687,6 +741,13 @@ def plot_healpix_maps(
         goodindx = np.arange(npix, dtype=np.int32)[goodhits]
         rot, lonspan, latspan = lonlat_range(nside, goodindx)
 
+        print(f"lonspan = {lonspan}", flush=True)
+        print(f"latspan = {latspan}", flush=True)
+        aspect = (latspan[1] - latspan[0]) / (lonspan[1] - lonspan[0])
+        print(f"aspect = {aspect}", flush=True)
+        ysize = int(xsize * aspect)
+        print(f"ysize = {ysize}", flush=True)
+
         if gnomres is None:
             gnomres = 1.2 * (latspan[1] - latspan[0]) / xsize
             gnomres *= 60
@@ -697,6 +758,7 @@ def plot_healpix_maps(
             maxhits,
             plot_map_path(hitfile, image_format, out_dir=out_dir),
             xsize=xsize,
+            ysize=ysize,
             rot=rot,
             reso=gnomres,
             lonra=lonspan,
@@ -743,6 +805,7 @@ def plot_healpix_maps(
                     mapfile, image_format, suffix=f"_{comp}", out_dir=out_dir
                 ),
                 xsize=xsize,
+                ysize=ysize,
                 rot=rot,
                 reso=gnomres,
                 lonra=lonspan,
@@ -764,6 +827,7 @@ def plot_healpix_maps(
                         mapfile, image_format, suffix=f"_input_{comp}", out_dir=out_dir
                     ),
                     xsize=xsize,
+                    ysize=ysize,
                     rot=rot,
                     reso=gnomres,
                     lonra=lonspan,
@@ -778,6 +842,7 @@ def plot_healpix_maps(
                         mapfile, image_format, suffix=f"_resid_{comp}", out_dir=out_dir
                     ),
                     xsize=xsize,
+                    ysize=ysize,
                     rot=rot,
                     reso=gnomres,
                     lonra=lonspan,
