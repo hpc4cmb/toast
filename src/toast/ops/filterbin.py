@@ -314,6 +314,10 @@ class FilterBin(Operator):
         False, help="Apply a different template for left and right scans"
     )
 
+    ground_template_expansion_order = Int(
+        0, help="Taylor-expand each azimuthal bin in time"
+    )
+
     leftright_interval = Unicode(
         defaults.throw_leftright_interval,
         help="Intervals for left-to-right scans",
@@ -904,14 +908,14 @@ class FilterBin(Operator):
         return
 
     @function_timer
-    def _add_ground_bin_templates(self, obs, templates):
+    def _add_ground_bin_templates(self, ob, templates):
         if self.ground_filter_bin_width is None:
             return
 
         if self.azimuth is not None:
-            az = obs.shared[self.azimuth]
+            az = ob.shared[self.azimuth]
         else:
-            quats = obs.shared[self.boresight_azel]
+            quats = ob.shared[self.boresight_azel]
             theta, phi, _ = qa.to_iso_angles(quats)
             az = 2 * np.pi - phi
 
@@ -926,7 +930,7 @@ class FilterBin(Operator):
 
         # bin numbers are positive by construction.
         # Assign flagged samples to bin = -1
-        shared_flags = np.array(obs.shared[self.shared_flags])
+        shared_flags = np.array(ob.shared[self.shared_flags])
         bad = (shared_flags & self.shared_flag_mask) != 0
         ibin[bad] = -1
 
@@ -959,7 +963,7 @@ class FilterBin(Operator):
             masks = []
             for name in self.leftright_interval, self.rightleft_interval:
                 mask = np.zeros(ibin.size, dtype=bool)
-                for ival in obs.intervals[name]:
+                for ival in ob.intervals[name]:
                     mask[ival.first : ival.last] = True
                 masks.append(mask)
             for template in directionless_templates:
@@ -967,6 +971,20 @@ class FilterBin(Operator):
                     temp = template.copy()
                     temp[mask] = 0
                     ground_templates.append(temp)
+
+        # Optionally add time derivatives of each bin temperature
+        norder = self.ground_template_expansion_order
+        if norder > 0:
+            times = ob.shared[self.times].data
+            times = times - times[0]
+            times = times / times[-1] * 2 - 1
+            new_templates = []
+            for template in ground_templates:
+                new_templates.append(template)
+                for order in range(norder):
+                    derivative = template * times**(order + 1)
+                    new_templates.append(derivative)
+            ground_templates = new_templates
 
         ground_templates = np.vstack(ground_templates)
 
@@ -1119,7 +1137,7 @@ class FilterBin(Operator):
         if rcond == 0:
             # No covariance for empty templates
             return None
-        if rcond > 1e-6:
+        if rcond > 1e-10:
             cov = np.linalg.inv(invcov)
         else:
             log.warning(
