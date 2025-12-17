@@ -336,6 +336,12 @@ class FilterBin(Operator):
 
     write_obs_matrix = Bool(False, help="Write the observation matrix")
 
+    nskip_obs_matrix = Int(
+        1,
+        help="Only output observation matrix for every nth detector on the "
+        "focalplane",
+    )
+
     noiseweight_obs_matrix = Bool(
         False, help="If True, observation matrix should match noise-weighted maps"
     )
@@ -631,6 +637,13 @@ class FilterBin(Operator):
                         f"# {idet + 1} / {len(dets)}",
                     )
 
+                # See if we are computing the observation matrix for this
+                # detector
+                if self.write_obs_matrix and idet % self.nskip_obs_matrix == 0:
+                    write_obs_matrix = True
+                else:
+                    write_obs_matrix = False
+
                 signal = obs.detdata[self.det_data][det]
                 flags = obs.detdata[self.det_flags][det]
                 # `good` is essentially the diagonal noise matrix used in
@@ -649,7 +662,7 @@ class FilterBin(Operator):
                     and self._deproject_pattern.match(det) is not None
                 )
 
-                if deproject or self.write_obs_matrix:
+                if deproject or write_obs_matrix:
                     # We'll need pixel numbers
                     obs_data = data.select(obs_uid=obs.uid)
                     self.binning.pixel_pointing.apply(obs_data, detectors=[det])
@@ -771,16 +784,17 @@ class FilterBin(Operator):
                         )
                         t1 = time()
 
-                    self._accumulate_observation_matrix(
-                        obs,
-                        det,
-                        pixels,
-                        weights,
-                        good_fit,
-                        good_bin,
-                        det_templates,
-                        template_covariance,
-                    )
+                    if write_obs_matrix:
+                        self._accumulate_observation_matrix(
+                            obs,
+                            det,
+                            pixels,
+                            weights,
+                            good_fit,
+                            good_bin,
+                            det_templates,
+                            template_covariance,
+                        )
 
         log.debug_rank(
             f"{self.group:4} : FilterBin:   Filtered group data in",
