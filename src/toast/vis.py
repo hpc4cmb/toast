@@ -548,6 +548,7 @@ def plot_healpix_maps(
         image_format (str): The output image format.
         out_dir (str): The output directory for the plots.
         graticule (bool): If True, draw a grid on the plot.
+        legacy (bool): If True, use the old healpy visualization functions.
 
     """
     set_matplotlib_backend()
@@ -600,54 +601,53 @@ def plot_healpix_maps(
         data, vmin, vmax, out, xsize=1000, ysize=1000, rot=None, lonra=None, latra=None
     ):
         file_base = os.path.splitext(os.path.basename(out))[0]
-        # if lonra is None:
-        #     lonra_res = None
-        # else:
 
-        # if lonra is None:
-        #     grat_res = None
-        # else:
-        #     grat_res = int((lonra[1] - lonra[0]) / 10)
+        if legacy:
+            if lonra is None:
+                grat_res = None
+            else:
+                grat_res = int((lonra[1] - lonra[0]) / 10)
 
-        projview(
-            data,
-            nest=True,
-            coord=["C"],
-            graticule=graticule,
-            graticule_labels=True,
-            rot=None,
-            xsize=xsize,
-            latra=latra,
-            lonra=lonra,
-            # longitude_grid_spacing=60,
-            # latitude_grid_spacing=30,
-            cmap=cmap,
-            min=vmin,
-            max=vmax,
-            unit="Value",
-            xlabel="Longitude",
-            ylabel="Latitude",
-            cb_orientation="horizontal",
-            projection_type="cart",
-            title=file_base,
-        )
-
-        # hp.cartview(
-        #     map=data,
-        #     # Cartesian projection defaults to centered on coverage
-        #     rot=None,
-        #     xsize=xsize,
-        #     ysize=ysize,
-        #     latra=latra,
-        #     lonra=lonra,
-        #     nest=True,
-        #     cmap=cmap,
-        #     min=vmin,
-        #     max=vmax,
-        #     title=file_base,
-        # )
-        # if graticule:
-        #     hp.graticule(dpar=grat_res, dmer=grat_res)
+            hp.cartview(
+                map=data,
+                # Cartesian projection defaults to centered on coverage
+                rot=None,
+                xsize=xsize,
+                ysize=ysize,
+                latra=latra,
+                lonra=lonra,
+                nest=True,
+                cmap=cmap,
+                min=vmin,
+                max=vmax,
+                title=file_base,
+            )
+            if graticule:
+                hp.graticule(dpar=grat_res, dmer=grat_res)
+        else:
+            projview(
+                data,
+                nest=True,
+                coord=["C"],
+                graticule=graticule,
+                graticule_labels=True,
+                rot=None,
+                rot_graticule=True,
+                xsize=xsize,
+                latra=latra,
+                lonra=lonra,
+                # longitude_grid_spacing=60,
+                # latitude_grid_spacing=30,
+                cmap=cmap,
+                min=vmin,
+                max=vmax,
+                unit="Value",
+                xlabel="Longitude",
+                ylabel="Latitude",
+                cb_orientation="horizontal",
+                projection_type="cart",
+                title=file_base,
+            )
         plt.savefig(out, format=image_format)
         plt.close()
 
