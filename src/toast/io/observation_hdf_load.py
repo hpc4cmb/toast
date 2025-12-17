@@ -561,6 +561,7 @@ def load_hdf5_obs_meta(
                         msg += f"{obj.attrs['class']}, but instantiated "
                         msg += "object does not have a load_hdf5() method"
                         log.error(msg)
+                        raise RuntimeError(msg)
                     continue
             # Warn that we are not loading this object
             msg = f"Found un-loadable metadata object '{obj_name}'.  Skipping."
@@ -591,6 +592,7 @@ def load_hdf5_obs_meta(
                         msg += f"{obj.attrs['class']}, but instantiated "
                         msg += "object does not have a load_hdf5() method"
                         log.error(msg)
+                        raise RuntimeError(msg)
                     continue
             # Warn that we are not loading this object
             msg = f"Found un-loadable attribute object '{obj_name}'.  Skipping."
