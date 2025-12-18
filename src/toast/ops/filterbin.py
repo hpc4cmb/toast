@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import pickle
 import re
 from glob import glob
 from time import time
@@ -154,6 +155,11 @@ class SparseTemplates:
         self.reset()
         return
 
+    @property
+    def normalized_amplitudes(self):
+        normalized = np.array(self.amplitudes) * np.array(self.norms)
+        return normalized
+
     @function_timer
     def build_template_covariance(self, good):
         """Calculate (F^T N^-1_F F)^-1
@@ -190,7 +196,7 @@ class SparseTemplates:
                 log.error(f"{row:03d} {invcov[row, row]}")
             raise
         log.debug(
-            f"FilterBin: Template covariance matrix "
+            f"SparseTemplates: Template covariance matrix "
             f"rcond = {rcond}",
         )
         if rcond == 0:
@@ -201,7 +207,7 @@ class SparseTemplates:
             cov = np.linalg.inv(invcov)
         else:
             log.warning(
-                f"FilterBin: WARNING: template covariance matrix "
+                f"SparseTemplates: WARNING: template covariance matrix "
                 f"is poorly conditioned: "
                 f"rcond = {rcond}.  Using matrix pseudoinverse.",
             )
@@ -485,6 +491,12 @@ class FilterBin(Operator):
         help="Cache directory for additive observation matrix products",
     )
 
+    amplitude_dir = Unicode(
+        None,
+        allow_none=True,
+        help="Write the template amplitudes to this directory",
+    )
+
     rcond_threshold = Float(
         1.0e-3,
         help="Minimum value for inverse pixel condition number cut.",
@@ -716,9 +728,10 @@ class FilterBin(Operator):
             memreport.apply(data)
 
             last_good_fit = None
-            template_covariance = None
+            template_amplitudes = {}  # for saving
 
             for idet, det in enumerate(dets):
+                template_amplitudes[det] = None
                 t1 = time()
                 if self.grank == 0:
                     log.debug(
@@ -870,6 +883,10 @@ class FilterBin(Operator):
                         )
                         t1 = time()
 
+                    template_amplitudes[det] = dict(zip(
+                        det_templates.names, det_templates.normalized_amplitudes
+                    ))
+
                     if write_obs_matrix:
                         self._accumulate_observation_matrix(
                             obs,
@@ -881,6 +898,20 @@ class FilterBin(Operator):
                             det_templates,
                             det_templates.template_covariance,
                         )
+
+            if self.amplitude_dir is not None:
+                # Collect and save the template amplitudes
+                fname_amp = os.path.join(
+                    self.amplitude_dir, f"{self.name}_amplitudes_{obs.name}.pck"
+                )
+                all_amplitudes = self.gcomm.gather(template_amplitudes)
+                if self.grank == 0:
+                    os.makedirs(self.amplitude_dir, exist_ok=True)
+                    for amplitudes in all_amplitudes:
+                        template_amplitudes.update(amplitudes)
+                    with open(fname_amp, "wb") as f:
+                        pickle.dump(template_amplitudes, f)
+                    log.info(f"Saved template amplitudes to {fname_amp}")
 
         log.debug_rank(
             f"{self.group:4} : FilterBin:   Filtered group data in",
