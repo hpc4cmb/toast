@@ -431,10 +431,10 @@ class FilterBin(Operator):
 
     write_obs_matrix = Bool(False, help="Write the observation matrix")
 
-    nskip_obs_matrix = Int(
+    nskip = Int(
         1,
-        help="Only output observation matrix for every nth detector on the "
-        "focalplane",
+        help="Only use every n:th detector.  Useful for quick-and-dirty "
+        "observation matrix calculation.",
     )
 
     noiseweight_obs_matrix = Bool(
@@ -731,20 +731,17 @@ class FilterBin(Operator):
             template_amplitudes = {}  # for saving
 
             for idet, det in enumerate(dets):
+                if idet % self.nskip != 0:
+                    # Only process every n:th detector
+                    continue
                 template_amplitudes[det] = None
+
                 t1 = time()
                 if self.grank == 0:
                     log.debug(
                         f"{self.group:4} : FilterBin:   Processing detector "
                         f"# {idet + 1} / {len(dets)}",
                     )
-
-                # See if we are computing the observation matrix for this
-                # detector
-                if self.write_obs_matrix and idet % self.nskip_obs_matrix == 0:
-                    write_obs_matrix = True
-                else:
-                    write_obs_matrix = False
 
                 signal = obs.detdata[self.det_data][det]
                 flags = obs.detdata[self.det_flags][det]
@@ -764,7 +761,7 @@ class FilterBin(Operator):
                     and self._deproject_pattern.match(det) is not None
                 )
 
-                if deproject or write_obs_matrix:
+                if deproject or self.write_obs_matrix:
                     # We'll need pixel numbers
                     obs_data = data.select(obs_uid=obs.uid)
                     self.binning.pixel_pointing.apply(obs_data, detectors=[det])
@@ -887,7 +884,7 @@ class FilterBin(Operator):
                         det_templates.names, det_templates.normalized_amplitudes
                     ))
 
-                    if write_obs_matrix:
+                    if self.write_obs_matrix:
                         self._accumulate_observation_matrix(
                             obs,
                             det,
