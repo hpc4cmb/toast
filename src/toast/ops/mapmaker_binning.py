@@ -290,7 +290,7 @@ class BinMap(Operator):
             log.verbose("  BinMap applying covariance")
         covariance_apply(cov, binned_map, use_alltoallv=(self.sync_type == "alltoallv"))
         # print("Binned final = ", data[self.binned].data)
-        
+
         return
 
     def _finalize(self, data, **kwargs):
