@@ -273,7 +273,7 @@ class GroundFilter(Operator):
             # of the ground template
 
             legendre_trend = np.zeros([self.trend_order, nsample])
-            legendre(x, legendre_trend, 1, self.trend_order + 1)
+            legendre_templates(x, legendre_trend, 1, self.trend_order + 1)
             templates.append(legendre_trend)
 
         # Get boresight azimuth
@@ -313,10 +313,10 @@ class GroundFilter(Operator):
         # Polynomial templates
 
         if self.filter_order is not None:
-            legendre_templates = self._make_poly_templates(phase)
+            ltemplates = self._make_poly_templates(phase)
             if self.split_template:
-                legendre_templates = self._split_templates(legendre_templates, obs)
-            templates.append(legendre_templates)
+                ltemplates = self._split_templates(ltemplates, obs)
+            templates.append(ltemplates)
 
         # Binned templates
 
