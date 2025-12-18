@@ -119,17 +119,19 @@ class InstrumentTest(MPITestCase):
         if not np.allclose(check_xi, xi, rtol=1.0e-7, atol=1.0e-6):
             print(f"XiEta xi check failed:")
             print(f"{np.transpose((check_xi, xi))}")
-            print(f" = {np.transpose((check_xi*180/np.pi, xi*180/np.pi))}")
+            print(f" = {np.transpose((check_xi * 180 / np.pi, xi * 180 / np.pi))}")
             raise ValueError("Xi values not equal")
         if not np.allclose(check_eta, eta, rtol=1.0e-7, atol=1.0e-6):
             print(f"XiEta Eta check failed:")
             print(f"{np.transpose((check_eta, eta))}")
-            print(f" = {np.transpose((check_eta*180/np.pi, eta*180/np.pi))}")
+            print(f" = {np.transpose((check_eta * 180 / np.pi, eta * 180 / np.pi))}")
             raise ValueError("Eta values not equal")
         if not np.allclose(check_gamma, gamma, rtol=1.0e-7, atol=1.0e-6):
             print(f"XiEta gamma check failed:")
             print(f"{np.transpose((check_gamma, gamma))}")
-            print(f" = {np.transpose((check_gamma*180/np.pi, gamma*180/np.pi))}")
+            print(
+                f" = {np.transpose((check_gamma * 180 / np.pi, gamma * 180 / np.pi))}"
+            )
             raise ValueError("Gamma values not equal")
 
     def test_coords(self):
@@ -206,10 +208,8 @@ class InstrumentTest(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
-        newfp = Focalplane()
-
         with H5File(fp_file, "r", comm=self.comm) as f:
-            newfp.load_hdf5(f.handle, comm=self.comm)
+            newfp = Focalplane.load_hdf5(f.handle, comm=self.comm)
 
         self.assertTrue(newfp == fp)
 
@@ -259,10 +259,8 @@ class InstrumentTest(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
-        newfp = Focalplane()
-
         with H5File(fp_file, "r", comm=self.comm) as f:
-            newfp.load_hdf5(f.handle, comm=self.comm)
+            newfp = Focalplane.load_hdf5(f.handle, comm=self.comm)
 
         # Test convolving with bandpass
         freqs = np.linspace(50, 150, 100) * u.GHz
@@ -273,9 +271,9 @@ class InstrumentTest(MPITestCase):
         # Test unit conversion and optical loading
         det = names[-1]
         result1 = newfp.bandpass.optical_loading(det, 270)
-        print(f"\noptical_loading: {result1*1e12} pW", flush=True)
+        print(f"\noptical_loading: {result1 * 1e12} pW", flush=True)
         result2 = newfp.bandpass.kcmb2w(det)
-        print(f"\nunit conversion: {result2*1e12/1e6} pW/uK_CMB", flush=True)
+        print(f"\nunit conversion: {result2 * 1e12 / 1e6} pW/uK_CMB", flush=True)
 
         with H5File(check_file, "w", comm=self.comm) as f:
             newfp.save_hdf5(f.handle, comm=self.comm)

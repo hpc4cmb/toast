@@ -36,7 +36,7 @@ class InjectCosmicRays(Operator):
     We assume the glitch to be described as
 
     .. math::
-    \gamma (t) = C_1 +C_2 e^{-t/\tau }
+    \\gamma (t) = C_1 +C_2 e^{-t/\\tau }
 
     where :math:C_1 and :math:C_2 and the time constant :math:\tau  are drawn from a distribution of estimated values
     from simulations.   For each observation and each detector, we estimate the number of hits expected

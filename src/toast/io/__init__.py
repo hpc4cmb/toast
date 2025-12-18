@@ -4,7 +4,6 @@
 
 # Namespace imports
 
-from .compression import compress_detdata, decompress_detdata
 from .hdf_utils import H5File, have_hdf5_parallel, hdf5_config, hdf5_open
 from .observation_hdf_load import (
     load_hdf5,

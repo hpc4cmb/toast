@@ -1,14 +1,11 @@
-# Copyright (c) 2021-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import glob
 import os
 import re
 
 import h5py
-import numpy as np
-import traitlets
 
 from ..dist import distribute_discrete
 from ..io import load_hdf5
@@ -35,7 +32,7 @@ class LoadHDF5(Operator):
         None, allow_none=True, help="Top-level directory containing the data volume"
     )
 
-    pattern = Unicode("obs_.*_.*\.h5", help="Regexp pattern to match files against")
+    pattern = Unicode(r"obs_.*_.*\.h5", help="Regexp pattern to match files against")
 
     files = List([], help="Override `volume` and load a list of files")
 

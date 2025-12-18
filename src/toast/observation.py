@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -197,6 +197,7 @@ class Observation(MutableMapping):
     """
 
     view = ViewInterface()
+    _reserved = set(["dist", "detdata", "shared", "intervals"])
 
     @function_timer
     def __init__(
@@ -574,6 +575,76 @@ class Observation(MutableMapping):
         val += "\n>"
         return val
 
+    def meta_equal(self, other, prefix):
+        """Test if observation metadata is equal between instances.
+
+        This compares the `_internal` dictionary of metadata between two
+        observations.
+
+        Args:
+            other (Observation):  The other instance to compare
+            prefix (str):  The top level prefix string for logging
+
+        Returns:
+            (bool):  True if the metadata is equal, else False
+
+        """
+        log = Logger.get()
+
+        def _compare_nodes(self_obj, other_obj, prefix):
+            if type(self_obj) is not type(other_obj):
+                if np.ndim(self_obj) == 0 and np.ndim(other_obj) == 0:
+                    # Both objects are scalars, but one might be a native python
+                    # type and the other a numpy type.  Continue with testing
+                    # these values.
+                    pass
+                else:
+                    msg = f"{prefix} meta_equal type {type(self_obj)} != "
+                    msg += f"{type(other_obj)}"
+                    log.verbose(msg)
+                    return False
+            if isinstance(self_obj, dict):
+                if set(self_obj.keys()) != set(other_obj.keys()):
+                    msg = f"{prefix} meta_equal dict keys mismatch"
+                    log.verbose(msg)
+                    return False
+                result = True
+                for k, v in self_obj.items():
+                    v_other = other_obj[k]
+                    child_prefix = f"{prefix}_{k}"
+                    check = _compare_nodes(v, v_other, child_prefix)
+                    if not check:
+                        result = False
+                return result
+            if isinstance(self_obj, (list, tuple)):
+                if len(self_obj) != len(other_obj):
+                    msg = f"{prefix} meta_equal container length mismatch"
+                    log.verbose(msg)
+                    return False
+                result = True
+                for index, val in enumerate(self_obj):
+                    other_val = other_obj[index]
+                    child_prefix = f"{prefix}_{index:04d}"
+                    check = _compare_nodes(val, other_val, child_prefix)
+                    if not check:
+                        result = False
+                return result
+            try:
+                is_eq = np.allclose(self_obj, other_obj)
+                if not is_eq:
+                    msg = f"{prefix} meta_equal arrays are not close"
+                    log.verbose(msg)
+                result = is_eq
+            except Exception:
+                # Not arrays
+                result = self_obj == other_obj
+                if not result:
+                    msg = f"{prefix} meta_equal scalars are not equal"
+                    log.verbose(msg)
+            return result
+
+        return _compare_nodes(self._internal, other._internal, prefix)
+
     def __eq__(self, other):
         # Note that testing for equality is quite expensive, since it means testing all
         # metadata and also all detector, shared, and interval data.  This is mainly
@@ -599,23 +670,14 @@ class Observation(MutableMapping):
         if self.dist != other.dist:
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs distributions not equal")
-        if set(self._internal.keys()) != set(other._internal.keys()):
+        if self.local_detector_flags != other.local_detector_flags:
             fail = 1
-            log.verbose(f"Proc {self.comm.world_rank}:  Obs metadata keys not equal")
-        for k, v in self._internal.items():
-            if v != other._internal[k]:
-                feq = True
-                try:
-                    feq = np.allclose(v, other._internal[k])
-                except Exception:
-                    # Not floating point data
-                    feq = False
-                if not feq:
-                    fail = 1
-                    log.verbose(
-                        f"Proc {self.comm.world_rank}:  Obs metadata[{k}]:  {v} != {other[k]}"
-                    )
-                    break
+            log.verbose(
+                f"Proc {self.comm.world_rank}:  Obs local_detector_flags not equal"
+            )
+
+        self.meta_equal(other, f"Proc {self.comm.world_rank}:  Obs _internal")
+
         if self.shared != other.shared:
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs shared data not equal")
@@ -625,6 +687,37 @@ class Observation(MutableMapping):
         if self.intervals != other.intervals:
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs intervals not equal")
+
+        # Handle other arbitrary attributes.
+        self_attrs = list()
+        for k, v in vars(self).items():
+            if k.startswith("_"):
+                continue
+            if k in self._reserved:
+                continue
+            self_attrs.append(k)
+        other_attrs = list()
+        for k, v in vars(other).items():
+            if k.startswith("_"):
+                continue
+            if k in self._reserved:
+                continue
+            other_attrs.append(k)
+        if other_attrs != self_attrs:
+            fail = 1
+            msg = f"Proc {self.comm.world_rank}:  Obs attr lists not equal "
+            msg += f"{other_attrs} != {self_attrs}"
+            log.verbose(msg)
+        else:
+            for attr in self_attrs:
+                self_obj = getattr(self, attr)
+                other_obj = getattr(other, attr)
+                if self_obj != other_obj:
+                    fail = 1
+                    log.verbose(
+                        f"Proc {self.comm.world_rank}:  Obs attr {attr} not equal"
+                    )
+
         if self.comm.comm_group is not None:
             fail = self.comm.comm_group.allreduce(fail, op=MPI.SUM)
         return fail == 0
@@ -633,7 +726,13 @@ class Observation(MutableMapping):
         return not self.__eq__(other)
 
     def duplicate(
-        self, times=None, meta=None, shared=None, detdata=None, intervals=None
+        self,
+        times=None,
+        meta=None,
+        attr=None,
+        shared=None,
+        detdata=None,
+        intervals=None,
     ):
         """Return a copy of the observation and all its data.
 
@@ -650,6 +749,7 @@ class Observation(MutableMapping):
         Args:
             times (str):  The name of the timestamps shared field.
             meta (list):  List of metadata objects to copy, or None.
+            attr (list):  List of other observation attributes to copy, or None.
             shared (list):  List of shared objects to copy, or None.
             detdata (list):  List of detdata objects to copy, or None.
             intervals (list):  List of intervals objects to copy, or None.
@@ -697,6 +797,17 @@ class Observation(MutableMapping):
                 new_obs.intervals[name] = IntervalList(
                     new_obs.shared[times], timespans=timespans
                 )
+        # Handle other arbitrary attributes
+        for k, v in vars(self).items():
+            if k.startswith("_"):
+                # We skip internal objects
+                continue
+            if hasattr(new_obs, k):
+                # This is some object already instantiated above
+                continue
+            if attr is None or k in attr:
+                # Copy this object
+                setattr(new_obs, k, copy.deepcopy(v))
         return new_obs
 
     def memory_use(self):

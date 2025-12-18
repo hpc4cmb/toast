@@ -1,14 +1,14 @@
-# Copyright (c) 2021-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
 
 import numpy as np
-import traitlets
+import warnings
 
 from ..io import load_hdf5, save_hdf5
-from ..mpi import MPI, comm_equal
+from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Dict, Int, List, Unicode, trait_docs
@@ -51,23 +51,40 @@ def obs_approx_equal(obs1, obs2):
     if obs1.dist != obs2.dist:
         fail = 1
         log.verbose(f"Proc {obs1.comm.world_rank}:  Obs distributions not equal")
-    if set(obs1._internal.keys()) != set(obs2._internal.keys()):
+
+    if not obs1.meta_equal(obs2, f"Proc {obs1.comm.world_rank}:  Obs _internal"):
         fail = 1
-        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs metadata keys not equal")
-    for k, v in obs1._internal.items():
-        if v != obs2._internal[k]:
-            feq = True
-            try:
-                feq = np.allclose(v, obs2._internal[k])
-            except Exception:
-                # Not floating point data
-                feq = False
-            if not feq:
+        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs metadata not equal")
+
+    # Compare any extra metadata class instances
+    extra_objs1 = list()
+    for k, v in vars(obs1).items():
+        if k.startswith("_"):
+            continue
+        if hasattr(v, "save_hdf5"):
+            extra_objs1.append(k)
+    extra_objs2 = list()
+    for k, v in vars(obs2).items():
+        if k.startswith("_"):
+            continue
+        if hasattr(v, "save_hdf5"):
+            extra_objs2.append(k)
+
+    if extra_objs1 != extra_objs2:
+        fail = 1
+        log.verbose(
+            f"Proc {obs1.comm.world_rank}:  Obs extra metadata obj lists not equal"
+        )
+    else:
+        for exobj in extra_objs1:
+            obj1 = getattr(obs1, exobj)
+            obj2 = getattr(obs2, exobj)
+            if obj1 != obj2:
                 fail = 1
                 log.verbose(
-                    f"Proc {obs1.comm.world_rank}:  Obs metadata[{k}]:  {v} != {obs2[k]}"
+                    f"Proc {obs1.comm.world_rank}:  Obs extra {exobj} not equal"
                 )
-                break
+
     if obs1.shared != obs2.shared:
         fail = 1
         log.verbose(f"Proc {obs1.comm.world_rank}:  Obs shared data not equal")
@@ -114,13 +131,8 @@ def obs_approx_equal(obs1, obs2):
             msg += f"{o1d[k].units} != {o2d[k].units}"
             log.verbose(msg)
             fail = 1
-        if o1d[k].dtype == np.dtype(np.float64):
-            if not np.allclose(o1d[k].data, o2d[k].data, rtol=1.0e-5, atol=1.0e-8):
-                msg = f"Proc {obs1.comm.world_rank}:  Obs detdata {k} array "
-                msg += f"{o1d[k].data} != {o2d[k].data}"
-                log.verbose(msg)
-                fail = 1
-        elif o1d[k].dtype == np.dtype(np.float32):
+        if o1d[k].dtype == np.dtype(np.float64) or o1d[k].dtype == np.dtype(np.float32):
+            # Only compare to 32bit precision
             if not np.allclose(o1d[k].data, o2d[k].data, rtol=1.0e-3, atol=1.0e-5):
                 msg = f"Proc {obs1.comm.world_rank}:  Obs detdata {k} array "
                 msg += f"{o1d[k].data} != {o2d[k].data}"
@@ -140,7 +152,18 @@ def obs_approx_equal(obs1, obs2):
 class SaveHDF5(Operator):
     """Operator which saves observations to HDF5.
 
-    This creates a file for each observation.
+    This creates a file for each observation.  Detector data compression can be enabled
+    by specifying a tuple for each item in the detdata list.  The first item in the
+    tuple is the field name.  The second item is either None, or a dictionary of FLAC
+    comppression properties.  Allowed compression parameters are:
+
+        "level": (int) the compression level
+        "quanta": (float) the quantization value, only for floating point data
+        "precision": (float) the fixed precision, only for floating point data
+
+    For integer data, an empty dictionary may be passed, and FLAC compression
+    will use the default level (5).  Floating point data *must* specify either the
+    quanta or precision parameters.
 
     """
 
@@ -177,7 +200,7 @@ class SaveHDF5(Operator):
     )
 
     detdata_float32 = Bool(
-        False, help="If True, convert any float64 detector data to float32 on write."
+        False, help="(Deprecated) Specify the per-field compression parameters."
     )
 
     detdata_in_place = Bool(
@@ -186,12 +209,14 @@ class SaveHDF5(Operator):
         "over the input data.",
     )
 
-    compress_detdata = Bool(False, help="If True, use FLAC to compress detector signal")
+    compress_detdata = Bool(
+        False, help="(Deprecated) Specify the per-field compression parameters"
+    )
 
     compress_precision = Int(
         None,
         allow_none=True,
-        help="Number of significant digits to retain in detdata compression",
+        help="(Deprecated) Specify the per-field compression parameters",
     )
 
     verify = Bool(False, help="If True, immediately load data back in and verify")
@@ -207,6 +232,26 @@ class SaveHDF5(Operator):
             msg = "You must set the volume trait prior to calling exec()"
             log.error(msg)
             raise RuntimeError(msg)
+
+        # Warn for deprecated traits that will be removed eventually.
+
+        if self.detdata_float32:
+            msg = "The detdata_float32 option is deprecated.  Instead, specify"
+            msg = " a compression quanta / precision that is appropriate for"
+            msg = " each detdata field."
+            warnings.warn(msg, DeprecationWarning)
+
+        if self.compress_detdata:
+            msg = "The compress_detdata option is deprecated.  Instead, specify"
+            msg = " a compression quanta / precision that is appropriate for"
+            msg = " each detdata field."
+            warnings.warn(msg, DeprecationWarning)
+
+        if self.compress_precision is not None:
+            msg = "The compress_precision option is deprecated.  Instead, specify"
+            msg = " a compression quanta / precision that is appropriate for"
+            msg = " each detdata field."
+            warnings.warn(msg, DeprecationWarning)
 
         # One process creates the top directory
         if data.comm.world_rank == 0:
@@ -226,6 +271,38 @@ class SaveHDF5(Operator):
         if len(self.intervals) > 0:
             intervals_fields = list(self.intervals)
 
+        if len(self.detdata) > 0:
+            detdata_fields = list(self.detdata)
+        else:
+            detdata_fields = list()
+
+        # Handle parsing of deprecated global compression options.  All
+        # new code should specify the FLAC compression parameters per
+        # field.
+        for ifield, field in enumerate(detdata_fields):
+            if not isinstance(field, str):
+                # User already specified compression parameters
+                continue
+            cprops = {"level": 5}
+            if self.compress_detdata:
+                # Try to guess what to do.
+                if "flag" not in field:
+                    # Might be float data
+                    if self.compress_precision is None:
+                        # Compress to 32bit floats
+                        cprops["quanta"] = np.finfo(np.float32).eps
+                    else:
+                        cprops["precision"] = self.compress_precision
+                detdata_fields[ifield] = (field, cprops)
+            elif self.detdata_float32:
+                # Implement this truncation as just compression to 32bit float
+                # precision
+                cprops["quanta"] = np.finfo(np.float32).eps
+                detdata_fields[ifield] = (field, cprops)
+            else:
+                # No compression
+                detdata_fields[ifield] = (field, None)
+
         for ob in data.obs:
             # Observations must have a name for this to work
             if ob.name is None:
@@ -235,35 +312,9 @@ class SaveHDF5(Operator):
 
             # Check to see if any detector data objects are temporary and have just
             # a partial list of detectors.  Delete these.
-
             for dd in list(ob.detdata.keys()):
                 if ob.detdata[dd].detectors != ob.local_detectors:
                     del ob.detdata[dd]
-
-            if len(self.detdata) > 0:
-                detdata_fields = list(self.detdata)
-            else:
-                detdata_fields = list()
-
-            if self.compress_detdata:
-                # Add generic compression instructions to detdata fields
-                for ifield, field in enumerate(detdata_fields):
-                    if not isinstance(field, str):
-                        # Assume user already supplied instructions for this field
-                        continue
-                    if "flag" in field:
-                        # Flags are ZIP-compressed
-                        detdata_fields[ifield] = (field, {"type": "gzip"})
-                    else:
-                        # Everything else is FLAC-compressed
-                        detdata_fields[ifield] = (
-                            field,
-                            {
-                                "type": "flac",
-                                "level": 5,
-                                "precision": self.compress_precision,
-                            },
-                        )
 
             outpath = save_hdf5(
                 ob,
@@ -275,7 +326,6 @@ class SaveHDF5(Operator):
                 config=self.config,
                 times=str(self.times),
                 force_serial=self.force_serial,
-                detdata_float32=self.detdata_float32,
                 detdata_in_place=self.detdata_in_place,
             )
 
@@ -299,47 +349,13 @@ class SaveHDF5(Operator):
                     # We saved nothing
                     verify_fields = list()
 
-                if self.detdata_float32:
-                    # We want to duplicate everything *except* float64 detdata
-                    # fields.
-                    dup_detdata = list()
-                    conv_detdata = list()
-                    for fld in verify_fields:
-                        if ob.detdata[fld].dtype == np.dtype(np.float64):
-                            conv_detdata.append(fld)
-                        else:
-                            dup_detdata.append(fld)
-                    original = ob.duplicate(
-                        times=str(self.times),
-                        meta=meta_fields,
-                        shared=shared_fields,
-                        detdata=dup_detdata,
-                        intervals=intervals_fields,
-                    )
-                    for fld in conv_detdata:
-                        if len(ob.detdata[fld].detector_shape) == 1:
-                            sample_shape = None
-                        else:
-                            sample_shape = ob.detdata[fld].detector_shape[1:]
-                        original.detdata.create(
-                            fld,
-                            sample_shape=sample_shape,
-                            dtype=np.float32,
-                            detectors=ob.detdata[fld].detectors,
-                            units=ob.detdata[fld].units,
-                        )
-                        original.detdata[fld].data[:] = (
-                            ob.detdata[fld].data[:].astype(np.float32)
-                        )
-                else:
-                    # Duplicate detdata
-                    original = ob.duplicate(
-                        times=str(self.times),
-                        meta=meta_fields,
-                        shared=shared_fields,
-                        detdata=verify_fields,
-                        intervals=intervals_fields,
-                    )
+                original = ob.duplicate(
+                    times=str(self.times),
+                    meta=meta_fields,
+                    shared=shared_fields,
+                    detdata=verify_fields,
+                    intervals=intervals_fields,
+                )
 
                 compare = load_hdf5(
                     loadpath,
@@ -355,7 +371,9 @@ class SaveHDF5(Operator):
                 if not obs_approx_equal(compare, original):
                     msg = "Observation HDF5 verify failed:\n"
                     msg += f"Input = {original}\n"
-                    msg += f"Loaded = {compare}"
+                    msg += f"Loaded = {compare}\n"
+                    msg += f"Input signal[0] = {original.detdata['signal'][0]}\n"
+                    msg += f"Loaded signal[0] = {compare.detdata['signal'][0]}"
                     log.error(msg)
                     raise RuntimeError(msg)
 

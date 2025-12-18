@@ -5,12 +5,12 @@
 import gzip
 
 import numpy as np
-from astropy import units as u
+from flacarray.compress import array_compress
+from flacarray.decompress import array_decompress
 
 from ..observation_data import DetectorData
 from ..timing import function_timer
 from ..utils import AlignedU8, Logger
-from .compression_flac import compress_detdata_flac, decompress_detdata_flac
 
 
 @function_timer
@@ -135,33 +135,29 @@ def compress_detdata(detdata, comp_params=None):
         if quanta is not None and precision is not None:
             raise RuntimeError("Cannot set both quanta and precision")
 
-        if detdata.dtype in ftypes:
-            (
-                comp_bytes,
-                comp_ranges,
-                comp_params["data_offsets"],
-                comp_params["data_gains"],
-            ) = compress_detdata_flac(
-                detdata, level=comp_level, quanta=quanta, precision=precision
+        if detdata.dtype in ftypes or detdata.dtype in itypes:
+            (comp_bytes, stream_starts, stream_nbytes, stream_offsets, stream_gains) = (
+                array_compress(
+                    detdata.data.reshape((n_det, -1)),
+                    level=comp_level,
+                    quanta=quanta,
+                    precision=precision,
+                )
             )
-        elif detdata.dtype == np.dtype(np.int64):
-            (
-                comp_bytes,
-                comp_ranges,
-                comp_params["data_offsets"],
-            ) = compress_detdata_flac(detdata, level=comp_level)
-        elif detdata.dtype == np.dtype(np.int32):
-            (
-                comp_bytes,
-                comp_ranges,
-            ) = compress_detdata_flac(detdata, level=comp_level)
+
+            comp_ranges = [(x, x + y) for x, y in zip(stream_starts, stream_nbytes)]
+            if detdata.dtype in ftypes:
+                comp_params["data_offsets"] = stream_offsets
+                comp_params["data_gains"] = stream_gains
+            elif detdata.dtype == np.dtype(np.int64):
+                comp_params["data_offsets"] = stream_offsets
         else:
-            msg = f"FLAC Compression of type '{detdata.dtype}' is not supported"
+            msg = f"Legacy FLAC Compression of type '{detdata.dtype}' is not supported"
             raise RuntimeError(msg)
 
         return (comp_bytes, comp_ranges, comp_params)
     else:
-        msg = f"Compression type \"{comp_params['type']}\" is not supported"
+        msg = f'Compression type "{comp_params["type"]}" is not supported'
         raise NotImplementedError(msg)
 
 
@@ -218,22 +214,22 @@ def decompress_detdata(comp_bytes, comp_ranges, comp_params, detdata=None):
         # We are populating an existing data object.  Verify consistent
         # properties.
         if detectors != detdata.detectors:
-            msg = f"Input detdata container has different detectors "
+            msg = "Input detdata container has different detectors "
             msg += f"({detdata.detectors}) than compressed data "
             msg += f"({detectors})"
             raise RuntimeError(msg)
         if detector_shape != detdata.detector_shape:
-            msg = f"Input detdata container has different det shape "
+            msg = "Input detdata container has different det shape "
             msg += f"({detdata.detector_shape}) than compressed data "
             msg += f"({detector_shape})"
             raise RuntimeError(msg)
         if dtype != detdata.dtype:
-            msg = f"Input detdata container has different dtype "
+            msg = "Input detdata container has different dtype "
             msg += f"({detdata.dtype}) than compressed data "
             msg += f"({dtype})"
             raise RuntimeError(msg)
         if units != detdata.units:
-            msg = f"Input detdata container has different units "
+            msg = "Input detdata container has different units "
             msg += f"({detdata.units}) than compressed data "
             msg += f"({units})"
             raise RuntimeError(msg)
@@ -264,23 +260,35 @@ def decompress_detdata(comp_bytes, comp_ranges, comp_params, detdata=None):
 
     elif comp_params["type"] == "flac":
         data_offsets = None
-        if "data_offsets" in comp_params:
-            data_offsets = comp_params["data_offsets"]
-        dslices = list()
+        if "data_offsets" in comp_params and comp_params["data_offsets"] is not None:
+            data_offsets = comp_params["data_offsets"].astype(np.float32)
 
         data_gains = None
-        if "data_gains" in comp_params:
-            data_gains = comp_params["data_gains"]
-        decompress_detdata_flac(
-            detdata,
+        if "data_gains" in comp_params and comp_params["data_gains"] is not None:
+            data_gains = comp_params["data_gains"].astype(np.float32)
+
+        stream_starts = np.array([x[0] for x in comp_ranges])
+        stream_stops = np.array([x[1] for x in comp_ranges])
+        stream_nbytes = stream_stops - stream_starts
+
+        temp_array = array_decompress(
             comp_bytes,
-            comp_ranges,
-            det_offsets=data_offsets,
-            det_gains=data_gains,
+            det_stride,
+            stream_starts,
+            stream_nbytes,
+            stream_offsets=data_offsets,
+            stream_gains=data_gains,
+            first_stream_sample=None,
+            last_stream_sample=None,
+            is_int64=False,
+            use_threads=False,
+            no_flatten=True,
         )
+        for idet, det in enumerate(detectors):
+            detdata[det, :] = temp_array[idet].reshape(detector_shape)
 
     else:
-        msg = f"Compression type \"{comp_params['type']}\" is not supported"
+        msg = f'Compression type "{comp_params["type"]}" is not supported'
         raise NotImplementedError(msg)
 
     return detdata
