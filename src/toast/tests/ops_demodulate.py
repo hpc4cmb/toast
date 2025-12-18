@@ -9,6 +9,7 @@ import numpy as np
 from astropy import units as u
 
 from .. import ops as ops
+from .. import templates
 from .. import qarray as qa
 from ..observation import default_values as defaults
 from ..vis import set_matplotlib_backend
@@ -68,7 +69,7 @@ class DemodulateTest(MPITestCase):
             weights="weights_radec",
         )
 
-        sky_file = os.path.join(self.outdir, f"fake_sky_coord_change.fits")
+        sky_file = os.path.join(self.outdir, "fake_sky_coord_change.fits")
         map_key = "fake_map"
         create_fake_healpix_scanned_tod(
             data,
@@ -570,3 +571,224 @@ class DemodulateTest(MPITestCase):
                     fname_plot = os.path.join(self.outdir, "i2p_leakage.pdf")
                     plt.savefig(fname_plot)
                     assert False
+
+    def _test_destripe(self, weight_mode, data, suffix=""):
+        nside = 256
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Pointing operators
+
+        detpointing_azel = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec,
+            shared_flag_mask=0,
+        )
+        detpointing_radec = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec,
+            shared_flag_mask=0,
+        )
+
+        pixels = ops.PixelsHealpix(
+            nside=nside,
+            detector_pointing=detpointing_radec,
+        )
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_radec,
+        )
+
+        sky_file = os.path.join(self.outdir, f"fake_sky_{weight_mode}{suffix}.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            sky_file,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=1.0 * u.deg,
+            lmax=3 * nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+
+        # Destripe signal without demodulation
+
+        step_seconds = 1.0
+        tmpl = templates.Offset(
+            times=defaults.times,
+            noise_model=default_model.noise_model,
+            step_time=step_seconds * u.second,
+        )
+
+        tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        binner = ops.BinMap(
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        mapper = ops.MapMaker(
+            name=f"modulated_{weight_mode}{suffix}",
+            det_data=defaults.det_data,
+            binning=binner,
+            template_matrix=tmatrix,
+            write_hits=True,
+            write_map=True,
+            write_cov=True,
+            write_invcov=True,
+            write_rcond=True,
+            keep_final_products=False,
+            output_dir=self.outdir,
+            solve_rcond_threshold=1e-3,
+            map_rcond_threshold=1e-3,
+            reset_pix_dist=True,
+        )
+        mapper.apply(data)
+
+        # Demodulate
+
+        demod_weights_in = ops.StokesWeights(
+            weights="demod_weights_in",
+            mode=weight_mode,
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_azel,
+        )
+
+        downsample = 3
+        demod = ops.Demodulate(
+            stokes_weights=demod_weights_in,
+            nskip=downsample,
+            purge=False,
+            mode=weight_mode,
+        )
+        demod_data = demod.apply(data)
+
+        # Map again
+
+        demod_weights = ops.StokesWeightsDemod(
+            detector_pointing_in=detpointing_azel,
+            detector_pointing_out=detpointing_radec,
+            mode=weight_mode,
+        )
+
+        mapper.name = f"demodulated_{weight_mode}{suffix}"
+        binner.stokes_weights = demod_weights
+        mapper.apply(demod_data)
+
+        if data.comm.world_rank == 0:
+            set_matplotlib_backend()
+            import matplotlib.pyplot as plt
+
+            fname_mod = os.path.join(
+                self.outdir, f"modulated_{weight_mode}{suffix}_map.fits"
+            )
+            fname_demod = os.path.join(
+                self.outdir, f"demodulated_{weight_mode}{suffix}_map.fits"
+            )
+            fname_hits = os.path.join(
+                self.outdir, f"demodulated_{weight_mode}{suffix}_hits.fits"
+            )
+
+            map_mod = hp.read_map(fname_mod, None)
+            map_demod = np.atleast_2d(hp.read_map(fname_demod, None))
+            hits = hp.read_map(fname_hits)
+            map_input = np.atleast_2d(hp.read_map(sky_file, None))
+
+            # Develop a comparison mask that excludes poorly observed pixels
+            sorted_hits = np.sort(hits[hits != 0])
+            nhit = len(sorted_hits)
+            hit_min = sorted_hits[int(0.1 * nhit)]  # worst 10% of hit pixels
+            rms_mask = hits > hit_min
+
+            fig = plt.figure(figsize=[18, 12])
+            nrow, ncol = 3, 3
+            rot = [42, -42]
+            reso = 1
+            xsize = 800
+
+            amp = 1e-5
+            for i, m in enumerate(map_mod):
+                # Modulated map is full IQU
+                value = map_input[i]
+                good = m != 0
+                rms = np.sqrt(np.mean((m - value)[rms_mask] ** 2))
+                m[m == 0] = hp.UNSEEN
+                stokes = "IQU"[i]
+                hp.gnomview(
+                    m,
+                    sub=[nrow, ncol, 1 + i],
+                    reso=reso,
+                    xsize=xsize,
+                    rot=rot,
+                    title=f"Modulated {stokes} : rms = {rms}",
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
+                    cmap="coolwarm",
+                )
+
+            all_good = True
+            for stokes, m in zip(weight_mode, map_demod):
+                # Demodulated map only has the prescribed components
+                i = "IQU".index(stokes)
+                value = map_input[i]
+                good = m != 0
+                rms0 = np.sqrt(np.mean(value[rms_mask] ** 2))
+                rms = np.sqrt(np.mean(m[rms_mask] ** 2))
+                rms1 = np.sqrt(np.mean((m - value)[rms_mask] ** 2))
+                m[m == 0] = hp.UNSEEN
+                hp.gnomview(
+                    m,
+                    sub=[nrow, ncol, ncol + i + 1],
+                    reso=reso,
+                    xsize=xsize,
+                    rot=rot,
+                    title=f"Demodulated {stokes} : rms = {rms / rms0:.3f} x rms(in)",
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
+                    cmap="coolwarm",
+                )
+                resid = m - value
+                resid[m == 0] = hp.UNSEEN
+                hp.gnomview(
+                    resid,
+                    sub=[nrow, ncol, 2 * ncol + i + 1],
+                    reso=reso,
+                    xsize=xsize,
+                    rot=rot,
+                    title=f"Residual {stokes} : resid rms = {rms1 / rms0:.3f} x rms(in)",
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
+                    cmap="coolwarm",
+                )
+                if rms1 / rms0 > 0.3:
+                    print(
+                        f"input - demodulated map RMS = {rms1}, (input RMS = {rms0})",
+                        flush=True,
+                    )
+                    all_good = False
+
+            outfile = os.path.join(
+                self.outdir, f"map_comparison.{weight_mode}{suffix}.png"
+            )
+            fig.savefig(outfile)
+            self.assertTrue(all_good)
+
+        if self.comm is not None:
+            self.comm.barrier()
+        close_data(demod_data)
+        close_data(data)
+
+    def test_destripe_IQU(self):
+        data = create_ground_data(self.comm)
+        self._test_destripe(weight_mode="IQU", data=data, suffix="_destripe")
+
+    def test_destripe_QU(self):
+        data = create_ground_data(self.comm)
+        self._test_destripe(weight_mode="QU", data=data, suffix="_destripe")

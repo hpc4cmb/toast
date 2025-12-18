@@ -204,6 +204,7 @@ class TemplateMatrix(Operator):
                     continue
                 if tmpl.view is None:
                     tmpl.view = self.view
+                tmpl.det_data = self.det_data
                 tmpl.det_data_units = self.det_data_units
                 tmpl.det_mask = self.det_mask
                 tmpl.det_flags = self.det_flags
@@ -933,6 +934,7 @@ class SolveAmplitudes(Operator):
         )
 
         # Initialize the template matrix
+        self.template_matrix.reset()
         self.template_matrix.det_data = self.det_data
         self.template_matrix.det_data_units = self._det_data_units
         self.template_matrix.det_flags = self.solver_flags
