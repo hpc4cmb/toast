@@ -10,7 +10,7 @@ import re
 from astropy import units as u
 
 from .. import qarray as qa
-from .._libtoast import add_templates, bin_invcov, bin_proj, legendre
+from .._libtoast import add_templates, bin_invcov, bin_proj, legendre_templates
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
@@ -227,9 +227,9 @@ class GroundFilter(Operator):
         """Evaluate Legendre polynomial templates up to the requested
         order"""
         norder = self.filter_order + 1
-        legendre_templates = np.zeros([norder, phase.size])
-        legendre(phase, legendre_templates, 0, norder)
-        return legendre_templates
+        ltemplates = np.zeros([norder, phase.size])
+        legendre_templates(phase, ltemplates, 0, norder)
+        return ltemplates
 
     @function_timer
     def _make_bin_templates(self, az):

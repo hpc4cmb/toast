@@ -8,7 +8,9 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from .._libtoast import add_templates, bin_invcov, bin_proj, fourier, legendre
+from .._libtoast import (
+    add_templates, bin_invcov, bin_proj, fourier_templates, legendre_templates
+)
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
@@ -172,18 +174,18 @@ class HWPFilter(Operator):
         x = np.arange(my_offset, my_offset + my_nsamp) / nsamp_tot * 2 - 1
 
         legendre_trend = np.zeros([self.trend_order + 1, my_nsamp])
-        legendre(x, legendre_trend, 0, self.trend_order + 1)
+        legendre_templates(x, legendre_trend, 0, self.trend_order + 1)
 
         # Fourier templates
 
         hwp_angle = obs.shared[self.hwp_angle].data
         nfilter = 2 * self.filter_order
-        fourier_templates = np.zeros([nfilter, my_nsamp])
-        fourier(hwp_angle, fourier_templates, 1, self.filter_order + 1)
+        ftemplates = np.zeros([nfilter, my_nsamp])
+        fourier_templates(hwp_angle, ftemplates, 1, self.filter_order + 1)
 
-        templates = np.vstack([legendre_trend, fourier_templates])
+        templates = np.vstack([legendre_trend, ftemplates])
 
-        return templates, legendre_trend, fourier_templates
+        return templates, legendre_trend, ftemplates
 
     @function_timer
     def fit_templates(

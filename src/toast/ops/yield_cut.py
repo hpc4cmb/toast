@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -10,7 +10,6 @@ from astropy import units as u
 
 from .. import qarray as qa
 from .. import rng
-from .._libtoast import add_templates, bin_invcov, bin_proj, legendre
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults

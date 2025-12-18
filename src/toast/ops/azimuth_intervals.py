@@ -10,7 +10,6 @@ from astropy import units as u
 from scipy.ndimage import uniform_filter1d
 
 from .. import qarray as qa
-from .._libtoast import add_templates, bin_invcov, bin_proj, legendre
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
