@@ -632,7 +632,7 @@ def plot_healpix_maps(
                 graticule=graticule,
                 graticule_labels=True,
                 rot=None,
-                rot_graticule=True,
+                # rot_graticule=True,
                 xsize=xsize,
                 latra=latra,
                 lonra=lonra,
@@ -797,6 +797,7 @@ def plot_healpix_maps(
             mmin, mmax = sym_range(mdata[goodhits])
             if rge is not None:
                 mmin, mmax = rge
+            mdata[badhits] = np.nan
             plot_single(
                 mdata,
                 mmin,
