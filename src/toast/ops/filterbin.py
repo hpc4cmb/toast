@@ -410,7 +410,15 @@ class FilterBin(Operator):
     )
 
     ground_template_expansion_order = Int(
-        0, help="Taylor-expand each azimuthal bin in time"
+        None,
+        allow_none=True,
+        help="Taylor-expand each azimuthal bin in time"
+    )
+
+    ground_template_time_step = Int(
+        None,
+        allow_none=True,
+        help="Break ground template into discrete time steps [seconds]"
     )
 
     leftright_interval = Unicode(
@@ -1055,6 +1063,31 @@ class FilterBin(Operator):
                     names.append(f"{name}-{direction}")
             legendre_filter = np.vstack(legendre_filter)
 
+        # Optionally add time steps to each bin temperature
+        timestep = self.ground_template_time_step
+        if timestep is not None:
+            times = ob.shared[self.times]
+            new_templates = []
+            new_names = []
+            tstart = times[0]
+            istep = 0
+            while tstart < times[-1]:
+                if times[-1] - tstart > 1.75 * timestep:
+                    # Break the remaining time into at least two steps
+                    tstop = tstart + timestep
+                else:
+                    # Not enough time left to add more steps
+                    tstop = times[-1]
+                good = np.logical_and(times >= tstart, times < tstop)
+                for name, template in zip(names, ground_templates):
+                    step_template = template * good
+                    new_templates.append(step_template)
+                    new_names.append(f"{name}-timestep-{istep}")
+                tstart = tstop
+                istep += 1
+            ground_templates = new_templates
+            names = new_names
+
         templates.append(names, legendre_filter)
 
         return
@@ -1134,7 +1167,7 @@ class FilterBin(Operator):
 
         # Optionally add time derivatives of each bin temperature
         norder = self.ground_template_expansion_order
-        if norder > 0:
+        if norder is not None:
             times = ob.shared[self.times].data
             times = times - times[0]
             times = times / times[-1] * 2 - 1
@@ -1145,6 +1178,31 @@ class FilterBin(Operator):
                     derivative = template * times**order
                     new_templates.append(derivative)
                     new_names.append(f"{name}-timederiv-{order}")
+            ground_templates = new_templates
+            names = new_names
+
+        # Optionally add time steps to each bin temperature
+        timestep = self.ground_template_time_step
+        if timestep is not None:
+            times = ob.shared[self.times]
+            new_templates = []
+            new_names = []
+            tstart = times[0]
+            istep = 0
+            while tstart < times[-1]:
+                if times[-1] - tstart > 1.75 * timestep:
+                    # Break the remaining time into at least two steps
+                    tstop = tstart + timestep
+                else:
+                    # Not enough time left to add more steps
+                    tstop = times[-1]
+                good = np.logical_and(times >= tstart, times < tstop)
+                for name, template in zip(names, ground_templates):
+                    step_template = template * good
+                    new_templates.append(step_template)
+                    new_names.append(f"{name}-timestep-{istep}")
+                tstart = tstop
+                istep += 1
             ground_templates = new_templates
             names = new_names
 
