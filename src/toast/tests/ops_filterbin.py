@@ -101,6 +101,7 @@ class FilterBinTest(MPITestCase):
             hwp_filter_order=4,
             ground_filter_order=ground_order,
             ground_filter_bin_width=ground_bin_width,
+            ground_filter_time_step=600,
             split_ground_template=True,
             poly_filter_order=2,
             output_dir=self.outdir,
