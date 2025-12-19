@@ -901,9 +901,16 @@ class FilterBin(Operator):
                 fname_amp = os.path.join(
                     self.amplitude_dir, f"{self.name}_amplitudes_{obs.name}.pck"
                 )
-                all_amplitudes = self.gcomm.gather(template_amplitudes)
+                if self.gcomm is None:
+                    all_amplitudes = [template_amplitudes]
+                else:
+                    all_amplitudes = self.gcomm.gather(template_amplitudes)
                 if self.grank == 0:
                     os.makedirs(self.amplitude_dir, exist_ok=True)
+                    # delete the first amplitudes, they are already in
+                    # the local dictionary
+                    del all_amplitudes[0]
+                    # Put the received amplitudes into the local dictionary
                     for amplitudes in all_amplitudes:
                         template_amplitudes.update(amplitudes)
                     with open(fname_amp, "wb") as f:
