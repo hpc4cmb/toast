@@ -106,6 +106,7 @@ class FilterBinTest(MPITestCase):
             output_dir=self.outdir,
             write_binmap=True,
             write_hdf5=True,
+            amplitude_dir=self.outdir,
         )
         filterbin.apply(data)
 
