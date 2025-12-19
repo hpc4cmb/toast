@@ -74,6 +74,9 @@ pyver=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*
 # Install build requirements.
 CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt"
 
+# On linux, we also install spt3g for testing
+pip install -v spt3g
+
 # Build compiled dependencies
 
 # For testing locally
