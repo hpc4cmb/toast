@@ -53,51 +53,49 @@ jobs:
             python: 313
             builder: manylinux
 
-          # MacOS x86_64.  The macos-13 runner is the last
-          # Intel-based runner version.  At some point we'll
-          # need to switch to macos-latest and test cross compiling.
-          - os: macos-13
+          # MacOS x86_64.
+          - os: macos-15-intel
             arch: x86_64
             python: 310
             builder: macosx
-            deploy: 13.0
-          - os: macos-13
+            deploy: 15.0
+          - os: macos-15-intel
             arch: x86_64
             python: 311
             builder: macosx
-            deploy: 13.0
-          - os: macos-13
+            deploy: 15.0
+          - os: macos-15-intel
             arch: x86_64
             python: 312
             builder: macosx
-            deploy: 13.0
-          - os: macos-13
+            deploy: 15.0
+          - os: macos-15-intel
             arch: x86_64
             python: 313
             builder: macosx
-            deploy: 13.0
+            deploy: 15.0
 
           # MacOS arm64
-          - os: macos-latest
+          - os: macos-15
             arch: arm64
             python: 310
             builder: macosx
-            deploy: 14.0
-          - os: macos-latest
+            deploy: 15.0
+          - os: macos-15
             arch: arm64
             python: 311
             builder: macosx
-            deploy: 14.0
-          - os: macos-latest
+            deploy: 15.0
+          - os: macos-15
             arch: arm64
             python: 312
             builder: macosx
-            deploy: 14.0
-          - os: macos-latest
+            deploy: 15.0
+          - os: macos-15
             arch: arm64
             python: 313
             builder: macosx
-            deploy: 14.0
+            deploy: 15.0
     env:
       CIBW_BUILD: cp${{ matrix.python }}-${{ matrix.builder }}_${{ matrix.arch }}
       CIBW_MANYLINUX_X86_64_IMAGE: ${{ matrix.builder }}_2_28
@@ -150,7 +148,7 @@ jobs:
 
       - name: Install cibuildwheel
         run: |
-          python -m pip install cibuildwheel==2.23.3
+          python -m pip install cibuildwheel==3.3.0
 
       - name: Build wheel
         run: |
