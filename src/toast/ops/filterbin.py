@@ -1747,8 +1747,8 @@ class FilterBin(Operator):
         cov_name = f"{self.name}_cov"
         rcond_name = f"{self.name}_rcond"
         if filtered:
-            map_name = f"{self.name}_filtered_map"
-            noiseweighted_map_name = f"{self.name}_noiseweighted_filtered_map"
+            map_name = f"{self.name}_map"
+            noiseweighted_map_name = f"{self.name}_noiseweighted_map"
         else:
             map_name = f"{self.name}_unfiltered_map"
             noiseweighted_map_name = f"{self.name}_noiseweighted_unfiltered_map"
