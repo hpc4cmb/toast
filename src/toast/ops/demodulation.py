@@ -152,7 +152,7 @@ class Demodulate(Operator):
     wkernel = Int(None, allow_none=True, help="Override automatic filter kernel size")
 
     fcut = Float(
-        0.95, help="Low pass cut-off frequency in units if HWP frequency"
+        0.95, help="Low pass cut-off frequency in units of HWP frequency"
     )
 
     fmin_2f = Float(
