@@ -47,6 +47,7 @@ class SparseTemplates:
         self.names = []
         self.templates = []
         self.name_to_template = {}
+        self.name_to_index = {}
         self.norms = []
         self.template_covariance = None
         self.amplitudes = None
@@ -121,6 +122,7 @@ class SparseTemplates:
             self.names.append(name)
             self.templates.append(template[first : last + 1])
             self.name_to_template[name] = self.templates[-1]
+            self.name_to_index[name] = len(self.templates) - 1
             self.norms.append(1.0)
         self.reset()
         return
@@ -142,6 +144,7 @@ class SparseTemplates:
                 masked.names.append(name)
                 masked.templates.append(template.copy())
                 masked.name_to_template[name] = masked.templates[-1]
+                masked.name_to_index[name] = len(masked.templates) - 1
                 masked.norms.append(1.0)
             else:
                 # The masked template is null.  Any samples that the full
@@ -1349,8 +1352,9 @@ class FilterBin(Operator):
             # This detector does not have precomputed templates
             return
 
+        nsample = obs.n_local_samples
         if self.shared_flags is None:
-            shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
+            shared_flags = np.zeros(nsample, dtype=np.uint8)
         else:
             shared_flags = np.array(obs.shared[self.shared_flags])
         bad = (shared_flags & self.shared_flag_mask) != 0
@@ -1358,7 +1362,7 @@ class FilterBin(Operator):
         # Improve template orthogonality by projecting subscan
         # polynomials out from the precomputed template
         if self.poly_filter_order is not None and \
-           (self.poly_filter_view  == self.precomputed_template_view):
+           (self.poly_filter_view == self.precomputed_template_view):
             deproject_poly = True
         else:
             deproject_poly = False
@@ -1366,14 +1370,25 @@ class FilterBin(Operator):
         intervals = obs.intervals[self.precomputed_template_view]
         key = precomputed["det_to_key"][det]
         tod_templates = precomputed[key]
+
+        # Sanity check
+        for name, template in tod_templates.items():
+            if len(template) != nsample:
+                msg = f"Precomputed template {key}:{name} is wrong length: "
+                msg += f"{len(template)} != {nsample}"
+                raise RuntimeError(msg)
+
         for i, ival in enumerate(intervals):
-            istart = ival.first
-            istop = ival.last
-            # Trim flagged samples from both ends
-            while istart < istop and bad[istart]:
-                istart += 1
-            while istop - 1 > istart and bad[istop - 1]:
-                istop -= 1
+            if deproject_poly:
+                # Polynomial template slice has been trimmed
+                poly_name = f"poly-0-interval-{i}"
+                itemplate = templates.name_to_index[poly_name]
+                istart = templates.starts[itemplate]
+                istop = templates.stops[itemplate]
+            else:
+                # Use full interval length
+                istart = ival.first
+                istop = ival.last
             ind = slice(istart, istop)
             slice_templates = []
             names = []
@@ -1383,7 +1398,8 @@ class FilterBin(Operator):
                     poly_templates = []
                     for order in range(self.poly_filter_order + 1):
                         poly_name = f"poly-{order}-interval-{i}"
-                        poly_templates.append(templates.name_to_template[poly_name])
+                        poly_template = templates.name_to_template[poly_name]
+                        poly_templates.append(poly_template)
                     poly_templates = np.vstack(poly_templates)
                     invcov = np.dot(poly_templates, poly_templates.T)
                     cov = np.linalg.inv(invcov)
