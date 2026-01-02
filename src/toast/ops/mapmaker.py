@@ -829,7 +829,7 @@ class Calibrate(Operator):
 
     mc_index = Int(None, allow_none=True, help="The Monte-Carlo index")
 
-    mc_root = Unicode(None, allow_node=True, help="Root name for Monte Carlo products")
+    mc_root = Unicode(None, allow_none=True, help="Root name for Monte Carlo products")
 
     reset_pix_dist = Bool(
         False,
