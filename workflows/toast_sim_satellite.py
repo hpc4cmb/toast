@@ -114,13 +114,11 @@ def load_instrument_and_schedule(args, comm):
         sample_rate = args.sample_rate * u.Hz
     else:
         sample_rate = None
-    focalplane = toast.instrument.Focalplane(
-        sample_rate=sample_rate,
-        thinfp=args.thinfp,
-    )
 
     with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
-        focalplane.load_hdf5(f.handle, comm=comm)
+        focalplane = toast.instrument.Focalplane.load_hdf5(
+            f.handle, comm=comm, sample_rate=sample_rate, thinfp=args.thinfp
+        )
     log.info_rank("Loaded focalplane in", comm=comm, timer=timer)
     log.info_rank(f"Focalplane: {str(focalplane)}", comm=comm)
     mem = toast.utils.memreport(msg="(whole node)", comm=comm, silent=True)

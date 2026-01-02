@@ -182,12 +182,10 @@ def load_instrument_and_schedule(args, comm):
         if comm is not None:
             focalplane = comm.bcast(focalplane, root=0)
     else:
-        focalplane = toast.instrument.Focalplane(
-            sample_rate=sample_rate,
-            thinfp=args.thinfp,
-        )
         with toast.io.H5File(args.focalplane, "r", comm=comm, force_serial=True) as f:
-            focalplane.load_hdf5(f.handle, comm=comm)
+            focalplane = toast.instrument.Focalplane.load_hdf5(
+                f.handle, comm=comm, sample_rate=sample_rate, thinfp=args.thinfp
+            )
         log.info_rank(f"Saving focalplane to {fname_pickle}", comm=comm)
         if comm is None or comm.rank == 0:
             with open(fname_pickle, "wb") as handle:
