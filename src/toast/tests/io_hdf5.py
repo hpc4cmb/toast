@@ -131,10 +131,10 @@ class IoHdf5Test(MPITestCase):
 
         # Add extra metadata attribute
         if not no_meta:
+            other = create_other_meta()
             for ob in data.obs:
                 ob.extra = ExtraMeta()
-            other = create_other_meta()
-            ob.update(other)
+                ob.update(other)
 
         if base_weather:
             # Replace the simulated weather with the base class for testing

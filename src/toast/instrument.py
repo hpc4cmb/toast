@@ -1039,7 +1039,11 @@ class Focalplane(object):
 
         focalplane_class_name = None
         if handle is not None:
-            focalplane_class_name = handle.attrs["focalplane_class"]
+            if "focalplane_class" in handle.attrs:
+                focalplane_class_name = handle.attrs["focalplane_class"]
+            else:
+                # Assume the base class
+                focalplane_class_name = object_fullname(cls)
         if need_bcast:
             focalplane_class_name = comm.bcast(focalplane_class_name, root=0)
 

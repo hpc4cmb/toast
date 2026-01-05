@@ -753,6 +753,9 @@ def save_hdf5(
     if rank == 0:
         os.rename(hfpath_temp, hfpath)
 
+    if comm is not None:
+        comm.barrier()
+
     return hfpath
 
 
