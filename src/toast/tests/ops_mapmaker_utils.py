@@ -333,12 +333,12 @@ class MapmakerUtilsTest(MPITestCase):
                     for j in range(3):
                         check_zmap.data[local_sm[i], local_pix[i], j] += (
                             noise.detector_weight(det).to_value(invnpp_units)
-                            * ob.detdata["noise"][det, i]
+                            * ob.detdata["noise"][det][i]
                             * wt[i, j]
                         )
                         check_zmap_corr.data[local_sm[i], local_pix[i], j] += (
                             noise_corr.detector_weight(det).to_value(invnpp_units)
-                            * ob.detdata["noise_corr"][det, i]
+                            * ob.detdata["noise_corr"][det][i]
                             * wt[i, j]
                         )
 
