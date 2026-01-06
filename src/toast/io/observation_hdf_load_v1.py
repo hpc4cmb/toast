@@ -449,7 +449,11 @@ def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None)
     new_detsets = file_det_sets
     if parent_group is not None:
         inst_group = parent_group["instrument"]
-        toast_version = int(inst_group.attrs["toast_format_version"])
+        if "toast_format_version" in inst_group.attrs:
+            toast_version = int(inst_group.attrs["toast_format_version"])
+        else:
+            # V1 code did not write this
+            toast_version = 1
         if toast_version != 1:
             msg = "Version 1 of load_instrument() called on file format "
             msg += f"version {toast_version}"
