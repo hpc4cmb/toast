@@ -985,7 +985,13 @@ class Focalplane(object):
 
     @classmethod
     def _load_hdf5(
-        cls, handle, comm=None, detectors=None, file_det_sets=None, **kwargs
+            cls,
+            handle,
+            comm=None,
+            detectors=None,
+            file_det_sets=None,
+            sample_rate=None,
+            **kwargs,
     ):
         """Load a base class Focalplane"""
         log = Logger.get()
@@ -995,11 +1001,11 @@ class Focalplane(object):
         need_bcast = hdf5_use_serial(handle, comm) and comm is not None
 
         detector_data = None
-        sample_rate = None
         field_of_view = None
         if handle is not None:
             detector_data = read_table_hdf5(handle, path="focalplane")
-            sample_rate = detector_data.meta["sample_rate"]
+            if sample_rate is None:
+                sample_rate = detector_data.meta["sample_rate"]
             field_of_view = detector_data.meta["field_of_view"]
 
         if need_bcast:
