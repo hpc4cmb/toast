@@ -12,6 +12,7 @@ from .common_mode_noise import CommonModeNoise
 from .conviqt import SimConviqt, SimTEBConviqt, SimWeightedConviqt
 from .copy import Copy
 from .crosslinking import CrossLinking
+from .decimate_focalplane import DecimateFocalplane
 from .delete import Delete
 from .demodulation import Demodulate, StokesWeightsDemod
 from .demod_common_mode import DemodCommonModeFilter
