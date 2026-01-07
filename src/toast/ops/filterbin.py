@@ -1345,8 +1345,8 @@ class FilterBin(Operator):
     @function_timer
     def _add_precomputed_templates(self, obs, det, templates):
         log = Logger.get()
-        shared_flags = None
 
+        tod_templates = {}
         for precomputed_templates in self.precomputed_templates.split(","):
             if precomputed_templates not in obs:
                 log.warning(
@@ -1360,66 +1360,82 @@ class FilterBin(Operator):
                 # This detector does not have precomputed templates
                 continue
 
-            if shared_flags is None:
-                nsample = obs.n_local_samples
-                if self.shared_flags is None:
-                    shared_flags = np.zeros(nsample, dtype=np.uint8)
-                else:
-                    shared_flags = np.array(obs.shared[self.shared_flags])
-                bad = (shared_flags & self.shared_flag_mask) != 0
-
-                # Improve template orthogonality by projecting subscan
-                # polynomials out from the precomputed template
-                if self.poly_filter_order is not None and \
-                   (self.poly_filter_view == self.precomputed_template_view):
-                    deproject_poly = True
-                else:
-                    deproject_poly = False
-
-                intervals = obs.intervals[self.precomputed_template_view]
-
             key = precomputed["det_to_key"][det]
-            tod_templates = precomputed[key]
+            tod_templates.update(precomputed[key])
 
-            # Sanity check
-            for name, template in tod_templates.items():
-                if len(template) != nsample:
-                    msg = f"Precomputed template {key}:{name} is wrong length: "
-                    msg += f"{len(template)} != {nsample}"
-                    raise RuntimeError(msg)
+        nprecomp = len(tod_templates)
+        if nprecomp == 0:
+            # No precomputed templates for this detector
+            log.warning(f"No precomputed templates found for det = {det}")
+            return
+        else:
+            log.debug(f"Processing {nprecomp} precomputed templates for {det}")
 
-            for i, ival in enumerate(intervals):
+        nsample = obs.n_local_samples
+        if self.shared_flags is None:
+            shared_flags = np.zeros(nsample, dtype=np.uint8)
+        else:
+            shared_flags = np.array(obs.shared[self.shared_flags])
+        bad = (shared_flags & self.shared_flag_mask) != 0
+
+        # Improve template orthogonality by projecting subscan
+        # polynomials out from the precomputed template
+        if self.poly_filter_order is not None and \
+           (self.poly_filter_view == self.precomputed_template_view):
+            deproject_poly = True
+        else:
+            deproject_poly = False
+
+        intervals = obs.intervals[self.precomputed_template_view]
+
+        # Sanity check
+        for name, template in tod_templates.items():
+            if len(template) != nsample:
+                msg = f"Precomputed template {key}:{name} is wrong length: "
+                msg += f"{len(template)} != {nsample}"
+                raise RuntimeError(msg)
+
+        for i, ival in enumerate(intervals):
+            if deproject_poly:
+                # Polynomial template slice has been trimmed
+                poly_name = f"poly-0-interval-{i}"
+                itemplate = templates.name_to_index[poly_name]
+                istart = templates.starts[itemplate]
+                istop = templates.stops[itemplate]
+            else:
+                # Use full interval length
+                istart = ival.first
+                istop = ival.last
+            ind = slice(istart, istop)
+            slice_templates = []
+            names = []
+            for name, tod_template in tod_templates.items():
+                template = tod_template[ind]
                 if deproject_poly:
-                    # Polynomial template slice has been trimmed
-                    poly_name = f"poly-0-interval-{i}"
-                    itemplate = templates.name_to_index[poly_name]
-                    istart = templates.starts[itemplate]
-                    istop = templates.stops[itemplate]
-                else:
-                    # Use full interval length
-                    istart = ival.first
-                    istop = ival.last
-                ind = slice(istart, istop)
-                slice_templates = []
-                names = []
-                for name, tod_template in tod_templates.items():
-                    template = tod_template[ind]
-                    if deproject_poly:
-                        poly_templates = []
-                        for order in range(self.poly_filter_order + 1):
-                            poly_name = f"poly-{order}-interval-{i}"
-                            poly_template = templates.name_to_template[poly_name]
-                            poly_templates.append(poly_template)
-                        poly_templates = np.vstack(poly_templates)
-                        invcov = np.dot(poly_templates, poly_templates.T)
-                        cov = np.linalg.inv(invcov)
-                        proj = np.dot(poly_templates, template)
-                        coeff = np.dot(cov, proj)
-                        template = template - np.dot(coeff, poly_templates)
-                    slice_templates.append(template)
-                    names.append(f"{name}-interval-{i}")
-                slice_templates = np.vstack(slice_templates)
-                templates.append(names, slice_templates, start=istart, stop=istop)
+                    poly_templates = []
+                    for order in range(self.poly_filter_order + 1):
+                        poly_name = f"poly-{order}-interval-{i}"
+                        poly_template = templates.name_to_template[poly_name]
+                        poly_templates.append(poly_template)
+                    poly_templates = np.vstack(poly_templates)
+                    invcov = np.dot(poly_templates, poly_templates.T)
+                    cov = np.linalg.inv(invcov)
+                    proj = np.dot(poly_templates, template)
+                    coeff = np.dot(cov, proj)
+                    template = template - np.dot(coeff, poly_templates)
+                slice_templates.append(template)
+                names.append(f"{name}-interval-{i}")
+            slice_templates = np.vstack(slice_templates)
+            n = len(slice_templates)
+            # Orthogonalize the templates
+            for itemplate in range(n - 1):
+                template1 = slice_templates[itemplate]
+                norm = np.dot(template1, template1)
+                for jtemplate in range(itemplate + 1, n):
+                    template2 = slice_templates[jtemplate]
+                    coeff = np.dot(template1, template2) / norm
+                    template2 -= coeff * template1
+            templates.append(names, slice_templates, start=istart, stop=istop)
 
         return
 
