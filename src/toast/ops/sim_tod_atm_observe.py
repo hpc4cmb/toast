@@ -200,6 +200,12 @@ class ObserveAtmosphere(Operator):
 
             # Loop over views
             views = ob.view[self.view]
+            # Avoid repeatly access det_flags and det_data in loops.
+            det_flags = views.detdata[self.det_flags]
+            det_data = views.detdata[self.det_data]
+            det_quats_azel = views.detdata[self.quats_azel]
+            if self.weights is not None:
+                det_weights = views.detdata[self.weights]
 
             ngood_tot = 0
             nbad_tot = 0
@@ -234,7 +240,7 @@ class ObserveAtmosphere(Operator):
                     flags = None
                     if self.det_flags is not None:
                         flags = (
-                            np.array(views.detdata[self.det_flags][vw][det])
+                            np.array(det_flags[vw][det])
                             & self.det_flag_mask
                         )
                         if sh_flags is not None:
@@ -243,7 +249,7 @@ class ObserveAtmosphere(Operator):
                         flags = sh_flags
 
                     good = slice(None, None, None)
-                    ngood = len(views.detdata[self.det_data][vw][det])
+                    ngood = len(det_data[vw][det])
                     if flags is not None:
                         good = flags == 0
                         ngood = np.sum(good)
@@ -253,7 +259,7 @@ class ObserveAtmosphere(Operator):
                     ngood_tot += ngood
 
                     # Detector Az / El quaternions for good samples
-                    azel_quat = views.detdata[self.quats_azel][vw][det][good]
+                    azel_quat = det_quats_azel[vw][det][good]
 
                     # Convert Az/El quaternion of the detector back into
                     # angles from the simulation.
@@ -264,7 +270,7 @@ class ObserveAtmosphere(Operator):
                         weights_I = 1
                         weights_Q = 0
                     else:
-                        weights = views.detdata[self.weights][vw][det][good]
+                        weights = det_weights[vw][det][good]
                         if "I" in self.weights_mode:
                             ind = self.weights_mode.index("I")
                             weights_I = weights[:, ind].copy()
@@ -387,7 +393,7 @@ class ObserveAtmosphere(Operator):
                                         "Cannot flag samples"
                                     )
                                 else:
-                                    views.detdata[self.det_flags][vw][det][good][
+                                    det_flags[vw][det][good][
                                         bad
                                     ] |= self.det_flag_mask
                                     nbad_tot += nbad
@@ -474,7 +480,7 @@ class ObserveAtmosphere(Operator):
                         )
 
                     # Add contribution to output
-                    views.detdata[self.det_data][vw][det, good] += scale * atmdata
+                    det_data[vw][det, good] += scale * atmdata
                     gt.stop("ObserveAtmosphere:  detector accumulate")
 
                     # Dump timestream snapshot
