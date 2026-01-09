@@ -65,9 +65,10 @@ class DecimateFocalplane(Operator):
             return
         
         log = Logger.get()
+        wcomm = data.comm.comm_world
         comm = data.comm.comm_group
-        timer = Timer()
-        timer.start()
+        timer0 = Timer()
+        timer0.start()
 
         for ob in data.obs:
             if not ob.is_distributed_by_detector:
@@ -107,13 +108,17 @@ class DecimateFocalplane(Operator):
 
             nleft = ngood - ndecimated
             frac = nleft / ntot
-            log.info_rank(
+            log.debug_rank(
                 f"Decimated {ndecimated} / {ngood} additional detectors in "
                 f"{ob.name}.  There were already {nbad} / {ntot} flagged detectors. "
-                f"Surviving fraction is {nleft} / {ntot} = {frac:.3f}. ",
+                f"Surviving fraction is {nleft} / {ntot} = {frac:.3f}.",
                 comm=comm,
-                timer=timer,
             )
+
+        if detectors is None:
+            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+        else:
+            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
         return
 

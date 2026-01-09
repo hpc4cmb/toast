@@ -169,8 +169,14 @@ class SimpleDeglitch(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
-        timer = Timer()
-        timer.start()
+        wcomm = data.comm.comm_world
+        timer0 = Timer()
+        timer0.start()
+
+        if detectors is None:
+            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
+        else:
+            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
 
         nobs = 0
         nbad = 0
@@ -286,12 +292,17 @@ class SimpleDeglitch(Operator):
             nobs = data.comm.comm_world.reduce(nobs)
             nbad = data.comm.comm_world.reduce(nbad)
             ndet = data.comm.comm_world.reduce(ndet)
+
         log.info_rank(
             f"Flagged {nbad} / {ndet} badly glitched detectors over {nobs} "
-            f"observations in",
-            comm=data.comm.comm_world,
-            timer=timer,
+            f"observations",
+            comm=wcomm,
         )
+
+        if detectors is None:
+            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+        else:
+            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
         return
 

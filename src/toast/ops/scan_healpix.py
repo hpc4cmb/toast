@@ -8,7 +8,7 @@ from astropy import units as u
 
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .operator import Operator
@@ -127,6 +127,14 @@ class ScanHealpixMap(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        wcomm = data.comm.comm_world
+        timer0 = Timer()
+        timer0.start()
+
+        if detectors is None:
+            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
+        else:
+            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
 
         # Check that the file is set
         if self.file is None:
@@ -228,6 +236,12 @@ class ScanHealpixMap(Operator):
             for map_name in self.map_names:
                 data[map_name].clear()
                 del data[map_name]
+
+        if detectors is None:
+            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+        else:
+            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+
         return
 
     def _finalize(self, data, **kwargs):

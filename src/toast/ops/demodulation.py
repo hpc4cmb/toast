@@ -248,6 +248,14 @@ class Demodulate(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        wcomm = data.comm.comm_world
+        timer0 = Timer()
+        timer0.start()
+
+        if detectors is None:
+            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
+        else:
+            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
 
         for trait in "noise_model", "stokes_weights":
             if getattr(self, trait) is None:
@@ -459,6 +467,11 @@ class Demodulate(Operator):
             data.obs = demodulate_obs
         else:
             self.demod_data.obs = demodulate_obs
+
+        if detectors is None:
+            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+        else:
+            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
     @function_timer
     def _get_fmod(self, obs):

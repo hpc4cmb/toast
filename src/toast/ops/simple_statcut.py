@@ -118,9 +118,15 @@ class SimpleStatCut(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        wcomm = data.comm.comm_world
         comm = data.comm.comm_group
-        timer = Timer()
-        timer.start()
+        timer0 = Timer()
+        timer0.start()
+
+        if detectors is None:
+            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
+        else:
+            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
 
         for ob in data.obs:
             if not ob.is_distributed_by_detector:
@@ -236,12 +242,17 @@ class SimpleStatCut(Operator):
             if comm is not None:
                 ndet_obs = comm.reduce(ndet_obs)
                 nbad_obs = comm.reduce(nbad_obs)
+
             log.debug_rank(
                 f"Flagged {nbad_obs} / {ndet_obs} additional detectors in "
-                f"{ob.name} due to statistics in",
+                f"{ob.name} due to statistics",
                 comm=comm,
-                timer=timer,
             )
+
+        if detectors is None:
+            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+        else:
+            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
         return
 

@@ -124,6 +124,11 @@ class HWPFilter(Operator):
         False, help="Subtract the fitted trend along with the HWP template"
     )
 
+    reverse = Bool(
+        False, help="Instead of subtracting the templates, add them back based "
+        "on saved amplitudes",
+    )
+
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
@@ -254,7 +259,7 @@ class HWPFilter(Operator):
         return
 
     @function_timer
-    def subtract_templates(self, ref, good, coeff, legendre_trend, fourier_filter):
+    def subtract_templates(self, ref, coeff, legendre_trend, fourier_filter):
         # Trend
         if self.detrend:
             trend = np.zeros_like(ref)
@@ -268,12 +273,21 @@ class HWPFilter(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-        t0 = time()
-        env = Environment.get()
         log = Logger.get()
-
         wcomm = data.comm.comm_world
         gcomm = data.comm.comm_group
+        timer0 = Timer()
+        timer0.start()
+
+        if detectors is None:
+            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
+        else:
+            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
+
+
+        if self.reverse and self.save_amplitudes is None:
+            msg = f"Cannot reverse HWP filter without saved template amplitudes"
+            raise RuntimeError(msg)
 
         self.nsingular = 0
         self.ngood = 0
@@ -282,6 +296,11 @@ class HWPFilter(Operator):
         # Each group loops over its own CES:es
         nobs = len(data.obs)
         for iobs, obs in enumerate(data.obs):
+            if self.reverse and self.save_amplitudes not in obs:
+                msg = f"Did not find saved amplitudes called "
+                msg += "'{self.save_amplitudes}' in {ob.name}"
+                raise RuntimeError(msg)
+
             # Prefix for logging
             log_prefix = f"{data.comm.group} : {obs.name} :"
 
@@ -289,7 +308,7 @@ class HWPFilter(Operator):
                 if data.comm.group_rank == 0:
                     msg = f"{log_prefix} HWPSS Filter: "
                     msg += f"Processing observation {iobs + 1} / {nobs}"
-                    msg += f" ({obs.name})"
+                    msg += f" ({obs.name}).  reverse = {self.reverse}"
                     log.debug(msg)
             else:
                 # This observation has no HWP
@@ -328,43 +347,53 @@ class HWPFilter(Operator):
                     log.verbose(msg)
 
                 ref = obs.detdata[self.det_data][det]
-                if self.det_flags is not None:
-                    test_flags = obs.detdata[self.det_flags][det] & self.det_flag_mask
-                    good = np.logical_and(common_flags == 0, test_flags == 0)
+
+                if self.reverse:
+                    # Add the templates back. Useful if we are deglitching
+                    # but want to to retain the offset in demodulation
+                    if det not in obs[self.save_amplitudes]:
+                        msg = f"No saved amplitudes found for det = {det}"
+                        raise RuntimeError(msg)
+                    coeff = -obs[self.save_amplitudes][det]
                 else:
-                    good = common_flags == 0
+                    # Fit the templates against the data
+                    if self.det_flags is not None:
+                        test_flags = obs.detdata[self.det_flags][det] & self.det_flag_mask
+                        good = np.logical_and(common_flags == 0, test_flags == 0)
+                    else:
+                        good = common_flags == 0
 
-                t1 = time()
-                coeff, last_invcov, last_cov, last_rcond = self.fit_templates(
-                    obs,
-                    templates,
-                    ref,
-                    good,
-                    last_good,
-                    last_invcov,
-                    last_cov,
-                    last_rcond,
-                )
-                if self.save_amplitudes is not None:
-                    self.record_coeff(obs, det, coeff)
-                last_good = good
-                if data.comm.group_rank == 0:
-                    msg = (
-                        f"{log_prefix} HWPSS Filter: "
-                        f"Fit templates in {time() - t1:.1f}s"
+                    t1 = time()
+                    coeff, last_invcov, last_cov, last_rcond = self.fit_templates(
+                        obs,
+                        templates,
+                        ref,
+                        good,
+                        last_good,
+                        last_invcov,
+                        last_cov,
+                        last_rcond,
                     )
-                    log.verbose(msg)
 
-                if coeff is None:
-                    # All samples flagged or template fit failed.
-                    curflag = obs.local_detector_flags[det]
-                    obs.update_local_detector_flags({det: curflag | self.hwp_flag_mask})
-                    continue
+                    if self.save_amplitudes is not None:
+                        self.record_coeff(obs, det, coeff)
+
+                    last_good = good
+                    if data.comm.group_rank == 0:
+                        msg = (
+                            f"{log_prefix} HWPSS Filter: "
+                            f"Fit templates in {time() - t1:.1f}s"
+                        )
+                        log.verbose(msg)
+
+                    if coeff is None:
+                        # All samples flagged or template fit failed.
+                        curflag = obs.local_detector_flags[det]
+                        obs.update_local_detector_flags({det: curflag | self.hwp_flag_mask})
+                        continue
 
                 t1 = time()
-                self.subtract_templates(
-                    ref, good, coeff, legendre_trend, fourier_filter
-                )
+                self.subtract_templates(ref, coeff, legendre_trend, fourier_filter)
                 if data.comm.group_rank == 0:
                     msg = (
                         f"{log_prefix} HWPSS Filter: "
@@ -381,18 +410,22 @@ class HWPFilter(Operator):
             self.ngood = wcomm.allreduce(self.ngood)
             self.rcondsum = wcomm.allreduce(self.rcondsum)
 
-        if wcomm is None or wcomm.rank == 0:
+        if not self.reverse:
             denominator = self.nsingular + self.ngood
             if denominator == 0:
-                msg = f"HWPSS filter had no observations with a HWP"
-                log.debug(msg)
+                log.debug_rank(
+                    "HWPSS filter had no observations with a HWP", comm=wcomm
+                )
             else:
                 rcond_mean = self.rcondsum / denominator
-                msg = (
-                    f"Applied HWPSS filter in {time() - t0:.1f} s.  "
-                    f"Average rcond of template matrix was {rcond_mean}"
+                log.debug_rank(
+                    f"Average rcond of template matrix was {rcond_mean}", comm=wcomm
                 )
-                log.debug(msg)
+
+        if detectors is None:
+            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+        else:
+            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
         return
 

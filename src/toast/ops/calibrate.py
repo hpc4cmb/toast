@@ -6,7 +6,7 @@ import numpy as np
 import traitlets
 
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Float, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .operator import Operator
@@ -85,6 +85,14 @@ class CalibrateDetectors(Operator):
     @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
+        wcomm = data.comm.comm_world
+        timer0 = Timer()
+        timer0.start()
+
+        if detectors is None:
+            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
+        else:
+            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
 
         for ob in data.obs:
             if self.det_data not in ob.detdata:
@@ -150,6 +158,11 @@ class CalibrateDetectors(Operator):
 
             # Update flags
             ob.update_local_detector_flags(det_flags)
+
+        if detectors is None:
+            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+        else:
+            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
     def _finalize(self, data, **kwargs):
         return
