@@ -1,28 +1,17 @@
-# Copyright (c) 2021-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import datetime
-import json
-import os
 import re
 
 import h5py
 import numpy as np
 from astropy import units as u
 
-from ..instrument import Focalplane, GroundSite, SpaceSite, Telescope
-from ..mpi import MPI, use_mpi
-from ..observation import Observation
-from ..timing import GlobalTimers, Timer, function_timer
 from ..utils import (
-    Environment,
     Logger,
-    dtype_to_aligned,
     have_hdf5_parallel,
-    import_from_name,
 )
-from ..weather import SimWeather
 
 
 def check_dataset_buffer_size(msg, slices, dtype, parallel):

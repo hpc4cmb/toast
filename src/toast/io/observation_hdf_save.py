@@ -1,18 +1,15 @@
-# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import json
 import os
-from datetime import timezone
 
 import h5py
 import numpy as np
-from astropy import units as u
 
 import flacarray
 
-from ..instrument import GroundSite
 from ..observation import default_values as defaults
 from ..observation_dist import global_interval_times
 from ..timing import Timer, function_timer
