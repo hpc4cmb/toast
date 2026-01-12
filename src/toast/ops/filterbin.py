@@ -41,7 +41,7 @@ from .scan_map import ScanMap, ScanMask
 
 
 class SparseTemplates:
-    def __init__(self):
+    def __init__(self, rcond_limit=1e-6):
         self.starts = []
         self.stops = []
         self.names = []
@@ -52,6 +52,7 @@ class SparseTemplates:
         self.template_covariance = None
         self.amplitudes = None
         self.meta = {}  # Auxiliary information, not used for fitting
+        self.rcond_limit = rcond_limit
 
     @property
     def ntemplate(self):
@@ -131,7 +132,7 @@ class SparseTemplates:
     def mask(self, good):
         """Return a new SparseTemplates instance that complies with the
         provided mask"""
-        masked = SparseTemplates()
+        masked = SparseTemplates(rcond_limit=self.rcond_limit)
         masked.meta = self.meta
         failed = []
         for start, stop, name, template in zip(
@@ -185,6 +186,7 @@ class SparseTemplates:
         final map.
         """
         log = Logger.get()
+        self.template_covariance = None
         ntemplate = self.ntemplate
         invcov = np.zeros([ntemplate, ntemplate])
         build_template_covariance(
@@ -201,32 +203,37 @@ class SparseTemplates:
             else:
                 rcond = 1 / cond
         except np.linalg.LinAlgError:
-            log.error(
+            log.warning(
                 f"Failed condition number calculation for "
-                f"{ntemplate}x{ntemplate} matrix:"
+                f"{ntemplate}x{ntemplate} matrix."
             )
-            log.error(f"{invcov}", flush=True)
-            log.error(f"Diagonal:")
-            for row in range(ntemplate):
-                log.error(f"{row:03d} {invcov[row, row]}")
-            raise
+            return
         log.debug(
             f"SparseTemplates: Template covariance matrix "
             f"rcond = {rcond}",
         )
         if rcond == 0:
             # No covariance for empty templates
-            self.cov = None
             return
-        if rcond > 1e-10:
+        if rcond > np.abs(self.rcond_limit):
             cov = np.linalg.inv(invcov)
         else:
-            log.warning(
-                f"SparseTemplates: WARNING: template covariance matrix "
-                f"is poorly conditioned: "
-                f"rcond = {rcond}.  Using matrix pseudoinverse.",
-            )
-            cov = np.linalg.pinv(invcov, rcond=1e-10, hermitian=True)
+            if self.rcond_limit < 0:
+                # Reject the data
+                log.warning(
+                    f"SparseTemplates: WARNING: template covariance matrix "
+                    f"is poorly conditioned: "
+                    f"rcond = {rcond}.  Rejecting the data.",
+                )
+                return
+            else:
+                # Use pseudoinverse
+                log.warning(
+                    f"SparseTemplates: WARNING: template covariance matrix "
+                    f"is poorly conditioned: "
+                    f"rcond = {rcond}.  Using matrix pseudoinverse.",
+                )
+                cov = np.linalg.pinv(invcov, rcond=1e-10, hermitian=True)
 
         self.template_covariance = cov
         return
@@ -565,6 +572,14 @@ class FilterBin(Operator):
         help="Intervals for precomputed template filtering. See `precomputed_templates`"
     )
 
+    template_rcond_limit = Float(
+        1e-6,
+        allow_none=False,
+        help="Threshold for handling degenerate template covariances.  "
+        "If the limit is is positive and rcond < limit, use pseudoinverse.  "
+        "If the limit is negative and rcond < abs(limit), reject detector.",
+    )
+
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
@@ -619,6 +634,15 @@ class FilterBin(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        wcomm = data.comm.comm_world
+        timer0 = Timer()
+        timer0.start()
+
+        if detectors is None:
+            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
+        else:
+            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
+
 
         timer = Timer()
         timer.start()
@@ -879,7 +903,8 @@ class FilterBin(Operator):
                     or np.any(last_good_fit != good_fit)
                 ):
                     det_templates.build_template_covariance(good_fit)
-                    last_good_fit = good_fit.copy()
+                    if det_templates.template_covariance is not None:
+                        last_good_fit = good_fit.copy()
 
                 if self.grank == 0:
                     if det_templates.template_covariance is None:
@@ -913,11 +938,17 @@ class FilterBin(Operator):
 
                     if self.grank == 0 and self.amplitude_dir is not None \
                        and n_saved_templates < self.n_save_templates:
+                        if self.amplitude_dir.startswith("/"):
+                            ampdir = self.amplitude_dir
+                        else:
+                            ampdir = os.path.join(self.output_dir, self.amplitude_dir)
                         # Save one example of the actual templates
-                        os.makedirs(self.amplitude_dir, exist_ok=True)
-                        fname_save = os.path.join(self.amplitude_dir, f"sparse_templates_{obs.name}_{det}.pck")
+                        os.makedirs(ampdir, exist_ok=True)
+                        fname_save = os.path.join(
+                            ampdir,
+                            f"{self.name}_sparse_templates_{obs.name}_{det}.pck",
+                        )
                         det_templates.save(fname_save)
-                        os.makedirs(self.amplitude_dir, exist_ok=True)
                         n_saved_templates += 1
 
                     if self.write_obs_matrix:
@@ -934,21 +965,25 @@ class FilterBin(Operator):
 
             if self.amplitude_dir is not None:
                 # Collect and save the template amplitudes
-                fname_amp = os.path.join(
-                    self.amplitude_dir, f"{self.name}_amplitudes_{obs.name}.pck"
-                )
                 if self.gcomm is None:
                     all_amplitudes = [template_amplitudes]
                 else:
                     all_amplitudes = self.gcomm.gather(template_amplitudes)
                 if self.grank == 0:
-                    os.makedirs(self.amplitude_dir, exist_ok=True)
+                    if self.amplitude_dir.startswith("/"):
+                        ampdir = self.amplitude_dir
+                    else:
+                        ampdir = os.path.join(self.output_dir, self.amplitude_dir)
+                    os.makedirs(ampdir, exist_ok=True)
                     # delete the first amplitudes, they are already in
                     # the local dictionary
                     del all_amplitudes[0]
                     # Put the received amplitudes into the local dictionary
                     for amplitudes in all_amplitudes:
                         template_amplitudes.update(amplitudes)
+                        fname_amp = os.path.join(
+                            ampdir, f"{self.name}_amplitudes_{obs.name}.pck"
+                        )
                     with open(fname_amp, "wb") as f:
                         pickle.dump(template_amplitudes, f)
                     log.info(f"Saved template amplitudes to {fname_amp}")
@@ -1007,6 +1042,11 @@ class FilterBin(Operator):
 
             memreport.prefix = "After observation matrix"
             memreport.apply(data)
+
+        if detectors is None:
+            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+        else:
+            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
         return
 
@@ -1299,7 +1339,7 @@ class FilterBin(Operator):
 
     @function_timer
     def _build_common_templates(self, obs):
-        templates = SparseTemplates()
+        templates = SparseTemplates(rcond_limit=self.template_rcond_limit)
 
         self._add_hwp_templates(obs, templates)
         self._add_ground_poly_templates(obs, templates)
