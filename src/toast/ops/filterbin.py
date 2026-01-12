@@ -1409,8 +1409,10 @@ class FilterBin(Operator):
             ind = slice(istart, istop)
             slice_templates = []
             names = []
-            for name, tod_template in tod_templates.items():
-                template = tod_template[ind]
+            # Loop over the precomputed templates in alphabetical order
+            # This will be the orthogonalization order
+            for name in sorted(tod_templates.keys()):
+                template = tod_templates[name][ind]
                 if deproject_poly:
                     poly_templates = []
                     for order in range(self.poly_filter_order + 1):
@@ -1423,6 +1425,8 @@ class FilterBin(Operator):
                     proj = np.dot(poly_templates, template)
                     coeff = np.dot(cov, proj)
                     template = template - np.dot(coeff, poly_templates)
+                else:
+                    template = template - np.mean(template)
                 slice_templates.append(template)
                 names.append(f"{name}-interval-{i}")
             slice_templates = np.vstack(slice_templates)
