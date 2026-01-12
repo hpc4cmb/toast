@@ -147,10 +147,10 @@ def main():
     df = pd.DataFrame(data=data, columns=cnames)
 
     img_px = 800
-    pio.kaleido.scope.default_format = "pdf"
-    pio.kaleido.scope.default_width = img_px
-    pio.kaleido.scope.default_height = img_px
-    pio.kaleido.scope.mathjax = None
+    pio.defaults.default_format = "pdf"
+    pio.defaults.default_width = img_px
+    pio.defaults.default_height = img_px
+    pio.defaults.mathjax = None
 
     fig = px.sunburst(
         data_frame=df,
