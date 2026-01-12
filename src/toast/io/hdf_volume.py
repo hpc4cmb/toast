@@ -10,8 +10,11 @@ from collections.abc import MutableMapping
 import numpy as np
 from astropy import units as u
 
+from ..coordinates import azel_to_radec
 from ..mpi import MPI
+from ..instrument import GroundSite
 from ..observation import default_values as defaults
+from .. import qarray as qa
 from ..timing import function_timer
 from ..utils import Logger, sqlite_connect, sqlite_scalar
 from .observation_hdf_load import load_hdf5
@@ -182,6 +185,7 @@ class VolumeIndex(object):
         return col_types
 
     def _db_create(self, schema):
+        """Create a new observation table."""
         create_str = f"CREATE TABLE {self.obs_table} ("
         fcreate = list()
         for k, v in schema.items():
@@ -200,6 +204,36 @@ class VolumeIndex(object):
         del cur
         conn.close()
         del conn
+
+    def _ground_scan_center(self, obs):
+        """If the observation is from a GroundSite, compute the scan center."""
+        if isinstance(obs.telescope.site, GroundSite):
+            # FIXME: Eventually handle arbitrary data distributions here
+            result = None
+            if obs.comm.group_rank == 0:
+                bad = (
+                    obs.shared[defaults.shared_flags].data
+                    & defaults.shared_mask_invalid
+                )
+                good = np.logical_not(bad)
+                mean_az = np.mean(np.unwrap(obs.shared[defaults.azimuth].data[good]))
+                mean_el = np.mean(obs.shared[defaults.elevation].data[good])
+                mean_time = np.mean(obs.shared[defaults.times].data[good])
+                bore_azel = qa.from_lonlat_angles(
+                    -np.array([mean_az]), np.array([mean_el]), np.zeros(1)
+                )
+                bore_radec = azel_to_radec(
+                    obs.telescope.site,
+                    np.array([mean_time]),
+                    bore_azel,
+                )
+                ra, dec, _ = qa.to_lonlat_angles(bore_radec)
+                result = (mean_az, mean_el, ra[0], dec[0])
+            if obs.comm.comm_group is not None:
+                result = obs.comm.comm_group.bcast(result, root=0)
+            return result
+        else:
+            return None
 
     @function_timer
     def append(self, obs, rel_path, indexfields=None):
@@ -260,6 +294,7 @@ class VolumeIndex(object):
 
         """
         log = Logger.get()
+
         # Gather the total number of valid detectors
         n_valid_local = np.count_nonzero(
             [y & defaults.det_mask_invalid for x, y in obs.local_detector_flags.items()]
@@ -269,6 +304,9 @@ class VolumeIndex(object):
         else:
             n_valid = n_valid_local
         n_valid = int(n_valid)
+
+        # Get ground scan center, if available
+        ground_props = self._ground_scan_center(obs)
 
         if obs.comm.group_rank == 0:
             # Get the user-specified properties
@@ -283,6 +321,13 @@ class VolumeIndex(object):
             fields["valid_dets"] = n_valid
             fields["start"] = obs.session.start.timestamp()
             fields["end"] = obs.session.end.timestamp()
+
+            if ground_props is not None:
+                az_center, el_center, ra_center, dec_center = ground_props
+                fields["az"] = np.degrees(az_center)
+                fields["el"] = np.degrees(el_center)
+                fields["ra"] = np.degrees(ra_center)
+                fields["dec"] = np.degrees(dec_center)
 
             field_types = self._field_schema(fields)
 
@@ -346,8 +391,8 @@ class VolumeIndex(object):
 
         """
         log = Logger.get()
-        # Load the observation with only metadata and no detector or
-        # shared data.
+        # Load the observation with only metadata and shared fields
+        # (no detector data).
         obs_path = os.path.join(volume_path, rel_path)
         try:
             obs = load_hdf5(
@@ -356,7 +401,7 @@ class VolumeIndex(object):
                 process_rows=None,
                 meta=None,
                 detdata=list(),
-                shared=list(),
+                shared=None,
                 intervals=list(),
                 detectors=None,
                 force_serial=False,
