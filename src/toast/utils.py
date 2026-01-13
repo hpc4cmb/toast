@@ -7,13 +7,16 @@ import gc
 import glob
 import hashlib
 import importlib
+import numbers
 import os
+import sqlite3
 import time
 from collections import UserDict
 from tempfile import TemporaryDirectory
 from contextlib import contextmanager
 
 import astropy.io.misc.hdf5 as aspy5
+from astropy import units as u
 import h5py
 import numpy as np
 from astropy.table import meta as aspymeta
@@ -1037,3 +1040,116 @@ def flagged_noise_fill(data, flags, buffer, poly_order=1):
         data[full_first:full_last][fit_bad] = full_fit[fit_bad] + np.random.normal(
             scale=rms, size=n_bad
         )
+
+
+def sqlite_connect(filename=None, mode="w"):
+    """Utility function for connecting to an sqlite3 DB.
+
+    This provides a single function for opening an sqlite connection
+    consistently across the code base.  When connecting to a file on
+    disk we try to use options which will be more performant in the
+    situation where the DB is on a networked / shared filesystem and
+    being accessed from multiple processes.
+
+    Args:
+        filename (str):  The path on disk or None if using an in-memory DB.
+        mode (str):  Either "r" or "w".
+
+    Returns:
+        (sqlite3.Connection):  The database connection.
+
+    """
+    if filename is None or filename == ":memory:":
+        # Memory-backed DB
+        if mode == "r":
+            raise ValueError("Cannot open memory DB in read-only mode")
+        return sqlite3.connect(":memory:")
+
+    # This timeout is in seconds.  If multiple processes are writing, they
+    # might be blocked for a while until they get their turn.  This prevents
+    # them from giving up too soon if other processes have a write lock.
+    # https://www.sqlite.org/pragma.html#pragma_busy_timeout
+    busy_time = 100
+
+    # Journaling options
+
+    # Persistent journaling mode.  File creation / deletion can be expensive
+    # on some filesystems.  This just writes some zeros to the header and
+    # leaves the file.  This journal is a "side car" file next to the original
+    # DB file and is safe to delete manually if one is sure that no processes
+    # are accessing the DB.
+    # https://www.sqlite.org/pragma.html#pragma_journal_mode
+    if mode == "r":
+        journal_mode = "off"
+    else:
+        journal_mode = "persist"
+
+    # Max size of the journal.  Although it is being overwritten repeatedly,
+    # if it gets too large we purge it and recreate.  This should not happen
+    # for most normal operations.
+    # https://www.sqlite.org/pragma.html#pragma_journal_size_limit
+    journal_size = f"{10 * 1024 * 1024}"
+
+    # Disk synchronization options
+
+    # Using "normal" instead of the default "full" can avoid potentially expensive
+    # (on network filesystems) sync operations.
+    # https://www.sqlite.org/pragma.html#pragma_synchronous
+    if mode == "r":
+        sync_mode = "off"
+    else:
+        sync_mode = "normal"
+
+    # Memory caching
+
+    # The default page size in modern sqlite is 4096 bytes, and should be fine.
+    # We set this explicitly to allow easy changing in the future or keeping it
+    # fixed if the default changes.
+    # https://www.sqlite.org/pragma.html#pragma_page_size
+    page_size = 4096
+
+    # The number of pages to cache in memory.  Setting this to a few MB of RAM
+    # can have substantial performance benefits.  Total will be number of pages
+    # times page size.
+    # https://www.sqlite.org/pragma.html#pragma_cache_size
+    n_cache_pages = 4000
+
+    # Open connection
+    if mode == "r":
+        connstr = f"file:{filename}?mode=ro"
+    else:
+        connstr = f"file:{filename}?mode=rwc"
+    conn = sqlite3.connect(connstr, uri=True, timeout=busy_time)
+
+    # Set cache sizes
+    conn.execute(f"pragma page_size={page_size}")
+    conn.execute(f"pragma cache_size={n_cache_pages}")
+
+    # Set journaling / sync options
+    conn.execute(f"pragma journal_mode={journal_mode}")
+    conn.execute(f"pragma journal_size_limit={journal_size}")
+    conn.execute(f"pragma synchronous={sync_mode}")
+
+    # Other tuning options
+
+    # Hold temporary tables in memory.
+    # https://www.sqlite.org/pragma.html#pragma_temp_store
+    conn.execute("pragma temp_store=memory")
+
+    if mode == "r":
+        conn.execute("pragma query_only=true")
+    return conn
+
+
+def sqlite_scalar(input):
+    """Ensure that any scalars are one of the sqlite types."""
+    if isinstance(input, numbers.Integral):
+        return int(input)
+    elif isinstance(input, u.Quantity):
+        return float(input.value)
+    elif isinstance(input, numbers.Number):
+        # We already checked integers above, so this must be float
+        return float(input)
+    else:
+        # Must be a string
+        return input

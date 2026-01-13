@@ -1,12 +1,10 @@
-# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import ast
 import json
 import os
-import re
-from datetime import datetime, timezone
 
 import h5py
 import numpy as np
@@ -16,9 +14,9 @@ import flacarray
 
 from ..instrument import Telescope, Session, Focalplane
 from ..observation import Observation
+from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
 from ..utils import Environment, Logger, import_from_name
-from ..weather import SimWeather, Weather
 from .hdf_utils import (
     check_dataset_buffer_size,
     hdf5_config,
@@ -683,6 +681,13 @@ def load_hdf5(
     log = Logger.get()
     env = Environment.get()
 
+    if intervals is not None and len(intervals) > 0:
+        # Make sure we are also loading timestamps
+        if shared is not None and defaults.times not in shared:
+            msg = "When loading intervals, you must also load timestamps"
+            log.error(msg)
+            raise RuntimeError(msg)
+
     rank = comm.group_rank
     nproc = comm.group_size
     if nproc == 1:
@@ -694,9 +699,6 @@ def load_hdf5(
     log_prefix = f"HDF5 load {os.path.basename(path)}: "
 
     # Open the file and get the root group.
-    hf = None
-    hfgroup = None
-
     parallel, _, _ = hdf5_config(comm=comm.comm_group, force_serial=force_serial)
     if (
         (not parallel)
@@ -776,22 +778,23 @@ def load_hdf5(
 
     # Load intervals
 
-    intervals_group = None
-    intervals_times = None
-    if hgroup is not None:
-        intervals_group = hgroup["intervals"]
-        intervals_times = intervals_group.attrs["times"]
-    if not parallel and nproc > 1:
-        intervals_times = comm.comm_group.bcast(intervals_times, root=0)
-    load_hdf5_intervals(
-        obs,
-        intervals_group,
-        obs.shared[intervals_times],
-        intervals,
-        log_prefix,
-        parallel,
-    )
-    del intervals_group
+    if intervals is None or len(intervals) > 0:
+        intervals_group = None
+        intervals_times = None
+        if hgroup is not None:
+            intervals_group = hgroup["intervals"]
+            intervals_times = intervals_group.attrs["times"]
+        if not parallel and nproc > 1:
+            intervals_times = comm.comm_group.bcast(intervals_times, root=0)
+        load_hdf5_intervals(
+            obs,
+            intervals_group,
+            obs.shared[intervals_times],
+            intervals,
+            log_prefix,
+            parallel,
+        )
+        del intervals_group
     log.debug_rank(
         f"{log_prefix} Finished intervals in",
         comm=comm.comm_group,

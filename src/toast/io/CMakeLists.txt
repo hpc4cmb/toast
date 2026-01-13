@@ -9,6 +9,7 @@ install(FILES
     observation_hdf_load_v0.py
     observation_hdf_load_v1.py
     hdf_utils.py
+    hdf_volume.py
     deprecated_compression.py
     DESTINATION ${PYTHON_SITE}/toast/io
 )

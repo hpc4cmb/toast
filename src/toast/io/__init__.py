@@ -5,6 +5,7 @@
 # Namespace imports
 
 from .hdf_utils import H5File, have_hdf5_parallel, hdf5_config, hdf5_open
+from .hdf_volume import VolumeIndex
 from .observation_hdf_load import (
     load_hdf5,
     load_hdf5_obs_meta,

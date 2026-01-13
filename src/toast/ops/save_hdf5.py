@@ -7,7 +7,7 @@ import os
 import numpy as np
 import warnings
 
-from ..io import load_hdf5, save_hdf5
+from ..io import load_hdf5, save_hdf5, VolumeIndex
 from ..mpi import MPI
 from ..observation import default_values as defaults
 from ..timing import function_timer
@@ -177,6 +177,27 @@ class SaveHDF5(Operator):
         help="Top-level directory for the data volume",
     )
 
+    volume_index = Unicode(
+        "DEFAULT",
+        allow_none=True,
+        help=(
+            "Path to index file.  None disables use of index.  "
+            "'DEFAULT' uses the default VolumeIndex name at the top of the volume."
+        ),
+    )
+
+    volume_index_fields = Dict(
+        {}, help="Extra observation metadata to index.  See `VolumeIndex.append()`."
+    )
+
+    session_dirs = Bool(
+        False, help="Organize observation files in session sub-directories"
+    )
+
+    unix_time_dirs = Bool(
+        False, help="If True, organize files in 5 digit, time-prefix sub-directories"
+    )
+
     # FIXME:  We should add a filtering mechanism here to dump a subset of
     # observations and / or detectors, as well as figure out subdirectory organization.
 
@@ -259,6 +280,14 @@ class SaveHDF5(Operator):
         if data.comm.comm_world is not None:
             data.comm.comm_world.barrier()
 
+        # Index for the volume, if we are using it.
+        if self.volume_index is None:
+            vindx = None
+        elif self.volume_index == "DEFAULT":
+            vindx = VolumeIndex(os.path.join(self.volume, VolumeIndex.default_name))
+        else:
+            vindx = VolumeIndex(self.volume_index)
+
         meta_fields = None
         if len(self.meta) > 0:
             meta_fields = list(self.meta)
@@ -316,9 +345,29 @@ class SaveHDF5(Operator):
                 if ob.detdata[dd].detectors != ob.local_detectors:
                     del ob.detdata[dd]
 
+            time_prefix = None
+            if self.unix_time_dirs:
+                time_prefix = f"{ob.session.start.timestamp()}"[:5]
+
+            if self.session_dirs:
+                if time_prefix is None:
+                    outdir = os.path.join(self.volume, ob.session.name)
+                else:
+                    outdir = os.path.join(self.volume, time_prefix, ob.session.name)
+                # One process creates the top directory
+                if data.comm.group_rank == 0:
+                    os.makedirs(outdir, exist_ok=True)
+                if data.comm.comm_group is not None:
+                    data.comm.comm_group.barrier()
+            else:
+                if time_prefix is None:
+                    outdir = self.volume
+                else:
+                    outdir = os.path.join(self.volume, time_prefix)
+
             outpath = save_hdf5(
                 ob,
-                self.volume,
+                outdir,
                 meta=meta_fields,
                 detdata=detdata_fields,
                 shared=shared_fields,
@@ -330,6 +379,17 @@ class SaveHDF5(Operator):
             )
 
             log.info_rank(f"Wrote {outpath}", comm=data.comm.comm_group)
+
+            # Add this observation to the volume index
+            if vindx is not None:
+                rel_path = os.path.relpath(outpath, start=self.volume)
+                if len(self.volume_index_fields) == 0:
+                    index_fields = None
+                else:
+                    index_fields = self.volume_index_fields
+                msg = f"Add {ob.name} to index with extra fields {index_fields}"
+                log.verbose_rank(msg, comm=data.comm.comm_group)
+                vindx.append(ob, rel_path, indexfields=index_fields)
 
             if self.verify:
                 # We are going to load the data back in, but first we need to make
