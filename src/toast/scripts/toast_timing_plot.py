@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2021-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -147,10 +147,10 @@ def main():
     df = pd.DataFrame(data=data, columns=cnames)
 
     img_px = 800
-    pio.kaleido.scope.default_format = "pdf"
-    pio.kaleido.scope.default_width = img_px
-    pio.kaleido.scope.default_height = img_px
-    pio.kaleido.scope.mathjax = None
+    pio.defaults.default_format = "pdf"
+    pio.defaults.default_width = img_px
+    pio.defaults.default_height = img_px
+    pio.defaults.mathjax = None
 
     fig = px.sunburst(
         data_frame=df,
