@@ -682,7 +682,7 @@ class IoHdf5Test(MPITestCase):
                             all_props.extend(pprops)
                     all_props = dt.comm.comm_group_rank.bcast(all_props, root=0)
                 else:
-                    all_props = [local_props]
+                    all_props = local_props
             if dt.comm.comm_group is not None:
                 all_props = dt.comm.comm_group.bcast(all_props)
             # Build the lookup tables
