@@ -644,7 +644,7 @@ class SimAtmTest(MPITestCase):
         )
 
         # HDF5 saving
-        saver = ops.SaveHDF5(detdata_float32=True, verify=True)
+        saver = ops.SaveHDF5(verify=True)
 
         # Simulate and process all detectors simultaneously
 
