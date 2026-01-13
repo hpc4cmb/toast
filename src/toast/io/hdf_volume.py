@@ -6,6 +6,7 @@ import os
 import re
 import numbers
 from collections.abc import MutableMapping
+import tempfile
 
 import numpy as np
 from astropy import units as u
@@ -196,14 +197,18 @@ class VolumeIndex(object):
                 fcreate.append(f"{k} {v}")
         create_str += ", ".join(fcreate)
         create_str += ")"
-        conn = sqlite_connect(self._path, mode="w")
-        cur = conn.cursor()
-        cur.execute(create_str)
-        conn.commit()
-        cur.close()
-        del cur
-        conn.close()
-        del conn
+        with tempfile.TemporaryDirectory() as tdir:
+            temp_path = os.path.join(tdir, "index.sqlite")
+            conn = sqlite_connect(temp_path, mode="w")
+            cur = conn.cursor()
+            cur.execute(create_str)
+            conn.commit()
+            cur.close()
+            del cur
+            conn.close()
+            del conn
+            if not os.path.isfile(self._path):
+                os.rename(temp_path, self._path)
 
     def _ground_scan_center(self, obs):
         """If the observation is from a GroundSite, compute the scan center."""
