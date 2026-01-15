@@ -175,7 +175,7 @@ class CrossLinking(Operator):
         tiny = np.abs(dphi) < 1e-30
         if np.any(tiny):
             ang = np.zeros(signal.size)
-            ang[tiny] = np.sign(dtheta) * np.sign(dphi) * np.pi / 2
+            ang[tiny] = np.sign(dtheta[tiny]) * np.sign(dphi[tiny]) * np.pi / 2
             not_tiny = np.logical_not(tiny)
             ang[not_tiny] = np.arctan(dtheta[not_tiny] / dphi[not_tiny])
         else:
