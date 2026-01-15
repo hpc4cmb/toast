@@ -131,6 +131,62 @@ class H5File(object):
         self.close()
 
 
+def unicode_array_to_fixed(input):
+    """Convert numpy arrays with Unicode strings to fixed-length bytes.
+
+    Args:
+        input (str):  The input array.
+
+    Returns:
+        (array):  The input converted to 'S' bytes, or the original if not
+            an array of strings.
+
+    """
+    utype_pat = re.compile(r"[><]U(\d+).*")
+    if np.issubdtype(input.dtype, np.str_):
+        # Unicode string
+        mat = utype_pat.match(str(input.dtype))
+        if mat is not None:
+            maxlen = mat.group(1)
+            stype = f"S{maxlen}"
+            return input.astype(stype)
+    else:
+        return input
+
+
+def replace_unicode_arrays(obj):
+    """Recursively replace unicode numpy arrays.
+
+    Descend the object container recursively and replace numpy unicode arrays with
+    fixed-length byte arrays.
+
+    Args:
+        obj (object):  A container or array
+
+    Returns:
+        (object):  The same style container as the input, with unicode arrays replaced
+
+    """
+    if isinstance(obj, dict):
+        new_obj = dict()
+        for k, v in obj.items():
+            new_obj[k] = replace_unicode_arrays(v)
+    elif isinstance(obj, tuple):
+        new_obj = list()
+        for val in obj:
+            new_obj.append(replace_unicode_arrays(val))
+        new_obj = tuple(new_obj)
+    elif isinstance(obj, list):
+        new_obj = list()
+        for val in obj:
+            new_obj.append(replace_unicode_arrays(val))
+    elif isinstance(obj, np.ndarray):
+        new_obj = unicode_array_to_fixed(obj)
+    else:
+        new_obj = obj
+    return new_obj
+
+
 def save_meta_object(parent, objname, obj):
     """Recursive function to save python metadata objects.
 
@@ -189,7 +245,7 @@ def save_meta_object(parent, objname, obj):
     elif isinstance(obj, u.Quantity):
         if isinstance(obj.value, np.ndarray):
             # Array quantity
-            odata = parent.create_dataset(objname, data=obj.value)
+            odata = parent.create_dataset(objname, data=replace_unicode_arrays(obj.value))
             odata.attrs["units"] = obj.unit.to_string()
             del odata
         else:
@@ -198,7 +254,7 @@ def save_meta_object(parent, objname, obj):
             parent.attrs[f"{objname}_units"] = obj.unit.to_string()
     elif isinstance(obj, np.ndarray):
         # Array
-        arr = parent.create_dataset(objname, data=obj)
+        arr = parent.create_dataset(objname, data=replace_unicode_arrays(obj))
         del arr
     else:
         # This is a scalar or some kind of unknown object.  Try

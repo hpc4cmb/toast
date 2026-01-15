@@ -197,7 +197,9 @@ class VolumeIndex(object):
                 fcreate.append(f"{k} {v}")
         create_str += ", ".join(fcreate)
         create_str += ")"
-        with tempfile.TemporaryDirectory() as tdir:
+        # We create the temp directory in the same filesystem as the final index, so
+        # that os.rename() will always work as expected.
+        with tempfile.TemporaryDirectory(dir=os.path.dirname(self._path)) as tdir:
             temp_path = os.path.join(tdir, "index.sqlite")
             conn = sqlite_connect(temp_path, mode="w")
             cur = conn.cursor()
