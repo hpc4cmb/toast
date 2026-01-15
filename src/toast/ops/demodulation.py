@@ -30,7 +30,7 @@ from .operator import Operator
 class Lowpass:
     """A callable class that applies the low pass filter"""
 
-    def __init__(self, wkernel, fmax, fsample, offset, nskip, window="hamming"):
+    def __init__(self, fmax, fsample, wkernel=None, offset=0, nskip=1, window="hamming"):
         """
         Args:
             wkernel (int) : width of the filter kernel
@@ -39,6 +39,10 @@ class Lowpass:
             offset (int) : signal index offset for downsampling
             nskip (int) : downsampling factor
         """
+        if wkernel is None:
+            # set kernel size longer than low-pass filter time scale
+            wkernel = (1 << int(np.ceil(np.log(fsample / fmax * 10) / np.log(2)))) - 1
+        self.wkernel = wkernel
         self.lpf = firwin(
             wkernel,
             fmax.to_value(u.Hz),
@@ -58,7 +62,7 @@ class Lowpass:
 class Bandpass:
     """A callable class that applies the bandpass filter"""
 
-    def __init__(self, wkernel, fmin, fmax, fsample, window="hamming"):
+    def __init__(self, fmin, fmax, fsample, wkernel=None, window="hamming"):
         """
         Args:
             wkernel (int) : width of the filter kernel
@@ -66,6 +70,10 @@ class Bandpass:
             fmax (float) : maximum frequency of the passband
             fsample (float) : signal sampling frequency
         """
+        if wkernel is None:
+            # set kernel size longer than low-pass filter time scale
+            wkernel = (1 << int(np.ceil(np.log(fsample / fmin * 10) / np.log(2)))) - 1
+        self.wkernel = wkernel
         self.bpf = firwin(
             wkernel,
             [fmin.to_value(u.Hz), fmax.to_value(u.Hz)],
@@ -352,15 +360,27 @@ class Demodulate(Operator):
             # fmod is the HWP spin frequency.  Polarization signal is at 4 x fmod
             fmod = self._get_fmod(obs)
 
-            wkernel = self._get_wkernel(fmod, fsample)
             lowpass = Lowpass(
-                wkernel, self.fcut * fmod, fsample, offset, self.nskip, self.window
+                self.fcut * fmod,
+                fsample,
+                wkernel=self.wkernel,
+                offset=offset,
+                nskip=self.nskip,
+                window=self.window,
             )
             bandpass2f = Bandpass(
-                wkernel, self.fmin_2f * fmod, self.fmax_2f * fmod, fsample, self.window
+                self.fmin_2f * fmod,
+                self.fmax_2f * fmod,
+                fsample,
+                wkernel=self.wkernel,
+                window=self.window,
             )
             bandpass4f = Bandpass(
-                wkernel, self.fmin_4f * fmod, self.fmax_4f * fmod, fsample, self.window
+                self.fmin_4f * fmod,
+                self.fmax_4f * fmod,
+                fsample,
+                wkernel=self.wkernel,
+                window=self.window,
             )
 
             # Create a new observation to hold the demodulated and downsampled data
@@ -383,11 +403,6 @@ class Demodulate(Operator):
                 process_rows=demod_process_rows,
                 sample_sets=demod_sample_sets,
             )
-            for key, value in obs.items():
-                if key == self.noise_model:
-                    # Will be generated later
-                    continue
-                demod_obs[key] = value
 
             # Allocate storage
 
@@ -409,7 +424,7 @@ class Demodulate(Operator):
                 self.det_flags, detectors=demod_dets, dtype=np.uint8
             )
 
-            self._demodulate_flags(obs, demod_obs, local_dets, wkernel, offset)
+            self._demodulate_flags(obs, demod_obs, local_dets, lowpass.wkernel, offset)
             self._demodulate_signal(
                 data, obs, demod_obs, local_dets, lowpass, bandpass2f, bandpass4f
             )
@@ -425,6 +440,8 @@ class Demodulate(Operator):
             )
 
             self._demodulate_intervals(obs, demod_obs)
+
+            self._demodulate_metadata(obs, demod_obs)
 
             demodulate_obs.append(demod_obs)
 
@@ -452,15 +469,6 @@ class Demodulate(Operator):
             np.mean(np.diff(hwp_angle) / np.diff(times)) / (2 * np.pi) * u.Hz
         )
         return hwp_rate
-
-    @function_timer
-    def _get_wkernel(self, fmax, fsample):
-        if self.wkernel is not None:
-            wkernel = self.wkernel
-        else:
-            # set kernel size longer than low-pass filter time scale
-            wkernel = (1 << int(np.ceil(np.log(fsample / fmax * 10) / np.log(2)))) - 1
-        return wkernel
 
     @function_timer
     def _demodulate_telescope(self, obs, all_dets):
@@ -566,6 +574,38 @@ class Demodulate(Operator):
                 msg = "Only shared objects using the group, row, and column "
                 msg += "communicators can be demodulated"
                 raise RuntimeError(msg)
+        return
+
+    @function_timer
+    def _demodulate_metadata(self, obs, demod_obs):
+        """Copy over and optionally downsample metadata"""
+
+        demod_times = demod_obs.shared[self.times].data
+
+        # Metadata dictionary
+
+        for key, value in obs.items():
+            if key in demod_obs:
+                # Already demodulated
+                continue
+            if hasattr(key, "downsample"):
+                demod_obs[key] = value.downsample(demod_times)
+            else:
+                demod_obs[key] = value
+
+        # Other observation attributes
+
+        for key, value in vars(obs).items():
+            if key.startswith("_"):
+                continue
+            if hasattr(demod_obs, key):
+                # Already demodulated
+                continue
+            if hasattr(value, "downsample"):
+                setattr(demod_obs, key, value.downsample(demod_times))
+            else:
+                setattr(demod_obs, key, value)
+
         return
 
     @function_timer

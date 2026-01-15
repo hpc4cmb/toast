@@ -1,17 +1,14 @@
-# Copyright (c) 2021-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import glob
 import os
 import re
 
 import h5py
-import numpy as np
-import traitlets
 
 from ..dist import distribute_discrete
-from ..io import load_hdf5
+from ..io import load_hdf5, VolumeIndex
 from ..observation import default_values as defaults
 from ..timing import function_timer
 from ..traits import Bool, Int, List, Unicode, trait_docs
@@ -23,7 +20,22 @@ from .operator import Operator
 class LoadHDF5(Operator):
     """Operator which loads HDF5 data files into observations.
 
-    This operator expects a top-level volume directory.
+    Selected observation files are distributed across process groups in a load-balanced
+    way, using the number of samples and (if using an index), the number of valid
+    detectors in each observation.
+
+    The list of observation files can be built in multiple ways:
+
+    - If `files` is specified, that is used and `volume` is ignored.
+
+    - If `volume_select` is specified, it should contain the conditional portion of the
+      SQL select command (e.g. "where X < Y").  This will be used to extract the
+      observation metadata needed to load files.
+
+    - If `volume_select` is not specified then all observations are chosen (either
+      from the volume index if specified, or using the filesystem).  This full list
+      of observations then has the regex `pattern` applied to the basename of each
+      observation file.
 
     """
 
@@ -35,12 +47,30 @@ class LoadHDF5(Operator):
         None, allow_none=True, help="Top-level directory containing the data volume"
     )
 
-    pattern = Unicode("obs_.*_.*\.h5", help="Regexp pattern to match files against")
+    volume_index = Unicode(
+        "DEFAULT",
+        allow_none=True,
+        help=(
+            "Path to index file.  None disables use of index.  "
+            "'DEFAULT' uses the default VolumeIndex name at the top of the volume."
+        ),
+    )
 
-    files = List([], help="Override `volume` and load a list of files")
+    volume_select = Unicode(
+        None,
+        allow_none=True,
+        help="SQL selection string applied to the observation table of the index.",
+    )
 
-    # FIXME:  We should add a filtering mechanism here to load a subset of
-    # observations and / or detectors, as well as figure out subdirectory organization.
+    pattern = Unicode(
+        r"obs_.*_.*\.h5",
+        help="Regexp pattern to match files against (if not using index).",
+    )
+
+    files = List(
+        [],
+        help="Override `volume` and load a list of files",
+    )
 
     meta = List([], help="Only load this list of meta objects")
 
@@ -72,19 +102,6 @@ class LoadHDF5(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-        log = Logger.get()
-
-        pattern = re.compile(self.pattern)
-
-        filenames = None
-        if len(self.files) > 0:
-            if self.volume is not None:
-                log.warning(
-                    f'LoadHDF5: volume="{self.volume}" trait overridden by '
-                    f"files={self.files}"
-                )
-            filenames = list(self.files)
-
         meta_fields = None
         if len(self.meta) > 0:
             meta_fields = list(self.meta)
@@ -102,53 +119,10 @@ class LoadHDF5(Operator):
         if len(self.intervals) > 0:
             intervals_fields = list(self.intervals)
 
-        # FIXME:  Eventually we will use the volume index / DB to select observations
-        # and their sizes for a load-balanced assignment.  For now, we read this from
-        # the file.
-
-        # One global process computes the list of observations and their approximate
-        # relative size.
-
-        def _get_obs_samples(path):
-            n_samp = 0
-            with h5py.File(path, "r") as hf:
-                n_samp = int(hf.attrs["observation_samples"])
-            return n_samp
-
-        obs_props = list()
-        if data.comm.world_rank == 0:
-            if filenames is None:
-                filenames = []
-                for root, dirs, files in os.walk(self.volume):
-                    # Process top-level files
-                    filenames += [
-                        os.path.join(root, fname)
-                        for fname in files
-                        if pattern.search(fname) is not None
-                    ]
-                    # Also process sub-directories one level deep
-                    for d in dirs:
-                        for root2, dirs2, files2 in os.walk(os.path.join(root, d)):
-                            filenames += [
-                                os.path.join(root2, fname)
-                                for fname in files2
-                                if pattern.search(fname) is not None
-                            ]
-                    break
-
-            for ofile in sorted(filenames):
-                fsize = _get_obs_samples(ofile)
-                obs_props.append((fsize, ofile))
-
-        if self.sort_by_size:
-            obs_props.sort(key=lambda x: x[0])
-        else:
-            obs_props.sort(key=lambda x: x[1])
-        if data.comm.comm_world is not None:
-            obs_props = data.comm.comm_world.bcast(obs_props, root=0)
+        # Get our list of observation files and relative sizes for load-balancing
+        obs_props = self._get_obs_props(data.comm.comm_world)
 
         # Distribute observations among groups
-
         obs_sizes = [x[0] for x in obs_props]
         groupdist = distribute_discrete(obs_sizes, data.comm.ngroups)
         group_firstobs = groupdist[data.comm.group].offset
@@ -172,6 +146,98 @@ class LoadHDF5(Operator):
             data.obs.append(ob)
 
         return
+
+    def _get_obs_samples(self, path):
+        """Helper function to extract the number of samples in each observation."""
+        n_samp = 0
+        with h5py.File(path, "r") as hf:
+            n_samp = int(hf.attrs["observation_samples"])
+        return n_samp
+
+    def _get_obs_props(self, comm):
+        """Query the index or filesystem for observations and their properties."""
+        log = Logger.get()
+        if comm is None:
+            rank = 0
+        else:
+            rank = comm.rank
+
+        # Index for the volume, if we are using it.
+        if self.volume_index is None or len(self.files) > 0:
+            # Either we are loading a list of files or disabling use of the index
+            vindx = None
+        elif self.volume_index == "DEFAULT":
+            vindx = VolumeIndex(os.path.join(self.volume, VolumeIndex.default_name))
+        else:
+            vindx = VolumeIndex(self.volume_index)
+
+        # If using the index, the fields we are querying
+        select_prefix = "select name, path, samples, valid_dets from "
+        select_prefix += VolumeIndex.obs_table
+        select_prefix += " "
+
+        obs_props = None
+        if rank == 0:
+            # Perform all filesystem and index queries on one process.
+            obs_props = list()
+            if len(self.files) > 0:
+                # The user gave an explicit list of files.  We use the number of
+                # samples for load-balancing.
+                if self.volume is not None:
+                    log.warning(
+                        f'LoadHDF5: volume="{self.volume}" trait overridden by '
+                        f"files={self.files}"
+                    )
+                for ofile in self.files:
+                    fsize = self._get_obs_samples(ofile)
+                    obs_props.append((fsize, ofile))
+            else:
+                # We are using the volume trait.  Get the list of relative file paths
+                # for each observation.
+                if self.volume is None:
+                    msg = "Either the volume or a list of files must be specified"
+                    log.error(msg)
+                    raise RuntimeError(msg)
+                if self.volume_select is None:
+                    # We are selecting all observations, and matching a regex.
+                    if vindx is None:
+                        # We have no index, just check the filesystem.  This is slow
+                        # for many observations.  Use the number of samples for load
+                        # balancing.
+                        rel_files = VolumeIndex.find_observations(
+                            self.volume, pattern_str=self.pattern
+                        )
+                        for rfile in rel_files:
+                            full_path = os.path.join(self.volume, rfile)
+                            fsize = self._get_obs_samples(full_path)
+                            obs_props.append((fsize, full_path))
+                    else:
+                        # We are using the index.  Get the full list of obs and then
+                        # apply the regex.  We use the number of valid detector-samples
+                        # for load balancing.
+                        pattern = re.compile(self.pattern)
+                        all_obs = vindx.select(select_prefix)
+                        for oname, opath, osamples, odets in all_obs:
+                            if pattern.search(opath) is not None:
+                                sz = osamples * odets
+                                full_path = os.path.join(self.volume, opath)
+                                obs_props.append((sz, full_path))
+                else:
+                    # Using a custom selection with the index.  Use the number of
+                    # valid detector-samples for load balancing.
+                    sel_str = f"{select_prefix}{self.volume_select}"
+                    sel_obs = vindx.select(sel_str)
+                    for oname, opath, osamples, odets in sel_obs:
+                        sz = osamples * odets
+                        full_path = os.path.join(self.volume, opath)
+                        obs_props.append((sz, full_path))
+            if self.sort_by_size:
+                obs_props.sort(key=lambda x: x[0])
+            else:
+                obs_props.sort(key=lambda x: x[1])
+        if comm is not None:
+            obs_props = comm.bcast(obs_props, root=0)
+        return obs_props
 
     def _finalize(self, data, **kwargs):
         return

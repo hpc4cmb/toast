@@ -97,7 +97,7 @@ void subtract_mean(py::array_t <int64_t,
 }
 
 void init_tod_filter(py::module & m) {
-    m.def("legendre",
+    m.def("legendre_templates",
           [](py::buffer x, py::buffer templates, size_t start_order,
              size_t stop_order) {
               pybuffer_check_1D <double> (x);
@@ -129,7 +129,7 @@ void init_tod_filter(py::module & m) {
             None.
     )");
 
-    m.def("fourier",
+    m.def("fourier_templates",
           [](py::buffer angle, py::buffer templates, size_t start_order,
              size_t stop_order) {
               pybuffer_check_1D <double> (angle);

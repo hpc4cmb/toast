@@ -10,7 +10,7 @@ import re
 from astropy import units as u
 
 from .. import qarray as qa
-from .._libtoast import add_templates, bin_invcov, bin_proj, legendre
+from .._libtoast import add_templates, bin_invcov, bin_proj, legendre_templates
 from ..data import Data
 from ..mpi import MPI
 from ..observation import default_values as defaults
@@ -227,9 +227,9 @@ class GroundFilter(Operator):
         """Evaluate Legendre polynomial templates up to the requested
         order"""
         norder = self.filter_order + 1
-        legendre_templates = np.zeros([norder, phase.size])
-        legendre(phase, legendre_templates, 0, norder)
-        return legendre_templates
+        ltemplates = np.zeros([norder, phase.size])
+        legendre_templates(phase, ltemplates, 0, norder)
+        return ltemplates
 
     @function_timer
     def _make_bin_templates(self, az):
@@ -273,7 +273,7 @@ class GroundFilter(Operator):
             # of the ground template
 
             legendre_trend = np.zeros([self.trend_order, nsample])
-            legendre(x, legendre_trend, 1, self.trend_order + 1)
+            legendre_templates(x, legendre_trend, 1, self.trend_order + 1)
             templates.append(legendre_trend)
 
         # Get boresight azimuth
@@ -313,10 +313,10 @@ class GroundFilter(Operator):
         # Polynomial templates
 
         if self.filter_order is not None:
-            legendre_templates = self._make_poly_templates(phase)
+            ltemplates = self._make_poly_templates(phase)
             if self.split_template:
-                legendre_templates = self._split_templates(legendre_templates, obs)
-            templates.append(legendre_templates)
+                ltemplates = self._split_templates(ltemplates, obs)
+            templates.append(ltemplates)
 
         # Binned templates
 

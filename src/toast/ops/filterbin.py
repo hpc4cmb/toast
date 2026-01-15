@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import pickle
 import re
 from glob import glob
 from time import time
@@ -18,8 +19,8 @@ from .._libtoast import (
     add_matrix,
     build_template_covariance,
     expand_matrix,
-    fourier,
-    legendre,
+    fourier_templates,
+    legendre_templates,
 )
 from ..mpi import MPI, get_world
 from ..observation import default_values as defaults
@@ -42,12 +43,21 @@ class SparseTemplates:
     def __init__(self):
         self.starts = []
         self.stops = []
+        self.names = []
         self.templates = []
+        self.norms = []
+        self.template_covariance = None
+        self.amplitudes = None
 
     @property
     def ntemplate(self):
         return len(self.templates)
 
+    def reset(self):
+        self.template_covariance = None
+        self.amplitudes = None
+
+    @function_timer
     def to_dense(self, nsample):
         dense = np.zeros([self.ntemplate, nsample])
         for itemplate, (start, stop, template) in enumerate(
@@ -56,6 +66,13 @@ class SparseTemplates:
             dense[itemplate, start:stop] = template
         return dense
 
+    @function_timer
+    def fit(self, signal, good):
+        proj = self.dot(signal * good)
+        self.amplitudes = np.dot(self.template_covariance, proj)
+        return
+
+    @function_timer
     def dot(self, signal):
         proj = np.zeros(self.ntemplate)
         for itemplate, (start, stop, template) in enumerate(
@@ -64,13 +81,15 @@ class SparseTemplates:
             proj[itemplate] = np.dot(template, signal[start:stop])
         return proj
 
-    def subtract(self, signal, amplitudes):
+    @function_timer
+    def subtract(self, signal):
         for itemplate, (start, stop, template) in enumerate(
             zip(self.starts, self.stops, self.templates)
         ):
-            signal[start:stop] -= amplitudes[itemplate] * template
+            signal[start:stop] -= self.amplitudes[itemplate] * template
         return
 
+    @function_timer
     def trim(self, template):
         first = 0
         last = len(template) - 1
@@ -78,30 +97,40 @@ class SparseTemplates:
             first += 1
         while last > first and template[last] == 0:
             last -= 1
+        self.reset()
         return first, last
 
-    def append(self, templates, start=0, stop=None):
+    @function_timer
+    def append(self, names, templates, start=0, stop=None):
         """Append new sparse template"""
-        for template in templates:
+        for name, template in zip(names, templates):
             first, last = self.trim(template)
             if first == last:
                 continue
             self.starts.append(start + first)
             self.stops.append(start + last + 1)
+            self.names.append(name)
             self.templates.append(template[first : last + 1])
+            self.norms.append(1.0)
+        self.reset()
         return
 
+    @function_timer
     def mask(self, good):
         """Return a new SparseTemplates instance that complies with the
         provided mask"""
         masked = SparseTemplates()
         failed = []
-        for start, stop, template in zip(self.starts, self.stops, self.templates):
+        for start, stop, name, template in zip(
+                self.starts, self.stops, self.names, self.templates
+        ):
             nnz = np.sum(template * good[start:stop] != 0)
             if nnz > 0:
                 masked.starts.append(start)
                 masked.stops.append(stop)
+                masked.names.append(name)
                 masked.templates.append(template.copy())
+                masked.norms.append(1.0)
             else:
                 # The masked template is null.  Any samples that the full
                 # template spans must be flagged.
@@ -109,9 +138,12 @@ class SparseTemplates:
         masked.normalize(good)
         return masked, failed
 
+    @function_timer
     def normalize(self, good=None):
         """Normalize templates and discard empty ones"""
-        for start, stop, template in zip(self.starts, self.stops, self.templates):
+        for itemplate, (start, stop, template) in enumerate(
+                zip(self.starts, self.stops, self.templates)
+        ):
             if good is None:
                 norm = np.sum(template**2) ** 0.5
             else:
@@ -119,6 +151,69 @@ class SparseTemplates:
             if norm == 0:
                 raise RuntimeError("Zero-norm template")
             template /= norm
+            self.norms[itemplate] *= norm
+        self.reset()
+        return
+
+    @property
+    def normalized_amplitudes(self):
+        normalized = np.array(self.amplitudes) * np.array(self.norms)
+        return normalized
+
+    @function_timer
+    def build_template_covariance(self, good):
+        """Calculate (F^T N^-1_F F)^-1
+
+        Observe that the sample noise weights in N^-1_F need not be the
+        same as in binning the filtered signal.  For instance, samples
+        falling on point sources may be masked here but included in the
+        final map.
+        """
+        log = Logger.get()
+        ntemplate = self.ntemplate
+        invcov = np.zeros([ntemplate, ntemplate])
+        build_template_covariance(
+            self.starts,
+            self.stops,
+            self.templates,
+            good.astype(np.float64),
+            invcov,
+        )
+        try:
+            cond = np.linalg.cond(invcov)
+            if np.isinf(cond):
+                rcond = 0
+            else:
+                rcond = 1 / cond
+        except np.linalg.LinAlgError:
+            log.error(
+                f"Failed condition number calculation for "
+                f"{ntemplate}x{ntemplate} matrix:"
+            )
+            log.error(f"{invcov}", flush=True)
+            log.error(f"Diagonal:")
+            for row in range(ntemplate):
+                log.error(f"{row:03d} {invcov[row, row]}")
+            raise
+        log.debug(
+            f"SparseTemplates: Template covariance matrix "
+            f"rcond = {rcond}",
+        )
+        if rcond == 0:
+            # No covariance for empty templates
+            self.cov = None
+            return
+        if rcond > 1e-10:
+            cov = np.linalg.inv(invcov)
+        else:
+            log.warning(
+                f"SparseTemplates: WARNING: template covariance matrix "
+                f"is poorly conditioned: "
+                f"rcond = {rcond}.  Using matrix pseudoinverse.",
+            )
+            cov = np.linalg.pinv(invcov, rcond=1e-10, hermitian=True)
+
+        self.template_covariance = cov
         return
 
 
@@ -314,6 +409,10 @@ class FilterBin(Operator):
         False, help="Apply a different template for left and right scans"
     )
 
+    ground_template_expansion_order = Int(
+        0, help="Taylor-expand each azimuthal bin in time"
+    )
+
     leftright_interval = Unicode(
         defaults.throw_leftright_interval,
         help="Intervals for left-to-right scans",
@@ -331,6 +430,12 @@ class FilterBin(Operator):
     )
 
     write_obs_matrix = Bool(False, help="Write the observation matrix")
+
+    nskip = Int(
+        1,
+        help="Only use every n:th detector.  Useful for quick-and-dirty "
+        "observation matrix calculation.",
+    )
 
     noiseweight_obs_matrix = Bool(
         False, help="If True, observation matrix should match noise-weighted maps"
@@ -386,6 +491,12 @@ class FilterBin(Operator):
         help="Cache directory for additive observation matrix products",
     )
 
+    amplitude_dir = Unicode(
+        None,
+        allow_none=True,
+        help="Write the template amplitudes to this directory",
+    )
+
     rcond_threshold = Float(
         1.0e-3,
         help="Minimum value for inverse pixel condition number cut.",
@@ -408,6 +519,22 @@ class FilterBin(Operator):
     )
 
     report_memory = Bool(False, help="Report memory throughout the execution")
+
+    precomputed_templates = Unicode(
+        None,
+        allow_none=True,
+        help="Observation key to a dictionary of time domain templates to project out."
+        " The dictionary must include a `det_to_key` dictionary which maps each "
+        "detector to a key in the dictionary.  That key will then return a list of "
+        "templates to fit against that detector.  See `precomputed_template_view`."
+        ,
+    )
+
+    precomputed_template_view = Unicode(
+        "throw",
+        allow_none=True,
+        help="Intervals for precomputed template filtering. See `precomputed_templates`"
+    )
 
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
@@ -601,9 +728,14 @@ class FilterBin(Operator):
             memreport.apply(data)
 
             last_good_fit = None
-            template_covariance = None
+            template_amplitudes = {}  # for saving
 
             for idet, det in enumerate(dets):
+                if idet % self.nskip != 0:
+                    # Only process every n:th detector
+                    continue
+                template_amplitudes[det] = None
+
                 t1 = time()
                 if self.grank == 0:
                     log.debug(
@@ -654,19 +786,13 @@ class FilterBin(Operator):
                         flags |= self.filter_flag_mask
                         continue
 
-                # Find all samples that remain good after filtering cuts
-                good_bin = np.logical_and(
-                    (common_flags & self.binning.shared_flag_mask) == 0,
-                    (flags & self.binning.det_flag_mask) == 0,
-                )
-
                 if (
                     self.deproject_map is not None
                     and self._deproject_pattern.match(det) is not None
                 ):
                     self._add_deprojection_templates(data, obs, pixels, det_templates)
                     # Must re-evaluate the template covariance
-                    template_covariance = None
+                    det_templates.reset()
 
                 if self.grank == 0:
                     log.debug(
@@ -676,6 +802,44 @@ class FilterBin(Operator):
                     )
                     t1 = time()
 
+                if self.precomputed_templates is not None:
+                    self._add_precomputed_templates(obs, det, det_templates)
+                    # Must re-evaluate the template covariance
+                    det_templates.reset()
+
+                if self.grank == 0:
+                    log.debug(
+                        f"{self.group:4} : FilterBin:   Built precomputed "
+                        f"templates in {time() - t1:.2f} s. "
+                        f"ntemplate = {det_templates.ntemplate}",
+                    )
+                    t1 = time()
+
+                # Deprojection templates or precomputed templates may also
+                # need to be discarded due to flagging
+
+                det_templates, failed = det_templates.mask(good_fit)
+
+                # Mask samples that cannot be filtered
+
+                if len(failed) != 0:
+                    for ind in failed:
+                        flags[ind] |= self.filter_flag_mask
+                    good_fit = np.logical_and(
+                        (common_flags & self.shared_flag_mask) == 0,
+                        (flags & self.det_flag_mask) == 0,
+                    )
+                    if np.sum(good_fit) == 0:
+                        flags |= self.filter_flag_mask
+                        continue
+
+                # Find all samples that remain good after filtering cuts
+
+                good_bin = np.logical_and(
+                    (common_flags & self.binning.shared_flag_mask) == 0,
+                    (flags & self.binning.det_flag_mask) == 0,
+                )
+
                 if det_templates.ntemplate == 0:
                     # No templates to fit
                     continue
@@ -684,20 +848,17 @@ class FilterBin(Operator):
                 # memreport.apply(data)
 
                 if (
-                    template_covariance is None
-                    or template_covariance.shape[0] != det_templates.ntemplate
+                    det_templates.template_covariance is None
                     or np.any(last_good_fit != good_fit)
                 ):
-                    template_covariance = self._build_template_covariance(
-                        det_templates, good_fit
-                    )
+                    det_templates.build_template_covariance(good_fit)
                     last_good_fit = good_fit.copy()
 
                 if self.grank == 0:
-                    if template_covariance is None:
+                    if det_templates.template_covariance is None:
                         shape = None
                     else:
-                        shape = template_covariance.shape
+                        shape = det_templates.template_covariance.shape
                     log.debug(
                         f"{self.group:4} : FilterBin:   Built "
                         f"{shape} template covariance "
@@ -705,12 +866,12 @@ class FilterBin(Operator):
                     )
                     t1 = time()
 
-                if template_covariance is None:
+                if det_templates.template_covariance is None:
                     # template covariance failed to invert. Flag detector data
                     flags |= self.filter_flag_mask
                 else:
                     self._regress_templates(
-                        det_templates, template_covariance, signal, good_fit
+                        det_templates, signal, good_fit
                     )
                     if self.grank == 0:
                         log.debug(
@@ -719,16 +880,42 @@ class FilterBin(Operator):
                         )
                         t1 = time()
 
-                    self._accumulate_observation_matrix(
-                        obs,
-                        det,
-                        pixels,
-                        weights,
-                        good_fit,
-                        good_bin,
-                        det_templates,
-                        template_covariance,
-                    )
+                    template_amplitudes[det] = dict(zip(
+                        det_templates.names, det_templates.normalized_amplitudes
+                    ))
+
+                    if self.write_obs_matrix:
+                        self._accumulate_observation_matrix(
+                            obs,
+                            det,
+                            pixels,
+                            weights,
+                            good_fit,
+                            good_bin,
+                            det_templates,
+                            det_templates.template_covariance,
+                        )
+
+            if self.amplitude_dir is not None:
+                # Collect and save the template amplitudes
+                fname_amp = os.path.join(
+                    self.amplitude_dir, f"{self.name}_amplitudes_{obs.name}.pck"
+                )
+                if self.gcomm is None:
+                    all_amplitudes = [template_amplitudes]
+                else:
+                    all_amplitudes = self.gcomm.gather(template_amplitudes)
+                if self.grank == 0:
+                    os.makedirs(self.amplitude_dir, exist_ok=True)
+                    # delete the first amplitudes, they are already in
+                    # the local dictionary
+                    del all_amplitudes[0]
+                    # Put the received amplitudes into the local dictionary
+                    for amplitudes in all_amplitudes:
+                        template_amplitudes.update(amplitudes)
+                    with open(fname_amp, "wb") as f:
+                        pickle.dump(template_amplitudes, f)
+                    log.info(f"Saved template amplitudes to {fname_amp}")
 
         log.debug_rank(
             f"{self.group:4} : FilterBin:   Filtered group data in",
@@ -805,10 +992,18 @@ class FilterBin(Operator):
         if nfilter < 1:
             return
 
-        fourier_templates = np.zeros([nfilter, hwp_angle.size])
-        fourier(hwp_angle, fourier_templates, 1, self.hwp_filter_order + 1)
+        ftemplates = np.zeros([nfilter, hwp_angle.size])
+        fourier_templates(hwp_angle, ftemplates, 1, self.hwp_filter_order + 1)
 
-        templates.append(fourier_templates)
+        names = []
+        for ifilter in range(nfilter):
+            order = ifilter // 2 + 1
+            if ifilter % 2 == 0:
+                names.append(f"HWPSS-cos-{order}")
+            else:
+                names.append(f"HWPSS-sin-{order}")
+
+        templates.append(names, ftemplates)
 
         return
 
@@ -831,39 +1026,48 @@ class FilterBin(Operator):
         if nfilter < 1:
             return
 
-        legendre_templates = np.zeros([nfilter, phase.size])
-        legendre(phase, legendre_templates, min_order, max_order + 1)
+        directionless_templates = np.zeros([nfilter, phase.size])
+        legendre_templates(phase, directionless_templates, min_order, max_order + 1)
+        directionless_names = []
+        for order in range(min_order, max_order + 1):
+            directionless_names.append(f"ground-poly-{order}")
+
         if not self.split_ground_template:
-            legendre_filter = legendre_templates
+            legendre_filter = directionless_templates
+            names = directionless_names
         else:
             # Separate ground filter by scan direction.
             legendre_filter = []
+            names = []
             masks = []
+            directions = []
             for name in self.leftright_interval, self.rightleft_interval:
                 mask = np.zeros(phase.size, dtype=bool)
                 for ival in obs.intervals[name]:
                     mask[ival.first : ival.last] = True
                 masks.append(mask)
-            for template in legendre_templates:
-                for mask in masks:
+                directions.append(name)
+            for name, template in zip(directionless_names, directionless_templates):
+                for direction, mask in zip(directions, masks):
                     temp = template.copy()
                     temp[mask] = 0
                     legendre_filter.append(temp)
+                    names.append(f"{name}-{direction}")
             legendre_filter = np.vstack(legendre_filter)
 
-        templates.append(legendre_filter)
+        templates.append(names, legendre_filter)
 
         return
 
     @function_timer
-    def _add_ground_bin_templates(self, obs, templates):
+    def _add_ground_bin_templates(self, ob, templates):
         if self.ground_filter_bin_width is None:
             return
 
         if self.azimuth is not None:
-            az = obs.shared[self.azimuth]
+            az = ob.shared[self.azimuth]
         else:
-            quats = obs.shared[self.boresight_azel]
+            quats = ob.shared[self.boresight_azel]
             theta, phi, _ = qa.to_iso_angles(quats)
             az = 2 * np.pi - phi
 
@@ -878,7 +1082,7 @@ class FilterBin(Operator):
 
         # bin numbers are positive by construction.
         # Assign flagged samples to bin = -1
-        shared_flags = np.array(obs.shared[self.shared_flags])
+        shared_flags = np.array(ob.shared[self.shared_flags])
         bad = (shared_flags & self.shared_flag_mask) != 0
         ibin[bad] = -1
 
@@ -900,29 +1104,53 @@ class FilterBin(Operator):
         # Each template is just a boolean mask that is true when
         # boresight is in a specific bin
         directionless_templates = []
+        directionless_names = []
         for bin_ in bins:
             directionless_templates.append((ibin == bin_).astype(float))
+            bin_center = np.degrees((bin_ + 0.5) * wbin)
+            directionless_names.append(f"ground-bin-at-{bin_center:.3f}")
 
         # Optionally separate ground filter by scan direction.
         if not self.split_ground_template:
             ground_templates = directionless_templates
+            names = directionless_names
         else:
             ground_templates = []
+            names = []
             masks = []
+            directions = []
             for name in self.leftright_interval, self.rightleft_interval:
                 mask = np.zeros(ibin.size, dtype=bool)
-                for ival in obs.intervals[name]:
+                for ival in ob.intervals[name]:
                     mask[ival.first : ival.last] = True
                 masks.append(mask)
-            for template in directionless_templates:
-                for mask in masks:
+                directions.append(name)
+            for name, template in zip(directionless_names, directionless_templates):
+                for direction, mask in zip(directions, masks):
                     temp = template.copy()
                     temp[mask] = 0
                     ground_templates.append(temp)
+                    names.append(f"{name}-{direction}")
+
+        # Optionally add time derivatives of each bin temperature
+        norder = self.ground_template_expansion_order
+        if norder > 0:
+            times = ob.shared[self.times].data
+            times = times - times[0]
+            times = times / times[-1] * 2 - 1
+            new_templates = []
+            new_names = []
+            for name, template in zip(names, ground_templates):
+                for order in range(norder + 1):
+                    derivative = template * times**order
+                    new_templates.append(derivative)
+                    new_names.append(f"{name}-timederiv-{order}")
+            ground_templates = new_templates
+            names = new_names
 
         ground_templates = np.vstack(ground_templates)
 
-        templates.append(ground_templates)
+        templates.append(names, ground_templates)
 
         return
 
@@ -938,7 +1166,7 @@ class FilterBin(Operator):
             shared_flags = np.array(obs.shared[self.shared_flags])
         bad = (shared_flags & self.shared_flag_mask) != 0
 
-        for ival in intervals:
+        for i, ival in enumerate(intervals):
             istart = ival.first
             istop = ival.last
             # Trim flagged samples from both ends
@@ -952,9 +1180,12 @@ class FilterBin(Operator):
                 continue
             wbin = 2 / (istop - istart)
             phase = (np.arange(istop - istart) + 0.5) * wbin - 1
-            legendre_templates = np.zeros([nfilter, phase.size])
-            legendre(phase, legendre_templates, 0, nfilter)
-            templates.append(legendre_templates, start=istart, stop=istop)
+            ltemplates = np.zeros([nfilter, phase.size])
+            legendre_templates(phase, ltemplates, 0, nfilter)
+            names = []
+            for order in range(nfilter):
+                names.append(f"poly-{order}-interval-{i}")
+            templates.append(names, ltemplates, start=istart, stop=istop)
 
         if self.shared_flags is not None:
             obs.shared[self.shared_flags].set(shared_flags, offset=(0,), fromrank=0)
@@ -990,7 +1221,6 @@ class FilterBin(Operator):
         weights = np.zeros([nsample, nnz], dtype=np.float64)
         dptemplate_raw = AlignedF64.zeros(nsample)
         dptemplate = dptemplate_raw.array()
-        norm = np.dot(common_templates[0], common_templates[0])
         for inz in range(self._deproject_nnz):
             weights[:] = 0
             weights[:, inz] = 1
@@ -1003,74 +1233,46 @@ class FilterBin(Operator):
                 weights.reshape(-1),
                 template,
             )
-            dptemplate *= np.sqrt(norm / np.dot(dptemplate, dptemplate))
-            templates.append(dptemplate)
+            name = f"deproject-{inz}"
+            templates.append(name, dptemplate)
         return
 
     @function_timer
-    def _build_template_covariance(self, templates, good):
-        """Calculate (F^T N^-1_F F)^-1
+    def _add_precomputed_templates(self, obs, det, templates):
+        if self.precomputed_templates not in obs:
+            raise RuntimeError()
 
-        Observe that the sample noise weights in N^-1_F need not be the
-        same as in binning the filtered signal.  For instance, samples
-        falling on point sources may be masked here but included in the
-        final map.
-        """
-        log = Logger.get()
-        ntemplate = templates.ntemplate
-        invcov = np.zeros([ntemplate, ntemplate])
-        build_template_covariance(
-            templates.starts,
-            templates.stops,
-            templates.templates,
-            good.astype(np.float64),
-            invcov,
-        )
-        try:
-            cond = np.linalg.cond(invcov)
-            if np.isinf(cond):
-                rcond = 0
-            else:
-                rcond = 1 / cond
-        except np.linalg.LinAlgError:
-            print(
-                f"Failed condition number calculation for {ntemplate}x{ntemplate} matrix:"
-            )
-            print(f"{invcov}", flush=True)
-            print(f"Diagonal:")
-            for row in range(ntemplate):
-                print(f"{row:03d} {invcov[row, row]}")
-            raise
-        if self.grank == 0:
-            log.debug(
-                f"{self.group:4} : FilterBin: Template covariance matrix "
-                f"rcond = {rcond}",
-            )
-        if rcond == 0:
-            # No covariance for empty templates
-            return None
-        if rcond > 1e-6:
-            cov = np.linalg.inv(invcov)
-        else:
-            log.warning(
-                f"{self.group:4} : FilterBin: WARNING: template covariance matrix "
-                f"is poorly conditioned: "
-                f"rcond = {rcond}.  Using matrix pseudoinverse.",
-            )
-            cov = np.linalg.pinv(invcov, rcond=1e-10, hermitian=True)
+        precomputed = obs[self.precomputed_templates]
+        if det not in precomputed["det_to_key"]:
+            # This detector does not have precomputed templates
+            return
 
-        return cov
+        intervals = obs.intervals[self.precomputed_template_view]
+        key = precomputed["det_to_key"][det]
+        tod_templates = precomputed[key]
+        for i, ival in enumerate(intervals):
+            istart = ival.first
+            istop = ival.last
+            ind = slice(istart, istop)
+            slice_templates = []
+            names = []
+            for name, tod_template in tod_templates.items():
+                slice_templates.append(tod_template[ind])
+                names.append(f"{name}-interval-{i}")
+            slice_templates = np.vstack(slice_templates)
+            templates.append(names, slice_templates, start=istart, stop=istop)
+
+        return
 
     @function_timer
-    def _regress_templates(self, templates, template_covariance, signal, good):
+    def _regress_templates(self, templates, signal, good):
         """Calculate Zd = (I - F(F^T N^-1_F F)^-1 F^T N^-1_F)d
 
         All samples that are not flagged (zero weight in N^-1_F) have
         equal weight.
         """
-        proj = templates.dot(signal * good)
-        amplitudes = np.dot(template_covariance, proj)
-        templates.subtract(signal, amplitudes)
+        templates.fit(signal, good)
+        templates.subtract(signal)
         return
 
     @function_timer

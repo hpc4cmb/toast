@@ -694,7 +694,7 @@ class ConfigTest(MPITestCase):
             os.makedirs(testdir)
 
         # Create the telescope and schedule files
-        tele_file = os.path.join(testdir, "toast_run_telescope.h5:/leve1/level2")
+        tele_file = os.path.join(testdir, "toast_run_telescope.h5:/level1/level2")
         tele = create_space_telescope(self.toastcomm.group_size)
         if self.toastcomm.world_rank == 0:
             save_instrument_file(tele_file, tele, None)

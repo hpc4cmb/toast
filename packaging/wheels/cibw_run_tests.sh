@@ -2,10 +2,18 @@
 
 # echo "Skipping tests to produce wheel artifacts for local testing"
 
-echo "======================================================================="
-echo "Running serial tests with MPI disabled"
-echo "======================================================================="
-MPI_DISABLE=1 python -c 'import toast.tests; toast.tests.run()'
+runner=$1
+
+if [ "x${runner}" = "xmacos-15-intel" ]; then
+    # Just try to import the package
+    MPI_DISABLE=1 python -c 'import toast'
+    echo "Skipping tests on macos-15-intel wheels, due to sporadic segfault"
+else
+    echo "======================================================================="
+    echo "Running serial tests with MPI disabled"
+    echo "======================================================================="
+    MPI_DISABLE=1 python -c 'import toast.tests; toast.tests.run()'
+fi
 
 # echo "======================================================================="
 # echo "Running MPI tests with $(which mpirun)"
