@@ -215,7 +215,8 @@ class Observation(MutableMapping):
         # In order to ensure that observations always have a unique name, assign a
         # random name if the user does not specify one.
         if self._name is None:
-            int_name = np.random.Generator.integers(2147483647, dtype=np.int32)
+            rng = np.random.default_rng()
+            int_name = rng.integers(0, high=2147483647, size=None, dtype=np.int32)
             self._name = f"{int_name:010d}"
             if self._uid is None:
                 # Set the UID to the same random integer
