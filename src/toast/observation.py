@@ -1,30 +1,25 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
 import copy
-import numbers
-import sys
 import types
-from collections.abc import Mapping, MutableMapping, Sequence
+from collections.abc import MutableMapping
 
 import numpy as np
 from astropy import units as u
-from pshmem.utils import mpi_data_type
 
 from .accelerator import AcceleratorObject
-from .dist import distribute_samples
-from .instrument import Session, Telescope
+from .instrument import Session
 from .intervals import IntervalList, interval_dtype
-from .mpi import MPI, comm_equal
+from .mpi import MPI
 from .observation_data import (
     DetDataManager,
-    DetectorData,
     IntervalsManager,
     SharedDataManager,
 )
 from .observation_dist import DistDetSamp, redistribute_data
-from .observation_view import DetDataView, SharedView, View, ViewInterface, ViewManager
+from .observation_view import ViewInterface
 from .timing import function_timer
 from .utils import Logger, name_UID
 
@@ -212,14 +207,23 @@ class Observation(MutableMapping):
         sample_sets=None,
         process_rows=None,
     ):
-        log = Logger.get()
         self._telescope = telescope
         self._name = name
         self._uid = uid
         self._session = session
 
-        if self._uid is None and self._name is not None:
-            self._uid = name_UID(self._name)
+        # In order to ensure that observations always have a unique name, assign a
+        # random name if the user does not specify one.
+        if self._name is None:
+            rng = np.random.default_rng()
+            int_name = rng.integers(0, high=2147483647, size=None, dtype=np.int32)
+            self._name = f"{int_name:010d}"
+            if self._uid is None:
+                # Set the UID to the same random integer
+                self._uid = int_name
+        else:
+            if self._uid is None:
+                self._uid = name_UID(self._name)
 
         if self._session is None:
             if self._name is not None:

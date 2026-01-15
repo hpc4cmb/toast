@@ -63,8 +63,8 @@ class LoadHDF5(Operator):
     )
 
     pattern = Unicode(
-        r"obs_.*_.*\.h5",
-        help="Regexp pattern to match files against (if not using index).",
+        r".*\.h5",
+        help="Regexp pattern to match files against (if not using volume_select).",
     )
 
     files = List(

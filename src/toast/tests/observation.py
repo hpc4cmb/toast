@@ -14,15 +14,17 @@ from pshmem import MPIShared
 from .. import ops
 from ..data import Data
 from ..mpi import MPI, Comm
-from ..observation import DetectorData, Observation
+from ..observation import Observation
 from ..observation import default_values as defaults
 from ..observation import set_default_values
+from ..observation_data import DetectorData
 from .helpers import (
     close_data,
     create_ground_data,
     create_outdir,
     create_satellite_empty,
     create_overdistributed_data,
+    create_space_telescope,
 )
 from .mpi import MPITestCase
 
@@ -76,6 +78,12 @@ class ObservationTest(MPITestCase):
                 np.testing.assert_equal(view[1], tdata[1, 0:2])
 
                 tdata.clear()
+
+    def test_empty_name(self):
+        comm = Comm(world=self.comm)
+        tele = create_space_telescope(comm.group_size)
+        obs = Observation(comm, tele, 10)
+        self.assertTrue(obs.uid == int(obs.name))
 
     def test_observation(self):
         # Populate the observations

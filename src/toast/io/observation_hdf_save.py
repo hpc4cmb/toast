@@ -538,8 +538,7 @@ def save_hdf5(
     comm = obs.comm.comm_group
     rank = obs.comm.group_rank
 
-    namestr = f"{obs.name}_{obs.uid}"
-    hfpath = os.path.join(dir, f"obs_{namestr}.h5")
+    hfpath = os.path.join(dir, f"{obs.name}.h5")
     hfpath_temp = f"{hfpath}.tmp"
 
     # Create the file and get the root group
