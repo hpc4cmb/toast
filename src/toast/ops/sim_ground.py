@@ -191,6 +191,12 @@ class SimGround(Operator):
         False, help="Modulate elevation with a sine wave instead of a triangle wave"
     )
 
+    el_mod_sine_phase = Quantity(
+        0.0 * u.degree,
+        allow_none=True,
+        help="Add a per subscan extra phase to the sine modulation. If negative adds random phase."
+    ) 
+
     distribute_time = Bool(
         False,
         help="Distribute observation data along the time axis rather than detector axis",
@@ -1002,7 +1008,10 @@ class SimGround(Operator):
                 scan_max_el,
                 self.el_mod_amplitude.to_value(u.radian),
                 self.el_mod_rate.to_value(u.Hz),
+                ival_scan_leftright,
+                ival_scan_rightleft,
                 el_mod_sine=self.el_mod_sine,
+                el_mod_sine_phase=self.el_mod_sine_phase.to_value(u.radian),
             )
         if self.el_mod_step.to_value(u.radian) > 0:
             scan_min_el, scan_max_el = step_el(
