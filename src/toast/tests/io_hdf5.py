@@ -269,8 +269,13 @@ class IoHdf5Test(MPITestCase):
         for ob in data.obs:
             original[ob.name] = ob.duplicate(times="times")
 
+        # Disable index for this test, to check that the loader works in this case
         saver = ops.SaveHDF5(
-            volume=datadir, detdata=det_data_fields, config=config, verify=True
+            volume=datadir,
+            volume_index=None,
+            detdata=det_data_fields,
+            config=config,
+            verify=True,
         )
         saver.apply(data)
 
