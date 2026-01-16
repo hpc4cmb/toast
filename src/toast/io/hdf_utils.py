@@ -227,25 +227,27 @@ def save_meta_object(parent, objname, obj):
         # Not participating
         return
 
-    if "type" not in parent.attrs:
+    if "python_data_type" not in parent.attrs:
         # This must be the root
-        parent.attrs["type"] = "dict"
+        parent.attrs["python_data_type"] = "dict"
 
     if isinstance(obj, dict):
         child = parent.create_group(objname)
-        child.attrs["type"] = _type_to_str(obj)
+        child.attrs["python_data_type"] = _type_to_str(obj)
         for k, v in obj.items():
             save_meta_object(child, k, v)
     elif isinstance(obj, (list, tuple)):
         child = parent.create_group(objname)
-        child.attrs["type"] = _type_to_str(obj)
+        child.attrs["python_data_type"] = _type_to_str(obj)
         for indx, item in enumerate(obj):
             k = f"item_{indx:04d}"
             save_meta_object(child, k, item)
     elif isinstance(obj, u.Quantity):
         if isinstance(obj.value, np.ndarray):
             # Array quantity
-            odata = parent.create_dataset(objname, data=replace_unicode_arrays(obj.value))
+            odata = parent.create_dataset(
+                objname, data=replace_unicode_arrays(obj.value)
+            )
             odata.attrs["units"] = obj.unit.to_string()
             del odata
         else:
@@ -281,11 +283,13 @@ def load_meta_object(parent):
         (object):  The populated python container
 
     """
-    if "type" not in parent.attrs:
-        raise RuntimeError("metadata group does not contain 'type' attribute")
+    if "python_data_type" not in parent.attrs:
+        raise RuntimeError(
+            "metadata group does not contain 'python_data_type' attribute"
+        )
 
     parsed = dict()
-    parsed["type"] = parent.attrs["type"]
+    parsed["python_data_type"] = parent.attrs["python_data_type"]
 
     # First process child groups / datasets
     for child_name in list(sorted(parent.keys())):
@@ -309,7 +313,7 @@ def load_meta_object(parent):
     units_pat = re.compile(r"(.*)_units")
     value_pat = re.compile(r"(.*)_value")
     for k, v in parent.attrs.items():
-        if k == "type":
+        if k == "python_data_type":
             continue
         if value_pat.match(k) is not None:
             # We will process this when matching units
@@ -328,22 +332,22 @@ def load_meta_object(parent):
     # If the parent container is a list or tuple, construct that now and sort the
     # children into the original order.
     ret = None
-    ctype = parsed["type"]
+    ctype = parsed["python_data_type"]
     if ctype == "dict":
-        del parsed["type"]
+        del parsed["python_data_type"]
         return parsed
     elif ctype == "list":
         keys = list(sorted(parsed.keys()))
         ret = list()
         for k in keys:
-            if k == "type":
+            if k == "python_data_type":
                 continue
             ret.append(parsed[k])
     elif ctype == "tuple":
         keys = list(sorted(parsed.keys()))
         ret = tuple()
         for k in keys:
-            if k == "type":
+            if k == "python_data_type":
                 continue
             ret = ret + (parsed[k],)
     else:

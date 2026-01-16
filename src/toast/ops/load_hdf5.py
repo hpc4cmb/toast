@@ -166,10 +166,23 @@ class LoadHDF5(Operator):
         if self.volume_index is None or len(self.files) > 0:
             # Either we are loading a list of files or disabling use of the index
             vindx = None
-        elif self.volume_index == "DEFAULT":
-            vindx = VolumeIndex(os.path.join(self.volume, VolumeIndex.default_name))
         else:
-            vindx = VolumeIndex(self.volume_index)
+            if self.volume_index == "DEFAULT":
+                index_path = os.path.join(self.volume, VolumeIndex.default_name)
+            else:
+                index_path = self.volume_index
+            index_exists = False
+            if rank == 0:
+                if os.path.isfile(index_path):
+                    index_exists = True
+            if comm is not None:
+                index_exists = comm.bcast(index_exists, root=0)
+            if index_exists:
+                vindx = VolumeIndex(index_path)
+            else:
+                msg = f"Volume index '{index_path}' does not exist, scanning filesystem for observations."
+                log.warning_rank(msg, comm=comm)
+                vindx = None
 
         # If using the index, the fields we are querying
         select_prefix = "select name, path, samples, valid_dets from "
