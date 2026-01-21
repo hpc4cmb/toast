@@ -805,6 +805,7 @@ class FilterBin(Operator):
                 )
                 if np.sum(good_fit) == 0:
                     flags |= self.filter_flag_mask
+                    obs.local_detector_flags[det] |= self.filter_flag_mask
                     continue
 
                 deproject = (
@@ -921,6 +922,7 @@ class FilterBin(Operator):
                 if det_templates.template_covariance is None:
                     # template covariance failed to invert. Flag detector data
                     flags |= self.filter_flag_mask
+                    obs.local_detector_flags[det] |= self.filter_flag_mask
                 else:
                     self._regress_templates(
                         det_templates, signal, good_fit
@@ -1164,9 +1166,9 @@ class FilterBin(Operator):
                 istep += 1
             legendre_filter = new_templates
             names = new_names
-            templates.meta["times"] = times.data  # For reference
 
         templates.append(names, legendre_filter)
+        templates.meta["times"] = np.array(ob.shared[self.times])  # For reference
         templates.meta["azimuth"] = np.array(ob.shared[self.azimuth])  # For reference
 
         return
@@ -1243,6 +1245,15 @@ class FilterBin(Operator):
                     temp[mask] = 0
                     ground_templates.append(temp)
                     names.append(f"{name}-{direction}")
+            # Save intervals for reference
+            templates.meta["leftright_interval"] = IntervalList(
+                np.array(ob.shared[self.times]),
+                ob.intervals[self.leftright_interval],
+            )
+            templates.meta["rightleft_interval"] = IntervalList(
+                np.array(ob.shared[self.times]),
+                ob.intervals[self.rightleft_interval],
+            )
 
         # Optionally add time derivatives of each bin temperature
         norder = self.ground_template_expansion_order
@@ -1284,11 +1295,11 @@ class FilterBin(Operator):
                 istep += 1
             ground_templates = new_templates
             names = new_names
-            templates.meta["times"] = times.data  # For reference
 
         ground_templates = np.vstack(ground_templates)
 
         templates.append(names, ground_templates)
+        templates.meta["times"] = np.array(ob.shared[self.times])  # For reference
         templates.meta["azimuth"] = np.array(az)  # For reference
 
         return
@@ -1957,18 +1968,25 @@ class FilterBin(Operator):
         white noise covariance matrices.
         """
 
+        if not filtered and not self.write_binmap and not self.write_noiseweighted_binmap:
+            return
+
         log = Logger.get()
         timer = Timer()
         timer.start()
 
-        hits_name = f"{self.name}_hits"
-        invcov_name = f"{self.name}_invcov"
-        cov_name = f"{self.name}_cov"
-        rcond_name = f"{self.name}_rcond"
         if filtered:
+            hits_name = f"{self.name}_filtered_hits"
+            invcov_name = f"{self.name}_filtered_invcov"
+            cov_name = f"{self.name}_filtered_cov"
+            rcond_name = f"{self.name}_filtered_rcond"
             map_name = f"{self.name}_filtered_map"
             noiseweighted_map_name = f"{self.name}_noiseweighted_filtered_map"
         else:
+            hits_name = f"{self.name}_unfiltered_hits"
+            invcov_name = f"{self.name}_unfiltered_invcov"
+            cov_name = f"{self.name}_unfiltered_cov"
+            rcond_name = f"{self.name}_unfiltered_rcond"
             map_name = f"{self.name}_unfiltered_map"
             noiseweighted_map_name = f"{self.name}_noiseweighted_unfiltered_map"
 
@@ -1978,28 +1996,29 @@ class FilterBin(Operator):
         self.binning.det_data_units = self._det_data_units
         self.binning.covariance = cov_name
 
-        if self.binning.covariance not in data:
-            cov = CovarianceAndHits(
-                pixel_dist=self.binning.pixel_dist,
-                covariance=self.binning.covariance,
-                inverse_covariance=invcov_name,
-                hits=hits_name,
-                rcond=rcond_name,
-                det_mask=self.binning.det_mask,
-                det_flags=self.binning.det_flags,
-                det_flag_mask=self.binning.det_flag_mask,
-                det_data_units=self._det_data_units,
-                shared_flags=self.binning.shared_flags,
-                shared_flag_mask=self.binning.shared_flag_mask,
-                pixel_pointing=self.binning.pixel_pointing,
-                stokes_weights=self.binning.stokes_weights,
-                noise_model=self.binning.noise_model,
-                rcond_threshold=self.rcond_threshold,
-                sync_type=self.binning.sync_type,
-                save_pointing=self.binning.full_pointing,
-            )
-            cov.apply(data, detectors=detectors)
-            log.info_rank(f"Binned covariance and hits in", comm=self.comm, timer=timer)
+        # Always (re)build the inverse covariance since detector
+        # flagging may change during filtering
+        cov = CovarianceAndHits(
+            pixel_dist=self.binning.pixel_dist,
+            covariance=self.binning.covariance,
+            inverse_covariance=invcov_name,
+            hits=hits_name,
+            rcond=rcond_name,
+            det_mask=self.binning.det_mask,
+            det_flags=self.binning.det_flags,
+            det_flag_mask=self.binning.det_flag_mask,
+            det_data_units=self._det_data_units,
+            shared_flags=self.binning.shared_flags,
+            shared_flag_mask=self.binning.shared_flag_mask,
+            pixel_pointing=self.binning.pixel_pointing,
+            stokes_weights=self.binning.stokes_weights,
+            noise_model=self.binning.noise_model,
+            rcond_threshold=self.rcond_threshold,
+            sync_type=self.binning.sync_type,
+            save_pointing=self.binning.full_pointing,
+        )
+        cov.apply(data, detectors=detectors)
+        log.info_rank(f"Binned covariance and hits in", comm=self.comm, timer=timer)
 
         self.binning.apply(data, detectors=detectors)
         log.info_rank(f"Binned signal in", comm=self.comm, timer=timer)
@@ -2011,18 +2030,17 @@ class FilterBin(Operator):
             if self.mc_index is not None:
                 mc_root += f"_{self.mc_index:05d}"
 
-        binned = not filtered  # only write hits and covariance once
-        if binned:
-            write_map = self.write_binmap
-            write_noiseweighted_map = self.write_noiseweighted_binmap
-        else:
+        if filtered:
             write_map = self.write_map
             write_noiseweighted_map = self.write_noiseweighted_map
+        else:
+            write_map = self.write_binmap
+            write_noiseweighted_map = self.write_noiseweighted_binmap
         keep_final = self.keep_final_products
         keep_cov = self.keep_final_products or self.write_obs_matrix
         for key, write, keep, force, rootname in [
-            (hits_name, self.write_hits and binned, keep_final, False, self.name),
-            (rcond_name, self.write_rcond and binned, keep_final, False, self.name),
+            (hits_name, self.write_hits, keep_final, False, self.name),
+            (rcond_name, self.write_rcond, keep_final, False, self.name),
             (
                 noiseweighted_map_name,
                 write_noiseweighted_map,
@@ -2031,8 +2049,8 @@ class FilterBin(Operator):
                 mc_root,
             ),
             (map_name, write_map, keep_final, True, mc_root),
-            (invcov_name, self.write_invcov and binned, keep_final, False, self.name),
-            (cov_name, self.write_cov and binned, keep_cov, False, self.name),
+            (invcov_name, self.write_invcov, keep_final, False, self.name),
+            (cov_name, self.write_cov, keep_cov, False, self.name),
         ]:
             if write:
                 product = key.replace(f"{self.name}_", "")
