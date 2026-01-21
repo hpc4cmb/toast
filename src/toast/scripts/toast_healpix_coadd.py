@@ -194,27 +194,39 @@ def main(opts=None, comm=None):
         noiseweighted = "noiseweighted" in infile_map
 
         # Determine the name of the covariance matrix file
-        if "unfiltered" in infile_map:
-            mapstring = "unfiltered_"
-        elif "filtered" in infile_map:
-            mapstring = "filtered_"
-        else:
-            mapstring = ""
-        if "binmap" in infile_map:
-            mapstring += "binmap"
-        else:
-            mapstring += "map"
-        if noiseweighted:
-            mapstring = f"noiseweighted_{mapstring}"
+        for naming_scheme in range(2):
+            if "unfiltered" in infile_map and naming_scheme == 1:
+                mapstring = "unfiltered_"
+            elif "filtered" in infile_map and naming_scheme == 1:
+                mapstring = "filtered_"
+            else:
+                mapstring = ""
+            if "binmap" in infile_map:
+                mapstring += "binmap"
+            else:
+                mapstring += "map"
 
-        infile_invcov = infile_map.replace(f"_{mapstring}.", "_invcov.")
+            infile_invcov = infile_map.replace("noiseweighted_", "").replace(
+                f"_{mapstring}.", "_invcov."
+            )
+            infile_cov = infile_map.replace("noiseweighted_", "").replace(
+                f"_{mapstring}.", "_cov."
+            )
+            infile_hits = infile_map.replace("noiseweighted_", "").replace(
+                f"_{mapstring}.", "_hits."
+            )
+            if infile_invcov == infile_map:
+                continue
+            if os.path.isfile(infile_invcov):
+                break
+            if os.path.isfile(infile_cov):
+                break
+
+        # Confirm success
         if infile_invcov == infile_map:
             raise RuntimeError(
                 f"Failed to derive name of a covariance matrix file from {infile_map}."
             )
-        infile_hits = infile_map.replace(f"_{mapstring}.", "_hits.")
-        if infile_hits == infile_map:
-            raise RuntimeError(f"Failed to derive name of hits file from {infile_map}.")
 
         if os.path.isfile(infile_invcov):
             invcov = load_map(infile_invcov, prefix)
@@ -234,7 +246,6 @@ def main(opts=None, comm=None):
             # Inverse covariance does not exist. Load and invert the
             # covariance matrix
             log.info(f"{prefix}Inverse covariance not available: {infile_invcov}")
-            infile_cov = infile_map.replace(f"_{mapstring}.", "_cov.")
             if not os.path.isfile(infile_cov):
                 log.info(f"{prefix}Covariance not available: {infile_cov}")
                 msg = (
