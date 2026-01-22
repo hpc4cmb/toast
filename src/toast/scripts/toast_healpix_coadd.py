@@ -189,6 +189,14 @@ def parse_args(opts):
         help="Scale the output map with the provided factor",
     )
 
+    parser.add_argument(
+        "--ring",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Output in RING ordering (default is NESTED)",
+    )
+
     args = parser.parse_args(args=opts)
 
     return args
@@ -448,15 +456,22 @@ def main(opts=None, comm=None, cache=None, result=None, prefix=None):
         if rank == 0:
             full_invcov = np.zeros([nnz2, npix])
             full_invcov[:, good] = invcov_sum
+            if args.ring:
+                invcov_out = hp.reorder(full_invcov, n2r=True)
+                nest = False
+            else:
+                invcov_out = full_invcov
+                nest = True
             if result is None:
                 # Write to disk
                 write_healpix(
-                    args.invcov, full_invcov, nest=True, overwrite=True, dtype=dtype
+                    args.invcov, invcov_out, nest=nest, overwrite=True, dtype=dtype
                 )
-                del full_invcov
             else:
                 # Write to the result dictionary
-                result[args.invcov] = full_invcov
+                result[args.invcov] = invcov_out
+            del invcov_out
+            del full_invcov
         log.info_rank(prefix + f"Wrote {args.invcov} in", timer=timer, comm=comm)
 
     if have_hits:
@@ -464,15 +479,22 @@ def main(opts=None, comm=None, cache=None, result=None, prefix=None):
         if rank == 0:
             full_hits = np.zeros([1, npix])
             full_hits[:, good] = hits_sum
+            if args.ring:
+                hits_out = hp.reorder(full_hits, n2r=True)
+                nest = False
+            else:
+                hits_out = full_hits
+                nest = True
             if result is None:
                 # Write to disk
                 write_healpix(
-                    args.hits, full_hits, nest=True, overwrite=True, dtype=dtype
+                    args.hits, hits_out, nest=nest, overwrite=True, dtype=dtype
                 )
-                del full_hits
             else:
                 # Write to the result dictionary
-                result[args.hits] = full_hits
+                result[args.hits] = hits_out
+            del hits_out
+            del full_hits
         log.info_rank(prefix + f"Wrote {args.hits} in", timer=timer, comm=comm)
 
     # Each task processes a segment of hit pixels
@@ -524,15 +546,22 @@ def main(opts=None, comm=None, cache=None, result=None, prefix=None):
             full_rcond = np.zeros(npix, dtype=dtype)
             full_rcond[good] = total_rcond
             del total_rcond
+            if args.ring:
+                rcond_out = hp.reorder(full_rcond, n2r=True)
+                nest = False
+            else:
+                rcond_out = full_rcond
+                nest = True
             if result is None:
                 # Write to disk
                 write_healpix(
-                    args.rcond, full_rcond, nest=True, dtype=dtype, overwrite=True
+                    args.rcond, rcond_out, nest=nest, dtype=dtype, overwrite=True
                 )
-                del full_rcond
             else:
                 # Write to the result dictionary
-                result[args.rcond] = full_rcond
+                result[args.rcond] = rcond_out
+            del rcond_out
+            del full_rcond
             log.info_rank(prefix + f"Wrote {args.rcond}", timer=timer, comm=None)
         if args.cov is not None:
             log.info(prefix + f"Writing {args.cov}")
@@ -540,27 +569,45 @@ def main(opts=None, comm=None, cache=None, result=None, prefix=None):
             full_cov = np.zeros([nnz2, npix])
             full_cov[:, good] = total_cov
             del total_cov
+            if args.ring:
+                cov_out = hp.reorder(full_cov, n2r=True)
+                nest = False
+            else:
+                cov_out = full_cov
+                nest = True
             if result is None:
                 # Write to disk
                 write_healpix(
-                    args.cov, full_cov, nest=True, dtype=dtype, overwrite=True
+                    args.cov, cov_out, nest=nest, dtype=dtype, overwrite=True
                 )
-                del full_cov
             else:
                 # Write to the result dictionary
-                result[args.cov] = full_cov
+                result[args.cov] = cov_out
+            del cov_out
+            del full_cov
             log.info_rank(prefix + f"Wrote {args.cov}", timer=timer, comm=None)
         log.info(prefix + f"Writing {args.outmap}")
         total_map = np.hstack(total_map)
         full_map = np.zeros([nnz, npix])
         full_map[:, good] = total_map
+        if args.ring:
+            map_out = hp.reorder(full_map, n2r=True)
+            nest = False
+        else:
+            map_out = full_map
+            nest = True
         if result is None:
             # Write to disk
-            write_healpix(args.outmap, full_map, nest=True, dtype=dtype, overwrite=True)
+            write_healpix(args.outmap, map_out, nest=nest, dtype=dtype, overwrite=True)
         else:
             # Write to the result dictionary
-            result[args.outmap] = full_map
+            result[args.outmap] = map_out
+        del map_out
+        del full_map
         log.info_rank(prefix + f"Wrote {args.outmap}", timer=timer, comm=None)
+
+        if result is not None:
+            result["nest"] = not args.ring
 
     log.info_rank(prefix + "Co-add done in", timer=timer0, comm=comm)
 
