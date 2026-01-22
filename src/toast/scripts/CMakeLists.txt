@@ -14,6 +14,7 @@ set(ENTRY_POINTS
     toast_benchmark_ground_setup.py
     toast_healpix_convert.py
     toast_healpix_coadd.py
+    toast_healpix_compare.py
     toast_hdf5_to_spt3g.py
     toast_mini.py
     toast_obsmatrix_combine.py
