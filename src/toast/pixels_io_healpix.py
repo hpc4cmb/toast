@@ -191,19 +191,9 @@ def read_healpix(filename, *args, **kwargs):
             kwargs["h"] = args[5]
 
         if len(args) > 6:
-            if "verbose" in kwargs:
-                raise ValueError("'verbose' defined twice")
-            kwargs["verbose"] = args[6]
-        if "verbose" in kwargs:
-            verbose = kwargs["verbose"]
-        else:
-            # healpy default
-            verbose = True
-
-        if len(args) > 7:
             if "memmap" in kwargs:
                 raise ValueError("'memmap' defined twice")
-            kwargs["memmap"] = args[7]
+            kwargs["memmap"] = args[6]
         if "memmap" in kwargs and kwargs["memmap"]:
             raise ValueError("HDF5 maps do not have explicit memmap")
 
@@ -227,16 +217,9 @@ def read_healpix(filename, *args, **kwargs):
         if "ORDERING" not in header or header["ORDERING"] not in ["NESTED", "RING"]:
             raise RuntimeError("Cannot determine pixel ordering")
         if header["ORDERING"] == "NESTED" and nest == False:
-            if verbose:
-                print(f"\nReordering {filename} to RING")
             mapdata = hp.reorder(mapdata, n2r=True)
         elif header["ORDERING"] == "RING" and nest == True:
-            if verbose:
-                print(f"\nReordering {filename} to NESTED")
             mapdata = hp.reorder(mapdata, r2n=True)
-        else:
-            if verbose:
-                print(f"\n{filename} is already {header['ORDERING']}")
         f.close()
 
         if "dtype" in kwargs and kwargs["dtype"] is not None:
