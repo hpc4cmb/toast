@@ -204,6 +204,9 @@ class LoadHDF5(Operator):
                 for ofile in self.files:
                     fsize = self._get_obs_samples(ofile)
                     obs_props.append((fsize, ofile))
+                msg = "LoadHDF5 using specified file list with sizes: "
+                msg += f"{obs_props}"
+                log.verbose(msg)
             else:
                 # We are using the volume trait.  Get the list of relative file paths
                 # for each observation.
@@ -224,6 +227,10 @@ class LoadHDF5(Operator):
                             full_path = os.path.join(self.volume, rfile)
                             fsize = self._get_obs_samples(full_path)
                             obs_props.append((fsize, full_path))
+                        msg = "LoadHDF5 using volume with NO index and matching"
+                        msg += f" filename pattern '{self.pattern}' found sizes: "
+                        msg += f"{obs_props}"
+                        log.verbose(msg)
                     else:
                         # We are using the index.  Get the full list of obs and then
                         # apply the regex.  We use the number of valid detector-samples
@@ -235,6 +242,10 @@ class LoadHDF5(Operator):
                                 sz = osamples * odets
                                 full_path = os.path.join(self.volume, opath)
                                 obs_props.append((sz, full_path))
+                        msg = "LoadHDF5 using volume WITH index and matching"
+                        msg += f" filename pattern '{self.pattern}' found sizes: "
+                        msg += f"{obs_props}"
+                        log.verbose(msg)
                 else:
                     # Using a custom selection with the index.  Use the number of
                     # valid detector-samples for load balancing.
@@ -244,6 +255,9 @@ class LoadHDF5(Operator):
                         sz = osamples * odets
                         full_path = os.path.join(self.volume, opath)
                         obs_props.append((sz, full_path))
+                    msg = f"LoadHDF5 using volume with query '{self.volume_select}'"
+                    msg += f" found sizes: {obs_props}"
+                    log.verbose(msg)
             if self.sort_by_size:
                 obs_props.sort(key=lambda x: x[0])
             else:

@@ -11,6 +11,8 @@ from astropy import units as u
 from ..utils import (
     Logger,
     have_hdf5_parallel,
+    replace_unicode_arrays,
+    replace_byte_arrays,
 )
 
 
@@ -131,62 +133,6 @@ class H5File(object):
         self.close()
 
 
-def unicode_array_to_fixed(input):
-    """Convert numpy arrays with Unicode strings to fixed-length bytes.
-
-    Args:
-        input (str):  The input array.
-
-    Returns:
-        (array):  The input converted to 'S' bytes, or the original if not
-            an array of strings.
-
-    """
-    utype_pat = re.compile(r"[><]U(\d+).*")
-    if np.issubdtype(input.dtype, np.str_):
-        # Unicode string
-        mat = utype_pat.match(str(input.dtype))
-        if mat is not None:
-            maxlen = mat.group(1)
-            stype = f"S{maxlen}"
-            return input.astype(stype)
-    else:
-        return input
-
-
-def replace_unicode_arrays(obj):
-    """Recursively replace unicode numpy arrays.
-
-    Descend the object container recursively and replace numpy unicode arrays with
-    fixed-length byte arrays.
-
-    Args:
-        obj (object):  A container or array
-
-    Returns:
-        (object):  The same style container as the input, with unicode arrays replaced
-
-    """
-    if isinstance(obj, dict):
-        new_obj = dict()
-        for k, v in obj.items():
-            new_obj[k] = replace_unicode_arrays(v)
-    elif isinstance(obj, tuple):
-        new_obj = list()
-        for val in obj:
-            new_obj.append(replace_unicode_arrays(val))
-        new_obj = tuple(new_obj)
-    elif isinstance(obj, list):
-        new_obj = list()
-        for val in obj:
-            new_obj.append(replace_unicode_arrays(val))
-    elif isinstance(obj, np.ndarray):
-        new_obj = unicode_array_to_fixed(obj)
-    else:
-        new_obj = obj
-    return new_obj
-
-
 def save_meta_object(parent, objname, obj):
     """Recursive function to save python metadata objects.
 
@@ -252,8 +198,8 @@ def save_meta_object(parent, objname, obj):
             del odata
         else:
             # Must be a scalar quantity
-            parent.attrs[f"{objname}_value"] = obj.value
-            parent.attrs[f"{objname}_units"] = obj.unit.to_string()
+            parent.attrs[f"{objname}:value"] = obj.value
+            parent.attrs[f"{objname}:units"] = obj.unit.to_string()
     elif isinstance(obj, np.ndarray):
         # Array
         arr = parent.create_dataset(objname, data=replace_unicode_arrays(obj))
@@ -302,16 +248,19 @@ def load_meta_object(parent):
             child = parent[child_name]
             if "units" in child.attrs:
                 # This is an array Quantity
-                arr = u.Quantity(child, u.Unit(child.attrs["units"]), copy=True)
+                arr = u.Quantity(
+                    replace_byte_arrays(child[...]), u.Unit(child.attrs["units"]), 
+                    copy=True
+                )
             else:
                 # Plain numpy array
-                arr = np.array(child, copy=True)
+                arr = np.array(replace_byte_arrays(child[...]), copy=True)
             parsed[child_name] = arr
             del child
 
     # Now process parent attributes
-    units_pat = re.compile(r"(.*)_units")
-    value_pat = re.compile(r"(.*)_value")
+    units_pat = re.compile(r"(.*):units$")
+    value_pat = re.compile(r"(.*):value$")
     for k, v in parent.attrs.items():
         if k == "python_data_type":
             continue
@@ -323,11 +272,11 @@ def load_meta_object(parent):
             # We have a quantity
             kname = units_mat.group(1)
             unit_str = v
-            kval = parent.attrs[f"{kname}_value"]
+            kval = replace_byte_arrays(np.array(parent.attrs[f"{kname}:value"]))
             parsed[kname] = u.Quantity(kval, u.Unit(unit_str))
         else:
-            # Simple scalar
-            parsed[k] = v
+            # Simple datatype
+            parsed[k] = replace_byte_arrays(v)
 
     # If the parent container is a list or tuple, construct that now and sort the
     # children into the original order.

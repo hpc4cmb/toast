@@ -8,6 +8,7 @@ from collections.abc import MutableMapping
 
 import numpy as np
 from astropy import units as u
+from astropy.table import Table
 
 from .accelerator import AcceleratorObject
 from .instrument import Session
@@ -21,7 +22,7 @@ from .observation_data import (
 from .observation_dist import DistDetSamp, redistribute_data
 from .observation_view import ViewInterface
 from .timing import function_timer
-from .utils import Logger, name_UID
+from .utils import Logger, name_UID, table_equal, array_equal
 
 default_values = None
 
@@ -607,49 +608,54 @@ class Observation(MutableMapping):
                     msg += f"{type(other_obj)}"
                     log.verbose(msg)
                     return False
+            if isinstance(self_obj, Table):
+                return table_equal(self_obj, other_obj)
             if isinstance(self_obj, dict):
-                if set(self_obj.keys()) != set(other_obj.keys()):
-                    msg = f"{prefix} meta_equal dict keys mismatch"
+                self_keys = set(self_obj.keys())
+                other_keys = set(other_obj.keys())
+                if self_keys != other_keys:
+                    msg = f"{prefix} meta_equal dict keys mismatch "
+                    msg += f"{self_keys} != {other_keys}"
                     log.verbose(msg)
                     return False
                 result = True
                 for k, v in self_obj.items():
                     v_other = other_obj[k]
-                    child_prefix = f"{prefix}_{k}"
+                    child_prefix = f"{prefix}:{k}"
                     check = _compare_nodes(v, v_other, child_prefix)
                     if not check:
                         result = False
                 return result
             if isinstance(self_obj, (list, tuple)):
                 if len(self_obj) != len(other_obj):
-                    msg = f"{prefix} meta_equal container length mismatch"
+                    msg = f"{prefix} meta_equal container length mismatch "
+                    msg += f"{len(self_obj)} != {len(other_obj)}"
                     log.verbose(msg)
                     return False
                 result = True
                 for index, val in enumerate(self_obj):
                     other_val = other_obj[index]
-                    child_prefix = f"{prefix}_{index:04d}"
+                    child_prefix = f"{prefix}:{index:04d}"
                     check = _compare_nodes(val, other_val, child_prefix)
                     if not check:
                         result = False
                 return result
-            try:
-                is_eq = np.allclose(self_obj, other_obj)
-                if not is_eq:
-                    msg = f"{prefix} meta_equal arrays are not close"
-                    log.verbose(msg)
-                result = is_eq
-            except Exception:
-                # Not arrays
-                result = self_obj == other_obj
-                if not result:
-                    msg = f"{prefix} meta_equal scalars are not equal"
-                    log.verbose(msg)
+            if isinstance(self_obj, np.ndarray):
+                result = array_equal(
+                    self_obj, other_obj, log_prefix=f"Observation eq {prefix}"
+                )
+                return result
+
+            # Not arrays
+            result = self_obj == other_obj
+            if not result:
+                msg = f"{prefix} meta_equal scalars {self_obj} != {other_obj}"
+                log.verbose(msg)
             return result
 
         return _compare_nodes(self._internal, other._internal, prefix)
 
-    def __eq__(self, other):
+    def __eq__(self, other, approx=False):
         # Note that testing for equality is quite expensive, since it means testing all
         # metadata and also all detector, shared, and interval data.  This is mainly
         # used for unit tests.
@@ -676,16 +682,20 @@ class Observation(MutableMapping):
             log.verbose(f"Proc {self.comm.world_rank}:  Obs distributions not equal")
         if self.local_detector_flags != other.local_detector_flags:
             fail = 1
-            log.verbose(
-                f"Proc {self.comm.world_rank}:  Obs local_detector_flags not equal"
-            )
+            msg = f"Proc {self.comm.world_rank}:  Obs local_detector_flags not equal: "
+            msg += f"LFLAGS = {self.local_detector_flags}, "
+            msg += f"RFLAGS = {other.local_detector_flags}"
+            log.verbose(msg)
 
-        self.meta_equal(other, f"Proc {self.comm.world_rank}:  Obs _internal")
+        rmeta = self.meta_equal(other, f"Proc {self.comm.world_rank}:  Obs _internal")
+        if not rmeta:
+            fail = 1
+            log.verbose(f"Proc {self.comm.world_rank}:  Obs meta data not equal")
 
         if self.shared != other.shared:
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs shared data not equal")
-        if self.detdata != other.detdata:
+        if not self.detdata.__eq__(other.detdata, approx=approx):
             fail = 1
             log.verbose(f"Proc {self.comm.world_rank}:  Obs detdata not equal")
         if self.intervals != other.intervals:

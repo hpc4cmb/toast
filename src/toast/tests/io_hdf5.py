@@ -12,7 +12,7 @@ from .. import ops as ops
 from ..config import build_config
 from ..data import Data
 from ..io import load_hdf5, save_hdf5, VolumeIndex
-from ..ops.save_hdf5 import obs_approx_equal
+from ..utils import replace_byte_arrays
 from ..weather import Weather
 from .helpers import close_data, create_ground_data, create_outdir, create_comm
 from .mpi import MPITestCase
@@ -61,6 +61,8 @@ def create_other_meta():
     qscalar = 1.234 * u.second
     arr = np.arange(10, dtype=np.float64)
     qarr = arr * u.meter
+    uarr = np.array(["abc", "defg", "hijklm", "no"], dtype=np.dtype("U6"))
+    sarr = np.array([b"abc", b"defg", b"hijklm", b"no"], dtype=np.dtype("|S6"))
 
     def _leaf_dict():
         return {
@@ -68,6 +70,8 @@ def create_other_meta():
             "qscalar": qscalar,
             "arr": arr,
             "qarr": qarr,
+            "uarr": uarr,
+            "sarr": sarr,
         }
 
     def _leaf_list():
@@ -76,6 +80,8 @@ def create_other_meta():
             qscalar,
             arr,
             qarr,
+            uarr,
+            sarr,
         ]
 
     def _leaf_tuple():
@@ -84,6 +90,8 @@ def create_other_meta():
             qscalar,
             arr,
             qarr,
+            uarr,
+            sarr,
         )
 
     def _node_dict():
@@ -135,9 +143,12 @@ class IoHdf5Test(MPITestCase):
             **kwargs,
         )
 
-        # Add extra metadata attribute
+        # Add extra metadata attribute.  Since we are going to test equality on the
+        # observation metadata when saving to HDF5 and loading back in, we convert
+        # any bytestrings to unicode first.
         if not no_meta:
-            other = create_other_meta()
+            raw_other = create_other_meta()
+            other = replace_byte_arrays(raw_other)
             for ob in data.obs:
                 ob.extra = ExtraMeta()
                 ob.update(other)
@@ -242,7 +253,7 @@ class IoHdf5Test(MPITestCase):
 
             # Verify
             for ob, orig in zip(check_data.obs, original):
-                if not obs_approx_equal(ob, orig):
+                if not orig.__eq__(ob, approx=True):
                     print(
                         f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}"
                     )
@@ -289,7 +300,7 @@ class IoHdf5Test(MPITestCase):
         # Verify
         for ob in check_data.obs:
             orig = original[ob.name]
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -302,7 +313,7 @@ class IoHdf5Test(MPITestCase):
 
         for ob in check_data.obs:
             orig = original[ob.name]
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -316,7 +327,7 @@ class IoHdf5Test(MPITestCase):
 
         for ob in check_data.obs:
             orig = original[ob.name]
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -362,7 +373,7 @@ class IoHdf5Test(MPITestCase):
         # Verify
         for ob in check_data.obs:
             orig = original[ob.name]
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -406,7 +417,7 @@ class IoHdf5Test(MPITestCase):
         for ob in check_data.obs:
             orig = original[ob.name]
             orig.detdata.clear()
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -452,7 +463,7 @@ class IoHdf5Test(MPITestCase):
         # Verify
         for ob in check_data.obs:
             orig = original[ob.name]
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -474,7 +485,9 @@ class IoHdf5Test(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
-        data, config = self.create_data(split=True, no_meta=True)
+        # Version 1 did not save per-detector flags in the observation to HDF5,
+        # so we disable them for this test.
+        data, config = self.create_data(split=True, no_meta=True, flagged_pixels=False)
         det_data_names = ["signal", "flags", "alt_signal"]
         det_data_fields = [
             ("signal", {"type": "flac", "quanta": 1.0e-7}),
@@ -510,7 +523,7 @@ class IoHdf5Test(MPITestCase):
 
         # Verify
         for ob, orig in zip(check_data.obs, original):
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
 

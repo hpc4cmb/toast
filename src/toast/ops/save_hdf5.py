@@ -16,138 +16,6 @@ from ..utils import Logger
 from .operator import Operator
 
 
-def obs_approx_equal(obs1, obs2):
-    """Compare observations with relaxed floating point data comparisons.
-
-    Normal equality tests for detector data may be too stringent in the case where
-    float64 data is compressed to 32bit integer FLAC data.  Here we do a normal equality
-    test except for detector data that has floating point values, where we instead
-    use an increased tolerance.
-
-    Args:
-        obs1 (Observation):  The first observation to compare.
-        obs2 (Observation):  The second observation to compare.
-
-    Returns:
-        (bool):  True if observations are approximately equal.
-
-    """
-    log = Logger.get()
-    fail = 0
-    if obs1.name != obs2.name:
-        fail = 1
-        log.verbose(
-            f"Proc {obs1.comm.world_rank}:  Obs names {obs1.name} != {obs2.name}"
-        )
-    if obs1.uid != obs2.uid:
-        fail = 1
-        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs uid {obs1.uid} != {obs2.uid}")
-    if obs1.telescope != obs2.telescope:
-        fail = 1
-        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs telescopes not equal")
-    if obs1.session != obs2.session:
-        fail = 1
-        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs sessions not equal")
-    if obs1.dist != obs2.dist:
-        fail = 1
-        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs distributions not equal")
-
-    if not obs1.meta_equal(obs2, f"Proc {obs1.comm.world_rank}:  Obs _internal"):
-        fail = 1
-        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs metadata not equal")
-
-    # Compare any extra metadata class instances
-    extra_objs1 = list()
-    for k, v in vars(obs1).items():
-        if k.startswith("_"):
-            continue
-        if hasattr(v, "save_hdf5"):
-            extra_objs1.append(k)
-    extra_objs2 = list()
-    for k, v in vars(obs2).items():
-        if k.startswith("_"):
-            continue
-        if hasattr(v, "save_hdf5"):
-            extra_objs2.append(k)
-
-    if extra_objs1 != extra_objs2:
-        fail = 1
-        log.verbose(
-            f"Proc {obs1.comm.world_rank}:  Obs extra metadata obj lists not equal"
-        )
-    else:
-        for exobj in extra_objs1:
-            obj1 = getattr(obs1, exobj)
-            obj2 = getattr(obs2, exobj)
-            if obj1 != obj2:
-                fail = 1
-                log.verbose(
-                    f"Proc {obs1.comm.world_rank}:  Obs extra {exobj} not equal"
-                )
-
-    if obs1.shared != obs2.shared:
-        fail = 1
-        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs shared data not equal")
-    if obs1.intervals != obs2.intervals:
-        fail = 1
-        log.verbose(f"Proc {obs1.comm.world_rank}:  Obs intervals not equal")
-
-    # Walk through the detector data
-    o1d = obs1.detdata
-    o2d = obs2.detdata
-    if o1d.detectors != o2d.detectors:
-        msg = f"Proc {obs1.comm.world_rank}:  Obs detdata detectors"
-        msg += f" {o1d.detectors} != {o2d.detectors}"
-        log.verbose(msg)
-        fail = 1
-    if o1d.samples != o2d.samples:
-        msg = f"Proc {obs1.comm.world_rank}:  Obs detdata samples "
-        msg += f"{o1d.samples} != {o2d.samples}"
-        log.verbose(msg)
-        fail = 1
-    if set(o1d._internal.keys()) != set(o2d._internal.keys()):
-        msg = f"Proc {obs1.comm.world_rank}:  Obs detdata keys "
-        msg += f"{o1d._internal.keys()} != {o2d._internal.keys()}"
-        log.verbose(msg)
-        fail = 1
-    for k in o1d._internal.keys():
-        if o1d[k].detectors != o2d[k].detectors:
-            msg = f"Proc {obs1.comm.world_rank}:  Obs detdata {k} detectors "
-            msg += f"{o1d[k].detectors} != {o2d[k].detectors}"
-            log.verbose(msg)
-            fail = 1
-        if o1d[k].dtype.char != o2d[k].dtype.char:
-            msg = f"Proc {obs1.comm.world_rank}:  Obs detdata {k} dtype "
-            msg += f"{o1d[k].dtype} != {o2d[k].dtype}"
-            log.verbose(msg)
-            fail = 1
-        if o1d[k].shape != o2d[k].shape:
-            msg = f"Proc {obs1.comm.world_rank}:  Obs detdata {k} shape "
-            msg += f"{o1d[k].shape} != {o2d[k].shape}"
-            log.verbose(msg)
-            fail = 1
-        if o1d[k].units != o2d[k].units:
-            msg = f"Proc {obs1.comm.world_rank}:  Obs detdata {k} units "
-            msg += f"{o1d[k].units} != {o2d[k].units}"
-            log.verbose(msg)
-            fail = 1
-        if o1d[k].dtype == np.dtype(np.float64) or o1d[k].dtype == np.dtype(np.float32):
-            # Only compare to 32bit precision
-            if not np.allclose(o1d[k].data, o2d[k].data, rtol=1.0e-3, atol=1.0e-5):
-                msg = f"Proc {obs1.comm.world_rank}:  Obs detdata {k} array "
-                msg += f"{o1d[k].data} != {o2d[k].data}"
-                log.verbose(msg)
-                fail = 1
-        elif not np.array_equal(o1d[k].data, o2d[k].data):
-            msg = f"Proc {obs1.comm.world_rank}:  Obs detdata {k} array "
-            msg += f"{o1d[k].data} != {o2d[k].data}"
-            log.verbose(msg)
-            fail = 1
-    if obs1.comm.comm_group is not None:
-        fail = obs1.comm.comm_group.allreduce(fail, op=MPI.SUM)
-    return fail == 0
-
-
 @trait_docs
 class SaveHDF5(Operator):
     """Operator which saves observations to HDF5.
@@ -428,14 +296,20 @@ class SaveHDF5(Operator):
                     force_serial=self.force_serial,
                 )
 
-                if not obs_approx_equal(compare, original):
-                    msg = "Observation HDF5 verify failed:\n"
-                    msg += f"Input = {original}\n"
-                    msg += f"Loaded = {compare}\n"
-                    msg += f"Input signal[0] = {original.detdata['signal'][0]}\n"
-                    msg += f"Loaded signal[0] = {compare.detdata['signal'][0]}"
-                    log.error(msg)
-                    raise RuntimeError(msg)
+                failed = 0
+                fail_msg = None
+                if not original.__eq__(compare, approx=True):
+                    fail_msg = "Observation HDF5 verify failed:\n"
+                    fail_msg += f"Input = {original}\n"
+                    fail_msg += f"Loaded = {compare}\n"
+                    fail_msg += f"Input signal[0] = {original.detdata['signal'][0]}\n"
+                    fail_msg += f"Loaded signal[0] = {compare.detdata['signal'][0]}"
+                    log.error(fail_msg)
+                    failed = 1
+                if data.comm.comm_group is not None:
+                    failed = data.comm.comm_group.allreduce(failed, op=MPI.SUM)
+                if failed:
+                    raise RuntimeError(fail_msg)
 
         return
 

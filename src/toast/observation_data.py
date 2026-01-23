@@ -24,7 +24,7 @@ from .accelerator import (
 )
 from .intervals import IntervalList
 from .mpi import MPI, comm_equivalent
-from .utils import Logger, dtype_to_aligned
+from .utils import Logger, dtype_to_aligned, array_equal
 
 if use_accel_jax:
     import jax
@@ -220,6 +220,13 @@ class DetectorData(AcceleratorObject):
     @property
     def detector_shape(self):
         return tuple(self._shape[1:])
+
+    @property
+    def sample_shape(self):
+        if len(self._shape) < 3:
+            return None
+        else:
+            return tuple(self._shape[2:])
 
     def memory_use(self):
         return self._memsize
@@ -531,7 +538,7 @@ class DetectorData(AcceleratorObject):
         val += "\n>"
         return val
 
-    def __eq__(self, other):
+    def __eq__(self, other, approx=False):
         # Please leave the commented-out lines for ease of future
         # debugging.
         if self.detectors != other.detectors:
@@ -551,47 +558,11 @@ class DetectorData(AcceleratorObject):
             # msg = f"DetectorData dets not equal {self.units} != {other.units}"
             # print(msg)
             return False
-        if self.dtype == np.dtype(np.float64):
-            drange = np.amax(self.data) - np.amin(self.data)
-            rtol = 1.0e-12
-            atol = 10.0 * drange * 1.0e-15
-            if not np.allclose(self.data, other.data, rtol=rtol, atol=atol):
-                # indx = np.logical_not(
-                #     np.isclose(self.data, other.data, rtol=rtol, atol=atol)
-                # )
-                # msg = f"DetectorData array not close rtol={rtol}, atol={atol}:"
-                # for d in np.arange(self.data.shape[0]):
-                #     dname = self.detectors[d]
-                #     for s in np.arange(self.data.shape[1])[indx[d]]:
-                #         msg += f"\n {dname}, {s}:  {self.data[d, s]}"
-                #         msg += f" != {other.data[d, s]}"
-                # print(msg)
-                return False
-        elif self.dtype == np.dtype(np.float32):
-            drange = np.amax(self.data) - np.amin(self.data)
-            rtol = 1.0e-6
-            atol = 10.0 * drange * 1.0e-6
-            if not np.allclose(self.data, other.data, rtol=rtol, atol=atol):
-                # indx = np.logical_not(
-                #     np.isclose(self.data, other.data, rtol=rtol, atol=atol)
-                # )
-                # msg = f"DetectorData array not close rtol={rtol}, atol={atol}:"
-                # for d in np.arange(self.data.shape[0]):
-                #     dname = self.detectors[d]
-                #     for s in np.arange(self.data.shape[1])[indx[d]]:
-                #         msg += f"\n {dname}, {s}:  {self.data[d, s]}"
-                #         msg += f" != {other.data[d, s]}"
-                # print(msg)
-                return False
-        elif not np.array_equal(self.data, other.data):
-            # indx = np.where(self.data != other.data)[0]
-            # msg = "DetectorData array not equal:"
-            # for d in np.arange(self.data.shape[0]):
-            #     dname = self.detectors[d]
-            #     for s in np.arange(self.data.shape[1])[indx[d]]:
-            #         msg += f"\n {dname}, {s}:  {self.data[d, s]}"
-            #         msg += f" != {other.data[d, s]}"
-            # print(msg)
+        # Compare array values
+        check = array_equal(
+            self.data, other.data, f32=approx, log_prefix="DetectorData"
+        )
+        if not check:
             return False
         return True
 
@@ -899,6 +870,26 @@ class DetDataManager(MutableMapping):
                         msg += "using neither openmp nor jax"
                         raise RuntimeError(msg)
         return existing
+
+    def rename(self, original, new_name):
+        """Rename a DetectorData object within the internal dictionary.
+
+        Args:
+            original (str):  The original name of the DetectorData
+            new_name (str):  The new name.
+
+        Returns:
+            (None)
+
+        """
+        if original not in self._internal:
+            msg = f"DetectorData '{original}' does not exist"
+            raise KeyError(original)
+        if new_name in self._internal:
+            msg = f"DetectorData '{new_name}' already exists.  Delete it "
+            msg += f"before renaming '{original}'"
+            raise RuntimeError(msg)
+        self._internal[new_name] = self._internal.pop(original)
 
     def accel_exists(self, key):
         """Check if the named detector data exists on the accelerator.
@@ -1252,7 +1243,7 @@ class DetDataManager(MutableMapping):
         val += ">"
         return val
 
-    def __eq__(self, other):
+    def __eq__(self, other, approx=False):
         log = Logger.get()
         if self.detectors != other.detectors:
             log.verbose(f"  detectors {self.detectors} != {other.detectors}")
@@ -1264,7 +1255,7 @@ class DetDataManager(MutableMapping):
             log.verbose(f"  keys {self._internal.keys()} != {other._internal.keys()}")
             return False
         for k in self._internal.keys():
-            if self._internal[k] != other._internal[k]:
+            if not self._internal[k].__eq__(other._internal[k], approx=approx):
                 msg = f"  detector data {k} not equal:  "
                 msg += f"{self._internal[k]} != {other._internal[k]}"
                 log.verbose(msg)

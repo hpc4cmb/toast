@@ -10,6 +10,7 @@ from astropy import units as u
 
 from .. import ops as ops
 from ..observation import default_values as defaults
+from ..mpi import flatten
 from ..pixels import PixelData
 from .helpers import (
     close_data,
@@ -46,7 +47,16 @@ class ScanHealpixDetectorTest(MPITestCase):
         )
         weights.apply(data)
 
-        pixel_names = np.unique(data.obs[0].telescope.focalplane.detector_data["pixel"])
+        local_pixel_names = np.unique(
+            data.obs[0].telescope.focalplane.detector_data["pixel"]
+        )
+        if data.comm.comm_group is not None:
+            pixel_names = list(
+                flatten(data.comm.comm_group.allgather(local_pixel_names))
+            )
+            pixel_names = np.unique(pixel_names)
+        else:
+            pixel_names = local_pixel_names
 
         hpix_file = os.path.join(self.outdir, "fake_fits_{pixel}.fits")
         # Create fake polarized sky signal independently for each pixel
@@ -66,6 +76,9 @@ class ScanHealpixDetectorTest(MPITestCase):
                 U_scale=0,
                 det_data=f"det_data_{pixel}",
             )
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
 
         # Run the scanning from the file. Each pixel will scan a different file
         scan_hpix = ops.ScanHealpixDetectorMap(

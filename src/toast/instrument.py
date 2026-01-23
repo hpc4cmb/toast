@@ -21,8 +21,8 @@ import astropy.time as astime
 import h5py
 import numpy as np
 from astropy import units as u
-from astropy.io.misc.hdf5 import read_table_hdf5, write_table_hdf5
-from astropy.table import Column, QTable
+from astropy.io.misc.hdf5 import read_table_hdf5
+from astropy.table import Column, QTable, Table
 from scipy.constants import c, h, k
 
 try:
@@ -45,6 +45,8 @@ from .utils import (
     object_fullname,
     table_write_parallel_hdf5,
     import_from_name,
+    table_equal,
+    replace_byte_arrays,
 )
 
 # CMB temperature
@@ -974,9 +976,13 @@ class Focalplane(object):
             return False
         if self.detectors != other.detectors:
             return False
-        if self.detector_data.colnames != other.detector_data.colnames:
-            return False
-        if not self.detector_data.values_equal(other.detector_data):
+        if not isinstance(self.detector_data, Table):
+            msg = f"self.detector_data is not a Table ({self.detector_data})"
+            raise RuntimeError(msg)
+        if not isinstance(self.detector_data, Table):
+            msg = f"other.detector_data is not a Table ({other.detector_data})"
+            raise RuntimeError(msg)
+        if not table_equal(self.detector_data, other.detector_data):
             return False
         return True
 
@@ -985,13 +991,13 @@ class Focalplane(object):
 
     @classmethod
     def _load_hdf5(
-            cls,
-            handle,
-            comm=None,
-            detectors=None,
-            file_det_sets=None,
-            sample_rate=None,
-            **kwargs,
+        cls,
+        handle,
+        comm=None,
+        detectors=None,
+        file_det_sets=None,
+        sample_rate=None,
+        **kwargs,
     ):
         """Load a base class Focalplane"""
         log = Logger.get()
@@ -1003,7 +1009,9 @@ class Focalplane(object):
         detector_data = None
         field_of_view = None
         if handle is not None:
-            detector_data = read_table_hdf5(handle, path="focalplane")
+            detector_data = replace_byte_arrays(
+                read_table_hdf5(handle, path="focalplane")
+            )
             if sample_rate is None:
                 sample_rate = detector_data.meta["sample_rate"]
             field_of_view = detector_data.meta["field_of_view"]
@@ -1036,7 +1044,7 @@ class Focalplane(object):
             comm (MPI.Comm):  If loading from a file, optional communicator.
 
         Returns:
-            None
+            (Focalplane):  The constructed Focalplane.
 
         """
         # Determine if we need to broadcast results.  This occurs if only one process

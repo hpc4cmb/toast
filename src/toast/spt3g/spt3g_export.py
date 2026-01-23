@@ -4,6 +4,7 @@
 
 import io
 import os
+import json
 
 import h5py
 import numpy as np
@@ -97,7 +98,7 @@ def export_detdata(
         raise KeyError(f"DetectorData object '{name}' does not exist in observation")
     if g3t == c3g.G3TimestreamMap and times is None:
         raise RuntimeError(
-            f"If exporting a G3TimestreamMap, the times name must be specified"
+            "If exporting a G3TimestreamMap, the times name must be specified"
         )
     gunit, scale = to_g3_unit(obs.detdata[name].units)
 
@@ -171,12 +172,14 @@ def export_intervals(obs, name, iframe):
     frame = iframe.data[0]
     for ival in obs.intervals[name]:
         if frame.start <= ival.stop and frame.stop >= ival.start:
-            overlap.append((
-                ival.start,
-                ival.stop,
-                max(frame.first, ival.first),
-                min(frame.last, ival.last),
-            ))
+            overlap.append(
+                (
+                    ival.start,
+                    ival.stop,
+                    max(frame.first, ival.first),
+                    min(frame.last, ival.last),
+                )
+            )
     overlap = IntervalList(
         iframe.timestamps,
         intervals=np.array(overlap, dtype=interval_dtype).view(np.recarray),
@@ -243,6 +246,7 @@ class export_obs_meta(object):
         ob["observation_detector_sets"] = c3g.G3VectorVectorString(
             obs.all_detector_sets
         )
+        ob["observation_detector_flags"] = json.dumps(obs.local_detector_flags)
         ob["telescope_name"] = c3g.G3String(obs.telescope.name)
         ob["telescope_class"] = c3g.G3String(object_fullname(obs.telescope.__class__))
         ob["telescope_uid"] = c3g.G3Int(obs.telescope.uid)
