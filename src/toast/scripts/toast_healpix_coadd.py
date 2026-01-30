@@ -10,6 +10,7 @@ minimum variance averages
 
 import argparse
 import os
+import re
 import sys
 import traceback
 
@@ -31,7 +32,10 @@ def load_map(fname, prefix="", cache=None):
     log = Logger.get()
     timer = Timer()
     timer.start()
-    if cache is not None and fname in cache:
+    if cache is not None:
+        if fname not in cache:
+            msg = prefix + f"Cache was provided but {fname} is not in cache"
+            log.error(msg)
         log.info(prefix + f"Loading {fname} from cache")
         m, good, npix = cache[fname]
         nmap, ngood = m.shape
@@ -43,7 +47,7 @@ def load_map(fname, prefix="", cache=None):
             msg = prefix + f"Failed to load HEALPix map: {e}"
             raise RuntimeError(msg)
         m = np.atleast_2d(m)
-        nmap, npix = m[0].shape
+        nmap, npix = m.shape
         good = np.argwhere(m[0] != 0).ravel()
         # Discard empty pixels
         m = m[:, good]
@@ -67,6 +71,11 @@ def find_covariance(infile_map, prefix="", cache=None):
         else:
             mapstring += "map"
 
+        pattern = re.compile(".*(_signflip[0-9]{4}).*")
+        match = pattern.match(infile_map)
+        if match is not None:
+            infile_map = infile_map.replace(match.groups()[0], "")
+
         infile_invcov = infile_map.replace("noiseweighted_", "").replace(
             f"_{mapstring}.", "_invcov."
         )
@@ -76,6 +85,7 @@ def find_covariance(infile_map, prefix="", cache=None):
         infile_hits = infile_map.replace("noiseweighted_", "").replace(
             f"_{mapstring}.", "_hits."
         )
+
         if infile_invcov == infile_map:
             # Try another naming scheme
             continue
@@ -202,24 +212,38 @@ def parse_args(opts):
     return args
 
 
-def parse_input_maps(args, comm):
+def parse_input_maps(args, comm, weights):
     log = Logger.get()
+    timer = Timer()
+    timer.start()
 
-    if len(args.inmap) == 1:
+    if weights is not None:
+        # Ignore command line arguments for input maps, use the provided
+        # dictionary instead
+        infiles = list(weights.keys())
+    elif len(args.inmap) == 1:
         # Only one file provided, try interpreting it as a text file with a list
         try:
             weights = dict()
             infiles = list()
             with open(args.inmap[0], "r") as listfile:
                 raw = listfile.readlines()
+            if len(raw) == 0:
+                msg = f"Did not find any maps listed in {args.inmap[0]}"
+                raise RuntimeError(msg)
             for line in raw:
-                flds = line.split()
-                infiles.append(flds[0])
-                if len(flds) > 1:
-                    weights[flds[0]] = float(flds[1])
+                fields = line.split()
+                infiles.append(fields[0])
+                if len(fields) == 1:
+                    weights[fields[0]] = 1.0
+                elif len(fields) == 2:
+                    weights[fields[0]] = (float(fields[1]), float(fields[1]))
+                elif len(fields) == 3:
+                    weights[fields[0]] = (float(fields[1]), float(fields[2]))
                 else:
-                    weights[flds[0]] = 1.0
-            log.info_rank(f"Loaded {args.inmap[0]} in", timer=timer1, comm=comm)
+                    msg = f"Failed to parse entry in {args.inmap[0]} : '{line}'"
+                    raise RuntimeError(msg)
+            log.info_rank(f"Loaded {args.inmap[0]} in", timer=timer, comm=comm)
         except UnicodeDecodeError:
             # Didn't work. Assume that user supplied a single map file
             infiles = args.inmap
@@ -231,7 +255,14 @@ def parse_input_maps(args, comm):
     return infiles, weights
 
 
-def main(opts=None, comm=None, cache=None, result=None, prefix=None):
+def main(
+        opts=None,
+        comm=None,
+        cache=None,
+        result=None,
+        prefix=None,
+        weights=None,
+):
     """Coadd the specified HEALPix maps
 
     Args:
@@ -243,6 +274,9 @@ def main(opts=None, comm=None, cache=None, result=None, prefix=None):
         result (dict) : If nonzero, the coadded products are NOT written to
             disk but rather entered in the `result` dictionary with their
             intended paths used as keys
+        weights (dict) : dictionary of paths to read and the weights to
+             apply to them and their inver covariance. Will override command
+             line arguments for input maps.
     """
     env = Environment.get()
     log = Logger.get()
@@ -284,7 +318,7 @@ def main(opts=None, comm=None, cache=None, result=None, prefix=None):
     else:
         have_hits = True
 
-    infiles, weights = parse_input_maps(args, comm)
+    infiles, weights = parse_input_maps(args, comm, weights)
 
     nfile = len(infiles)
     for ifile, infile_map in enumerate(infiles):
@@ -393,10 +427,12 @@ def main(opts=None, comm=None, cache=None, result=None, prefix=None):
                 prefix + f"Applied inverse matrix in", timer=timer1, comm=None
             )
 
-        # Apply per-map weights.  The weights loaded from the file
-        # are assumed to be inverse noise weights for each map.
-        inmap *= weights[infile_map]
-        invcov *= weights[infile_map]
+        # Apply per-map weights to the noise-weighted map. The
+        # additional weights loaded from the file are assumed to be
+        # inverse noise weights for each map.
+        map_weight, invcov_weight = weights[infile_map]
+        inmap *= map_weight
+        invcov *= invcov_weight
 
         if noiseweighted_sum is None:
             noiseweighted_sum = np.zeros([nnz, npix], dtype=float)
