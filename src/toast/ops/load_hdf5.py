@@ -11,7 +11,7 @@ from ..dist import distribute_discrete
 from ..io import load_hdf5, VolumeIndex
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Int, List, Unicode, trait_docs
+from ..traits import Bool, Dict, Int, List, Unicode, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
@@ -79,6 +79,10 @@ class LoadHDF5(Operator):
         help="Only load this list of detdata objects",
     )
 
+    det_select = Dict(
+        {}, help="Keep a subset of detectors whose focalplane columns match."
+    )
+
     shared = List([], help="Only load this list of shared objects")
 
     intervals = List([], help="Only load this list of intervals objects")
@@ -141,6 +145,7 @@ class LoadHDF5(Operator):
                 shared=shared_fields,
                 intervals=intervals_fields,
                 force_serial=self.force_serial,
+                det_select=self.det_select,
             )
 
             data.obs.append(ob)
@@ -204,6 +209,9 @@ class LoadHDF5(Operator):
                 for ofile in self.files:
                     fsize = self._get_obs_samples(ofile)
                     obs_props.append((fsize, ofile))
+                msg = "LoadHDF5 using specified file list with sizes: "
+                msg += f"{obs_props}"
+                log.verbose(msg)
             else:
                 # We are using the volume trait.  Get the list of relative file paths
                 # for each observation.
@@ -224,6 +232,10 @@ class LoadHDF5(Operator):
                             full_path = os.path.join(self.volume, rfile)
                             fsize = self._get_obs_samples(full_path)
                             obs_props.append((fsize, full_path))
+                        msg = "LoadHDF5 using volume with NO index and matching"
+                        msg += f" filename pattern '{self.pattern}' found sizes: "
+                        msg += f"{obs_props}"
+                        log.verbose(msg)
                     else:
                         # We are using the index.  Get the full list of obs and then
                         # apply the regex.  We use the number of valid detector-samples
@@ -235,6 +247,10 @@ class LoadHDF5(Operator):
                                 sz = osamples * odets
                                 full_path = os.path.join(self.volume, opath)
                                 obs_props.append((sz, full_path))
+                        msg = "LoadHDF5 using volume WITH index and matching"
+                        msg += f" filename pattern '{self.pattern}' found sizes: "
+                        msg += f"{obs_props}"
+                        log.verbose(msg)
                 else:
                     # Using a custom selection with the index.  Use the number of
                     # valid detector-samples for load balancing.
@@ -244,6 +260,9 @@ class LoadHDF5(Operator):
                         sz = osamples * odets
                         full_path = os.path.join(self.volume, opath)
                         obs_props.append((sz, full_path))
+                    msg = f"LoadHDF5 using volume with query '{self.volume_select}'"
+                    msg += f" found sizes: {obs_props}"
+                    log.verbose(msg)
             if self.sort_by_size:
                 obs_props.sort(key=lambda x: x[0])
             else:

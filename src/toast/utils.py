@@ -9,6 +9,7 @@ import hashlib
 import importlib
 import numbers
 import os
+import re
 import sqlite3
 import time
 from collections import UserDict
@@ -20,6 +21,7 @@ from astropy import units as u
 import h5py
 import numpy as np
 from astropy.table import meta as aspymeta
+from astropy.table import Table
 from wurlitzer import pipes, STDOUT
 
 from ._libtoast import (
@@ -856,12 +858,10 @@ def table_write_parallel_hdf5(table, root, name, comm=None):
     # Table with numpy unicode strings can't be written in HDF5 so
     # to write such a table a copy of table is made containing columns as
     # bytestrings.  Now this copy of the table can be written in HDF5.
-    if any(col.info.dtype.kind == "U" for col in table.itercols()):
-        table = table.copy(copy_data=False)
-        table.convert_unicode_to_bytestring()
+    safe_table = replace_unicode_arrays(table)
 
     # Write the table to the root group
-    tarray = table.as_array()
+    tarray = safe_table.as_array()
     dset_shape = tarray.shape
     dset_type = tarray.dtype
     dset = None
@@ -874,7 +874,7 @@ def table_write_parallel_hdf5(table, root, name, comm=None):
     del dset
 
     # Serialize metadata
-    header_yaml = aspymeta.get_yaml_from_table(table)
+    header_yaml = aspymeta.get_yaml_from_table(safe_table)
     header_encoded = np.array([h.encode("utf-8") for h in header_yaml])
     mdset_shape = header_encoded.shape
     mdset_type = header_encoded.dtype
@@ -1153,3 +1153,303 @@ def sqlite_scalar(input):
     else:
         # Must be a string
         return input
+
+
+def array_equal(left, right, f32=False, log_prefix=""):
+    log = Logger.get()
+    if isinstance(left, u.Quantity):
+        # Floating point values with units
+        if not isinstance(right, u.Quantity):
+            msg = f"{log_prefix}: Lefthand array is a Quantity, Righthand is not"
+            log.verbose(msg)
+            return False
+        if left.unit != right.unit:
+            msg = f"{log_prefix}: Lefthand unit ({left.unit}) != "
+            msg += f"Righthand unit ({right.unit})"
+            log.verbose(msg)
+            return False
+        lval = left.value
+        rval = right.value
+    else:
+        lval = left
+        rval = right
+    if lval.dtype != rval.dtype:
+        msg = f"{log_prefix}: Lefthand dtype ({lval.dtype}) != "
+        msg += f"Righthand dtype ({rval.dtype})"
+        log.verbose(msg)
+        return False
+    if lval.dtype == np.dtype(np.float64) or lval.dtype == np.dtype(np.float32):
+        # Float data
+        drange = np.nanmax(lval) - np.nanmin(lval)
+        if lval.dtype == np.dtype(np.float32) or f32:
+            rtol = 1.0e-6
+            atol = 10.0 * drange * 1.0e-6
+        else:
+            rtol = 1.0e-12
+            atol = 10.0 * drange * 1.0e-15
+        if not np.allclose(lval, rval, rtol=rtol, atol=atol, equal_nan=True):
+            msg = f"{log_prefix}: (atol={atol}, rtol={rtol}) "
+            msg += f"Lefthand data {lval} != "
+            msg += f"Righthand data {rval}"
+            log.verbose(msg)
+            return False
+    else:
+        # Some other type of data
+        if not np.array_equal(lval, rval):
+            msg = f"{log_prefix}: "
+            msg += f"Lefthand data {lval} != "
+            msg += f"Righthand data {rval}"
+            log.verbose(msg)
+            return False
+    return True
+
+
+def table_equal(left, right):
+    """Improved table comparison beyond astropy.Table.values_equal()
+
+    Do an elementwise comparison with extra care for boolean columns.
+
+    Args:
+        left (Table):  The first table to compare.
+        right (Table):  The second table to compare.
+
+    Returns:
+        (bool):  True if all elements are equal.
+
+    """
+    log = Logger.get()
+    left_names = set(left.colnames)
+    right_names = set(right.colnames)
+    if left_names != right_names:
+        msg = f"Table colnames {left_names} != {right_names}"
+        log.verbose(msg)
+        return False
+
+    for nm in left_names:
+        left_col = left[nm]
+        right_col = right[nm]
+        if isinstance(left_col, u.Quantity):
+            # floating point values with units
+            if not isinstance(right_col, u.Quantity):
+                msg = f"Column {nm} is a Quantity on left, but not right"
+                log.verbose(msg)
+                return False
+            if left_col.unit != right_col.unit:
+                msg = f"Column {nm} unit mismatch {left_col.unit} != {right_col.unit}"
+                log.verbose(msg)
+                return False
+            check = array_equal(
+                left_col.value, right_col.value, log_prefix=f"Column {nm} Quantities"
+            )
+            if not check:
+                return False
+        else:
+            # Normal arrays
+            check = array_equal(left_col, right_col, log_prefix=f"Column {nm}")
+            if not check:
+                return False
+    return True
+
+
+def unicode_array_to_bytes(input):
+    """Convert numpy arrays with Unicode strings to fixed-length bytes.
+
+    Args:
+        input (str):  The input array.
+
+    Returns:
+        (array):  The input converted to 'S' bytes, or the original if not
+            an array of strings.
+
+    """
+    utype_pat = re.compile(r"[><|]*U(\d+)$")
+    if np.issubdtype(input.dtype, np.str_):
+        # Unicode string
+        mat = utype_pat.match(str(input.dtype))
+        if mat is not None:
+            maxlen = mat.group(1)
+            stype = f"S{maxlen}"
+            return input.astype(np.dtype(stype))
+        else:
+            msg = f"unicode to bytes string type has dtype {str(input.dtype)}"
+            raise RuntimeError(msg)
+    else:
+        return input
+
+
+def byte_array_to_unicode(input):
+    """Convert fixed length byte arrays to unicode dtype.
+
+    Args:
+        input (str):  The input array.
+
+    Returns:
+        (array):  The input converted to 'U' dtype, or the original if not
+            an array of type 'S'.
+
+    """
+    stype_pat = re.compile(r".*S(\d+)$")
+    if np.issubdtype(input.dtype, np.bytes_):
+        # Unicode string
+        mat = stype_pat.match(str(input.dtype))
+        if mat is not None:
+            maxlen = mat.group(1)
+            utype = f"U{maxlen}"
+            return input.astype(np.dtype(utype))
+        else:
+            msg = f"bytes to unicode bytes type has dtype {str(input.dtype)}"
+            raise RuntimeError(msg)
+    else:
+        return input
+
+
+def replace_unicode_arrays(obj):
+    """Recursively replace unicode numpy arrays.
+
+    Descend the object container recursively and replace numpy unicode arrays with
+    fixed-length byte arrays.
+
+    Args:
+        obj (object):  A container or array
+
+    Returns:
+        (object):  The same style container as the input, with unicode arrays replaced
+
+    """
+    if isinstance(obj, Table):
+        # Modify table columns as needed.
+        new_obj = obj.copy()
+        tnames = new_obj.colnames
+        for nm in tnames:
+            old_col = new_obj[nm]
+            if np.issubdtype(old_col.dtype, np.str_):
+                # Replace it
+                new_col = replace_unicode_arrays(old_col)
+                new_obj.replace_column(nm, new_col)
+    elif isinstance(obj, dict):
+        new_obj = dict()
+        for k, v in obj.items():
+            new_obj[k] = replace_unicode_arrays(v)
+    elif isinstance(obj, tuple):
+        new_obj = list()
+        for val in obj:
+            new_obj.append(replace_unicode_arrays(val))
+        new_obj = tuple(new_obj)
+    elif isinstance(obj, list):
+        new_obj = list()
+        for val in obj:
+            new_obj.append(replace_unicode_arrays(val))
+    elif isinstance(obj, np.ndarray):
+        new_obj = unicode_array_to_bytes(obj)
+    else:
+        new_obj = obj
+    return new_obj
+
+
+def replace_byte_arrays(obj):
+    """Recursively replace fixed-length numpy byte arrays.
+
+    Descend the object container recursively and replace numpy byte arrays with
+    Unicode arrays.
+
+    Args:
+        obj (object):  A container or array
+
+    Returns:
+        (object):  The same style container as the input, with byte arrays replaced
+
+    """
+    if isinstance(obj, Table):
+        # Modify table columns as needed.
+        new_obj = obj.copy()
+        tnames = new_obj.colnames
+        for nm in tnames:
+            old_col = new_obj[nm]
+            if np.issubdtype(old_col.dtype, np.bytes_):
+                # Replace it
+                new_col = replace_byte_arrays(old_col)
+                new_obj.replace_column(nm, new_col)
+    elif isinstance(obj, dict):
+        new_obj = dict()
+        for k, v in obj.items():
+            new_obj[k] = replace_byte_arrays(v)
+    elif isinstance(obj, tuple):
+        new_obj = list()
+        for val in obj:
+            new_obj.append(replace_byte_arrays(val))
+        new_obj = tuple(new_obj)
+    elif isinstance(obj, list):
+        new_obj = list()
+        for val in obj:
+            new_obj.append(replace_byte_arrays(val))
+    elif isinstance(obj, np.ndarray):
+        new_obj = byte_array_to_unicode(obj)
+    else:
+        new_obj = obj
+    return new_obj
+
+
+def count_string_arrays(obj, prefix="", verbose=False):
+    """Recursively count the number of unicode and byte arrays.
+
+    This is intended for debugging, and prints to stdout.
+
+    Args:
+        obj (object):  A container or array
+        prefix (str):  Prefix to prepend to print statements
+        verbose (bool):  If True, print info for every object
+
+    Returns:
+        (tuple):  The number of (unicode, byte) arrays (dtype 'U' and 'S') found.
+
+    """
+    ufound = 0
+    sfound = 0
+    stype_pat = re.compile(r".*S(\d+)$")
+    utype_pat = re.compile(r"[><|]*U(\d+)$")
+    if isinstance(obj, Table):
+        # Modify table columns as needed.
+        tnames = obj.colnames
+        for nm in tnames:
+            col = obj[nm]
+            if np.issubdtype(col.dtype, np.bytes_):
+                # Count it
+                if verbose:
+                    print(f"{prefix}found byte array in table column {nm}", flush=True)
+                sfound += 1
+            if np.issubdtype(col.dtype, np.str_):
+                # Count it
+                if verbose:
+                    print(
+                        f"{prefix}found unicode array in table column {nm}", flush=True
+                    )
+                ufound += 1
+    elif isinstance(obj, dict):
+        for k, v in obj.items():
+            dufound, dsfound = count_string_arrays(v)
+            ufound += dufound
+            sfound += dsfound
+    elif isinstance(obj, tuple):
+        for val in obj:
+            dufound, dsfound = count_string_arrays(val)
+            ufound += dufound
+            sfound += dsfound
+    elif isinstance(obj, list):
+        for val in obj:
+            dufound, dsfound = count_string_arrays(val)
+            ufound += dufound
+            sfound += dsfound
+    elif isinstance(obj, np.ndarray):
+        smat = stype_pat.match(str(obj.dtype))
+        umat = utype_pat.match(str(obj.dtype))
+        if smat is not None:
+            if verbose:
+                print(f"{prefix}found S array {obj}", flush=True)
+            sfound += 1
+        elif umat is not None:
+            if verbose:
+                print(f"{prefix}found U array {obj}", flush=True)
+            ufound += 1
+    else:
+        pass
+    return (ufound, sfound)

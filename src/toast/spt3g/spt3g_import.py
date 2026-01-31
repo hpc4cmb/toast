@@ -4,6 +4,7 @@
 
 import datetime
 import io
+import json
 import os
 import re
 
@@ -207,6 +208,7 @@ class import_obs_meta(object):
                 "observation_name",
                 "observation_uid",
                 "observation_detector_sets",
+                "observation_detector_flags",
                 "telescope_name",
                 "telescope_class",
                 "telescope_uid",
@@ -239,7 +241,8 @@ class import_obs_meta(object):
 
         Returns:
             (tuple):  The (observation name, observation UID, observation meta
-                dictionary, observation det sets, Telescope, list of noise models)
+                dictionary, observation det sets, Telescope, list of noise models,
+                detector flags)
 
         """
         name = None
@@ -253,6 +256,7 @@ class import_obs_meta(object):
         telescope = None
         noise = list()
         detsets = None
+        detflags = None
         for frm in frames:
             if frm.type == c3g.G3FrameType.Observation:
                 name = from_g3_scalar_type(frm["observation_name"])
@@ -260,6 +264,10 @@ class import_obs_meta(object):
                 detsets = list()
                 for dset in frm["observation_detector_sets"]:
                     detsets.append(list(dset))
+                if "observation_detector_flags" in frm:
+                    detflags = json.loads(frm["observation_detector_flags"])
+                else:
+                    detflags = dict()
                 site_class = import_from_name(from_g3_scalar_type(frm["site_class"]))
                 if "site_lat_deg" in frm:
                     # This is a GroundSite
@@ -388,8 +396,7 @@ class import_obs_meta(object):
                 # Extract the focalplane and noise models
                 byte_reader = io.BytesIO(np.array(frm["focalplane"], dtype=np.uint8))
                 with h5py.File(byte_reader, "r") as f:
-                    focalplane = Focalplane()
-                    focalplane.load_hdf5(f)
+                    focalplane = Focalplane.load_hdf5(f)
                 del byte_reader
 
                 telescope = telescope_class(
@@ -424,7 +431,7 @@ class import_obs_meta(object):
 
                 del fake_obs
 
-        return name, uid, meta, detsets, telescope, session, noise
+        return name, uid, meta, detsets, telescope, session, noise, detflags
 
 
 class import_obs_data(object):
@@ -673,6 +680,7 @@ class import_obs(object):
         obs_session = None
         obs_detsets = None
         obs_noise = None
+        obs_detflags = None
         if self._rank == lead_rank:
             (
                 obs_name,
@@ -682,6 +690,7 @@ class import_obs(object):
                 obs_telescope,
                 obs_session,
                 obs_noise,
+                obs_detflags,
             ) = self._meta_import(frames)
         if self._comm.comm_group is not None:
             obs_telescope = self._comm.comm_group.bcast(obs_telescope, root=lead_rank)
@@ -691,6 +700,7 @@ class import_obs(object):
             obs_session = self._comm.comm_group.bcast(obs_session, root=lead_rank)
             obs_detsets = self._comm.comm_group.bcast(obs_detsets, root=lead_rank)
             obs_noise = self._comm.comm_group.bcast(obs_noise, root=lead_rank)
+            obs_detflags = self._comm.comm_group.bcast(obs_detflags, root=lead_rank)
 
         # Every process with data builds some information about their
         # scan frames, which can then be used to sort and redistribute them
@@ -738,6 +748,9 @@ class import_obs(object):
 
         # Add the metadata
         ob.update(obs_meta)
+
+        # Update det flags
+        ob.update_local_detector_flags(obs_detflags)
 
         # Add the noise models
         for model_name, model in obs_noise.items():

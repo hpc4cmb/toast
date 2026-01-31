@@ -303,9 +303,10 @@ class VolumeIndex(object):
         log = Logger.get()
 
         # Gather the total number of valid detectors
-        n_valid_local = np.count_nonzero(
+        n_invalid = np.count_nonzero(
             [y & defaults.det_mask_invalid for x, y in obs.local_detector_flags.items()]
         )
+        n_valid_local = len(obs.local_detectors) - n_invalid
         if obs.comm_col is not None:
             n_valid = obs.comm_col.allreduce(n_valid_local, op=MPI.SUM)
         else:

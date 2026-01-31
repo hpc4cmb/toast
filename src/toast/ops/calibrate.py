@@ -7,17 +7,26 @@ import traitlets
 
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Int, Unicode, trait_docs
+from ..traits import Float, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
 
 @trait_docs
 class CalibrateDetectors(Operator):
-    """Multiply detector data by factors in the observation dictionary.
+    """Multiply detector data by calibration factors.
 
-    Given a dictionary in each observation, apply the per-detector scaling factors
-    to the timestreams.  Detectors that do not exist in the dictionary are flagged.
+    The calibration factor can be specified as a fixed value for all detectors (for
+    example when converting from raw ADC values) or per-detector values can be
+    supplied as a dictionary within the observation metadata or a column of the
+    focalplane data table.  Detectors which are missing in the calibration dictionary
+    are flagged.
+
+    This operator is frequently the first one applied to "raw" data loaded from disk.
+    If the dtype of the input DetectorData is an integer type, it will be promoted
+    to float64 before applying the calibration.
+
+    The units of the DetectorData can be updated with the `cal_units` trait.
 
     """
 
@@ -27,6 +36,18 @@ class CalibrateDetectors(Operator):
 
     cal_name = Unicode(
         "calibration", help="The observation or focalplane key containing the gains"
+    )
+
+    cal_value = Float(
+        None,
+        allow_none=True,
+        help="Apply this constant value to all detectors.  Overrides `cal_name`",
+    )
+
+    cal_units = Unit(
+        None,
+        allow_none=True,
+        help="Update the detector data units",
     )
 
     det_data = Unicode(
@@ -74,18 +95,49 @@ class CalibrateDetectors(Operator):
                 continue
 
             fp = ob.telescope.focalplane
-            if self.cal_name in ob:
-                # Observation has a separate calibration table
-                cal = ob[self.cal_name]
-            elif self.cal_name in fp.properties:
-                # Gains are in the focalplane database
-                cal = {}
-                for det in dets:
-                    cal[det] = fp[det][self.cal_name]
+            if self.cal_value is not None:
+                cal = {x: self.cal_value for x in dets}
             else:
-                msg = f"{ob.name}: Gains '{self.cal_name}' do not exist "
-                msg += f"as a dictionary nor in the focalplane database"
-                raise RuntimeError(msg)
+                if self.cal_name in ob:
+                    # Observation has a separate calibration table
+                    cal = ob[self.cal_name]
+                elif self.cal_name in fp.properties:
+                    # Gains are in the focalplane database
+                    cal = {}
+                    for det in dets:
+                        cal[det] = fp[det][self.cal_name]
+                else:
+                    msg = f"{ob.name}: Gains '{self.cal_name}' do not exist "
+                    msg += "as a dictionary nor in the focalplane database"
+                    raise RuntimeError(msg)
+
+            # Check dtype of detector data
+            input_dtype = ob.detdata[self.det_data].dtype
+            if input_dtype == np.dtype(np.int32) or input_dtype == np.dtype(np.int64):
+                # Create a new DetectorData object and copy the original.  Then delete
+                # the original and move the new one into place.
+                temp_name = f"{self.name}_{self.det_data}_TEMPORARY"
+                if self.cal_units is None:
+                    temp_units = ob.detdata[self.det_data].units
+                else:
+                    temp_units = self.cal_units
+                ob.detdata.create(
+                    temp_name,
+                    sample_shape=ob.detdata[self.det_data].sample_shape,
+                    dtype=np.float64,
+                    detectors=ob.detdata[self.det_data].detectors,
+                    units=temp_units,
+                )
+                for det in ob.detdata[self.det_data].detectors:
+                    ob.detdata[temp_name][det] = ob.detdata[self.det_data][det].astype(
+                        np.float64
+                    )
+                del ob.detdata[self.det_data]
+                ob.detdata.rename(temp_name, self.det_data)
+            else:
+                # Just update units if needed
+                if self.cal_units is not None:
+                    ob.detdata[self.det_data].update_units(self.cal_units)
 
             # Process all detectors
             det_flags = dict(ob.local_detector_flags)

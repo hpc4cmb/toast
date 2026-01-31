@@ -4,6 +4,7 @@
 
 import glob
 import os
+import re
 
 import numpy as np
 from astropy import units as u
@@ -12,7 +13,7 @@ from .. import ops as ops
 from ..config import build_config
 from ..data import Data
 from ..io import load_hdf5, save_hdf5, VolumeIndex
-from ..ops.save_hdf5 import obs_approx_equal
+from ..utils import replace_byte_arrays, array_equal
 from ..weather import Weather
 from .helpers import close_data, create_ground_data, create_outdir, create_comm
 from .mpi import MPITestCase
@@ -61,6 +62,8 @@ def create_other_meta():
     qscalar = 1.234 * u.second
     arr = np.arange(10, dtype=np.float64)
     qarr = arr * u.meter
+    uarr = np.array(["abc", "defg", "hijklm", "no"], dtype=np.dtype("U6"))
+    sarr = np.array([b"abc", b"defg", b"hijklm", b"no"], dtype=np.dtype("|S6"))
 
     def _leaf_dict():
         return {
@@ -68,6 +71,8 @@ def create_other_meta():
             "qscalar": qscalar,
             "arr": arr,
             "qarr": qarr,
+            "uarr": uarr,
+            "sarr": sarr,
         }
 
     def _leaf_list():
@@ -76,6 +81,8 @@ def create_other_meta():
             qscalar,
             arr,
             qarr,
+            uarr,
+            sarr,
         ]
 
     def _leaf_tuple():
@@ -84,6 +91,8 @@ def create_other_meta():
             qscalar,
             arr,
             qarr,
+            uarr,
+            sarr,
         )
 
     def _node_dict():
@@ -135,9 +144,12 @@ class IoHdf5Test(MPITestCase):
             **kwargs,
         )
 
-        # Add extra metadata attribute
+        # Add extra metadata attribute.  Since we are going to test equality on the
+        # observation metadata when saving to HDF5 and loading back in, we convert
+        # any bytestrings to unicode first.
         if not no_meta:
-            other = create_other_meta()
+            raw_other = create_other_meta()
+            other = replace_byte_arrays(raw_other)
             for ob in data.obs:
                 ob.extra = ExtraMeta()
                 ob.update(other)
@@ -242,7 +254,7 @@ class IoHdf5Test(MPITestCase):
 
             # Verify
             for ob, orig in zip(check_data.obs, original):
-                if not obs_approx_equal(ob, orig):
+                if not orig.__eq__(ob, approx=True):
                     print(
                         f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}"
                     )
@@ -289,7 +301,7 @@ class IoHdf5Test(MPITestCase):
         # Verify
         for ob in check_data.obs:
             orig = original[ob.name]
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -302,7 +314,7 @@ class IoHdf5Test(MPITestCase):
 
         for ob in check_data.obs:
             orig = original[ob.name]
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -316,7 +328,7 @@ class IoHdf5Test(MPITestCase):
 
         for ob in check_data.obs:
             orig = original[ob.name]
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -362,7 +374,7 @@ class IoHdf5Test(MPITestCase):
         # Verify
         for ob in check_data.obs:
             orig = original[ob.name]
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -406,7 +418,7 @@ class IoHdf5Test(MPITestCase):
         for ob in check_data.obs:
             orig = original[ob.name]
             orig.detdata.clear()
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -452,7 +464,7 @@ class IoHdf5Test(MPITestCase):
         # Verify
         for ob in check_data.obs:
             orig = original[ob.name]
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
         del check_data
@@ -474,7 +486,9 @@ class IoHdf5Test(MPITestCase):
         if self.comm is not None:
             self.comm.barrier()
 
-        data, config = self.create_data(split=True, no_meta=True)
+        # Version 1 did not save per-detector flags in the observation to HDF5,
+        # so we disable them for this test.
+        data, config = self.create_data(split=True, no_meta=True, flagged_pixels=False)
         det_data_names = ["signal", "flags", "alt_signal"]
         det_data_fields = [
             ("signal", {"type": "flac", "quanta": 1.0e-7}),
@@ -510,7 +524,7 @@ class IoHdf5Test(MPITestCase):
 
         # Verify
         for ob, orig in zip(check_data.obs, original):
-            if not obs_approx_equal(ob, orig):
+            if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
 
@@ -650,6 +664,39 @@ class IoHdf5Test(MPITestCase):
             if toastcomm.comm_world is not None:
                 toastcomm.comm_world.barrier()
 
+    def _allreduce_obs_props(self, dt):
+        """Helper function to get observation and session mapping.
+        This is needed to find the information across all process groups and
+        communicate it to all processes for checks below.
+        """
+        local_time = {x.name: np.mean(x.shared["times"].data) for x in dt.obs}
+        local_props = [(x.name, x.session.name, local_time[x.name]) for x in dt.obs]
+        all_props = None
+        if dt.comm.group_rank == 0:
+            if dt.comm.comm_group_rank is not None:
+                proc_props = dt.comm.comm_group_rank.gather(local_props, root=0)
+                if dt.comm.comm_group_rank.rank == 0:
+                    all_props = list()
+                    for pprops in proc_props:
+                        all_props.extend(pprops)
+                all_props = dt.comm.comm_group_rank.bcast(all_props, root=0)
+            else:
+                all_props = local_props
+        if dt.comm.comm_group is not None:
+            all_props = dt.comm.comm_group.bcast(all_props)
+        # Build the lookup tables
+        a_obs = set([x[0] for x in all_props])
+        a_sessions = set([x[1] for x in all_props])
+        s_obs = dict()
+        s_times = dict()
+        for oname, sname, stime in all_props:
+            if sname not in s_obs:
+                s_obs[sname] = set()
+            if sname not in s_times:
+                s_times[sname] = stime
+            s_obs[sname].add(oname)
+        return a_obs, a_sessions, s_obs, s_times
+
     def test_save_load_index(self):
         rank = 0
         if self.comm is not None:
@@ -703,9 +750,12 @@ class IoHdf5Test(MPITestCase):
                 s_obs[sname].add(oname)
             return a_obs, a_sessions, s_obs, s_times
 
-        orig_obs, orig_sessions, orig_ses_obs, orig_ses_times = _allreduce_obs_props(
-            data
-        )
+        (
+            orig_obs,
+            orig_sessions,
+            orig_ses_obs,
+            orig_ses_times,
+        ) = self._allreduce_obs_props(data)
 
         # The fields we will index
 
@@ -800,9 +850,12 @@ class IoHdf5Test(MPITestCase):
             check_data = Data(data.comm)
             loader.volume_select = sel_str
             loader.apply(check_data)
-            (loaded_obs, loaded_sessions, loaded_ses_obs, loaded_ses_times) = (
-                _allreduce_obs_props(check_data)
-            )
+            (
+                loaded_obs,
+                loaded_sessions,
+                loaded_ses_obs,
+                loaded_ses_times,
+            ) = _allreduce_obs_props(check_data)
 
             if loaded_obs != orig_ses_obs[ses]:
                 msg = f"select time {ses} returned {loaded_obs} not {orig_ses_obs[ses]}"
@@ -810,4 +863,79 @@ class IoHdf5Test(MPITestCase):
                 self.assertTrue(False)
             del check_data
 
+        close_data(data)
+
+    def test_det_select(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        datadir = os.path.join(self.outdir, "det_select")
+        if rank == 0:
+            os.makedirs(datadir)
+        if self.comm is not None:
+            self.comm.barrier()
+
+        # Generate the data
+
+        data, config = self.create_data(split=False)
+        det_data_fields = [
+            ("signal", {"quanta": 1.0e-7}),
+            ("flags", {}),
+            ("alt_signal", {"quanta": 1.0e-12}),
+        ]
+
+        # The fields we will index
+
+        index_fields = {
+            "extra_data": ".extra.data:mean",
+            "extra_key": ".extra.meta[key]:median",
+            "leaf_scalar": "[top_tuple][0][qarr]:mean",
+        }
+
+        # Save data and create the index
+
+        saver = ops.SaveHDF5(
+            volume=datadir,
+            volume_index_fields=index_fields,
+            session_dirs=True,
+            unix_time_dirs=True,
+            detdata=det_data_fields,
+            config=config,
+            verify=True,
+        )
+        saver.apply(data)
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.barrier()
+
+        # Now load the data with a detector selection.
+
+        check_data = Data(data.comm)
+        loader = ops.LoadHDF5(
+            volume=datadir,
+            volume_select=None,
+            det_select={"pixel": r"D.*[02468]"},
+        )
+        loader.apply(check_data)
+
+        # Verify that loaded observations have the expected set of detectors.
+        pat = re.compile(r"D.*[13579]")
+        for obs, orig in zip(check_data.obs, data.obs):
+            upixels = np.unique(obs.telescope.focalplane.detector_data["pixel"])
+            for pix in upixels:
+                if pat.match(pix) is not None:
+                    msg = f"Loaded incorrect pixel '{pix}' from {obs.name}"
+                    print(msg, flush=True)
+                    self.assertTrue(False)
+            for det in obs.local_detectors:
+                self.assertTrue(
+                    array_equal(
+                        obs.detdata["signal"][det],
+                        orig.detdata["signal"][det],
+                        f32=True,
+                    )
+                )
+
+        del check_data
         close_data(data)
