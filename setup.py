@@ -290,7 +290,7 @@ conf["author_email"] = "tskisner.public@gmail.com"
 conf["license"] = "BSD"
 conf["url"] = "https://github.com/hpc4cmb/toast"
 conf["version"] = get_version()
-conf["python_requires"] = ">=3.9.0"
+conf["python_requires"] = ">=3.10.0"
 conf["setup_requires"] = (["wheel"],)
 conf["install_requires"] = [
     "tomlkit",
@@ -300,7 +300,7 @@ conf["install_requires"] = [
     "matplotlib",
     "psutil",
     "h5py",
-    "pshmem>=1.3.0",
+    "pshmem>=1.3.3",
     "flacarray>=0.3.4",
     "ruamel.yaml",
     "astropy",
