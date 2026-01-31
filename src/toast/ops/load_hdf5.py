@@ -11,7 +11,7 @@ from ..dist import distribute_discrete
 from ..io import load_hdf5, VolumeIndex
 from ..observation import default_values as defaults
 from ..timing import function_timer
-from ..traits import Bool, Int, List, Unicode, trait_docs
+from ..traits import Bool, Dict, Int, List, Unicode, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
@@ -79,6 +79,10 @@ class LoadHDF5(Operator):
         help="Only load this list of detdata objects",
     )
 
+    det_select = Dict(
+        {}, help="Keep a subset of detectors whose focalplane columns match."
+    )
+
     shared = List([], help="Only load this list of shared objects")
 
     intervals = List([], help="Only load this list of intervals objects")
@@ -141,6 +145,7 @@ class LoadHDF5(Operator):
                 shared=shared_fields,
                 intervals=intervals_fields,
                 force_serial=self.force_serial,
+                det_select=self.det_select,
             )
 
             data.obs.append(ob)

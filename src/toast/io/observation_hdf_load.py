@@ -5,6 +5,7 @@
 import ast
 import json
 import os
+import re
 
 import h5py
 import numpy as np
@@ -148,7 +149,7 @@ def load_hdf5_shared(obs, hgrp, fields, log_prefix, parallel):
 
 
 @function_timer
-def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
+def load_hdf5_detdata(obs, file_dets, hgrp, fields, log_prefix, parallel):
     log = Logger.get()
 
     timer = Timer()
@@ -176,6 +177,19 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
     if serial_load and obs.comm.comm_group is not None:
         # Broadcast the field list
         field_list = obs.comm.comm_group.bcast(field_list, root=0)
+
+    if len(obs.all_detectors) != len(file_dets):
+        # We are only loading a subset of detectors in the file.  We need to build
+        # the mapping from observation detectors to indices in the file.
+        det_subset = True
+        file_det_indx = {y: x for x, y in enumerate(file_dets)}
+        det_obs_to_file = np.zeros(len(obs.all_detectors), dtype=np.int32)
+        for idet, det in enumerate(obs.all_detectors):
+            det_obs_to_file[idet] = file_det_indx[det]
+    else:
+        # We are loading all detectors
+        det_subset = False
+        det_obs_to_file = np.arange(len(obs.all_detectors), dtype=np.int32)
 
     for field in field_list:
         if fields is not None and field not in fields:
@@ -231,6 +245,11 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
         if len(full_shape) > 2:
             sample_shape = full_shape[2:]
 
+        post_slice = ()
+        if sample_shape is not None:
+            for dim in sample_shape:
+                post_slice += slice(0, dim, 1)
+
         # All processes create their local detector data
         obs.detdata.create(
             field,
@@ -247,11 +266,30 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
 
         if compressed:
             # Load with flacarray
-            mpi_dist = [(x.offset, x.offset + x.n_elem) for x in dist_dets]
+            if det_subset:
+                keep_dets = np.zeros(len(file_dets), dtype=bool)
+                for iglobal in det_obs_to_file:
+                    keep_dets[iglobal] = True
+            else:
+                keep_dets = None
+            # The MPI distribution passed to flacarray is given in terms of
+            # the detectors in the file, not the ones we are loading.
+            if len(dist_dets) == 1:
+                mpi_dist = [(0, len(file_dets))]
+            else:
+                mpi_dist = [
+                    (
+                        det_obs_to_file[x.offset],
+                        det_obs_to_file[x.offset + x.n_elem],
+                    )
+                    for x in dist_dets[:-1]
+                ]
+                last_end = mpi_dist[-1][1]
+                mpi_dist.append((last_end, len(file_dets)))
             flcdata = (
                 flacarray.hdf5.read_array(
                     cgrp,
-                    keep=None,
+                    keep=keep_dets,
                     stream_slice=None,
                     keep_indices=False,
                     mpi_comm=obs.comm.comm_group,
@@ -270,14 +308,37 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
                 first_det = detrange.offset
                 end_det = detrange.offset + detrange.n_elem
                 n_local_det = detrange.n_elem
-                pslice = (slice(0, n_local_det, 1), slice(0, obs.n_all_samples, 1))
-                hslice = (
-                    slice(first_det, end_det, 1),
-                    slice(0, obs.n_all_samples, 1),
-                )
                 if obs.comm.group_rank == 0:
                     buffer = np.zeros((n_local_det, obs.n_all_samples), dtype=dtype)
-                    ds.read_direct(buffer, hslice, pslice)
+                    if det_subset:
+                        # We are reading multiple non-contiguous detectors.  Loop over
+                        # those to fill the buffer.
+                        for ilocal in range(n_local_det):
+                            det_file = det_obs_to_file[first_det + ilocal]
+                            pslice = (
+                                slice(ilocal, ilocal + 1, 1),
+                                slice(0, obs.n_all_samples, 1),
+                            )
+                            pslice += post_slice
+                            hslice = (
+                                slice(det_file, det_file + 1, 1),
+                                slice(0, obs.n_all_samples, 1),
+                            )
+                            hslice += post_slice
+                            ds.read_direct(buffer, hslice, pslice)
+                    else:
+                        # We are reading all dets in one shot.
+                        pslice = (
+                            slice(0, n_local_det, 1),
+                            slice(0, obs.n_all_samples, 1),
+                        )
+                        pslice += post_slice
+                        hslice = (
+                            slice(first_det, end_det, 1),
+                            slice(0, obs.n_all_samples, 1),
+                        )
+                        hslice += post_slice
+                        ds.read_direct(buffer, hslice, pslice)
                     if proc == 0:
                         # Copy data into place
                         obs.detdata[field][:] = buffer
@@ -295,17 +356,13 @@ def load_hdf5_detdata(obs, hgrp, fields, log_prefix, parallel):
                     del buffer
         else:
             # Uncompressed read in parallel
-            detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
-            hf_slice = [
+            detdata_slice = (slice(0, det_nelem, 1), slice(0, samp_nelem, 1))
+            detdata_slice += post_slice
+            hf_slice = (
                 slice(det_off, det_off + det_nelem, 1),
                 slice(samp_off, samp_off + samp_nelem, 1),
-            ]
-            if len(full_shape) > 2:
-                for dim in full_shape[2:]:
-                    detdata_slice.append(slice(0, dim))
-                    hf_slice.append(slice(0, dim))
-            detdata_slice = tuple(detdata_slice)
-            hf_slice = tuple(hf_slice)
+            )
+            hf_slice += post_slice
             msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
             check_dataset_buffer_size(msg, hf_slice, dtype, parallel)
             ds.read_direct(obs.detdata[field].data, hf_slice, detdata_slice)
@@ -366,8 +423,15 @@ def load_hdf5_intervals(obs, hgrp, times, fields, log_prefix, parallel):
         )
 
 
-def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None):
+def load_instrument(
+    parent_group, detectors=None, det_select=None, file_det_sets=None, comm=None
+):
     """Load instrument information from an HDF5 group."""
+    log = Logger.get()
+    rank = 0
+    if comm is not None:
+        rank = comm.rank
+
     new_detsets = file_det_sets
     toast_version = None
     has_session = False
@@ -398,14 +462,51 @@ def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None)
     # If we are selecting only a subset of detectors, make a restricted
     # focalplane now and also modify detsets.
 
-    if detectors is not None:
+    if detectors is not None or det_select is not None:
         raw_focalplane = tele.focalplane
+
+        if detectors is not None:
+            keep = set(detectors)
+            msg = f"Proc {rank}:  Selecting detectors from {len(keep)} names"
+        else:
+            msg = f"Proc {rank}:  Selecting detectors from zero names"
+            keep = None
+        if det_select is not None:
+            col_pat = {x: re.compile(y) for x, y in det_select.items()}
+            msg += f" and {len(col_pat)} column matches"
+        else:
+            col_pat = None
+            msg += " and zero column matches"
+        log.verbose(msg)
 
         # Slice focalplane to include only these detectors.  Also modify
         # detector sets to include only these detectors.
-        keep = set(detectors)
-        fp_rows = [x["name"] in keep for x in raw_focalplane.detector_data]
+        fp_rows = list()
+        for row in raw_focalplane.detector_data:
+            use_row = False
+            if keep is not None and row["name"] in keep:
+                # We are using explicit list of dets, and this matches.
+                msg = f"Proc {rank}:    det {row['name']} in list, keeping"
+                log.verbose(msg)
+                use_row = True
+            elif col_pat is None:
+                # No matching on column values, keep the det.
+                msg = f"Proc {rank}:    det {row['name']} no column patterns, keeping"
+                log.verbose(msg)
+                use_row = True
+            else:
+                # Check if all column values match
+                ccheck = True
+                for cname, cpat in col_pat.items():
+                    if cpat.search(row[cname]) is None:
+                        ccheck = False
+                if ccheck:
+                    msg = f"Proc {rank}:    det {row['name']} matches columns, keeping"
+                    log.verbose(msg)
+                    use_row = True
+            fp_rows.append(use_row)
         fp_data = QTable(raw_focalplane.detector_data[fp_rows])
+        fp_dets = set(fp_data["name"])
 
         focalplane = Focalplane(
             detector_data=fp_data,
@@ -418,7 +519,7 @@ def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None)
             for ds in file_det_sets:
                 new_ds = list()
                 for d in ds:
-                    if d in keep:
+                    if d in fp_dets:
                         new_ds.append(d)
                 if len(new_ds) > 0:
                     new_detsets.append(new_ds)
@@ -427,7 +528,7 @@ def load_instrument(parent_group, detectors=None, file_det_sets=None, comm=None)
             for dskey, ds in file_det_sets.items():
                 new_ds = list()
                 for d in ds:
-                    if d in keep:
+                    if d in fp_dets:
                         new_ds.append(d)
                 if len(new_ds) > 0:
                     new_detsets.append(new_ds)
@@ -447,6 +548,7 @@ def load_hdf5_obs_meta(
     meta=None,
     detectors=None,
     process_rows=None,
+    det_select=None,
 ):
     log = Logger.get()
     rank = comm.group_rank
@@ -459,6 +561,7 @@ def load_hdf5_obs_meta(
     obs_samples = None
     obs_name = None
     obs_uid = None
+    obs_dets = None
     session = None
     obs_det_sets = None
     obs_sample_sets = None
@@ -481,8 +584,18 @@ def load_hdf5_obs_meta(
             ]
 
         # Instrument properties
+        dlist = None
+        if detectors is not None and len(detectors) > 0:
+            dlist = detectors
+        dselect = None
+        if det_select is not None and len(det_select) > 0:
+            dselect = det_select
         telescope, session, obs_det_sets = load_instrument(
-            hgroup, detectors=detectors, file_det_sets=file_det_sets, comm=None
+            hgroup,
+            detectors=dlist,
+            det_select=dselect,
+            file_det_sets=file_det_sets,
+            comm=None,
         )
 
         # Per detector flags.
@@ -500,6 +613,7 @@ def load_hdf5_obs_meta(
         obs_samples = comm.comm_group.bcast(obs_samples, root=0)
         obs_name = comm.comm_group.bcast(obs_name, root=0)
         obs_uid = comm.comm_group.bcast(obs_uid, root=0)
+        obs_dets = comm.comm_group.bcast(obs_dets, root=0)
         session = comm.comm_group.bcast(session, root=0)
         obs_det_sets = comm.comm_group.bcast(obs_det_sets, root=0)
         obs_sample_sets = comm.comm_group.bcast(obs_sample_sets, root=0)
@@ -638,7 +752,7 @@ def load_hdf5_obs_meta(
         comm=comm.comm_group,
         timer=timer,
     )
-    return obs
+    return obs, obs_dets
 
 
 @function_timer
@@ -652,6 +766,7 @@ def load_hdf5(
     intervals=None,
     detectors=None,
     force_serial=False,
+    det_select=None,
 ):
     """Load an HDF5 observation.
 
@@ -673,6 +788,8 @@ def load_hdf5(
             objects.
         force_serial (bool):  If True, do not use HDF5 parallel support,
             even if it is available.
+        det_select (dict):  A dictionary of column names and regex matches to apply
+            to the focalplane table to select detectors to load.
 
     Returns:
         (Observation):  The constructed observation.
@@ -753,7 +870,7 @@ def load_hdf5(
         raise RuntimeError(msg)
 
     # Load all metadata into an empty Observation
-    obs = load_hdf5_obs_meta(
+    obs, file_dets = load_hdf5_obs_meta(
         comm,
         hgroup,
         parallel=parallel,
@@ -761,6 +878,7 @@ def load_hdf5(
         meta=meta,
         detectors=detectors,
         process_rows=process_rows,
+        det_select=det_select,
     )
 
     # Load shared data
@@ -806,7 +924,7 @@ def load_hdf5(
     detdata_group = None
     if hgroup is not None:
         detdata_group = hgroup["detdata"]
-    load_hdf5_detdata(obs, detdata_group, detdata, log_prefix, parallel)
+    load_hdf5_detdata(obs, file_dets, detdata_group, detdata, log_prefix, parallel)
     del detdata_group
     log.debug_rank(
         f"{log_prefix} Finished detector data in",
@@ -849,5 +967,5 @@ def load_instrument_file(path, detectors=None, obs_det_sets=None, comm=None):
             if grp == "":
                 continue
             parent = parent[grp]
-        telescope, session, _ = load_instrument(parent)
+        telescope, session, _ = load_instrument(parent, detectors=detectors)
     return telescope, session
