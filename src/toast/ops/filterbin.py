@@ -1486,6 +1486,9 @@ class FilterBin(Operator):
             for itemplate in range(n - 1):
                 template1 = slice_templates[itemplate]
                 norm = np.dot(template1, template1)
+                if norm < 1e-10:
+                    # Skip orthogonalizing against near-zero-norm template
+                    continue
                 for jtemplate in range(itemplate + 1, n):
                     template2 = slice_templates[jtemplate]
                     coeff = np.dot(template1, template2) / norm
