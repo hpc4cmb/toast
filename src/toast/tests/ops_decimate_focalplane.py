@@ -121,7 +121,9 @@ class DecimateFocalplaneTest(MPITestCase):
 
     def test_pixel_grouping(self):
         """Test decimation with detectors_per_pixel=2."""
-        data = create_ground_data(self.comm, pixel_per_process=30)
+        data = create_ground_data(
+            self.comm, pixel_per_process=30, flagged_pixels=False
+        )
 
         # Apply decimation with pixel grouping
         nskip = 3
@@ -134,6 +136,7 @@ class DecimateFocalplaneTest(MPITestCase):
         decimate.apply(data)
 
         # Verify that detectors are flagged in groups
+        # Since flagged_pixels=False, all detectors start unflagged
         for obs in data.obs:
             local_dets = sorted(obs.local_detectors)
             ndet = len(local_dets)
@@ -155,13 +158,14 @@ class DecimateFocalplaneTest(MPITestCase):
                     if should_be_flagged:
                         self.assertTrue(
                             is_flagged,
-                            f"Detector {det} in pixel {ipix} should be flagged",
+                            f"Detector {det} in pixel {ipix} (ipix % nskip != 0) should be flagged",
                         )
                     else:
-                        # Detector might already be flagged for other reasons
-                        # We just verify the pattern is correct for pixels
-                        # that we know should not be touched
-                        pass
+                        # This pixel should be kept - detectors should not be flagged
+                        self.assertFalse(
+                            is_flagged,
+                            f"Detector {det} in pixel {ipix} (ipix % nskip == 0) should not be flagged",
+                        )
 
         close_data(data)
 
