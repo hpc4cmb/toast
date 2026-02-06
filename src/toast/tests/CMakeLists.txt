@@ -73,6 +73,7 @@ install(FILES
     ops_pixels_healpix.py
     ops_cadence_map.py
     ops_crosslinking.py
+    ops_decimate_focalplane.py
     ops_sss.py
     ops_demodulate.py
     ops_demod_common_mode.py
