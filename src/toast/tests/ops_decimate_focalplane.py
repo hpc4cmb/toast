@@ -223,8 +223,10 @@ class DecimateFocalplaneTest(MPITestCase):
         close_data(data)
 
     def test_decimation_pattern(self):
-        """Test that the decimation pattern is correct - keep every nskip:th detector."""
-        data = create_ground_data(self.comm, pixel_per_process=50, single_group=True)
+        """Test that the decimation pattern is correct - keep every nskip-th detector."""
+        data = create_ground_data(
+            self.comm, pixel_per_process=50, single_group=True, flagged_pixels=False
+        )
 
         nskip = 4
         decimate = ops.DecimateFocalplane(
@@ -235,25 +237,40 @@ class DecimateFocalplaneTest(MPITestCase):
         decimate.apply(data)
 
         # Check the pattern for each observation
+        # Since we used flagged_pixels=False, all detectors start unflagged
         for obs in data.obs:
             local_dets = sorted(obs.local_detectors)
             ndet = len(local_dets)
 
+            kept_count = 0
+            flagged_count = 0
+
             for idx in range(ndet):
                 det = local_dets[idx]
                 det_flag = obs.local_detector_flags[det]
-                is_newly_flagged = (det_flag & defaults.det_mask_invalid) != 0
+                is_flagged = (det_flag & defaults.det_mask_invalid) != 0
 
-                # Every nskip:th detector (0, nskip, 2*nskip, ...) should NOT be flagged by decimation
-                # All others should be flagged (if they weren't already)
+                # Every nskip-th detector (0, nskip, 2*nskip, ...) should NOT be flagged by decimation
+                # All others should be flagged
                 if idx % nskip == 0:
                     # This detector should be kept (not flagged by decimation)
-                    # Note: it might have been flagged before, but we can't distinguish that easily
-                    pass
+                    self.assertFalse(
+                        is_flagged,
+                        f"Detector {det} at index {idx} should not be flagged (idx % nskip == 0)",
+                    )
+                    kept_count += 1
                 else:
                     # This detector should be flagged by decimation
-                    # (unless it was already flagged)
-                    pass
+                    self.assertTrue(
+                        is_flagged,
+                        f"Detector {det} at index {idx} should be flagged (idx % nskip != 0)",
+                    )
+                    flagged_count += 1
+
+            # Verify we kept approximately 1/nskip of detectors
+            expected_kept = ndet // nskip
+            self.assertGreaterEqual(kept_count, expected_kept)
+            self.assertLessEqual(kept_count, expected_kept + 1)
 
         close_data(data)
 
