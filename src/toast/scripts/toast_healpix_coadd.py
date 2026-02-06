@@ -234,7 +234,7 @@ def parse_input_maps(args, comm, weights):
                 fields = line.split()
                 infiles.append(fields[0])
                 if len(fields) == 1:
-                    weights[fields[0]] = 1.0
+                    weights[fields[0]] = (1.0, 1.0)
                 elif len(fields) == 2:
                     weights[fields[0]] = (float(fields[1]), float(fields[1]))
                 elif len(fields) == 3:
@@ -246,10 +246,10 @@ def parse_input_maps(args, comm, weights):
         except UnicodeDecodeError:
             # Didn't work. Assume that user supplied a single map file
             infiles = args.inmap
-            weights = {infiles[0]: 1.0}
+            weights = {infiles[0]: (1.0, 1.0)}
     else:
         infiles = args.inmap
-        weights = {x: 1.0 for x in infiles}
+        weights = {x: (1.0, 1.0) for x in infiles}
 
     return infiles, weights
 
