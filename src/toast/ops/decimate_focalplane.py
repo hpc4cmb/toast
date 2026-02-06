@@ -5,7 +5,6 @@
 
 import numpy as np
 import traitlets
-import scipy.stats as ss
 
 from .. import qarray as qa
 from ..intervals import IntervalList
