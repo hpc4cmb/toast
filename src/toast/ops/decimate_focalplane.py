@@ -6,7 +6,6 @@
 import numpy as np
 import traitlets
 
-from ..intervals import IntervalList
 from ..mpi import MPI
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
