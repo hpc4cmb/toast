@@ -9,7 +9,7 @@ import traitlets
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
 from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
-from ..utils import Environment, Logger, flagged_noise_fill, name_UID
+from ..utils import Logger
 from .operator import Operator
 
 
