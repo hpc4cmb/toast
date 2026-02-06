@@ -16,7 +16,7 @@ import healpy as hp
 import numpy as np
 from toast._libtoast import cov_apply_diag, cov_eigendecompose_diag
 from toast.mpi import MPI, Comm, get_world
-from toast.pixels_io_healpix import read_healpix, write_healpix
+from toast.pixels_io_healpix import read_healpix
 from toast.timing import Timer
 from toast.utils import Environment, Logger
 
