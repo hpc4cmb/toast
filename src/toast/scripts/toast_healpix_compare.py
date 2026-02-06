@@ -22,7 +22,6 @@ from toast.timing import Timer
 from toast.utils import Environment, Logger
 
 import toast
-from toast import PixelData, PixelDistribution
 
 
 def load_map(fname):
