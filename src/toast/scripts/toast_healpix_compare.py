@@ -11,7 +11,6 @@ import os
 import sys
 import traceback
 
-import h5py
 import healpy as hp
 import numpy as np
 from toast._libtoast import cov_apply_diag, cov_eigendecompose_diag
