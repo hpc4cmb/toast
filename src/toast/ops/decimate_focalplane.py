@@ -6,7 +6,6 @@
 import numpy as np
 import traitlets
 from astropy import units as u
-from scipy.signal import medfilt
 import scipy.stats as ss
 
 from .. import qarray as qa
