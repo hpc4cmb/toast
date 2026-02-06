@@ -297,8 +297,10 @@ class HWPFilter(Operator):
         nobs = len(data.obs)
         for iobs, obs in enumerate(data.obs):
             if self.reverse and self.save_amplitudes not in obs:
-                msg = f"Did not find saved amplitudes called "
-                msg += "'{self.save_amplitudes}' in {ob.name}"
+                msg = (
+                    f"Did not find saved amplitudes called "
+                    f"'{self.save_amplitudes}' in {obs.name}"
+                )
                 raise RuntimeError(msg)
 
             # Prefix for logging
