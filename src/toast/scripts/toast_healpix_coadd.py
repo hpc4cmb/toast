@@ -117,7 +117,7 @@ def find_covariance(infile_map, prefix="", cache=None):
 
     if (cache is None or infile_hits not in cache) and not os.path.isfile(infile_hits):
         log.info(prefix + f"No hits for {infile_map} : {infile_hits}")
-        infile_fits = None
+        infile_hits = None
 
     for fname in infile_invcov, infile_cov, infile_hits:
         if fname is not None and fname == infile_map:
