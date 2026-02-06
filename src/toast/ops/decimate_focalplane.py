@@ -6,7 +6,6 @@
 import numpy as np
 import traitlets
 
-from .. import qarray as qa
 from ..intervals import IntervalList
 from ..mpi import MPI
 from ..noise import Noise
