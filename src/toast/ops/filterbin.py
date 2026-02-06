@@ -983,9 +983,9 @@ class FilterBin(Operator):
                     # Put the received amplitudes into the local dictionary
                     for amplitudes in all_amplitudes:
                         template_amplitudes.update(amplitudes)
-                        fname_amp = os.path.join(
-                            ampdir, f"{self.name}_amplitudes_{obs.name}.pck"
-                        )
+                    fname_amp = os.path.join(
+                        ampdir, f"{self.name}_amplitudes_{obs.name}.pck"
+                    )
                     with open(fname_amp, "wb") as f:
                         pickle.dump(template_amplitudes, f)
                     log.info(f"Saved template amplitudes to {fname_amp}")
