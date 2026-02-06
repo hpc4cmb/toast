@@ -80,7 +80,7 @@ def main(opts=None, comm=None):
     if m2 is not None:
         nside2 = hp.get_nside(m2)
         if nside != nside2:
-            msg = f"NSides do not agree: {nside1} != {nside2}"
+            msg = f"NSides do not agree: {nside} != {nside2}"
             raise RuntimeError(msg)
     log.info(f"Nside = {nside}")
     npix = hp.nside2npix(nside)
@@ -89,7 +89,7 @@ def main(opts=None, comm=None):
     if m2 is not None:
         nmap2 = len(m2)
         if nmap != nmap2:
-            msg = f"Number of components do not agree: {nmap1} != {nmap2}"
+            msg = f"Number of components do not agree: {nmap} != {nmap2}"
             raise RuntimeError(msg)
     log.info(f"Nmap = {nmap}")
 
