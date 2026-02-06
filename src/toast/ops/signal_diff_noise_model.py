@@ -168,10 +168,7 @@ class SignalDiffNoiseModel(Operator):
                 indices=indices,
             )
 
-        if detectors is None:
-            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
-        else:
-            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+        log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
         return
 
