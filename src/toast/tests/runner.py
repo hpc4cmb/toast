@@ -31,6 +31,7 @@ from . import ops_azimuth_intervals as test_ops_azimuth_intervals
 from . import ops_cadence_map as test_ops_cadence_map
 from . import ops_common_mode_noise as test_ops_common_mode_noise
 from . import ops_crosslinking as test_ops_crosslinking
+from . import ops_decimate_focalplane as test_ops_decimate_focalplane
 from . import ops_demodulate as test_ops_demodulate
 from . import ops_demod_common_mode as test_ops_demod_common_mode
 from . import ops_detrend as test_ops_detrend
