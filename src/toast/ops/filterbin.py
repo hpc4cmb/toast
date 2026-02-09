@@ -696,8 +696,6 @@ class FilterBin(Operator):
             pix_dist = BuildPixelDistribution(
                 pixel_dist=binning.pixel_dist,
                 pixel_pointing=binning.pixel_pointing,
-                shared_flags=binning.shared_flags,
-                shared_flag_mask=binning.shared_flag_mask,
             )
             pix_dist.apply(data)
             log.debug_rank(
