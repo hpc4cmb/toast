@@ -174,7 +174,7 @@ def coadd_observation_matrix(
         log.info_rank(f"{prefix}Loaded {infile_matrix} in", timer=timer1, comm=None)
 
         # We'll need the white noise covariance as well
-        infile_invcov = infile_matrix.replace("noiseweighted_obs_matrix.npz", "invcov")
+        infile_invcov = infile_matrix.replace("noiseweighted_obs_matrix.npz", "filtered_invcov")
         if os.path.isfile(infile_invcov + ".fits"):
             infile_invcov += ".fits"
         elif os.path.isfile(infile_invcov + ".h5"):
@@ -182,7 +182,7 @@ def coadd_observation_matrix(
         else:
             msg = (
                 f"Cannot find an inverse covariance matrix to go "
-                "with '{infile_matrix}'"
+                f"with '{infile_matrix}'"
             )
             raise RuntimeError(msg)
         log.info(f"{prefix}Loading {infile_invcov}")
