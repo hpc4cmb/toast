@@ -1474,8 +1474,6 @@ class FilterBin(Operator):
                     proj = np.dot(poly_templates, template)
                     coeff = np.dot(cov, proj)
                     template = template - np.dot(coeff, poly_templates)
-                else:
-                    template = template - np.mean(template)
                 slice_templates.append(template)
                 names.append(f"{name}-interval-{i}")
             slice_templates = np.vstack(slice_templates)
