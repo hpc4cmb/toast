@@ -37,6 +37,9 @@ def load_map(fname, prefix="", cache=None):
             log.error(msg)
         log.info(prefix + f"Loading {fname} from cache")
         m, good, npix = cache[fname]
+        if len(m.shape) != 2:
+            msg = f"Cached map '{fname}' does not have the right dimensions: {m.shape}"
+            raise RuntimeError(msg)
         nmap, ngood = m.shape
     else:
         log.info(prefix + f"Loading {fname}")

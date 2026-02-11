@@ -202,10 +202,10 @@ class SparseTemplates:
                 rcond = 0
             else:
                 rcond = 1 / cond
-        except np.linalg.LinAlgError:
+        except np.linalg.LinAlgError as e:
             log.warning(
                 f"Failed condition number calculation for "
-                f"{ntemplate}x{ntemplate} matrix."
+                f"{ntemplate}x{ntemplate} matrix: {e}"
             )
             return
         log.debug(
@@ -1410,7 +1410,11 @@ class FilterBin(Operator):
                 continue
 
             key = precomputed["det_to_key"][det]
-            tod_templates.update(precomputed[key])
+            for name, template in precomputed[key].items():
+                if np.any(np.isnan(template)):
+                    log.warning(f"NaN in precomputed template: {det}:{key}:{name}")
+                else:
+                    tod_templates[name] = template
 
         nprecomp = len(tod_templates)
         if nprecomp == 0:
