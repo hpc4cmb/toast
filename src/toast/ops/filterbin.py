@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -13,6 +13,7 @@ import numpy as np
 import scipy.io
 import scipy.sparse
 import traitlets
+from ruamel.yaml import YAML
 
 from .._libtoast import (
     accumulate_observation_matrix,
@@ -38,6 +39,8 @@ from .operator import Operator
 from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
 from .scan_map import ScanMap, ScanMask
+
+yaml = YAML()
 
 
 class SparseTemplates:
@@ -136,7 +139,7 @@ class SparseTemplates:
         masked.meta = self.meta
         failed = []
         for start, stop, name, template in zip(
-                self.starts, self.stops, self.names, self.templates
+            self.starts, self.stops, self.names, self.templates
         ):
             nnz = np.sum(template * good[start:stop] != 0)
             if nnz > 0:
@@ -158,7 +161,7 @@ class SparseTemplates:
     def normalize(self, good=None):
         """Normalize templates and discard empty ones"""
         for itemplate, (start, stop, template) in enumerate(
-                zip(self.starts, self.stops, self.templates)
+            zip(self.starts, self.stops, self.templates)
         ):
             if good is None:
                 norm = np.sum(template**2) ** 0.5
@@ -209,8 +212,7 @@ class SparseTemplates:
             )
             return
         log.debug(
-            f"SparseTemplates: Template covariance matrix "
-            f"rcond = {rcond}",
+            f"SparseTemplates: Template covariance matrix rcond = {rcond}",
         )
         if rcond == 0:
             # No covariance for empty templates
@@ -387,6 +389,12 @@ class FilterBin(Operator):
         "intensity map and its derivatives",
     )
 
+    filter_config_file = Unicode(
+        None,
+        allow_none=True,
+        help="YAML file containing a dictionary of filter configurations per observation.",
+    )
+
     deproject_nnz = Int(
         1,
         help="Number of deprojection templates to regress.  Must be less than "
@@ -432,15 +440,13 @@ class FilterBin(Operator):
     )
 
     ground_template_expansion_order = Int(
-        None,
-        allow_none=True,
-        help="Taylor-expand each azimuthal bin in time"
+        None, allow_none=True, help="Taylor-expand each azimuthal bin in time"
     )
 
     ground_template_time_step = Int(
         None,
         allow_none=True,
-        help="Break ground template into discrete time steps [seconds]"
+        help="Break ground template into discrete time steps [seconds]",
     )
 
     leftright_interval = Unicode(
@@ -562,14 +568,13 @@ class FilterBin(Operator):
         help="Observation key to a dictionary of time domain templates to project out."
         " The dictionary must include a `det_to_key` dictionary which maps each "
         "detector to a key in the dictionary.  That key will then return a list of "
-        "templates to fit against that detector.  See `precomputed_template_view`."
-        ,
+        "templates to fit against that detector.  See `precomputed_template_view`.",
     )
 
     precomputed_template_view = Unicode(
         "throw",
         allow_none=True,
-        help="Intervals for precomputed template filtering. See `precomputed_templates`"
+        help="Intervals for precomputed template filtering. See `precomputed_templates`",
     )
 
     template_rcond_limit = Float(
@@ -628,6 +633,24 @@ class FilterBin(Operator):
                     raise traitlets.TraitError(msg)
         return bin
 
+    def _apply_filter_config(self, obs):
+        """Use custom filter configuration for this observation"""
+        log = Logger.get()
+
+        if obs.name in self.filter_config:
+            success = True
+            for key, value in self.filter_config[obs.name].items():
+                if not hasattr(self, key):
+                    msg = f"{self.filter_config_file} specifies {key} for "
+                    msg += f"{obs.name} but it is not recognized"
+                    raise RuntimeError(msg)
+                setattr(self, key, value)
+        else:
+            log.warning(f"No filter configuration for {obs.name}")
+            success = False
+
+        return success
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -642,7 +665,6 @@ class FilterBin(Operator):
             log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
         else:
             log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
-
 
         timer = Timer()
         timer.start()
@@ -753,6 +775,12 @@ class FilterBin(Operator):
         memreport.prefix = "Before filtering"
         memreport.apply(data)
 
+        if self.filter_config_file is not None:
+            with open(self.filter_config_file, "r") as f:
+                self.filter_config = yaml.load(f)
+        else:
+            self.filter_config = None
+
         t1 = time()
         for iobs, obs in enumerate(data.obs):
             dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
@@ -761,6 +789,11 @@ class FilterBin(Operator):
                     f"{self.group:4} : FilterBin: Processing observation "
                     f"{iobs} / {len(data.obs)}",
                 )
+
+            if self.filter_config is not None:
+                success = self._apply_filter_config(obs)
+                if not success:
+                    continue
 
             common_templates = self._build_common_templates(obs)
             if self.shared_flags is not None:
@@ -897,9 +930,8 @@ class FilterBin(Operator):
                 # memreport.prefix = "After detector templates"
                 # memreport.apply(data)
 
-                if (
-                    det_templates.template_covariance is None
-                    or np.any(last_good_fit != good_fit)
+                if det_templates.template_covariance is None or np.any(
+                    last_good_fit != good_fit
                 ):
                     det_templates.build_template_covariance(good_fit)
                     if det_templates.template_covariance is not None:
@@ -922,9 +954,7 @@ class FilterBin(Operator):
                     flags |= self.filter_flag_mask
                     obs.local_detector_flags[det] |= self.filter_flag_mask
                 else:
-                    self._regress_templates(
-                        det_templates, signal, good_fit
-                    )
+                    self._regress_templates(det_templates, signal, good_fit)
                     if self.grank == 0:
                         log.debug(
                             f"{self.group:4} : FilterBin:   Regressed templates in "
@@ -932,12 +962,15 @@ class FilterBin(Operator):
                         )
                         t1 = time()
 
-                    template_amplitudes[det] = dict(zip(
-                        det_templates.names, det_templates.amplitudes
-                    ))
+                    template_amplitudes[det] = dict(
+                        zip(det_templates.names, det_templates.amplitudes)
+                    )
 
-                    if self.grank == 0 and self.amplitude_dir is not None \
-                       and n_saved_templates < self.n_save_templates:
+                    if (
+                        self.grank == 0
+                        and self.amplitude_dir is not None
+                        and n_saved_templates < self.n_save_templates
+                    ):
                         if self.amplitude_dir.startswith("/"):
                             ampdir = self.amplitude_dir
                         else:
@@ -1008,6 +1041,8 @@ class FilterBin(Operator):
 
         # Bin filtered signal
 
+        self._get_filter_header(extra_header)
+
         self._bin_map(data, detectors, filtered=True, extra_header=extra_header)
         log.debug_rank("FilterBin: Binned filtered map in", comm=self.comm, timer=timer)
 
@@ -1046,7 +1081,9 @@ class FilterBin(Operator):
         if detectors is None:
             log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
         else:
-            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
+            log.debug_rank(
+                f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0
+            )
 
         return
 
@@ -1433,8 +1470,9 @@ class FilterBin(Operator):
 
         # Improve template orthogonality by projecting subscan
         # polynomials out from the precomputed template
-        if self.poly_filter_order is not None and \
-           (self.poly_filter_view == self.precomputed_template_view):
+        if self.poly_filter_order is not None and (
+            self.poly_filter_view == self.precomputed_template_view
+        ):
             deproject_poly = True
         else:
             deproject_poly = False
@@ -1796,6 +1834,31 @@ class FilterBin(Operator):
 
         return extra_header
 
+    def _get_filter_header(self, header):
+        """Add filter configuration to the header"""
+
+        prefix = "FILTER:"
+        header["filter prefix"] = prefix
+        for param in [
+            "hwp_filter_order",
+            "ground_filter_order",
+            "ground_filter_bin_width",
+            "split_ground_template",
+            "ground_template_expansion_order",
+            "ground_template_time_step",
+            "rightleft_interval",
+            "poly_filter_order",
+            "poly_filter_view",
+        ]:
+            key = prefix + param
+            value = getattr(self, param)
+            if value is None:
+                # Header cannot have Python objects
+                value = "None"
+            header[key] = value
+
+        return
+
     @function_timer
     def _initialize_obs_matrix(self):
         if self.write_obs_matrix:
@@ -1971,7 +2034,11 @@ class FilterBin(Operator):
         white noise covariance matrices.
         """
 
-        if not filtered and not self.write_binmap and not self.write_noiseweighted_binmap:
+        if (
+            not filtered
+            and not self.write_binmap
+            and not self.write_noiseweighted_binmap
+        ):
             return
 
         log = Logger.get()

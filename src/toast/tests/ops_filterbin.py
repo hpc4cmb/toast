@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -12,6 +12,7 @@ import numpy.testing as nt
 import scipy.sparse
 from astropy import units as u
 from astropy.table import Column
+from ruamel.yaml import YAML
 
 from toast import ObsMat
 
@@ -25,12 +26,105 @@ from ..vis import set_matplotlib_backend
 from .helpers import close_data, create_ground_data, create_outdir, fake_flags
 from .mpi import MPITestCase
 
+yaml = YAML()
+
 
 class FilterBinTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.nside = 64
+
+    def test_filterbin_with_config(self):
+        if "CIBUILDWHEEL" in os.environ:
+            print(f"WARNING:  Skipping test_filterbin_with_config during wheel tests")
+            return
+        # Create a fake ground data set for testing
+        data = create_ground_data(self.comm, turnarounds_invalid=True)
+
+        nside = 256
+
+        # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=nside,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        weights = ops.StokesWeights(
+            mode="I",  # "IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise from this model
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
+        sim_noise.apply(data)
+
+        # Add a strong gradient that should be filtered out completely
+        for obs in data.obs:
+            grad = np.arange(obs.n_local_samples)
+            for det in obs.local_detectors:
+                obs.detdata[defaults.det_data][det] += grad
+
+        # Make fake flags
+        fake_flags(data)
+
+        binning = ops.BinMap(
+            pixel_dist="pixel_dist",
+            covariance="covariance",
+            det_data=sim_noise.det_data,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+            sync_type="allreduce",
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=defaults.shared_mask_nonscience,
+            det_flags=defaults.det_flags,
+            det_flag_mask=defaults.det_mask_invalid,
+        )
+
+        # Create and save filter configuration
+        config = {}
+        for obs in data.obs:
+            config[obs.name] = {
+                "poly_filter_order": 1,
+                "poly_filter_view": "scanning",
+                "ground_filter_bin_width": None,
+                "ground_filter_order": None,
+            }
+        if data.comm.comm_world is not None:
+            all_configs = data.comm.comm_world.gather(config)
+        else:
+            all_configs = [config]
+        fname_config = f"{self.outdir}/filter_config.yaml"
+        if data.comm.comm_world is None or data.comm.comm_world.rank == 0:
+            for c in all_configs:
+                config.update(c)
+            with open(fname_config, "w") as f:
+                yaml.dump(config, f)
+
+        name = "filterbin_config"
+        filterbin = ops.FilterBin(
+            name=name,
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
+            det_flag_mask=defaults.det_mask_nonscience,
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=defaults.shared_mask_nonscience,
+            binning=binning,
+            filter_config_file=fname_config,
+            output_dir=self.outdir,
+            write_binmap=True,
+            write_hdf5=True,
+        )
+        filterbin.apply(data)
+
+        close_data(data)
 
     def _test_filterbin(self, ground_order=None, ground_bin_width=None):
         if "CIBUILDWHEEL" in os.environ:
