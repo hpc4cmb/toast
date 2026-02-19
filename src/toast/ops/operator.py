@@ -19,6 +19,7 @@ class Operator(TraitConfig):
     timing = Bool(False, help="If True, print timing of exec() and finalize()")
 
     def __init__(self, **kwargs):
+        self._first_exec_start = None
         super().__init__(**kwargs)
 
     def _exec(self, data, detectors=None, **kwargs):
@@ -48,19 +49,17 @@ class Operator(TraitConfig):
         log = Logger.get()
         if self.enabled:
             if self.timing:
-                wcomm = data.comm.comm_world
-                op_name = f"{self.name} ({type(self).__name__})"
-                op_timer = Timer()
-                op_timer.start()
-                log.info_rank(f"Begin {op_name} exec()", comm=wcomm)
+                if self._first_exec_start is None:
+                    wcomm = data.comm.comm_world
+                    op_name = f"{self.name} ({type(self).__name__})"
+                    self._first_exec_start = Timer()
+                    self._first_exec_start.start()
+                    log.info_rank(f"{op_name} starting...", comm=wcomm)
             self._exec(
                 data,
                 detectors=detectors,
                 **kwargs,
             )
-            if self.timing:
-                log.info_rank(f"End {op_name} exec() in", comm=wcomm, timer=op_timer)
-                op_timer.stop()
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to exec()"
@@ -88,18 +87,14 @@ class Operator(TraitConfig):
         if self.enabled:
             msg = f"Calling finalize() for operator {self.name}"
             log.verbose(msg)
+            ret = self._finalize(data, **kwargs)
             if self.timing:
                 wcomm = data.comm.comm_world
                 op_name = f"{self.name} ({type(self).__name__})"
-                op_timer = Timer()
-                op_timer.start()
-                log.info_rank(f"Begin {op_name} finalize()", comm=wcomm)
-            ret = self._finalize(data, **kwargs)
-            if self.timing:
                 log.info_rank(
-                    f"End {op_name} finalize() in", comm=wcomm, timer=op_timer
+                    f"{op_name} applied in", comm=wcomm, timer=self._first_exec_start
                 )
-                op_timer.stop()
+                self._first_exec_start.stop()
             return ret
         else:
             if data.comm.world_rank == 0:
