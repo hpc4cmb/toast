@@ -5,6 +5,7 @@
 from ..timing import function_timer_stackskip
 from ..traits import TraitConfig
 from ..utils import Logger
+from ..timing import Timer
 
 
 class Operator(TraitConfig):
@@ -44,11 +45,18 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
+            wcomm = data.comm.comm_world
+            op_name = f"{self.name} ({type(self).__name__})"
+            op_timer = Timer()
+            op_timer.start()
+            log.info_rank(f"Begin {op_name} exec", comm=wcomm)
             self._exec(
                 data,
                 detectors=detectors,
                 **kwargs,
             )
+            log.info_rank(f"Finish {op_name} exec in", comm=wcomm, timer=op_timer)
+            op_timer.stop()
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to exec()"
