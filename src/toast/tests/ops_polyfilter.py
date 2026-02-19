@@ -104,6 +104,7 @@ class PolyFilterTest(MPITestCase):
         # Filter
 
         polyfilter = ops.PolyFilter(
+            name="custom_poly1D_name",
             order=1,
             det_data=defaults.det_data,
             det_flags=defaults.det_flags,
@@ -112,6 +113,7 @@ class PolyFilterTest(MPITestCase):
             shared_flag_mask=defaults.shared_mask_invalid,
             poly_flag_mask=1,
             view="scanning",
+            timing=True,
         )
         polyfilter.apply(data)
 

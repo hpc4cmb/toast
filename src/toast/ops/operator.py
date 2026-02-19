@@ -3,7 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..timing import function_timer_stackskip
-from ..traits import TraitConfig
+from ..traits import Bool, TraitConfig
 from ..utils import Logger
 from ..timing import Timer
 
@@ -15,6 +15,8 @@ class Operator(TraitConfig):
     defines some interfaces and also some common helper methods.
 
     """
+
+    timing = Bool(False, help="If True, print timing of exec() and finalize()")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -45,18 +47,20 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            wcomm = data.comm.comm_world
-            op_name = f"{self.name} ({type(self).__name__})"
-            op_timer = Timer()
-            op_timer.start()
-            log.info_rank(f"Begin {op_name} exec", comm=wcomm)
+            if self.timing:
+                wcomm = data.comm.comm_world
+                op_name = f"{self.name} ({type(self).__name__})"
+                op_timer = Timer()
+                op_timer.start()
+                log.info_rank(f"Begin {op_name} exec()", comm=wcomm)
             self._exec(
                 data,
                 detectors=detectors,
                 **kwargs,
             )
-            log.info_rank(f"Finish {op_name} exec in", comm=wcomm, timer=op_timer)
-            op_timer.stop()
+            if self.timing:
+                log.info_rank(f"End {op_name} exec() in", comm=wcomm, timer=op_timer)
+                op_timer.stop()
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to exec()"
@@ -84,7 +88,19 @@ class Operator(TraitConfig):
         if self.enabled:
             msg = f"Calling finalize() for operator {self.name}"
             log.verbose(msg)
-            return self._finalize(data, **kwargs)
+            if self.timing:
+                wcomm = data.comm.comm_world
+                op_name = f"{self.name} ({type(self).__name__})"
+                op_timer = Timer()
+                op_timer.start()
+                log.info_rank(f"Begin {op_name} finalize()", comm=wcomm)
+            ret = self._finalize(data, **kwargs)
+            if self.timing:
+                log.info_rank(
+                    f"End {op_name} finalize() in", comm=wcomm, timer=op_timer
+                )
+                op_timer.stop()
+            return ret
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"
