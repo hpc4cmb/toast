@@ -15,6 +15,6 @@ data must often be analyzed simultaneously to extract an estimate of the sky sig
 
 ## Documentation
 
-See the full documentation here:
+See the full documentation in progress here:
 
-https://toast-cmb.readthedocs.io/en/toast3/
+https://hpc4cmb.github.io/toast
