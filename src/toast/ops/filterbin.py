@@ -1359,10 +1359,7 @@ class FilterBin(Operator):
             templates.append(names, ltemplates, start=istart, stop=istop)
 
         # Save polynomial intervals for reference
-        templates.meta["poly_intervals"] = IntervalList(
-            np.array(intervals.timestamps),  # Cannot pickle pshmem data
-            intervals=intervals,
-        )
+        templates.meta["poly_intervals"] = intervals.data
 
         if self.shared_flags is not None:
             obs.shared[self.shared_flags].set(shared_flags, offset=(0,), fromrank=0)
