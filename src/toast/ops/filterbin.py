@@ -658,13 +658,6 @@ class FilterBin(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         wcomm = data.comm.comm_world
-        timer0 = Timer()
-        timer0.start()
-
-        if detectors is None:
-            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
-        else:
-            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
 
         timer = Timer()
         timer.start()
@@ -1077,13 +1070,6 @@ class FilterBin(Operator):
 
             memreport.prefix = "After observation matrix"
             memreport.apply(data)
-
-        if detectors is None:
-            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
-        else:
-            log.debug_rank(
-                f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0
-            )
 
         return
 

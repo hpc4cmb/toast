@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -513,14 +513,6 @@ class PolyFilter(Operator):
     @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
-        wcomm = data.comm.comm_world
-        timer0 = Timer()
-        timer0.start()
-
-        if detectors is None:
-            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
-        else:
-            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
 
         # Kernel selection
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
@@ -625,11 +617,6 @@ class PolyFilter(Operator):
                 obs.shared[self.shared_flags].set(shared_flags, fromrank=0)
             if obs.comm.comm_group is not None:
                 obs.comm.comm_group.barrier()
-
-        if detectors is None:
-            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
-        else:
-            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
         return
 

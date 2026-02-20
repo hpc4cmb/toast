@@ -109,14 +109,6 @@ class TimeConstant(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
-        wcomm = data.comm.comm_world
-        timer0 = Timer()
-        timer0.start()
-
-        if detectors is None:
-            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
-        else:
-            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
 
         if self.tau is None and self.tau_name is None:
             raise RuntimeError("Either tau or tau_name must be set.")
@@ -192,11 +184,6 @@ class TimeConstant(Operator):
                     continue
                 obs.detdata[self.det_flags][det][:n_edge] |= self.edge_flag_mask
                 obs.detdata[self.det_flags][det][-n_edge:] |= self.edge_flag_mask
-
-        if detectors is None:
-            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
-        else:
-            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
     def _finalize(self, data, **kwargs):
         return

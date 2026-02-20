@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -85,14 +85,6 @@ class CalibrateDetectors(Operator):
     @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
-        wcomm = data.comm.comm_world
-        timer0 = Timer()
-        timer0.start()
-
-        if detectors is None:
-            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
-        else:
-            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
 
         for ob in data.obs:
             if self.det_data not in ob.detdata:
@@ -158,11 +150,6 @@ class CalibrateDetectors(Operator):
 
             # Update flags
             ob.update_local_detector_flags(det_flags)
-
-        if detectors is None:
-            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
-        else:
-            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
     def _finalize(self, data, **kwargs):
         return

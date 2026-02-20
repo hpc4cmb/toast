@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2022 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -275,15 +275,6 @@ class HWPFilter(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         wcomm = data.comm.comm_world
-        gcomm = data.comm.comm_group
-        timer0 = Timer()
-        timer0.start()
-
-        if detectors is None:
-            log.info_rank(f"Applying {type(self).__name__}", comm=wcomm)
-        else:
-            log.debug_rank(f"Applying {type(self).__name__}", comm=wcomm)
-
 
         if self.reverse and self.save_amplitudes is None:
             msg = f"Cannot reverse HWP filter without saved template amplitudes"
@@ -423,11 +414,6 @@ class HWPFilter(Operator):
                 log.debug_rank(
                     f"Average rcond of template matrix was {rcond_mean}", comm=wcomm
                 )
-
-        if detectors is None:
-            log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
-        else:
-            log.debug_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
         return
 

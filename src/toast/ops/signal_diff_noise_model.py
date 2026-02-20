@@ -1,4 +1,4 @@
-# Copyright (c) 2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -107,9 +107,6 @@ class SignalDiffNoiseModel(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
-        wcomm = data.comm.comm_world
-        timer0 = Timer()
-        timer0.start()
 
         if detectors is not None:
             msg = "You must run this operator on all detectors at once"
@@ -167,8 +164,6 @@ class SignalDiffNoiseModel(Operator):
                 NET=NET,
                 indices=indices,
             )
-
-        log.info_rank(f"Applied {type(self).__name__} in", comm=wcomm, timer=timer0)
 
         return
 
