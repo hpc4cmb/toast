@@ -1820,8 +1820,8 @@ class FilterBin(Operator):
     def _get_filter_header(self, header):
         """Add filter configuration to the header"""
 
-        prefix = "FILTER:"
-        header["filter prefix"] = prefix
+        prefix = "HIERARCH FILTER:"
+        header["HIERARCH filter prefix"] = prefix
         for param in [
             "hwp_filter_order",
             "ground_filter_order",
