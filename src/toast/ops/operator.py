@@ -3,8 +3,9 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 from ..timing import function_timer_stackskip
-from ..traits import TraitConfig
+from ..traits import Bool, TraitConfig
 from ..utils import Logger
+from ..timing import Timer
 
 
 class Operator(TraitConfig):
@@ -15,7 +16,10 @@ class Operator(TraitConfig):
 
     """
 
+    timing = Bool(False, help="If True, print timing of exec() and finalize()")
+
     def __init__(self, **kwargs):
+        self._first_exec_start = None
         super().__init__(**kwargs)
 
     def _exec(self, data, detectors=None, **kwargs):
@@ -44,6 +48,13 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
+            if self.timing:
+                if self._first_exec_start is None:
+                    wcomm = data.comm.comm_world
+                    op_name = f"{self.name} ({type(self).__name__})"
+                    self._first_exec_start = Timer()
+                    self._first_exec_start.start()
+                    log.info_rank(f"{op_name} starting...", comm=wcomm)
             self._exec(
                 data,
                 detectors=detectors,
@@ -76,7 +87,15 @@ class Operator(TraitConfig):
         if self.enabled:
             msg = f"Calling finalize() for operator {self.name}"
             log.verbose(msg)
-            return self._finalize(data, **kwargs)
+            ret = self._finalize(data, **kwargs)
+            if self.timing:
+                wcomm = data.comm.comm_world
+                op_name = f"{self.name} ({type(self).__name__})"
+                log.info_rank(
+                    f"{op_name} applied in", comm=wcomm, timer=self._first_exec_start
+                )
+                self._first_exec_start.stop()
+            return ret
         else:
             if data.comm.world_rank == 0:
                 msg = f"Operator {self.name} is disabled, skipping call to finalize()"
