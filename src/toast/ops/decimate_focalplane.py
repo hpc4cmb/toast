@@ -1,4 +1,4 @@
-# Copyright (c) 2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2025-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -23,7 +23,7 @@ class DecimateFocalplane(Operator):
 
     nskip = Int(
         10,
-        help="The decimation factor. Only keep every nskip:th detector.",
+        help="The decimation factor. Only keep every nskip:th pixel.",
     )
 
     detectors_per_pixel = Int(
