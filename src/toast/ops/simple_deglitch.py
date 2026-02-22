@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -169,8 +169,7 @@ class SimpleDeglitch(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
-        timer = Timer()
-        timer.start()
+        wcomm = data.comm.comm_world
 
         nobs = 0
         nbad = 0
@@ -286,11 +285,11 @@ class SimpleDeglitch(Operator):
             nobs = data.comm.comm_world.reduce(nobs)
             nbad = data.comm.comm_world.reduce(nbad)
             ndet = data.comm.comm_world.reduce(ndet)
+
         log.info_rank(
             f"Flagged {nbad} / {ndet} badly glitched detectors over {nobs} "
-            f"observations in",
-            comm=data.comm.comm_world,
-            timer=timer,
+            f"observations",
+            comm=wcomm,
         )
 
         return

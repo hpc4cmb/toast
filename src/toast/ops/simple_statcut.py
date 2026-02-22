@@ -1,4 +1,4 @@
-# Copyright (c) 2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2025-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -119,8 +119,6 @@ class SimpleStatCut(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         comm = data.comm.comm_group
-        timer = Timer()
-        timer.start()
 
         for ob in data.obs:
             if not ob.is_distributed_by_detector:
@@ -236,11 +234,11 @@ class SimpleStatCut(Operator):
             if comm is not None:
                 ndet_obs = comm.reduce(ndet_obs)
                 nbad_obs = comm.reduce(nbad_obs)
+
             log.debug_rank(
                 f"Flagged {nbad_obs} / {ndet_obs} additional detectors in "
-                f"{ob.name} due to statistics in",
+                f"{ob.name} due to statistics",
                 comm=comm,
-                timer=timer,
             )
 
         return

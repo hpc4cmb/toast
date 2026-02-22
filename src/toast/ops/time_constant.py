@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -13,7 +13,7 @@ from .. import rng
 from ..fft import convolve
 from ..mpi import MPI, Comm, MPI_Comm, use_mpi
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
 from ..utils import Environment, Logger
 from .operator import Operator
@@ -108,7 +108,6 @@ class TimeConstant(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
-        env = Environment.get()
         log = Logger.get()
 
         if self.tau is None and self.tau_name is None:

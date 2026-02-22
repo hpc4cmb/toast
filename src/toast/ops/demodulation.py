@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -152,7 +152,7 @@ class Demodulate(Operator):
     wkernel = Int(None, allow_none=True, help="Override automatic filter kernel size")
 
     fcut = Float(
-        0.95, help="Low pass cut-off frequency in units if HWP frequency"
+        0.95, help="Low pass cut-off frequency in units of HWP frequency"
     )
 
     fmin_2f = Float(

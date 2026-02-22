@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -8,7 +8,7 @@ from astropy import units as u
 
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .operator import Operator
@@ -228,6 +228,7 @@ class ScanHealpixMap(Operator):
             for map_name in self.map_names:
                 data[map_name].clear()
                 del data[map_name]
+
         return
 
     def _finalize(self, data, **kwargs):

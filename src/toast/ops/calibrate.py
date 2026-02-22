@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -6,7 +6,7 @@ import numpy as np
 import traitlets
 
 from ..observation import default_values as defaults
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..traits import Float, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .operator import Operator

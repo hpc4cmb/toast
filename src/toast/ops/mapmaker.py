@@ -636,8 +636,8 @@ class MapMaker(Operator):
         """Extract useful information from the data object to record in
         map headers"""
         extra_header = {}
-        start = None
-        stop = None
+        start = 1e100
+        stop = -1e100
         all_dets = set()
         good_dets = set()
         for ob in data.obs:

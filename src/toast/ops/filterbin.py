@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -13,6 +13,7 @@ import numpy as np
 import scipy.io
 import scipy.sparse
 import traitlets
+from ruamel.yaml import YAML
 
 from .._libtoast import (
     accumulate_observation_matrix,
@@ -22,6 +23,7 @@ from .._libtoast import (
     fourier_templates,
     legendre_templates,
 )
+from ..intervals import IntervalList
 from ..mpi import MPI, get_world
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
@@ -38,16 +40,22 @@ from .pipeline import Pipeline
 from .pointing import BuildPixelDistribution
 from .scan_map import ScanMap, ScanMask
 
+yaml = YAML()
+
 
 class SparseTemplates:
-    def __init__(self):
+    def __init__(self, rcond_limit=1e-6):
         self.starts = []
         self.stops = []
         self.names = []
         self.templates = []
+        self.name_to_template = {}
+        self.name_to_index = {}
         self.norms = []
         self.template_covariance = None
         self.amplitudes = None
+        self.meta = {}  # Auxiliary information, not used for fitting
+        self.rcond_limit = rcond_limit
 
     @property
     def ntemplate(self):
@@ -56,6 +64,12 @@ class SparseTemplates:
     def reset(self):
         self.template_covariance = None
         self.amplitudes = None
+
+    @function_timer
+    def save(self, fname_save):
+        with open(fname_save, "wb") as f:
+            pickle.dump(self, f)
+        return
 
     @function_timer
     def to_dense(self, nsample):
@@ -111,6 +125,8 @@ class SparseTemplates:
             self.stops.append(start + last + 1)
             self.names.append(name)
             self.templates.append(template[first : last + 1])
+            self.name_to_template[name] = self.templates[-1]
+            self.name_to_index[name] = len(self.templates) - 1
             self.norms.append(1.0)
         self.reset()
         return
@@ -119,10 +135,11 @@ class SparseTemplates:
     def mask(self, good):
         """Return a new SparseTemplates instance that complies with the
         provided mask"""
-        masked = SparseTemplates()
+        masked = SparseTemplates(rcond_limit=self.rcond_limit)
+        masked.meta = self.meta
         failed = []
         for start, stop, name, template in zip(
-                self.starts, self.stops, self.names, self.templates
+            self.starts, self.stops, self.names, self.templates
         ):
             nnz = np.sum(template * good[start:stop] != 0)
             if nnz > 0:
@@ -130,6 +147,8 @@ class SparseTemplates:
                 masked.stops.append(stop)
                 masked.names.append(name)
                 masked.templates.append(template.copy())
+                masked.name_to_template[name] = masked.templates[-1]
+                masked.name_to_index[name] = len(masked.templates) - 1
                 masked.norms.append(1.0)
             else:
                 # The masked template is null.  Any samples that the full
@@ -142,7 +161,7 @@ class SparseTemplates:
     def normalize(self, good=None):
         """Normalize templates and discard empty ones"""
         for itemplate, (start, stop, template) in enumerate(
-                zip(self.starts, self.stops, self.templates)
+            zip(self.starts, self.stops, self.templates)
         ):
             if good is None:
                 norm = np.sum(template**2) ** 0.5
@@ -170,6 +189,7 @@ class SparseTemplates:
         final map.
         """
         log = Logger.get()
+        self.template_covariance = None
         ntemplate = self.ntemplate
         invcov = np.zeros([ntemplate, ntemplate])
         build_template_covariance(
@@ -185,33 +205,37 @@ class SparseTemplates:
                 rcond = 0
             else:
                 rcond = 1 / cond
-        except np.linalg.LinAlgError:
-            log.error(
+        except np.linalg.LinAlgError as e:
+            log.warning(
                 f"Failed condition number calculation for "
-                f"{ntemplate}x{ntemplate} matrix:"
+                f"{ntemplate}x{ntemplate} matrix: {e}"
             )
-            log.error(f"{invcov}", flush=True)
-            log.error(f"Diagonal:")
-            for row in range(ntemplate):
-                log.error(f"{row:03d} {invcov[row, row]}")
-            raise
+            return
         log.debug(
-            f"SparseTemplates: Template covariance matrix "
-            f"rcond = {rcond}",
+            f"SparseTemplates: Template covariance matrix rcond = {rcond}",
         )
         if rcond == 0:
             # No covariance for empty templates
-            self.cov = None
             return
-        if rcond > 1e-10:
+        if rcond > np.abs(self.rcond_limit):
             cov = np.linalg.inv(invcov)
         else:
-            log.warning(
-                f"SparseTemplates: WARNING: template covariance matrix "
-                f"is poorly conditioned: "
-                f"rcond = {rcond}.  Using matrix pseudoinverse.",
-            )
-            cov = np.linalg.pinv(invcov, rcond=1e-10, hermitian=True)
+            if self.rcond_limit < 0:
+                # Reject the data
+                log.warning(
+                    f"SparseTemplates: WARNING: template covariance matrix "
+                    f"is poorly conditioned: "
+                    f"rcond = {rcond}.  Rejecting the data.",
+                )
+                return
+            else:
+                # Use pseudoinverse
+                log.warning(
+                    f"SparseTemplates: WARNING: template covariance matrix "
+                    f"is poorly conditioned: "
+                    f"rcond = {rcond}.  Using matrix pseudoinverse.",
+                )
+                cov = np.linalg.pinv(invcov, rcond=1e-10, hermitian=True)
 
         self.template_covariance = cov
         return
@@ -365,6 +389,12 @@ class FilterBin(Operator):
         "intensity map and its derivatives",
     )
 
+    filter_config_file = Unicode(
+        None,
+        allow_none=True,
+        help="YAML file containing a dictionary of filter configurations per observation.",
+    )
+
     deproject_nnz = Int(
         1,
         help="Number of deprojection templates to regress.  Must be less than "
@@ -410,7 +440,13 @@ class FilterBin(Operator):
     )
 
     ground_template_expansion_order = Int(
-        0, help="Taylor-expand each azimuthal bin in time"
+        None, allow_none=True, help="Taylor-expand each azimuthal bin in time"
+    )
+
+    ground_template_time_step = Int(
+        None,
+        allow_none=True,
+        help="Break ground template into discrete time steps [seconds]",
     )
 
     leftright_interval = Unicode(
@@ -497,6 +533,12 @@ class FilterBin(Operator):
         help="Write the template amplitudes to this directory",
     )
 
+    n_save_templates = Int(
+        0,
+        help="Number of templates examples to save.  "
+        "Only enabled when amplitude_dir is not None",
+    )
+
     rcond_threshold = Float(
         1.0e-3,
         help="Minimum value for inverse pixel condition number cut.",
@@ -526,14 +568,21 @@ class FilterBin(Operator):
         help="Observation key to a dictionary of time domain templates to project out."
         " The dictionary must include a `det_to_key` dictionary which maps each "
         "detector to a key in the dictionary.  That key will then return a list of "
-        "templates to fit against that detector.  See `precomputed_template_view`."
-        ,
+        "templates to fit against that detector.  See `precomputed_template_view`.",
     )
 
     precomputed_template_view = Unicode(
         "throw",
         allow_none=True,
-        help="Intervals for precomputed template filtering. See `precomputed_templates`"
+        help="Intervals for precomputed template filtering. See `precomputed_templates`",
+    )
+
+    template_rcond_limit = Float(
+        1e-6,
+        allow_none=False,
+        help="Threshold for handling degenerate template covariances.  "
+        "If the limit is is positive and rcond < limit, use pseudoinverse.  "
+        "If the limit is negative and rcond < abs(limit), reject detector.",
     )
 
     @traitlets.validate("det_mask")
@@ -584,12 +633,31 @@ class FilterBin(Operator):
                     raise traitlets.TraitError(msg)
         return bin
 
+    def _apply_filter_config(self, obs):
+        """Use custom filter configuration for this observation"""
+        log = Logger.get()
+
+        if obs.name in self.filter_config:
+            success = True
+            for key, value in self.filter_config[obs.name].items():
+                if not hasattr(self, key):
+                    msg = f"{self.filter_config_file} specifies {key} for "
+                    msg += f"{obs.name} but it is not recognized"
+                    raise RuntimeError(msg)
+                setattr(self, key, value)
+        else:
+            log.warning(f"No filter configuration for {obs.name}")
+            success = False
+
+        return success
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        wcomm = data.comm.comm_world
 
         timer = Timer()
         timer.start()
@@ -643,8 +711,6 @@ class FilterBin(Operator):
             pix_dist = BuildPixelDistribution(
                 pixel_dist=binning.pixel_dist,
                 pixel_pointing=binning.pixel_pointing,
-                shared_flags=binning.shared_flags,
-                shared_flag_mask=binning.shared_flag_mask,
             )
             pix_dist.apply(data)
             log.debug_rank(
@@ -702,6 +768,12 @@ class FilterBin(Operator):
         memreport.prefix = "Before filtering"
         memreport.apply(data)
 
+        if self.filter_config_file is not None:
+            with open(self.filter_config_file, "r") as f:
+                self.filter_config = yaml.load(f)
+        else:
+            self.filter_config = None
+
         t1 = time()
         for iobs, obs in enumerate(data.obs):
             dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
@@ -710,6 +782,11 @@ class FilterBin(Operator):
                     f"{self.group:4} : FilterBin: Processing observation "
                     f"{iobs} / {len(data.obs)}",
                 )
+
+            if self.filter_config is not None:
+                success = self._apply_filter_config(obs)
+                if not success:
+                    continue
 
             common_templates = self._build_common_templates(obs)
             if self.shared_flags is not None:
@@ -729,11 +806,9 @@ class FilterBin(Operator):
 
             last_good_fit = None
             template_amplitudes = {}  # for saving
+            n_saved_templates = 0
 
             for idet, det in enumerate(dets):
-                if idet % self.nskip != 0:
-                    # Only process every n:th detector
-                    continue
                 template_amplitudes[det] = None
 
                 t1 = time()
@@ -754,6 +829,7 @@ class FilterBin(Operator):
                 )
                 if np.sum(good_fit) == 0:
                     flags |= self.filter_flag_mask
+                    obs.local_detector_flags[det] |= self.filter_flag_mask
                     continue
 
                 deproject = (
@@ -847,12 +923,12 @@ class FilterBin(Operator):
                 # memreport.prefix = "After detector templates"
                 # memreport.apply(data)
 
-                if (
-                    det_templates.template_covariance is None
-                    or np.any(last_good_fit != good_fit)
+                if det_templates.template_covariance is None or np.any(
+                    last_good_fit != good_fit
                 ):
                     det_templates.build_template_covariance(good_fit)
-                    last_good_fit = good_fit.copy()
+                    if det_templates.template_covariance is not None:
+                        last_good_fit = good_fit.copy()
 
                 if self.grank == 0:
                     if det_templates.template_covariance is None:
@@ -869,10 +945,9 @@ class FilterBin(Operator):
                 if det_templates.template_covariance is None:
                     # template covariance failed to invert. Flag detector data
                     flags |= self.filter_flag_mask
+                    obs.local_detector_flags[det] |= self.filter_flag_mask
                 else:
-                    self._regress_templates(
-                        det_templates, signal, good_fit
-                    )
+                    self._regress_templates(det_templates, signal, good_fit)
                     if self.grank == 0:
                         log.debug(
                             f"{self.group:4} : FilterBin:   Regressed templates in "
@@ -880,9 +955,27 @@ class FilterBin(Operator):
                         )
                         t1 = time()
 
-                    template_amplitudes[det] = dict(zip(
-                        det_templates.names, det_templates.normalized_amplitudes
-                    ))
+                    template_amplitudes[det] = dict(
+                        zip(det_templates.names, det_templates.amplitudes)
+                    )
+
+                    if (
+                        self.grank == 0
+                        and self.amplitude_dir is not None
+                        and n_saved_templates < self.n_save_templates
+                    ):
+                        if self.amplitude_dir.startswith("/"):
+                            ampdir = self.amplitude_dir
+                        else:
+                            ampdir = os.path.join(self.output_dir, self.amplitude_dir)
+                        # Save one example of the actual templates
+                        os.makedirs(ampdir, exist_ok=True)
+                        fname_save = os.path.join(
+                            ampdir,
+                            f"{self.name}_sparse_templates_{obs.name}_{det}.pck",
+                        )
+                        det_templates.save(fname_save)
+                        n_saved_templates += 1
 
                     if self.write_obs_matrix:
                         self._accumulate_observation_matrix(
@@ -898,21 +991,25 @@ class FilterBin(Operator):
 
             if self.amplitude_dir is not None:
                 # Collect and save the template amplitudes
-                fname_amp = os.path.join(
-                    self.amplitude_dir, f"{self.name}_amplitudes_{obs.name}.pck"
-                )
                 if self.gcomm is None:
                     all_amplitudes = [template_amplitudes]
                 else:
                     all_amplitudes = self.gcomm.gather(template_amplitudes)
                 if self.grank == 0:
-                    os.makedirs(self.amplitude_dir, exist_ok=True)
+                    if self.amplitude_dir.startswith("/"):
+                        ampdir = self.amplitude_dir
+                    else:
+                        ampdir = os.path.join(self.output_dir, self.amplitude_dir)
+                    os.makedirs(ampdir, exist_ok=True)
                     # delete the first amplitudes, they are already in
                     # the local dictionary
                     del all_amplitudes[0]
                     # Put the received amplitudes into the local dictionary
                     for amplitudes in all_amplitudes:
                         template_amplitudes.update(amplitudes)
+                    fname_amp = os.path.join(
+                        ampdir, f"{self.name}_amplitudes_{obs.name}.pck"
+                    )
                     with open(fname_amp, "wb") as f:
                         pickle.dump(template_amplitudes, f)
                     log.info(f"Saved template amplitudes to {fname_amp}")
@@ -936,6 +1033,8 @@ class FilterBin(Operator):
         memreport.apply(data)
 
         # Bin filtered signal
+
+        self._get_filter_header(extra_header)
 
         self._bin_map(data, detectors, filtered=True, extra_header=extra_header)
         log.debug_rank("FilterBin: Binned filtered map in", comm=self.comm, timer=timer)
@@ -1008,15 +1107,15 @@ class FilterBin(Operator):
         return
 
     @function_timer
-    def _add_ground_poly_templates(self, obs, templates):
+    def _add_ground_poly_templates(self, ob, templates):
         if self.ground_filter_order is None:
             return
 
         # To avoid template degeneracies, ground filter only includes
         # polynomial orders not present in the polynomial filter
 
-        phase = self._get_phase(obs)
-        shared_flags = np.array(obs.shared[self.shared_flags])
+        phase = self._get_phase(ob)
+        shared_flags = np.array(ob.shared[self.shared_flags])
 
         min_order = 0
         if self.poly_filter_order is not None:
@@ -1043,7 +1142,7 @@ class FilterBin(Operator):
             directions = []
             for name in self.leftright_interval, self.rightleft_interval:
                 mask = np.zeros(phase.size, dtype=bool)
-                for ival in obs.intervals[name]:
+                for ival in ob.intervals[name]:
                     mask[ival.first : ival.last] = True
                 masks.append(mask)
                 directions.append(name)
@@ -1054,8 +1153,44 @@ class FilterBin(Operator):
                     legendre_filter.append(temp)
                     names.append(f"{name}-{direction}")
             legendre_filter = np.vstack(legendre_filter)
+            # Save intervals for reference
+            templates.meta["leftright_interval"] = IntervalList(
+                np.array(ob.shared[self.times]),
+                ob.intervals[self.leftright_interval],
+            )
+            templates.meta["rightleft_interval"] = IntervalList(
+                np.array(ob.shared[self.times]),
+                ob.intervals[self.rightleft_interval],
+            )
+
+        # Optionally add time steps to each bin temperature
+        timestep = self.ground_template_time_step
+        if timestep is not None:
+            times = ob.shared[self.times]
+            new_templates = []
+            new_names = []
+            tstart = times[0]
+            istep = 0
+            while tstart < times[-1]:
+                if times[-1] - tstart > 1.75 * timestep:
+                    # Break the remaining time into at least two steps
+                    tstop = tstart + timestep
+                else:
+                    # Not enough time left to add more steps
+                    tstop = times[-1]
+                good = np.logical_and(times >= tstart, times < tstop)
+                for name, template in zip(names, legendre_filter):
+                    step_template = template * good
+                    new_templates.append(step_template)
+                    new_names.append(f"{name}-timestep-{istep}")
+                tstart = tstop
+                istep += 1
+            legendre_filter = new_templates
+            names = new_names
 
         templates.append(names, legendre_filter)
+        templates.meta["times"] = np.array(ob.shared[self.times])  # For reference
+        templates.meta["azimuth"] = np.array(ob.shared[self.azimuth])  # For reference
 
         return
 
@@ -1131,10 +1266,19 @@ class FilterBin(Operator):
                     temp[mask] = 0
                     ground_templates.append(temp)
                     names.append(f"{name}-{direction}")
+            # Save intervals for reference
+            templates.meta["leftright_interval"] = IntervalList(
+                np.array(ob.shared[self.times]),
+                ob.intervals[self.leftright_interval],
+            )
+            templates.meta["rightleft_interval"] = IntervalList(
+                np.array(ob.shared[self.times]),
+                ob.intervals[self.rightleft_interval],
+            )
 
         # Optionally add time derivatives of each bin temperature
         norder = self.ground_template_expansion_order
-        if norder > 0:
+        if norder is not None:
             times = ob.shared[self.times].data
             times = times - times[0]
             times = times / times[-1] * 2 - 1
@@ -1148,9 +1292,36 @@ class FilterBin(Operator):
             ground_templates = new_templates
             names = new_names
 
+        # Optionally add time steps to each bin temperature
+        timestep = self.ground_template_time_step
+        if timestep is not None:
+            times = ob.shared[self.times]
+            new_templates = []
+            new_names = []
+            tstart = times[0]
+            istep = 0
+            while tstart < times[-1]:
+                if times[-1] - tstart > 1.75 * timestep:
+                    # Break the remaining time into at least two steps
+                    tstop = tstart + timestep
+                else:
+                    # Not enough time left to add more steps
+                    tstop = times[-1]
+                good = np.logical_and(times >= tstart, times < tstop)
+                for name, template in zip(names, ground_templates):
+                    step_template = template * good
+                    new_templates.append(step_template)
+                    new_names.append(f"{name}-timestep-{istep}")
+                tstart = tstop
+                istep += 1
+            ground_templates = new_templates
+            names = new_names
+
         ground_templates = np.vstack(ground_templates)
 
         templates.append(names, ground_templates)
+        templates.meta["times"] = np.array(ob.shared[self.times])  # For reference
+        templates.meta["azimuth"] = np.array(az)  # For reference
 
         return
 
@@ -1187,6 +1358,9 @@ class FilterBin(Operator):
                 names.append(f"poly-{order}-interval-{i}")
             templates.append(names, ltemplates, start=istart, stop=istop)
 
+        # Save polynomial intervals for reference
+        templates.meta["poly_intervals"] = intervals.data
+
         if self.shared_flags is not None:
             obs.shared[self.shared_flags].set(shared_flags, offset=(0,), fromrank=0)
 
@@ -1194,7 +1368,7 @@ class FilterBin(Operator):
 
     @function_timer
     def _build_common_templates(self, obs):
-        templates = SparseTemplates()
+        templates = SparseTemplates(rcond_limit=self.template_rcond_limit)
 
         self._add_hwp_templates(obs, templates)
         self._add_ground_poly_templates(obs, templates)
@@ -1239,27 +1413,107 @@ class FilterBin(Operator):
 
     @function_timer
     def _add_precomputed_templates(self, obs, det, templates):
-        if self.precomputed_templates not in obs:
-            raise RuntimeError()
+        log = Logger.get()
 
-        precomputed = obs[self.precomputed_templates]
-        if det not in precomputed["det_to_key"]:
-            # This detector does not have precomputed templates
+        tod_templates = {}
+        for precomputed_templates in self.precomputed_templates.split(","):
+            if precomputed_templates not in obs:
+                log.warning(
+                    f"Observation {obs.name} does not have precomputed templates "
+                    f"under '{precomputed_templates}'"
+                )
+                continue
+
+            precomputed = obs[precomputed_templates]
+            if det not in precomputed["det_to_key"]:
+                # This detector does not have precomputed templates
+                continue
+
+            key = precomputed["det_to_key"][det]
+            for name, template in precomputed[key].items():
+                if np.any(np.isnan(template)):
+                    log.warning(f"NaN in precomputed template: {det}:{key}:{name}")
+                else:
+                    tod_templates[name] = template
+
+        nprecomp = len(tod_templates)
+        if nprecomp == 0:
+            # No precomputed templates for this detector
+            log.warning(f"No precomputed templates found for det = {det}")
             return
+        else:
+            log.debug(f"Processing {nprecomp} precomputed templates for {det}")
+
+        nsample = obs.n_local_samples
+        if self.shared_flags is None:
+            shared_flags = np.zeros(nsample, dtype=np.uint8)
+        else:
+            shared_flags = np.array(obs.shared[self.shared_flags])
+        bad = (shared_flags & self.shared_flag_mask) != 0
+
+        # Improve template orthogonality by projecting subscan
+        # polynomials out from the precomputed template
+        if self.poly_filter_order is not None and (
+            self.poly_filter_view == self.precomputed_template_view
+        ):
+            deproject_poly = True
+        else:
+            deproject_poly = False
 
         intervals = obs.intervals[self.precomputed_template_view]
-        key = precomputed["det_to_key"][det]
-        tod_templates = precomputed[key]
+
+        # Sanity check
+        for name, template in tod_templates.items():
+            if len(template) != nsample:
+                msg = f"Precomputed template {key}:{name} is wrong length: "
+                msg += f"{len(template)} != {nsample}"
+                raise RuntimeError(msg)
+
         for i, ival in enumerate(intervals):
-            istart = ival.first
-            istop = ival.last
+            if deproject_poly:
+                # Polynomial template slice has been trimmed
+                poly_name = f"poly-0-interval-{i}"
+                itemplate = templates.name_to_index[poly_name]
+                istart = templates.starts[itemplate]
+                istop = templates.stops[itemplate]
+            else:
+                # Use full interval length
+                istart = ival.first
+                istop = ival.last
             ind = slice(istart, istop)
             slice_templates = []
             names = []
-            for name, tod_template in tod_templates.items():
-                slice_templates.append(tod_template[ind])
+            # Loop over the precomputed templates in alphabetical order
+            # This will be the orthogonalization order
+            for name in sorted(tod_templates.keys()):
+                template = tod_templates[name][ind]
+                if deproject_poly:
+                    poly_templates = []
+                    for order in range(self.poly_filter_order + 1):
+                        poly_name = f"poly-{order}-interval-{i}"
+                        poly_template = templates.name_to_template[poly_name]
+                        poly_templates.append(poly_template)
+                    poly_templates = np.vstack(poly_templates)
+                    invcov = np.dot(poly_templates, poly_templates.T)
+                    cov = np.linalg.inv(invcov)
+                    proj = np.dot(poly_templates, template)
+                    coeff = np.dot(cov, proj)
+                    template = template - np.dot(coeff, poly_templates)
+                slice_templates.append(template)
                 names.append(f"{name}-interval-{i}")
             slice_templates = np.vstack(slice_templates)
+            n = len(slice_templates)
+            # Orthogonalize the templates
+            for itemplate in range(n - 1):
+                template1 = slice_templates[itemplate]
+                norm = np.dot(template1, template1)
+                if norm < 1e-10:
+                    # Skip orthogonalizing against near-zero-norm template
+                    continue
+                for jtemplate in range(itemplate + 1, n):
+                    template2 = slice_templates[jtemplate]
+                    coeff = np.dot(template1, template2) / norm
+                    template2 -= coeff * template1
             templates.append(names, slice_templates, start=istart, stop=istop)
 
         return
@@ -1563,6 +1817,31 @@ class FilterBin(Operator):
 
         return extra_header
 
+    def _get_filter_header(self, header):
+        """Add filter configuration to the header"""
+
+        prefix = "HIERARCH FILTER:"
+        header["HIERARCH filter prefix"] = prefix
+        for param in [
+            "hwp_filter_order",
+            "ground_filter_order",
+            "ground_filter_bin_width",
+            "split_ground_template",
+            "ground_template_expansion_order",
+            "ground_template_time_step",
+            "rightleft_interval",
+            "poly_filter_order",
+            "poly_filter_view",
+        ]:
+            key = prefix + param
+            value = getattr(self, param)
+            if value is None:
+                # Header cannot have Python objects
+                value = "None"
+            header[key] = value
+
+        return
+
     @function_timer
     def _initialize_obs_matrix(self):
         if self.write_obs_matrix:
@@ -1738,18 +2017,29 @@ class FilterBin(Operator):
         white noise covariance matrices.
         """
 
+        if (
+            not filtered
+            and not self.write_binmap
+            and not self.write_noiseweighted_binmap
+        ):
+            return
+
         log = Logger.get()
         timer = Timer()
         timer.start()
 
-        hits_name = f"{self.name}_hits"
-        invcov_name = f"{self.name}_invcov"
-        cov_name = f"{self.name}_cov"
-        rcond_name = f"{self.name}_rcond"
         if filtered:
+            hits_name = f"{self.name}_filtered_hits"
+            invcov_name = f"{self.name}_filtered_invcov"
+            cov_name = f"{self.name}_filtered_cov"
+            rcond_name = f"{self.name}_filtered_rcond"
             map_name = f"{self.name}_filtered_map"
             noiseweighted_map_name = f"{self.name}_noiseweighted_filtered_map"
         else:
+            hits_name = f"{self.name}_unfiltered_hits"
+            invcov_name = f"{self.name}_unfiltered_invcov"
+            cov_name = f"{self.name}_unfiltered_cov"
+            rcond_name = f"{self.name}_unfiltered_rcond"
             map_name = f"{self.name}_unfiltered_map"
             noiseweighted_map_name = f"{self.name}_noiseweighted_unfiltered_map"
 
@@ -1759,28 +2049,29 @@ class FilterBin(Operator):
         self.binning.det_data_units = self._det_data_units
         self.binning.covariance = cov_name
 
-        if self.binning.covariance not in data:
-            cov = CovarianceAndHits(
-                pixel_dist=self.binning.pixel_dist,
-                covariance=self.binning.covariance,
-                inverse_covariance=invcov_name,
-                hits=hits_name,
-                rcond=rcond_name,
-                det_mask=self.binning.det_mask,
-                det_flags=self.binning.det_flags,
-                det_flag_mask=self.binning.det_flag_mask,
-                det_data_units=self._det_data_units,
-                shared_flags=self.binning.shared_flags,
-                shared_flag_mask=self.binning.shared_flag_mask,
-                pixel_pointing=self.binning.pixel_pointing,
-                stokes_weights=self.binning.stokes_weights,
-                noise_model=self.binning.noise_model,
-                rcond_threshold=self.rcond_threshold,
-                sync_type=self.binning.sync_type,
-                save_pointing=self.binning.full_pointing,
-            )
-            cov.apply(data, detectors=detectors)
-            log.info_rank(f"Binned covariance and hits in", comm=self.comm, timer=timer)
+        # Always (re)build the inverse covariance since detector
+        # flagging may change during filtering
+        cov = CovarianceAndHits(
+            pixel_dist=self.binning.pixel_dist,
+            covariance=self.binning.covariance,
+            inverse_covariance=invcov_name,
+            hits=hits_name,
+            rcond=rcond_name,
+            det_mask=self.binning.det_mask,
+            det_flags=self.binning.det_flags,
+            det_flag_mask=self.binning.det_flag_mask,
+            det_data_units=self._det_data_units,
+            shared_flags=self.binning.shared_flags,
+            shared_flag_mask=self.binning.shared_flag_mask,
+            pixel_pointing=self.binning.pixel_pointing,
+            stokes_weights=self.binning.stokes_weights,
+            noise_model=self.binning.noise_model,
+            rcond_threshold=self.rcond_threshold,
+            sync_type=self.binning.sync_type,
+            save_pointing=self.binning.full_pointing,
+        )
+        cov.apply(data, detectors=detectors)
+        log.info_rank(f"Binned covariance and hits in", comm=self.comm, timer=timer)
 
         self.binning.apply(data, detectors=detectors)
         log.info_rank(f"Binned signal in", comm=self.comm, timer=timer)
@@ -1792,18 +2083,17 @@ class FilterBin(Operator):
             if self.mc_index is not None:
                 mc_root += f"_{self.mc_index:05d}"
 
-        binned = not filtered  # only write hits and covariance once
-        if binned:
-            write_map = self.write_binmap
-            write_noiseweighted_map = self.write_noiseweighted_binmap
-        else:
+        if filtered:
             write_map = self.write_map
             write_noiseweighted_map = self.write_noiseweighted_map
+        else:
+            write_map = self.write_binmap
+            write_noiseweighted_map = self.write_noiseweighted_binmap
         keep_final = self.keep_final_products
         keep_cov = self.keep_final_products or self.write_obs_matrix
         for key, write, keep, force, rootname in [
-            (hits_name, self.write_hits and binned, keep_final, False, self.name),
-            (rcond_name, self.write_rcond and binned, keep_final, False, self.name),
+            (hits_name, self.write_hits, keep_final, False, self.name),
+            (rcond_name, self.write_rcond, keep_final, False, self.name),
             (
                 noiseweighted_map_name,
                 write_noiseweighted_map,
@@ -1812,8 +2102,8 @@ class FilterBin(Operator):
                 mc_root,
             ),
             (map_name, write_map, keep_final, True, mc_root),
-            (invcov_name, self.write_invcov and binned, keep_final, False, self.name),
-            (cov_name, self.write_cov and binned, keep_cov, False, self.name),
+            (invcov_name, self.write_invcov, keep_final, False, self.name),
+            (cov_name, self.write_cov, keep_cov, False, self.name),
         ]:
             if write:
                 product = key.replace(f"{self.name}_", "")

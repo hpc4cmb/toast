@@ -76,6 +76,7 @@ install(FILES
     calibrate.py
     demod_common_mode.py
     detrend.py
+    decimate_focalplane.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
 

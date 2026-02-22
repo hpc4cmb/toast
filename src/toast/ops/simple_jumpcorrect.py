@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -387,6 +387,7 @@ class SimpleJumpCorrect(Operator):
                         jump_props[det] = jumps
             if self.save_jumps is not None:
                 ob[self.save_jumps] = jump_props
+
         return
 
     def _finalize(self, data, **kwargs):

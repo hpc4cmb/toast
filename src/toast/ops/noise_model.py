@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -668,9 +668,6 @@ class FlagNoiseFit(Operator):
         if self.focalplane_value is not None and self.focalplane_key is None:
             raise RuntimeError("If you set focalplane_value, you must also set the key")
 
-        timer = Timer()
-        timer.start()
-
         nobs = 0
         nbad = 0
         ndet = 0
@@ -880,10 +877,10 @@ class FlagNoiseFit(Operator):
             nobs = data.comm.comm_world.reduce(nobs)
             nbad = data.comm.comm_world.reduce(nbad)
             ndet = data.comm.comm_world.reduce(ndet)
+
         log.info_rank(
-            f"Flagged {nbad} / {ndet} noise outliers over {nobs} observations in",
+            f"Flagged {nbad} / {ndet} noise outliers over {nobs} observations",
             comm=data.comm.comm_world,
-            timer=timer,
         )
 
     def _finalize(self, data, **kwargs):

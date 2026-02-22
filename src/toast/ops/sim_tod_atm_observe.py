@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -8,7 +8,6 @@ import numpy as np
 import scipy.interpolate
 import traitlets
 from astropy import units as u
-from numpy.core.fromnumeric import size
 
 from .. import qarray as qa
 from ..atm import available_utils
