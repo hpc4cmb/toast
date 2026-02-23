@@ -18,6 +18,7 @@ from .demodulation import Demodulate, StokesWeightsDemod
 from .demod_common_mode import DemodCommonModeFilter
 from .detrend import Detrend
 from .elevation_noise import ElevationNoise
+from .extend_flags import ExtendFlags
 from .fill_gaps import FillGaps
 from .filterbin import FilterBin, combine_observation_matrix
 from .flag_intervals import FlagIntervals

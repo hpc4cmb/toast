@@ -9,6 +9,7 @@ install(FILES
     copy.py
     reset.py
     fill_gaps.py
+    extend_flags.py
     arithmetic.py
     memory_counter.py
     simple_deglitch.py

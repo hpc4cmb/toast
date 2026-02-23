@@ -2,22 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import copy
-
 import numpy as np
 import traitlets
 from astropy import units as u
 from scipy.signal import convolve
 
-from .. import qarray as qa
-from ..intervals import IntervalList
-from ..mpi import MPI
-from ..noise import Noise
-from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
-from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
-from ..utils import Environment, Logger, name_UID
+from ..timing import function_timer
+from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
+from ..utils import Logger, flagged_noise_fill
 from .operator import Operator
 
 
@@ -71,7 +64,7 @@ class SimpleJumpCorrect(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_nonscience,
+        defaults.shared_mask_invalid,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -124,6 +117,18 @@ class SimpleJumpCorrect(Operator):
         help="Do not compute jumps, instead apply the specified dictionary of values",
     )
 
+    fill_gaps = Bool(
+        True,
+        help="Fill gaps with a linear trend",
+    )
+
+    fill_gaps_buffer_time = Quantity(
+        1.0 * u.s,
+        help="Buffer time around flagged regions used for filling",
+    )
+
+    fill_gaps_order = Int(3, help="Polynomial order for fit across gap")
+
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
@@ -170,7 +175,7 @@ class SimpleJumpCorrect(Operator):
         """
         h = np.zeros(m)
         mid = m // 2
-        h[: mid] = 1
+        h[:mid] = 1
         h[mid:] = -1
         # This turns the interpretation of the peak amplitude directly
         # into the step amplitude
@@ -238,7 +243,7 @@ class SimpleJumpCorrect(Operator):
 
     @function_timer
     def _get_sigma(self, toi, flag, tol):
-        """ Measure the median flagged standard deviation of toi over
+        """Measure the median flagged standard deviation of toi over
         windows of size 2 * tol
         """
         full_flag = np.logical_or(flag, toi == 0)
@@ -286,9 +291,7 @@ class SimpleJumpCorrect(Operator):
 
     @function_timer
     def _find_jumps(self, sig, bad, jumps=None, phase=None, offset=0):
-        """ Locate all jumps in `sig` using a matched filter
-        """
-        bad_out = bad.copy()
+        """Locate all jumps in `sig` using a matched filter"""
         # Potential jumps show up as peaks in the match-filtered signal
         sig_filtered = convolve(sig, self.stepfilter, mode="same")
         peaks = self._find_peaks(
@@ -313,9 +316,7 @@ class SimpleJumpCorrect(Operator):
             peaks = new_peaks
             njump = len(peaks)
         if jumps is not None:
-            jumps.extend(
-                [(x + offset, y, z) for x, y, z in peaks]
-            )
+            jumps.extend([(x + offset, y, z) for x, y, z in peaks])
         return peaks
 
     @function_timer
@@ -356,6 +357,21 @@ class SimpleJumpCorrect(Operator):
                     shared_flags != 0,
                     (det_flags & self.det_flag_mask) != 0,
                 )
+                # If we are filling gaps with a polynomial, do that now *before*
+                # applying a matched filter.
+                if self.fill_gaps:
+                    buffer_fill = int(
+                        self.fill_gaps_buffer_time.to_value(u.s)
+                        * focalplane.sample_rate.to_value(u.Hz)
+                    )
+                    flagged_noise_fill(
+                        sig,
+                        bad,
+                        buffer_fill,
+                        poly_order=self.fill_gaps_order,
+                        no_white_noise=True,
+                    )
+
                 if self.apply_jumps is not None:
                     corrected_signal, flag_out = self._remove_jumps(
                         sig, bad, ob[self.apply_jumps][det], self.jump_radius
@@ -363,28 +379,48 @@ class SimpleJumpCorrect(Operator):
                     sig[:] = corrected_signal
                     det_flags[flag_out] |= self.jump_mask
                 else:
+                    total_jumps = 0
                     for iview, view in enumerate(views):
                         ind = slice(view.first, view.last)
-                        jumps = self._find_jumps(
+                        view_jumps = self._find_jumps(
                             sig[ind],
                             bad[ind],
-                            jumps=jumps,
                             phase=phase,
                             offset=view.first,
                         )
-                        if len(jumps) == 0:
+                        if len(view_jumps) == 0:
                             continue
-                        if len(jumps) > self.njump_limit:
-                            # This detector view has too many jumps
-                            det_flags[ind] |= self.det_flag_mask
-                            continue
+                        total_jumps += len(view_jumps)
                         corrected_signal, flag_out = self._remove_jumps(
-                            sig[ind], bad[ind], jumps,
+                            sig[ind],
+                            bad[ind],
+                            view_jumps,
                         )
                         sig[ind] = corrected_signal
                         det_flags[ind][flag_out] |= self.jump_mask
+                        if self.save_jumps is not None:
+                            jumps.extend(view_jumps)
+                    if total_jumps > self.njump_limit:
+                        det_flags[ind] |= self.det_flag_mask
                     if self.save_jumps is not None:
                         jump_props[det] = jumps
+                    if (
+                        np.count_nonzero(
+                            det_flags & (self.det_flag_mask | self.jump_mask)
+                        )
+                        > len(sig) - self.nsample_min
+                    ):
+                        # Too many flagged samples, cut the detector
+                        ob.update_local_detector_flags({det: self.jump_mask})
+                    elif self.fill_gaps:
+                        flagged_noise_fill(
+                            ob.detdata[self.det_data][det],
+                            ob.detdata[self.det_flags][det],
+                            buffer_fill,
+                            poly_order=self.fill_gaps_order,
+                            no_white_noise=True,
+                        )
+
             if self.save_jumps is not None:
                 ob[self.save_jumps] = jump_props
 

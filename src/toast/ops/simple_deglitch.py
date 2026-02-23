@@ -2,22 +2,15 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import copy
-
 import numpy as np
 import traitlets
 from astropy import units as u
 from scipy.signal import medfilt
 
-from .. import qarray as qa
-from ..intervals import IntervalList
-from ..mpi import MPI
-from ..noise import Noise
-from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
-from ..utils import Environment, Logger, flagged_noise_fill, name_UID
+from ..traits import Bool, Float, Int, Quantity, Unicode, trait_docs
+from ..utils import Logger, flagged_noise_fill
 from .operator import Operator
 
 
@@ -59,7 +52,7 @@ class SimpleDeglitch(Operator):
     )
 
     shared_flag_mask = Int(
-        defaults.shared_mask_nonscience,
+        defaults.shared_mask_invalid,
         help="Bit mask value for optional shared flagging",
     )
 
@@ -104,6 +97,13 @@ class SimpleDeglitch(Operator):
         True,
         help="Fill gaps with a trend line and white noise",
     )
+
+    fill_gaps_buffer_time = Quantity(
+        1.0 * u.s,
+        help="Buffer time around flagged regions used for filling",
+    )
+
+    fill_gaps_order = Int(3, help="Polynomial order for fit across gap")
 
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
@@ -204,6 +204,22 @@ class SimpleDeglitch(Operator):
                     shared_flags != 0,
                     (det_flags & self.det_flag_mask) != 0,
                 )
+                # If we are filling gaps, do that now *before* applying a median
+                # filter, which might be thrown off by large spikes in the
+                # flagged samples.
+                if self.fill_gaps:
+                    buffer_fill = int(
+                        self.fill_gaps_buffer_time.to_value(u.s)
+                        * focalplane.sample_rate.to_value(u.Hz)
+                    )
+                    flagged_noise_fill(
+                        sig,
+                        bad,
+                        buffer_fill,
+                        poly_order=self.fill_gaps_order,
+                        no_white_noise=True,
+                    )
+
                 for iview, view in enumerate(views):
                     nsample = view.last - view.first
                     ind = slice(view.first, view.last)
@@ -260,14 +276,13 @@ class SimpleDeglitch(Operator):
                         ob.local_detector_flags[alt_det] |= defaults.det_mask_invalid
                         bad_detectors.add(alt_det)
                 elif self.fill_gaps:
-                    # 1 second buffer
-                    buffer_ = int(focalplane.sample_rate.to_value(u.Hz))
                     for alt_det in coupled_detectors:
                         flagged_noise_fill(
                             ob.detdata[self.det_data][alt_det],
                             ob.detdata[self.det_flags][alt_det],
-                            buffer_,
-                            poly_order=1,
+                            buffer_fill,
+                            poly_order=self.fill_gaps_order,
+                            no_white_noise=True,
                         )
             nbad_obs = len(bad_detectors)
             ndet_obs = len(local_dets)

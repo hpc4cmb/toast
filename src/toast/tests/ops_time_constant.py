@@ -19,6 +19,8 @@ from .helpers import (
     close_data,
     create_outdir,
     create_satellite_data,
+    create_ground_data,
+    fake_flags,
 )
 from .mpi import MPITestCase
 
@@ -155,6 +157,119 @@ class TimeConstantTest(MPITestCase):
 
                 rms = np.std(signal0[slc] - signal[slc]) / np.std(signal0[slc])
                 self.assertTrue(rms < 0.05)
+
+        close_data(data)
+
+    def test_time_constant_flags(self):
+        # Create fake ground data so that we have turnaround shared flags
+        data = create_ground_data(self.comm, sample_rate=10.0 * u.Hz)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise from this model
+        sim_noise = ops.SimNoise(noise_model="noise_model", out="signal")
+        sim_noise.apply(data)
+
+        # Copy the signal for reference
+        ops.Copy(detdata=[("signal", "signal0")]).apply(data)
+
+        # Create some random flags
+        fake_flags(
+            data,
+            det_name=defaults.det_flags,
+            det_val=defaults.det_mask_invalid,
+            do_half=False,
+            do_random=True,
+        )
+
+        # Fill gaps with poor noise estimate
+        ops.FillGaps().apply(data)
+
+        # Convolve
+
+        time_constant = ops.TimeConstant(
+            tau=1 * u.ms,
+            det_data="signal",
+        )
+        if self.make_plots:
+            time_constant.debug = self.outdir
+        time_constant.deconvolve = False
+        time_constant.apply(data)
+
+        # Verify that the signal changed
+        for obs in data.obs:
+            for det in obs.select_local_detectors(flagmask=defaults.det_mask_invalid):
+                slc = slice(100, -100, 1)
+                good = obs.detdata["flags"][det][slc] == 0
+                signal0 = obs.detdata["signal0"][det][slc][good]
+                signal = obs.detdata["signal"][det][slc][good]
+                rms = np.std(signal0 - signal) / np.std(signal0)
+                self.assertTrue(rms > 0.01)
+
+        # Now deconvolve
+
+        time_constant.deconvolve = True
+        time_constant.apply(data)
+
+        # Verify that the signal is restored
+        for obs in data.obs:
+            if obs.comm.group_rank == 0:
+                import matplotlib.pyplot as plt
+            for det in obs.select_local_detectors(flagmask=defaults.det_mask_invalid):
+                slc = slice(100, -100, 1)
+                good = obs.detdata["flags"][det] == 0
+                bad = np.logical_not(good)
+                signal0 = obs.detdata["signal0"][det]
+                signal0[bad] = 0
+                signal = obs.detdata["signal"][det]
+                signal[bad] = 0
+                if obs.comm.group_rank == 0:
+                    for prange in [(0, len(signal)), (0, 200)]:
+                        pslc = slice(prange[0], prange[1], 1)
+                        fig = plt.figure(figsize=(12, 10), dpi=72)
+                        ax = fig.add_subplot(2, 1, 1, aspect="auto")
+                        ax.plot(
+                            obs.shared["times"].data[pslc],
+                            obs.detdata["flags"][det][pslc],
+                            c="green",
+                            label=f"Det {det} Flags",
+                        )
+                        ax.plot(
+                            obs.shared["times"].data[pslc],
+                            signal0[pslc],
+                            c="black",
+                            label=f"Det {det} Original",
+                        )
+                        ax.plot(
+                            obs.shared["times"].data[pslc],
+                            signal[pslc],
+                            c="red",
+                            label=f"Det {det} After Convolve / Deconvolve",
+                        )
+                        ax.legend(loc=1)
+                        ax = fig.add_subplot(2, 1, 2, aspect="auto")
+                        ax.plot(
+                            obs.shared["times"].data[pslc],
+                            (signal - signal0)[pslc],
+                            c="blue",
+                            label=f"Det {det} Processed - Original",
+                        )
+                        # ax.set_ylim(-0.1, 0.1)
+                        ax.legend(loc=1)
+                        plt.title(f"Observation {obs.name} Detector {det}")
+                        savefile = os.path.join(
+                            self.outdir,
+                            f"out_{obs.name}_{det}_{prange[0]}-{prange[1]}.pdf",
+                        )
+                        plt.savefig(savefile)
+                        plt.close()
+
+                rms = np.std(signal0 - signal) / np.std(signal0)
+                if rms >= 0.05:
+                    print(f"{obs.name}:{det} RMS ({rms}) > 0.05", flush=True)
+                    self.assertTrue(False)
 
         close_data(data)
 

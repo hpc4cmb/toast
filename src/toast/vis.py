@@ -710,7 +710,7 @@ def plot_healpix_maps(
     if mapfile is not None:
         mapdata = read_healpix(mapfile, field=None, nest=True)
         if truth is not None:
-            truthdata = hp.read_map(truth, field=None, nest=True)
+            truthdata = read_healpix(truth, field=None, nest=True)
 
         if len(mapdata.shape) > 1:
             # We have Q/U data too
@@ -752,6 +752,10 @@ def plot_healpix_maps(
                 # truthdata[0][badhits] = hp.UNSEEN
                 truthdata[icomp][badhits] = np.nan
                 tmin, tmax = sym_range(truthdata[icomp][goodhits])
+                if rge is not None:
+                    tmin, tmax = rge
+                    tmin *= 0.05
+                    tmax *= 0.05
                 plot_single(
                     truthdata[icomp],
                     tmin,

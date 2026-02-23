@@ -191,9 +191,51 @@ def load_hdf5_detdata(obs, file_dets, hgrp, fields, log_prefix, parallel):
         det_subset = False
         det_obs_to_file = np.arange(len(obs.all_detectors), dtype=np.int32)
 
+    # When decompressing fields with flacarray, we need the global MPI distribution
+    # of data in the file, even if we are only extracting a subset of detectors.
+    # This will be the same for all compressed det data fields, so we compute it
+    # once.
+
+    if det_subset:
+        keep_dets = np.zeros(len(file_dets), dtype=bool)
+        for iglobal in det_obs_to_file:
+            keep_dets[iglobal] = True
+    else:
+        keep_dets = None
+    # The MPI distribution passed to flacarray is given in terms of
+    # the detectors in the file, not the ones we are loading.
+    if len(dist_dets) == 1:
+        mpi_dist = [(0, len(file_dets))]
+    else:
+        mpi_dist = list()
+        for iproc, dd in enumerate(dist_dets):
+            poff = dd.offset
+            pelem = dd.n_elem
+            if iproc == 0:
+                first = 0
+            else:
+                first = int(det_obs_to_file[poff])
+            if iproc == obs.comm.group_size - 1:
+                last = len(file_dets)
+            else:
+                last = int(det_obs_to_file[poff + pelem])
+            mpi_dist.append((first, last))
+
+    cmsg = f"Compressed detdata MPI dist = {dist_dets},\n loading with flacarray"
+    cmsg += f" MPI dist {mpi_dist},\n keep dets = {keep_dets}"
+    log.verbose_rank(cmsg, comm=obs.comm.comm_group)
+
     for field in field_list:
         if fields is not None and field not in fields:
+            log.verbose_rank(
+                f"{log_prefix}  Detdata skipping field {field}, not in load list",
+                comm=obs.comm.comm_group,
+            )
             continue
+        log.verbose_rank(
+            f"{log_prefix}  Detdata begin field {field}",
+            comm=obs.comm.comm_group,
+        )
         ds = None
         units = None
         full_shape = None
@@ -202,6 +244,7 @@ def load_hdf5_detdata(obs, file_dets, hgrp, fields, log_prefix, parallel):
 
         compressed = False
         cgrp = None
+        dbg_rnk = f"{obs.comm.world_rank} / {obs.comm.group_rank}"
         if hgrp is not None:
             if isinstance(hgrp[field], h5py.Dataset):
                 # This is uncompressed data
@@ -241,6 +284,11 @@ def load_hdf5_detdata(obs, file_dets, hgrp, fields, log_prefix, parallel):
             dtype = obs.comm.comm_group.bcast(dtype, root=0)
             orig_dtype = obs.comm.comm_group.bcast(orig_dtype, root=0)
 
+        msg = f"Detdata {field} properties: compressed = {compressed}"
+        msg += f" units='{units}', fullshape={full_shape}, dtype={dtype}"
+        msg += f" orig_dtype={orig_dtype}"
+        log.verbose_rank(msg, comm=obs.comm.comm_group)
+
         sample_shape = None
         if len(full_shape) > 2:
             sample_shape = full_shape[2:]
@@ -266,39 +314,25 @@ def load_hdf5_detdata(obs, file_dets, hgrp, fields, log_prefix, parallel):
 
         if compressed:
             # Load with flacarray
-            if det_subset:
-                keep_dets = np.zeros(len(file_dets), dtype=bool)
-                for iglobal in det_obs_to_file:
-                    keep_dets[iglobal] = True
-            else:
-                keep_dets = None
-            # The MPI distribution passed to flacarray is given in terms of
-            # the detectors in the file, not the ones we are loading.
-            if len(dist_dets) == 1:
-                mpi_dist = [(0, len(file_dets))]
-            else:
-                mpi_dist = [
-                    (
-                        det_obs_to_file[x.offset],
-                        det_obs_to_file[x.offset + x.n_elem],
+            flcdata = None
+            try:
+                flcdata = (
+                    flacarray.hdf5.read_array(
+                        cgrp,
+                        keep=keep_dets,
+                        stream_slice=None,
+                        keep_indices=False,
+                        mpi_comm=obs.comm.comm_group,
+                        mpi_dist=mpi_dist,
+                        use_threads=False,
                     )
-                    for x in dist_dets[:-1]
-                ]
-                last_end = mpi_dist[-1][1]
-                mpi_dist.append((last_end, len(file_dets)))
-            flcdata = (
-                flacarray.hdf5.read_array(
-                    cgrp,
-                    keep=keep_dets,
-                    stream_slice=None,
-                    keep_indices=False,
-                    mpi_comm=obs.comm.comm_group,
-                    mpi_dist=mpi_dist,
-                    use_threads=False,
+                    .astype(orig_dtype)
+                    .reshape(obs.detdata[field].shape)
                 )
-                .astype(orig_dtype)
-                .reshape(obs.detdata[field].shape)
-            )
+            except Exception as e:
+                msg = f"DBG {dbg_rnk} read_array failed: {e}"
+                log.error(msg)
+                raise
             for idet, det in enumerate(obs.detdata[field].detectors):
                 obs.detdata[field][idet] = flcdata[idet]
             del flcdata
@@ -432,7 +466,6 @@ def load_instrument(
     if comm is not None:
         rank = comm.rank
 
-    new_detsets = file_det_sets
     toast_version = None
     has_session = False
     if parent_group is not None:
@@ -462,6 +495,7 @@ def load_instrument(
     # If we are selecting only a subset of detectors, make a restricted
     # focalplane now and also modify detsets.
 
+    new_detsets = file_det_sets
     if detectors is not None or det_select is not None:
         raw_focalplane = tele.focalplane
 
@@ -513,25 +547,28 @@ def load_instrument(
             sample_rate=raw_focalplane.sample_rate,
             field_of_view=raw_focalplane.field_of_view,
         )
-        new_detsets = list()
-        if isinstance(file_det_sets, list):
-            # List of lists
-            for ds in file_det_sets:
-                new_ds = list()
-                for d in ds:
-                    if d in fp_dets:
-                        new_ds.append(d)
-                if len(new_ds) > 0:
-                    new_detsets.append(new_ds)
-        else:
-            # Must be a dictionary
-            for dskey, ds in file_det_sets.items():
-                new_ds = list()
-                for d in ds:
-                    if d in fp_dets:
-                        new_ds.append(d)
-                if len(new_ds) > 0:
-                    new_detsets.append(new_ds)
+
+        if file_det_sets is not None:
+            if isinstance(file_det_sets, list):
+                # List of lists
+                new_detsets = list()
+                for ds in file_det_sets:
+                    new_ds = list()
+                    for d in ds:
+                        if d in fp_dets:
+                            new_ds.append(d)
+                    if len(new_ds) > 0:
+                        new_detsets.append(new_ds)
+            else:
+                # Must be a dictionary
+                new_detsets = list()
+                for dskey, ds in file_det_sets.items():
+                    new_ds = list()
+                    for d in ds:
+                        if d in fp_dets:
+                            new_ds.append(d)
+                    if len(new_ds) > 0:
+                        new_detsets.append(new_ds)
         tele.focalplane = focalplane
 
     if parent_group is not None:
@@ -600,6 +637,11 @@ def load_hdf5_obs_meta(
 
         # Per detector flags.
         all_det_flags = json.loads(hgroup.attrs["observation_detector_flags"])
+
+        if comm.group_rank == 0:
+            bad_dets = np.count_nonzero([y for x, y in all_det_flags.items()])
+            msg = f"{log_prefix} obs has {bad_dets} detectors cut by flagging"
+            log.debug(msg)
 
     log.debug_rank(
         f"{log_prefix} Loaded instrument properties in",
