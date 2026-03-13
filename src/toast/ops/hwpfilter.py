@@ -252,13 +252,6 @@ class HWPFilter(Operator):
         return coeff, invcov, cov, rcond
 
     @function_timer
-    def record_coeff(self, obs, det, coeff):
-        if self.save_amplitudes not in obs:
-            obs[self.save_amplitudes] = {}
-        obs[self.save_amplitudes][det] = coeff
-        return
-
-    @function_timer
     def subtract_templates(self, ref, coeff, legendre_trend, fourier_filter):
         # Trend
         if self.detrend:
@@ -287,12 +280,16 @@ class HWPFilter(Operator):
         # Each group loops over its own CES:es
         nobs = len(data.obs)
         for iobs, obs in enumerate(data.obs):
-            if self.reverse and self.save_amplitudes not in obs:
-                msg = (
-                    f"Did not find saved amplitudes called "
-                    f"'{self.save_amplitudes}' in {obs.name}"
-                )
-                raise RuntimeError(msg)
+            if self.save_amplitudes not in obs:
+                if self.reverse:
+                    msg = (
+                        f"Did not find saved amplitudes called "
+                        f"'{self.save_amplitudes}' in {obs.name}"
+                    )
+                    raise RuntimeError(msg)
+                else:
+                    # Start a new dictionary for template amplitudes
+                    obs[self.save_amplitudes] = {}
 
             # Prefix for logging
             log_prefix = f"{data.comm.group} : {obs.name} :"
@@ -369,7 +366,7 @@ class HWPFilter(Operator):
                     )
 
                     if self.save_amplitudes is not None:
-                        self.record_coeff(obs, det, coeff)
+                        obs[self.save_amplitudes][det] = coeff
 
                     last_good = good
                     if data.comm.group_rank == 0:
