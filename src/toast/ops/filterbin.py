@@ -1473,6 +1473,10 @@ class FilterBin(Operator):
             if deproject_poly:
                 # Polynomial template slice has been trimmed
                 poly_name = f"poly-0-interval-{i}"
+                if poly_name not in templates.name_to_index:
+                    # The subscan was flagged and the polynomial is
+                    # missing.  No need for precomputed templates
+                    continue
                 itemplate = templates.name_to_index[poly_name]
                 istart = templates.starts[itemplate]
                 istop = templates.stops[itemplate]
