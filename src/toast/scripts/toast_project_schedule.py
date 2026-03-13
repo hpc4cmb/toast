@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2025-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -115,11 +115,17 @@ def get_period_hits(args, schedule, period_times, iperiod, iscan):
             # to the azimuth range at our reference time
             observer.date = to_DJD(t)
             azvec, el = get_azel(args, scan)
+            step_hits = np.zeros_like(hits)
             for az in azvec:
                 ra, dec = observer.radec_of(az, el)
                 vec = hp.dir2vec(np.pi / 2 - dec, ra)
                 pix = hp.query_disc(args.nside, vec, radius=radius)
-                hits[pix] += 1
+                step_hits[pix] += 1
+            # Normalize the hits so survey weight per unit time is constant
+            step_time = min(t + args.timestep, scan.stop.timestamp()) - t
+            step_hits /= np.sum(step_hits)
+            step_hits *= step_time
+            hits += step_hits
 
     return hits, iscan
 
@@ -321,6 +327,10 @@ def plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank):
             tstart = period_times[0][0]
             tstop = period_times[-1][1]
             name = "Full"
+        if args.save_hits:
+            fname_hits = fname_plot.replace(".png", ".fits")
+            hp.write_map(fname_hits, hits, overwrite=True)
+            print(f"Wrote hits to {fname_hits}")
         title = f"{name} : {to_UTC(tstart)} - {to_UTC(tstop)}"
         mask = hits > 0
         hits[hits == 0] = hp.UNSEEN
@@ -533,6 +543,14 @@ def parse_arguments():
         default=False,
         action="store_true",
         help="Skip plotting step hit maps and only provide the total",
+    )
+
+    parser.add_argument(
+        "--save-hits",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Save copies of the hit maps along with the plots",
     )
 
     args = parser.parse_args()
