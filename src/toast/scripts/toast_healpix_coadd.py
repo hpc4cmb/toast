@@ -27,7 +27,7 @@ from toast.utils import Environment, Logger
 import toast
 
 
-def load_map(fname, prefix="", cache=None):
+def load_map(fname, prefix="", cache=None, dtype=float):
     log = Logger.get()
     timer = Timer()
     timer.start()
@@ -44,7 +44,7 @@ def load_map(fname, prefix="", cache=None):
     else:
         log.info(prefix + f"Loading {fname}")
         try:
-            m = read_healpix(fname, None, nest=True, dtype=float)
+            m = read_healpix(fname, None, nest=True, dtype=dtype)
         except Exception as e:
             msg = prefix + f"Failed to load HEALPix map: {e}"
             raise RuntimeError(msg)
@@ -146,6 +146,12 @@ def parse_args(opts):
     )
 
     parser.add_argument(
+        "--outmap_noiseweighted",
+        required=False,
+        help="Name of output file",
+    )
+
+    parser.add_argument(
         "--rcond",
         required=False,
         help="Name of output rcond file",
@@ -176,6 +182,14 @@ def parse_args(opts):
         type=int,
         help="Submap size is 12 * nside_submap ** 2.  "
         "Number of submaps is (nside / nside_submap) ** 2",
+    )
+
+    parser.add_argument(
+        "--nside_out",
+        required=False,
+        default=None,
+        type=int,
+        help="Output map resolution",
     )
 
     parser.add_argument(
@@ -307,14 +321,15 @@ def main(
 
     if args.double_precision:
         dtype = np.float64
+        dtype_hits = np.int64
     else:
         dtype = np.float32
+        dtype_hits = np.int32
 
     noiseweighted_sum = None
     invcov_sum = None
     hits_sum = None
     nnz, nnz2, nnz3, npix = None, None, None, None
-    hit_pixels = None
     if args.hits is None:
         have_hits = False
     else:
@@ -329,12 +344,11 @@ def main(
             continue
         log.info(prefix + f"Processing file {ifile + 1} / {nfile}")
         inmap, nnz_test, npix_test, good = load_map(
-            infile_map, prefix=prefix, cache=cache
+            infile_map, prefix=prefix, cache=cache, dtype=float,
         )
         if nnz is None:
             nnz = nnz_test
             npix = npix_test
-            hit_pixels = np.zeros(npix, dtype=bool)
         else:
             if nnz != nnz_test:
                 raise RuntimeError(f"Mismatch in nnz: {nnz} != {nnz_test}")
@@ -350,9 +364,8 @@ def main(
 
         if infile_invcov is not None:
             invcov, nnz2, npix_test, good_cov = load_map(
-                infile_invcov, prefix=prefix, cache=cache
+                infile_invcov, prefix=prefix, cache=cache, dtype=float
             )
-            hit_pixels[good_cov] = True
             ngood = good_cov.size
             fsky = ngood / npix
             log.info_rank(
@@ -364,10 +377,9 @@ def main(
             # Inverse covariance does not exist. Load and invert the
             # covariance matrix
             cov, nnz2, npix_test, good_cov = load_map(
-                infile_cov, prefix=prefix, cache=cache
+                infile_cov, prefix=prefix, cache=cache, dtype=float
             )
             ngood = good_cov.size
-            hit_pixels[good_cov] = True
             fsky = ngood / npix
             log.info_rank(
                 prefix + f"Loaded {infile_cov} {cov.shape}, fsky = {fsky:.4f} in",
@@ -396,7 +408,8 @@ def main(
                     keep_cov[i] = True
             ndiscard = np.sum(np.logical_not(keep_cov))
             if ndiscard != 0:
-                msg = f"Discarding {ndiscard} pixels in {infile_invcov}/{infile_cov} "
+                msg = f"Discarding {ndiscard} / {good_cov.size} pixels in "
+                msg += f"{infile_invcov}/{infile_cov} "
                 msg += f"that are not present in {infile_map}"
                 log.warning(msg)
             good_cov = good_cov[keep_cov]
@@ -409,7 +422,7 @@ def main(
                     keep_map[i] = True
             ndiscard = np.sum(np.logical_not(keep_map))
             if ndiscard != 0:
-                msg = f"Discarding {ndiscard} pixels in {infile_map} "
+                msg = f"Discarding {ndiscard} / {good.size} pixels in {infile_map} "
                 msg += f"that are not present in {infile_invcov}/{infile_cov}"
                 log.warning(msg)
             good = good[keep_map]
@@ -422,7 +435,7 @@ def main(
         if have_hits:
             if infile_hits is not None:
                 hits, nnz3, npix_test, good_hits = load_map(
-                    infile_hits, prefix=prefix, cache=cache
+                    infile_hits, prefix=prefix, cache=cache, dtype=int
                 )
                 if good_hits.size != good.size:
                     # Hits can include pixels that fail matrix
@@ -488,7 +501,42 @@ def main(
         del invcov
         del inmap
 
+    if args.nside_out is not None and noiseweighted_sum is not None:
+        # If needed, adjust the co-add resolution.
+        nside_in = hp.get_nside(noiseweighted_sum)
+        if nside_in < args.nside_out:
+            msg = f"Don't know how to increase Nside from {nside_in} to {args.nside_out}"
+            raise RuntimeError(msg)
+        noiseweighted_sum = hp.ud_grade(
+            noiseweighted_sum,
+            args.nside_out,
+            order_in="NEST",
+            order_out="NEST",
+            power=-2,
+        )
+        invcov_sum = hp.ud_grade(
+            invcov_sum,
+            args.nside_out,
+            order_in="NEST",
+            order_out="NEST",
+            power=-2,
+        )
+        if have_hits:
+            hits_sum = hp.ud_grade(
+                hits_sum,
+                args.nside_out,
+                order_in="NEST",
+                order_out="NEST",
+                power=-2,
+            )
+        npix = 12 * args.nside_out**2
+
     log.info_rank(prefix + "Processed inputs in", timer=timer, comm=comm)
+
+    if invcov_sum is None:
+        hit_pixels = None
+    else:
+        hit_pixels = invcov_sum[0] != 0
 
     if ntask != 1:
         nnz = comm.bcast(nnz)
@@ -524,6 +572,35 @@ def main(
             hits_sum = hits_sum[:, good]
     fsky = ngood / npix
     log.info_rank(prefix + f"fsky = {fsky:.4f}", comm=comm)
+
+    if args.outmap_noiseweighted is not None:
+        log.info_rank(prefix + f"Writing {args.outmap_noiseweighted}", comm=comm)
+        if rank == 0:
+            full_noiseweighted = np.zeros([nnz, npix])
+            full_noiseweighted[:, good] = noiseweighted_sum
+            if args.ring:
+                noiseweighted_out = hp.reorder(full_noiseweighted, n2r=True)
+                nest = False
+            else:
+                noiseweighted_out = full_noiseweighted
+                nest = True
+            if result is None:
+                # Write to disk
+                write_healpix(
+                    args.outmap_noiseweighted,
+                    noiseweighted_out,
+                    nest=nest,
+                    overwrite=True,
+                    dtype=dtype,
+                )
+            else:
+                # Write to the result dictionary
+                result[args.outmap_noiseweighted] = noiseweighted_out
+            del noiseweighted_out
+            del full_noiseweighted
+        log.info_rank(
+            prefix + f"Wrote {args.outmap_noiseweighted} in", timer=timer, comm=comm
+        )
 
     if args.invcov is not None:
         log.info_rank(prefix + f"Writing {args.invcov}", comm=comm)
@@ -562,7 +639,7 @@ def main(
             if result is None:
                 # Write to disk
                 write_healpix(
-                    args.hits, hits_out, nest=nest, overwrite=True, dtype=dtype
+                    args.hits, hits_out, nest=nest, overwrite=True, dtype=dtype_hits
                 )
             else:
                 # Write to the result dictionary
@@ -660,25 +737,27 @@ def main(
             del cov_out
             del full_cov
             log.info_rank(prefix + f"Wrote {args.cov}", timer=timer, comm=None)
-        log.info(prefix + f"Writing {args.outmap}")
-        total_map = np.hstack(total_map)
-        full_map = np.zeros([nnz, npix])
-        full_map[:, good] = total_map
-        if args.ring:
-            map_out = hp.reorder(full_map, n2r=True)
-            nest = False
-        else:
-            map_out = full_map
-            nest = True
-        if result is None:
-            # Write to disk
-            write_healpix(args.outmap, map_out, nest=nest, dtype=dtype, overwrite=True)
-        else:
-            # Write to the result dictionary
-            result[args.outmap] = map_out
-        del map_out
-        del full_map
-        log.info_rank(prefix + f"Wrote {args.outmap}", timer=timer, comm=None)
+
+        if args.outmap is not None:
+            log.info(prefix + f"Writing {args.outmap}")
+            total_map = np.hstack(total_map)
+            full_map = np.zeros([nnz, npix])
+            full_map[:, good] = total_map
+            if args.ring:
+                map_out = hp.reorder(full_map, n2r=True)
+                nest = False
+            else:
+                map_out = full_map
+                nest = True
+            if result is None:
+                # Write to disk
+                write_healpix(args.outmap, map_out, nest=nest, dtype=dtype, overwrite=True)
+            else:
+                # Write to the result dictionary
+                result[args.outmap] = map_out
+            del map_out
+            del full_map
+            log.info_rank(prefix + f"Wrote {args.outmap}", timer=timer, comm=None)
 
         if result is not None:
             result["nest"] = not args.ring
