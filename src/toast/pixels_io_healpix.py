@@ -314,7 +314,9 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
                 chunks=(n_value, n_pix_submap),
                 dtype=dtype,
             )
-            dset[:] = mapdata
+            # Use HDF5 chunked storage. Only non-zero submaps are written
+            nonzero = mapdata != 0
+            dset[nonzero] = mapdata[nonzero]
 
             if "extra_header" in kwargs:
                 header = kwargs["extra_header"]
