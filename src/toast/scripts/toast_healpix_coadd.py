@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -384,8 +384,36 @@ def main(
             )
             del cov
 
-        if good.size != good_cov.size:
-            raise RuntimeError("Map and covariance have different numbers of nonzeros")
+        if good.size != good_cov.size or np.any(good != good_cov):
+            # Inverse covariance can include pixels that fail matrix
+            # inversion.  We must discard those to be able to use
+            # compressed maps
+
+            keep_cov = np.zeros(good_cov.size, dtype=bool)
+            map_set = set(good)
+            for i, pix in enumerate(good_cov):
+                if pix in map_set:
+                    keep_cov[i] = True
+            ndiscard = np.sum(np.logical_not(keep_cov))
+            if ndiscard != 0:
+                msg = f"Discarding {ndiscard} pixels in {infile_invcov}/{infile_cov} "
+                msg += f"that are not present in {infile_map}"
+                log.warning(msg)
+            good_cov = good_cov[keep_cov]
+            invcov = invcov[:, keep_cov]
+
+            keep_map = np.zeros(good.size, dtype=bool)
+            cov_set = set(good_cov)
+            for i, pix in enumerate(good):
+                if pix in cov_set:
+                    keep_map[i] = True
+            ndiscard = np.sum(np.logical_not(keep_map))
+            if ndiscard != 0:
+                msg = f"Discarding {ndiscard} pixels in {infile_map} "
+                msg += f"that are not present in {infile_invcov}/{infile_cov}"
+                log.warning(msg)
+            good = good[keep_map]
+            inmap = inmap[:, keep_map]
 
         if np.any(good != good_cov):
             raise RuntimeError("Map and covariance disagree on nonzeros")
@@ -397,9 +425,17 @@ def main(
                     infile_hits, prefix=prefix, cache=cache
                 )
                 if good_hits.size != good.size:
-                    raise RuntimeError(
-                        "Map and hits have different numbers of nonzeros"
-                    )
+                    # Hits can include pixels that fail matrix
+                    # inversion.  We must discard those to be able to use
+                    # compressed maps
+                    keep_hits = np.zeros(good_hits.size, dtype=bool)
+                    map_set = set(good)
+                    for i, pix in enumerate(good_hits):
+                        if pix in map_set:
+                            keep_hits[i] = True
+                    good_hits = good_hits[keep_hits]
+                    hits = hits[keep_hits]
+                    raise RuntimeError(msg)
                 if np.any(good_hits != good):
                     raise RuntimeError("Map and hits disagree on nonzeros")
             else:
