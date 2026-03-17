@@ -427,6 +427,7 @@ def main(
                 log.warning(msg)
             good = good[keep_map]
             inmap = inmap[:, keep_map]
+            ngood = len(good)
 
         if np.any(good != good_cov):
             raise RuntimeError("Map and covariance disagree on nonzeros")
