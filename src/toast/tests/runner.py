@@ -8,7 +8,6 @@ import sys
 import unittest
 
 from .. import timing
-from .._libtoast import libtoast_tests
 from ..mpi import MPI, use_mpi
 from ..spt3g import available as spt3g_available
 from ..vis import set_matplotlib_backend
@@ -165,12 +164,6 @@ def test(name=None, verbosity=2):
     ):
         running_on_ci = True
 
-    if (name is None) or (name == "libtoast"):
-        # Run tests from the serial compiled library.
-        if not running_on_ci:
-            # These include timing tests which will fail on CI services
-            libtoast_tests(list(sys.argv))
-
     # Run python tests.
 
     loader = unittest.TestLoader()
@@ -299,7 +292,7 @@ def test(name=None, verbosity=2):
 
         if spt3g_available:
             suite.addTest(loader.loadTestsFromModule(test_spt3g))
-    elif name != "libtoast":
+    else:
         if (name == "spt3g") and (not spt3g_available):
             print("Cannot run SPT3G tests- package not available")
             return

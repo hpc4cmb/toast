@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Apply TOAST source code formatting.  This script will run the
-# "uncrustify" and "black" formatting tools on C++ and Python code
+# "uncrustify" and "ruff" formatting tools on C++ and Python code
 # respectively.
 #
 
