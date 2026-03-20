@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -22,6 +22,7 @@ import h5py
 import numpy as np
 from astropy.table import meta as aspymeta
 from astropy.table import Table
+import scipy.signal
 from wurlitzer import pipes, STDOUT
 
 from ._libtoast import (
@@ -1062,9 +1063,8 @@ def extend_flags(flags, mask, buffer):
 
     The `mask` is bitwise "and" applied to the flags array to determine which
     samples are "bad".  Contiguous regions of bad samples are identified and
-    then areas of less than `buffer` samples in between two bad regions are flagged
-    with the mask value.  If `extend` is True, the same buffer size is added around
-    all flagged regions.  The flags array is modified in-place.
+    then areas of `buffer` samples on either side of each region are flagged.
+    The flags array is modified in-place.
 
     Args:
         flags (array):  The array of flags.
@@ -1076,6 +1076,8 @@ def extend_flags(flags, mask, buffer):
         (None)
 
     """
+    # FIXME: This could potentially be simplified using a convolution with a
+    # buffer-length kernel.
     matching = np.array(flags & mask, dtype=bool)
     start_flags = np.where(matching[1:] > matching[:-1])[0] + 1
     end_flags = np.where(matching[1:] < matching[:-1])[0] + 1

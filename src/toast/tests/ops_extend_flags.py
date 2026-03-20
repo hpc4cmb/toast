@@ -19,6 +19,46 @@ from .helpers import (
 from .mpi import MPITestCase
 
 
+def check_buffering(input, output, buffer):
+    n_samp = len(input)
+    # Check that all output samples within range are flagged
+    for isamp in range(n_samp):
+        if input[isamp] == 0:
+            continue
+        istart = isamp - buffer
+        if istart < 0:
+            istart = 0
+        istop = isamp + buffer
+        if istop >= n_samp:
+            istop = n_samp - 1
+        for it in range(istart, istop, 1):
+            if output[it] == 0:
+                msg = f"Flagged input {isamp}:  output {it} is not flagged"
+                print(msg, flush=True)
+                return False
+    # Check that all flagged output samples are in range of an input flag
+    for isamp in range(n_samp):
+        if output[isamp] == 0:
+            continue
+        istart = isamp - buffer
+        if istart < 0:
+            istart = 0
+        istop = isamp + buffer + 1
+        if istop >= n_samp:
+            istop = n_samp - 1
+        total = 0
+        for it in range(istart, istop, 1):
+            if input[it] != 0:
+                total += 1
+        if total == 0:
+            flgstr = ",".join([f"{input[x]}" for x in range(istart, istop)])
+            msg = f"Flagged output {isamp}:  no input samples "
+            msg += f"flagged in {istart}:{istop}\n{flgstr}"
+            print(msg, flush=True)
+            return False
+    return True
+
+
 class FlagGapsTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
@@ -49,45 +89,6 @@ class FlagGapsTest(MPITestCase):
         fake_flags(data, do_half=False, do_random=True)
 
         return data
-
-    def check_buffering(self, input, output, buffer):
-        n_samp = len(input)
-        # Check that all output samples within range are flagged
-        for isamp in range(n_samp):
-            if input[isamp] == 0:
-                continue
-            istart = isamp - buffer
-            if istart < 0:
-                istart = 0
-            istop = isamp + buffer
-            if istop >= n_samp:
-                istop = n_samp - 1
-            for it in range(istart, istop, 1):
-                if output[it] == 0:
-                    msg = f"Flagged input {isamp}:  output {it} is not flagged"
-                    print(msg, flush=True)
-                    return False
-        # Check that all flagged output samples are in range of an input flag
-        for isamp in range(n_samp):
-            if output[isamp] == 0:
-                continue
-            istart = isamp - buffer
-            if istart < 0:
-                istart = 0
-            istop = isamp + buffer + 1
-            if istop >= n_samp:
-                istop = n_samp - 1
-            total = 0
-            for it in range(istart, istop, 1):
-                if input[it] != 0:
-                    total += 1
-            if total == 0:
-                flgstr = ",".join([f"{input[x]}" for x in range(istart, istop)])
-                msg = f"Flagged output {isamp}:  no input samples "
-                msg += f"flagged in {istart}:{istop}\n{flgstr}"
-                print(msg, flush=True)
-                return False
-        return True
 
     def test_gap_flag_func(self):
         # Create some test data.
@@ -187,7 +188,7 @@ class FlagGapsTest(MPITestCase):
         # Check results
         for ob in data.obs:
             self.assertTrue(
-                self.check_buffering(
+                check_buffering(
                     ob.shared["input"].data,
                     ob.shared[defaults.shared_flags].data,
                     shared_buffer,
@@ -195,7 +196,7 @@ class FlagGapsTest(MPITestCase):
             )
             for det in ob.select_local_detectors(flagmask=defaults.det_mask_nonscience):
                 self.assertTrue(
-                    self.check_buffering(
+                    check_buffering(
                         ob.detdata["input"][det],
                         ob.detdata[defaults.det_flags][det],
                         det_buffer,
@@ -292,7 +293,7 @@ class FlagGapsTest(MPITestCase):
         # Check results
         for ob in data.obs:
             self.assertTrue(
-                self.check_buffering(
+                check_buffering(
                     ob.shared["input"].data,
                     ob.shared[defaults.shared_flags].data,
                     shared_buffer,
@@ -300,7 +301,7 @@ class FlagGapsTest(MPITestCase):
             )
             for det in ob.select_local_detectors(flagmask=defaults.det_mask_nonscience):
                 self.assertTrue(
-                    self.check_buffering(
+                    check_buffering(
                         ob.detdata["input"][det],
                         ob.detdata[defaults.det_flags][det],
                         det_buffer,

@@ -43,7 +43,10 @@ class TimeConstant(Operator):
 
     shared_flag_mask = Int(
         defaults.shared_mask_invalid,
-        help="Bit mask value for optional shared flagging",
+        help=(
+            "Bit mask value for optional shared flagging.  Flagged shared "
+            "samples will be propagated to detector sample flags"
+        ),
     )
 
     det_flags = Unicode(

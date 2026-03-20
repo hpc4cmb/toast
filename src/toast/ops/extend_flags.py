@@ -51,25 +51,25 @@ class ExtendFlags(Operator):
     shared_buffer_time = Quantity(
         None,
         allow_none=True,
-        help="Flag shared gaps smaller than this time span",
+        help="Extend shared flagged regions by this time span",
     )
 
     shared_buffer_samples = Int(
         None,
         allow_none=True,
-        help="Flag shared gaps smaller than this number of samples",
+        help="Extend shared flagged regions by this number of samples",
     )
 
     det_buffer_time = Quantity(
         None,
         allow_none=True,
-        help="Flag detector gaps smaller than this time span",
+        help="Extend detector flagged regions by this time span",
     )
 
     det_buffer_samples = Int(
         None,
         allow_none=True,
-        help="Flag detector gaps smaller than this number of samples",
+        help="Extend detector flagged regions by this number of samples",
     )
 
     @traitlets.validate("det_mask")
@@ -127,6 +127,9 @@ class ExtendFlags(Operator):
             return
 
         for ob in data.obs:
+            if not ob.is_distributed_by_detector:
+                msg = f"{ob.name}: ExtendFlags requires data distributed by detector."
+                raise RuntimeError(msg)
             # Sample rate for this observation
             rate = ob.telescope.focalplane.sample_rate.to_value(u.Hz)
 
@@ -168,6 +171,7 @@ class ExtendFlags(Operator):
                     ):
                         msg = f"All samples for detector {det} have been flagged"
                         log.warning(msg)
+                        ob.update_local_detector_flags({det: self.det_mask})
 
     def _finalize(self, data, **kwargs):
         return
