@@ -1,53 +1,56 @@
-# TOAST
+cmake_minimum_required(VERSION 3.21)
 
-# This minimum version is mostly set in order to get a newer version
-# of the FindMPI check.  Note that you can easily install a newer cmake version
-# using conda or pip.
-cmake_minimum_required(VERSION 3.20 FATAL_ERROR)
+# Warn if the user invokes CMake directly
+if (NOT SKBUILD)
+    message(WARNING "\
+    This CMake file is meant to be executed using 'scikit-build-core'.
+    Running it directly will almost certainly not produce the desired
+    result. If you are a user trying to install this package, use the
+    command below, which will install all necessary build dependencies,
+    compile the package in an isolated environment, and then install it.
+    =====================================================================
+    $ pip install .
+    =====================================================================
+    If you are a software developer, and this is your own package, then
+    it is usually much more efficient to install the build dependencies
+    in your environment once and use the following command that avoids
+    a costly creation of a new virtual environment at every compilation:
+    =====================================================================
+    $ pip install pybind11 scikit-build-core[pyproject]
+    $ pip install --no-build-isolation -ve .
+    =====================================================================
+    You may optionally add -Ceditable.rebuild=true to auto-rebuild when
+    the package is imported. Otherwise, you need to rerun the above
+    after editing C++ files.")
+endif()
 
-foreach(policy
-    CMP0048
-    CMP0074
-    CMP0077
-    CMP0063
-    CMP0094
-  )
-  if(POLICY ${policy})
-    cmake_policy(SET ${policy} NEW)
-  endif()
-endforeach()
+# Define the project with name and version from pyproject.toml
+project(${SKBUILD_PROJECT_NAME} LANGUAGES CXX C VERSION ${SKBUILD_PROJECT_VERSION})
 
-file(READ ${CMAKE_CURRENT_SOURCE_DIR}/src/toast/RELEASE REL_VERSION)
-string(REGEX REPLACE "^([0-9]+\\.[0-9]+)\\..*" "\\1" MAJMIN_VERSION "${REL_VERSION}")
-
-project(toast VERSION ${MAJMIN_VERSION} LANGUAGES C CXX)
-
-# Force C++11
-set(CMAKE_CXX_STANDARD 11)
+# Use modern C++
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Set symbol visibility to hidden to be consistent with pybind11
-set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-
-# pybind11 enables IPO by default.  This can cause problems with some
-# compilers.  Remove this if we find a better workaround:
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
-
-# Auxiliary files
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
-
-# Use GNUInstallDirs to install libraries into correct locations on all
-# platforms.
-include(GNUInstallDirs)
-
-# Build defaults
-include(BuildType)
 
 # We are building libraries that will eventually be linked into shared
 # modules.  All code should be built with PIC.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# External packages
+# Auxiliary files
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+
+# First set up our package, bindings, and generated version files
+
+# Python
+find_package(
+    Python
+    REQUIRED COMPONENTS Interpreter Development.Module
+    OPTIONAL_COMPONENTS Development.SABIModule
+)
+
+# pybind11
+find_package(pybind11 CONFIG REQUIRED)
+
+# Other external packages
 
 # In some situations (like building python wheels), it is useful to statically link to
 # our external dependencies.  This allows us to ship self-contained compiled
@@ -182,8 +185,6 @@ endif()
 find_package(AATM)
 
 find_package(SuiteSparse)
-
-find_package(Python3 3.9 COMPONENTS Interpreter Development.Module REQUIRED)
 
 # Internal products
 

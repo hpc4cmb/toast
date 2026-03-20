@@ -1,18 +1,12 @@
+# This directory defines an object library with all the 
+# external dependencies.
 
-# Add internal googletest framework.  Must be added before the unit test
-# internal library in order to define some variables.
+# Version file
+set(c_version ${CMAKE_CURRENT_BINARY_DIR}/version.cpp)
 
-add_subdirectory(gtest EXCLUDE_FROM_ALL)
-set(gtest_force_shared_crt TRUE)
-include_directories("${gtest_SOURCE_DIR}/include")
-
-# Add a custom command that produces version.cpp
-
-set(versioncpp ${CMAKE_CURRENT_BINARY_DIR}/version.cpp)
-
-add_custom_command(OUTPUT ${versioncpp}
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/version.cmake
-    COMMENT "Updating version.cpp if needed ..."
+add_custom_command(OUTPUT ${c_version}
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/generate_version_cpp.sh ${SKBUILD_PROJECT_VERSION}
+    COMMENT "Updating version files if needed ..."
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 )
 
@@ -20,6 +14,7 @@ add_custom_command(OUTPUT ${versioncpp}
 
 set(toast_SOURCES
     toast.cpp
+    "${c_version}"
     src/toast_gpu_helpers.cpp
     src/toast_sys_environment.cpp
     src/toast_sys_utils.cpp
@@ -40,23 +35,13 @@ set(toast_SOURCES
     src/toast_atm_sim.cpp
     src/toast_atm_observe.cpp
     src/toast_template_offset.cpp
-    tests/toast_test_runner.cpp
-    tests/toast_test_env.cpp
-    tests/toast_test_utils.cpp
-    tests/toast_test_sf.cpp
-    tests/toast_test_rng.cpp
-    tests/toast_test_qarray.cpp
-    tests/toast_test_fft.cpp
-    tests/toast_test_cov.cpp
-    tests/toast_test_polyfilter.cpp
 )
 
-add_library(toast OBJECT ${versioncpp} ${toast_SOURCES})
+add_library(toast OBJECT ${toast_SOURCES})
 
 target_include_directories(toast BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
-    "${CMAKE_CURRENT_SOURCE_DIR}/tests"
 )
 
 target_include_directories(toast BEFORE PUBLIC
@@ -65,8 +50,6 @@ target_include_directories(toast BEFORE PUBLIC
 )
 
 # Dependencies
-
-target_link_libraries(toast gtest)
 
 if(AATM_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_AATM=1)
@@ -150,37 +133,3 @@ else()
     message(STATUS "CUDA libs not found.")
 endif()
 
-# Installation
-
-#install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-
-# Hardcode this to "lib" for now, since lib32/lib64 is a pain
-# to use on many systems.
-#install(TARGETS toast DESTINATION ${CMAKE_INSTALL_LIBDIR})
-#install(TARGETS toast DESTINATION lib)
-
-# Add the serial unit test executable
-
-# add_executable(toast_test
-#     toast_test.cpp
-# )
-
-# if(OpenMP_CXX_FOUND)
-#     target_compile_options(toast_test PRIVATE "${OpenMP_CXX_FLAGS}")
-# endif(OpenMP_CXX_FOUND)
-
-# target_include_directories(toast_test BEFORE PRIVATE
-#     "${CMAKE_CURRENT_SOURCE_DIR}"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/include"
-#     "${CMAKE_CURRENT_SOURCE_DIR}/tests"
-# )
-
-# target_link_libraries(toast_test toast)
-
-# target_link_options(toast_test PRIVATE
-#     ${LAPACK_LINKER_FLAGS} ${BLAS_LINKER_FLAGS} ${OpenMP_CXX_FLAGS}
-# )
-
-# install(TARGETS toast_test DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# add_test(NAME serial_tests COMMAND toast_test)
