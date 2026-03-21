@@ -45,7 +45,7 @@ class SimpleStatCut(Operator):
     )
 
     det_flag_mask = Int(
-        defaults.det_mask_invalid,
+        defaults.det_mask_nonscience,
         help="Bit mask value for detector sample flagging",
     )
 
@@ -58,12 +58,6 @@ class SimpleStatCut(Operator):
     shared_flag_mask = Int(
         defaults.shared_mask_nonscience,
         help="Bit mask value for optional shared flagging",
-    )
-
-    view = Unicode(
-        None,
-        allow_none=True,
-        help="Find glitches in this view",
     )
 
     medfilt_kernel_size = Int(
@@ -126,9 +120,6 @@ class SimpleStatCut(Operator):
                 log.error(msg)
                 raise RuntimeError(msg)
 
-            views = ob.intervals[self.view]
-            focalplane = ob.telescope.focalplane
-
             all_local_dets = ob.select_local_detectors(flagmask=self.det_mask)
 
             if len(all_local_dets) > 0 and all_local_dets[0].startswith("demod"):
@@ -155,7 +146,6 @@ class SimpleStatCut(Operator):
                         local_dets.append(det)
                 local_dets = np.array(local_dets)
                 ndet = len(local_dets)
-                bad_dets = np.zeros(ndet, dtype=bool)
 
                 local_rms = np.zeros(ndet)
                 local_skew = np.zeros(ndet)
@@ -195,7 +185,7 @@ class SimpleStatCut(Operator):
                 stat_dict = {}
                 Stats = namedtuple("Stats", ["rms", "skew", "kurtosis"])
                 for det, rms, skew, kurtosis in zip(
-                        all_dets, all_rms, all_skew, all_kurtosis
+                    all_dets, all_rms, all_skew, all_kurtosis
                 ):
                     stat_dict[det] = Stats(rms, skew, kurtosis)
                 if self.out not in ob:
@@ -204,8 +194,8 @@ class SimpleStatCut(Operator):
 
                 good = np.ones(len(all_dets), dtype=bool)
                 for all_stat, local_stat in zip(
-                        [all_rms, all_skew, all_kurtosis],
-                        [local_rms, local_skew, local_kurtosis],
+                    [all_rms, all_skew, all_kurtosis],
+                    [local_rms, local_skew, local_kurtosis],
                 ):
                     while True:
                         med = np.median(all_stat[good])
@@ -226,8 +216,9 @@ class SimpleStatCut(Operator):
                                     continue
                                 alt_det = det.replace(prefix, alt_prefix)
                                 if alt_det in ob.local_detector_flags:
-                                    ob.local_detector_flags[alt_det] \
-                                        |= defaults.det_mask_invalid
+                                    ob.local_detector_flags[alt_det] |= (
+                                        defaults.det_mask_invalid
+                                    )
                                     cut_obs.add(alt_det)
 
             nbad_obs = len(cut_obs)

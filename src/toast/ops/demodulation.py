@@ -30,7 +30,9 @@ from .operator import Operator
 class Lowpass:
     """A callable class that applies the low pass filter"""
 
-    def __init__(self, fmax, fsample, wkernel=None, offset=0, nskip=1, window="hamming"):
+    def __init__(
+        self, fmax, fsample, wkernel=None, offset=0, nskip=1, window="hamming"
+    ):
         """
         Args:
             wkernel (int) : width of the filter kernel
@@ -151,24 +153,26 @@ class Demodulate(Operator):
 
     wkernel = Int(None, allow_none=True, help="Override automatic filter kernel size")
 
-    fcut = Float(
-        0.95, help="Low pass cut-off frequency in units of HWP frequency"
-    )
+    fcut = Float(0.95, help="Low pass cut-off frequency in units of HWP frequency")
 
     fmin_2f = Float(
-        1.05, help="Low frequency end of the 2f-bandpass filter in units of HWP frequency"
+        1.05,
+        help="Low frequency end of the 2f-bandpass filter in units of HWP frequency",
     )
 
     fmax_2f = Float(
-        2.95, help="High frequency end of the 2f-bandpass filter in units of HWP frequency"
+        2.95,
+        help="High frequency end of the 2f-bandpass filter in units of HWP frequency",
     )
 
     fmin_4f = Float(
-        3.05, help="Low frequency end of the 4f-bandpass filter in units of HWP frequency"
+        3.05,
+        help="Low frequency end of the 4f-bandpass filter in units of HWP frequency",
     )
 
     fmax_4f = Float(
-        4.95, help="High frequency end of the 4fbandpass filter in units of HWP frequency"
+        4.95,
+        help="High frequency end of the 4fbandpass filter in units of HWP frequency",
     )
 
     nskip = Int(3, help="Downsampling factor")
@@ -249,7 +253,7 @@ class Demodulate(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        for trait in "noise_model", "stokes_weights":
+        for trait in ["stokes_weights"]:
             if getattr(self, trait) is None:
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
@@ -259,7 +263,7 @@ class Demodulate(Operator):
             raise RuntimeError(msg)
 
         if self.stokes_weights.hwp_angle is None:
-            msg = f"The Stokes weights operator (self.stokes_weights) "
+            msg = "The Stokes weights operator (self.stokes_weights) "
             msg += "does not have HWP angle"
             raise RuntimeError(msg)
 
@@ -804,6 +808,9 @@ class Demodulate(Operator):
         bandpass4f,
     ):
         """Add Noise objects for the new detectors"""
+        if self.noise_model is None:
+            return
+
         noise = obs[self.noise_model]
 
         demod_detectors = []

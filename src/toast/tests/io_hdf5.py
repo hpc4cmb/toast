@@ -15,15 +15,25 @@ from ..data import Data
 from ..io import load_hdf5, save_hdf5, VolumeIndex
 from ..utils import replace_byte_arrays, array_equal
 from ..weather import Weather
-from .helpers import close_data, create_ground_data, create_outdir, create_comm
+from .helpers import (
+    close_data,
+    create_ground_data,
+    create_outdir,
+    create_comm,
+    create_satellite_data,
+)
 from .mpi import MPITestCase
 
 
 class ExtraMeta(object):
     """Class to test Observation attribute save / load."""
 
-    def __init__(self):
-        self._data = np.random.normal(size=100)
+    def __init__(self, missing=False):
+        self._missing = missing
+        if missing:
+            self._data = None
+        else:
+            self._data = np.random.normal(size=100)
         self.meta = {"key": self._data}
 
     @property
@@ -32,23 +42,38 @@ class ExtraMeta(object):
 
     def save_hdf5(self, group, obs):
         if group is not None:
-            hdata = group.create_dataset(
-                "ExtraMeta", self._data.shape, dtype=self._data.dtype
-            )
+            if self._missing:
+                group.attrs["missing"] = 1
+                hdata = group.create_dataset("ExtraMeta", shape=(), dtype=np.float64)
+            else:
+                group.attrs["missing"] = 0
+                hdata = group.create_dataset(
+                    "ExtraMeta", self._data.shape, dtype=self._data.dtype
+                )
         if obs.comm.group_rank == 0:
-            hdata.write_direct(self._data, (slice(0, 100, 1),), (slice(0, 100, 1),))
+            if not self._missing:
+                hdata.write_direct(self._data, (slice(0, 100, 1),), (slice(0, 100, 1),))
 
     def load_hdf5(self, group, obs):
         if group is not None:
-            ds = group["ExtraMeta"]
-            if obs.comm.group_rank == 0:
-                self._data = np.empty(ds.shape, dtype=ds.dtype)
-                hslc = tuple([slice(0, x, 1) for x in ds.shape])
-                ds.read_direct(self._data, hslc, hslc)
+            if group.attrs["missing"] == 1:
+                self._missing = True
+                self._data = None
+            else:
+                self._missing = False
+                ds = group["ExtraMeta"]
+                if obs.comm.group_rank == 0:
+                    self._data = np.empty(ds.shape, dtype=ds.dtype)
+                    hslc = tuple([slice(0, x, 1) for x in ds.shape])
+                    ds.read_direct(self._data, hslc, hslc)
         if obs.comm.comm_group is not None:
+            self._missing = obs.comm.comm_group.bcast(self._missing, root=0)
             self._data = obs.comm.comm_group.bcast(self._data, root=0)
+        self.meta = {"key": self._data}
 
     def __eq__(self, other):
+        if self._missing:
+            return True
         if np.allclose(self._data, other._data):
             return True
         else:
@@ -130,19 +155,42 @@ class IoHdf5Test(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
-    def create_data(self, split=False, base_weather=False, no_meta=False, **kwargs):
-        # Create fake observing of a small patch.  Use a multifrequency
-        # focalplane so we can test split sessions.
-
-        ppp = 2
-        freq_list = [(100 + 10 * x) * u.GHz for x in range(3)]
-        data = create_ground_data(
-            self.comm,
-            freqs=freq_list,
-            pixel_per_process=ppp,
-            split=split,
-            **kwargs,
-        )
+    def create_data(
+        self,
+        split=False,
+        base_weather=False,
+        no_meta=False,
+        missing=False,
+        space=False,
+        **kwargs,
+    ):
+        if space:
+            # Create a space telescope with many detectors and fewer samples.
+            ppp = 7
+            data = create_satellite_data(
+                self.comm,
+                obs_per_group=1,
+                sample_rate=10.0 * u.Hz,
+                obs_time=10.0 * u.minute,
+                gap_time=0.0 * u.minute,
+                pixel_per_process=ppp,
+                hwp_rpm=9.0,
+                width=5.0 * u.degree,
+                single_group=True,
+                **kwargs,
+            )
+        else:
+            # Create a ground telescope observing a small patch.  Use a multifrequency
+            # focalplane so we can test split sessions.
+            ppp = 2
+            freq_list = [(100 + 10 * x) * u.GHz for x in range(3)]
+            data = create_ground_data(
+                self.comm,
+                freqs=freq_list,
+                pixel_per_process=ppp,
+                split=split,
+                **kwargs,
+            )
 
         # Add extra metadata attribute.  Since we are going to test equality on the
         # observation metadata when saving to HDF5 and loading back in, we convert
@@ -150,11 +198,14 @@ class IoHdf5Test(MPITestCase):
         if not no_meta:
             raw_other = create_other_meta()
             other = replace_byte_arrays(raw_other)
-            for ob in data.obs:
-                ob.extra = ExtraMeta()
+            for iob, ob in enumerate(data.obs):
+                if missing and iob == 1:
+                    ob.extra = ExtraMeta(missing=True)
+                else:
+                    ob.extra = ExtraMeta()
                 ob.update(other)
 
-        if base_weather:
+        if base_weather and not space:
             # Replace the simulated weather with the base class for testing
             for ob in data.obs:
                 old_weather = ob.telescope.site.weather
@@ -173,35 +224,46 @@ class IoHdf5Test(MPITestCase):
                 ob.telescope.site.weather = new_weather
                 del old_weather
 
-        # Simple detector pointing
-        detpointing_azel = ops.PointingDetectorSimple(
-            boresight="boresight_azel", quats="quats_azel"
-        )
-
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
 
-        # Make an elevation-dependent noise model
-        el_model = ops.ElevationNoise(
-            noise_model="noise_model",
-            out_model="el_weighted",
-            detector_pointing=detpointing_azel,
-        )
-        el_model.apply(data)
+        if space:
+            # Simulate noise and accumulate to signal
+            sim_noise = ops.SimNoise(noise_model="noise_model")
+            sim_noise.apply(data)
 
-        # Simulate noise and accumulate to signal
-        sim_noise = ops.SimNoise(noise_model=el_model.out_model)
-        sim_noise.apply(data)
+            config = build_config(
+                [
+                    default_model,
+                    sim_noise,
+                ]
+            )
+        else:
+            # Make an elevation-dependent noise model
+            # Simple detector pointing
+            detpointing_azel = ops.PointingDetectorSimple(
+                boresight="boresight_azel", quats="quats_azel"
+            )
+            el_model = ops.ElevationNoise(
+                noise_model="noise_model",
+                out_model="el_weighted",
+                detector_pointing=detpointing_azel,
+            )
+            el_model.apply(data)
 
-        config = build_config(
-            [
-                detpointing_azel,
-                default_model,
-                el_model,
-                sim_noise,
-            ]
-        )
+            # Simulate noise and accumulate to signal
+            sim_noise = ops.SimNoise(noise_model=el_model.out_model)
+            sim_noise.apply(data)
+
+            config = build_config(
+                [
+                    detpointing_azel,
+                    default_model,
+                    el_model,
+                    sim_noise,
+                ]
+            )
 
         # Make another detdata object with units for testing
         for ob in data.obs:
@@ -543,7 +605,7 @@ class IoHdf5Test(MPITestCase):
 
         # Generate the data and create the index using a single group
 
-        data, config = self.create_data(split=True, single_group=True)
+        data, config = self.create_data(split=True, single_group=True, missing=True)
         det_data_fields = [
             ("signal", {"quanta": 1.0e-7}),
             ("flags", {}),
@@ -664,6 +726,21 @@ class IoHdf5Test(MPITestCase):
             if toastcomm.comm_world is not None:
                 toastcomm.comm_world.barrier()
 
+        # Select by extra metadata that should be missing on some obs
+        # (should print a warning)
+        sel_str = "select name from observations where "
+        sel_str += "extra_data > -1.0 and extra_data < 1.0"
+        for test_comm in [toastcomm.comm_world, toastcomm.comm_group]:
+            _ = vindx.select(sel_str, comm=test_comm)
+            if toastcomm.comm_world is not None:
+                toastcomm.comm_world.barrier()
+        sel_str = "select name from observations where "
+        sel_str += "extra_key > -1.0 and extra_key < 1.0"
+        for test_comm in [toastcomm.comm_world, toastcomm.comm_group]:
+            _ = vindx.select(sel_str, comm=test_comm)
+            if toastcomm.comm_world is not None:
+                toastcomm.comm_world.barrier()
+
     def _allreduce_obs_props(self, dt):
         """Helper function to get observation and session mapping.
         This is needed to find the information across all process groups and
@@ -710,7 +787,7 @@ class IoHdf5Test(MPITestCase):
 
         # Generate the data
 
-        data, config = self.create_data(split=True)
+        data, config = self.create_data(split=True, missing=True)
         det_data_fields = [
             ("signal", {"quanta": 1.0e-7}),
             ("flags", {}),
@@ -757,6 +834,8 @@ class IoHdf5Test(MPITestCase):
             orig_ses_times,
         ) = self._allreduce_obs_props(data)
 
+        n_total_obs = len(orig_obs)
+
         # The fields we will index
 
         index_fields = {
@@ -766,7 +845,8 @@ class IoHdf5Test(MPITestCase):
         }
         check_leaf = data.obs[0]["top_tuple"][0]["qarr"]
 
-        # Save data and create the index
+        # Save data and create the index.  We run the saving one observation at
+        # a time to test multiple access to the index.
 
         saver = ops.SaveHDF5(
             volume=datadir,
@@ -777,10 +857,30 @@ class IoHdf5Test(MPITestCase):
             config=config,
             verify=True,
         )
-        saver.apply(data)
+        for ob in data.obs:
+            one_obs = data.select(obs_uid=ob.uid)
+            saver.apply(one_obs)
+            del one_obs
 
         if data.comm.comm_world is not None:
             data.comm.comm_world.barrier()
+
+        # Access the index and verify null counts
+        vindx = VolumeIndex(os.path.join(datadir, VolumeIndex.default_name))
+        vindx._load_db_schema()
+        if vindx._db_rows != n_total_obs:
+            msg = f"VolumeIndex has {vindx._db_rows} rows instead of {n_total_obs}"
+            print(msg, flush=True)
+            self.assertTrue(False)
+        # There should be one null per process group
+        expected_nulls = data.comm.ngroups
+        for field in ["extra_data", "extra_key"]:
+            null_count = vindx._db_null_count[field]
+            if null_count != expected_nulls:
+                msg = f"VolumeIndex {field} has null count {null_count} "
+                msg += f"instead of {expected_nulls}"
+                print(msg, flush=True)
+                self.assertTrue(False)
 
         # Now load the data with various selections and confirm the expected
         # set of observations are loaded.
@@ -878,11 +978,11 @@ class IoHdf5Test(MPITestCase):
 
         # Generate the data
 
-        data, config = self.create_data(split=False)
+        data, config = self.create_data(space=True, missing=True, flagged_pixels=False)
         det_data_fields = [
-            ("signal", {"quanta": 1.0e-7}),
+            ("signal", {"quanta": 1.0e-14}),
             ("flags", {}),
-            ("alt_signal", {"quanta": 1.0e-12}),
+            ("alt_signal", {"quanta": 1.0e-14}),
         ]
 
         # The fields we will index
@@ -909,33 +1009,45 @@ class IoHdf5Test(MPITestCase):
         if data.comm.comm_world is not None:
             data.comm.comm_world.barrier()
 
+        # When loading subsets of the data on each process below, we want to compare
+        # to the global data regardless of the original MPI distribution.  Since this
+        # is a small dataset, we gather the full detdata signal to all processes.
+
+        if data.comm.comm_group is None:
+            global_orig = data.obs[0].detdata["signal"][:]
+        else:
+            all_orig = data.comm.comm_group.allgather(data.obs[0].detdata["signal"][:])
+            global_orig = np.concatenate(all_orig, axis=0)
+            del all_orig
+        global_indx = {y: x for x, y in enumerate(data.obs[0].all_detectors)}
+
         # Now load the data with a detector selection.
 
         check_data = Data(data.comm)
         loader = ops.LoadHDF5(
             volume=datadir,
             volume_select=None,
-            det_select={"pixel": r"D.*[02468]"},
+            det_select={"pixel": r"^D.*[02468]$"},
         )
         loader.apply(check_data)
 
         # Verify that loaded observations have the expected set of detectors.
-        pat = re.compile(r"D.*[13579]")
-        for obs, orig in zip(check_data.obs, data.obs):
-            upixels = np.unique(obs.telescope.focalplane.detector_data["pixel"])
-            for pix in upixels:
-                if pat.match(pix) is not None:
-                    msg = f"Loaded incorrect pixel '{pix}' from {obs.name}"
-                    print(msg, flush=True)
-                    self.assertTrue(False)
-            for det in obs.local_detectors:
-                self.assertTrue(
-                    array_equal(
-                        obs.detdata["signal"][det],
-                        orig.detdata["signal"][det],
-                        f32=True,
-                    )
+        pat = re.compile(r"^D.*[13579]$")
+        obs = check_data.obs[0]
+        upixels = np.unique(obs.telescope.focalplane.detector_data["pixel"])
+        for pix in upixels:
+            if pat.match(pix) is not None:
+                msg = f"Loaded incorrect pixel '{pix}' from {obs.name}"
+                print(msg, flush=True)
+                self.assertTrue(False)
+        for det in obs.local_detectors:
+            self.assertTrue(
+                array_equal(
+                    obs.detdata["signal"][det],
+                    global_orig[global_indx[det]],
+                    f32=True,
                 )
+            )
 
         del check_data
         close_data(data)

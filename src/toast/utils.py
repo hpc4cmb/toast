@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2024 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -22,6 +22,7 @@ import h5py
 import numpy as np
 from astropy.table import meta as aspymeta
 from astropy.table import Table
+import scipy.signal
 from wurlitzer import pipes, STDOUT
 
 from ._libtoast import (
@@ -963,7 +964,7 @@ class SetDict(UserDict):
         return True
 
 
-def flagged_noise_fill(data, flags, buffer, poly_order=1):
+def flagged_noise_fill(data, flags, buffer, poly_order=1, no_white_noise=False):
     """Fill flagged samples with noise.
 
     This finds contiguous flagged samples and fills each gap with a polynomial
@@ -974,6 +975,8 @@ def flagged_noise_fill(data, flags, buffer, poly_order=1):
         flags (array):  The array of sample flags.
         buffer (int):  Number of samples to use on either side of flagged regions.
         poly_order (int):  The polynomial order to fit across the gap.
+        no_white_noise (bool):  If True, do not add white noise to samples in the
+           gaps (so only the polynomial will span the gaps).
 
     Returns:
         None
@@ -991,7 +994,8 @@ def flagged_noise_fill(data, flags, buffer, poly_order=1):
         raise RuntimeError(msg)
 
     if np.sum(flags == 0) == 0:
-        raise RuntimeError(f"Cannot gapfill a buffer without any good data")
+        # All samples flagged, nothing to do.
+        return
 
     flag_indx = np.arange(n_samp, dtype=np.int64)[flags != 0]
     flag_groups = np.split(flag_indx, np.where(np.diff(flag_indx) != 1)[0] + 1)
@@ -1020,6 +1024,16 @@ def flagged_noise_fill(data, flags, buffer, poly_order=1):
         full_last = bad_last + buffer
         if full_last > n_samp:
             full_last = n_samp
+
+        # If our flagged region is at the beginning or end of
+        # the data, using higher order polynomials can often lead
+        # to the fit blowing up.  In this case, we revert to
+        # linear order fits.
+        if full_first == 0 or full_last == n_samp:
+            group_order = 1
+        else:
+            group_order = poly_order
+
         fit_n_samps = full_last - full_first
         fit_samps = np.arange(fit_n_samps)
         fit_flags = flags[full_first:full_last]
@@ -1028,7 +1042,7 @@ def flagged_noise_fill(data, flags, buffer, poly_order=1):
         in_fit_x = fit_samps[fit_good]
         in_fit_y = data[full_first:full_last][fit_good]
         fit_poly = np.polynomial.polynomial.Polynomial.fit(
-            in_fit_x, in_fit_y, poly_order
+            in_fit_x, in_fit_y, group_order
         )
         fit_curve = fit_poly(in_fit_x)
 
@@ -1037,9 +1051,72 @@ def flagged_noise_fill(data, flags, buffer, poly_order=1):
         # Fill the gaps with noise plus the fit polynomial
         full_fit = fit_poly(fit_samps)
         n_bad = np.count_nonzero(fit_bad)
-        data[full_first:full_last][fit_bad] = full_fit[fit_bad] + np.random.normal(
-            scale=rms, size=n_bad
-        )
+        data[full_first:full_last][fit_bad] = full_fit[fit_bad]
+        if not no_white_noise:
+            data[full_first:full_last][fit_bad] += np.random.normal(
+                scale=rms, size=n_bad
+            )
+
+
+def extend_flags(flags, mask, buffer):
+    """Expand flagged regions.
+
+    The `mask` is bitwise "and" applied to the flags array to determine which
+    samples are "bad".  Contiguous regions of bad samples are identified and
+    then areas of `buffer` samples on either side of each region are flagged.
+    The flags array is modified in-place.
+
+    Args:
+        flags (array):  The array of flags.
+        mask (int):  The flag mask.
+        buffer (int):  The number of samples to extend flagged regions on either
+            side.
+
+    Returns:
+        (None)
+
+    """
+    # FIXME: This could potentially be simplified using a convolution with a
+    # buffer-length kernel.
+    matching = np.array(flags & mask, dtype=bool)
+    start_flags = np.where(matching[1:] > matching[:-1])[0] + 1
+    end_flags = np.where(matching[1:] < matching[:-1])[0] + 1
+    if len(start_flags) == 0 and len(end_flags) == 0:
+        # No flags!
+        return
+    regions = list()
+    if len(start_flags) > 0 and len(end_flags) > 0:
+        # Some number of both starts and stops
+        if start_flags[0] < end_flags[0]:
+            # Good data at start
+            for start, end in zip(start_flags, end_flags):
+                regions.append((start, end))
+            if len(start_flags) != len(end_flags):
+                # Flagged data at end
+                regions.append((start_flags[-1], len(matching)))
+        else:
+            # Flagged data at start
+            regions.append((0, end_flags[0]))
+            for start, end in zip(start_flags, end_flags[1:]):
+                regions.append((start, end))
+            if len(start_flags) == len(end_flags):
+                # Flagged data at end
+                regions.append((start_flags[-1], len(matching)))
+    elif len(start_flags) > 0:
+        # No ends, so one flagged region at the end
+        regions.append((start_flags[0], len(matching)))
+    else:
+        # No starts, so one flagged region at the beginning
+        regions.append((0, end_flags[0]))
+
+    for start, end in regions:
+        fstart = start - buffer
+        if fstart < 0:
+            fstart = 0
+        fend = end + buffer
+        if fend >= len(matching):
+            fend = len(matching) - 1
+        flags[fstart:fend] = mask
 
 
 def sqlite_connect(filename=None, mode="w"):
@@ -1143,7 +1220,10 @@ def sqlite_connect(filename=None, mode="w"):
 
 def sqlite_scalar(input):
     """Ensure that any scalars are one of the sqlite types."""
-    if isinstance(input, numbers.Integral):
+    if input is None:
+        # This is valid- will be inserted as sqlite NULL
+        return input
+    elif isinstance(input, numbers.Integral):
         return int(input)
     elif isinstance(input, u.Quantity):
         return float(input.value)

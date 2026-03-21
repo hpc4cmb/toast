@@ -30,10 +30,34 @@ class TimeConstant(Operator):
         help="Observation detdata key apply filtering to",
     )
 
+    det_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for per-detector flagging",
+    )
+
+    shared_flags = Unicode(
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for telescope flags to use",
+    )
+
+    shared_flag_mask = Int(
+        defaults.shared_mask_invalid,
+        help=(
+            "Bit mask value for optional shared flagging.  Flagged shared "
+            "samples will be propagated to detector sample flags"
+        ),
+    )
+
     det_flags = Unicode(
         defaults.det_flags,
         allow_none=True,
         help="Observation detdata key for flags to use",
+    )
+
+    det_flag_mask = Int(
+        defaults.det_mask_invalid,
+        help="Bit mask value for detector sample flagging",
     )
 
     tau = Quantity(
@@ -57,11 +81,6 @@ class TimeConstant(Operator):
     tau_flag_mask = Int(
         defaults.det_mask_invalid,
         help="Detector flag mask for cutting detectors with invalid Tau values.",
-    )
-
-    edge_flag_mask = Int(
-        defaults.det_mask_invalid,
-        help="Sample flag mask for cutting samples at the ends due to filter effects.",
     )
 
     batch = Bool(False, help="If True, batch all detectors and process at once")
@@ -114,7 +133,7 @@ class TimeConstant(Operator):
             raise RuntimeError("Either tau or tau_name must be set.")
 
         for obs in data.obs:
-            dets = obs.select_local_detectors(detectors, flagmask=self.tau_flag_mask)
+            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 continue
 
@@ -146,11 +165,28 @@ class TimeConstant(Operator):
                     kernel = 1.0 / kernel
                 return kernel
 
-            # The slice of detector data we will use
+            # The slice of detector data and flags we will use
             signal = obs.detdata[self.det_data][dets, :]
+            if self.det_flags is None:
+                flags = None
+                flag_mask = None
+            else:
+                flags = obs.detdata[self.det_flags][dets, :]
+                if self.shared_flags is not None:
+                    # These shared flags will effectively be propagated to
+                    # detector flags by this operator
+                    shflg = self.det_flag_mask * np.array(
+                        obs.shared[self.shared_flags].data & self.shared_flag_mask,
+                        dtype=np.uint8,
+                    )
+                    for detflag in flags:
+                        detflag |= shflg
+                flag_mask = self.det_flag_mask
             if len(dets) == 1:
                 # Corner case, signal is a vector, not a list of vectors
                 signal = [signal]
+                if flags is not None:
+                    flags = [flags]
 
             if self.batch:
                 # Use the internal batched (threaded) implementation.  This
@@ -170,20 +206,13 @@ class TimeConstant(Operator):
             convolve(
                 signal,
                 fsample,
+                flags=flags,
+                flag_mask=flag_mask,
                 kernel_func=_filter_kernel,
                 deconvolve=False,
                 algorithm=algo,
                 debug=debug_root,
             )
-
-            # Flag 5 time-constants of data at the beginning and end
-            for idet, det in enumerate(dets):
-                tau = tau_det[idet].to_value(u.second)
-                n_edge = int(5 * tau * fsample)
-                if n_edge == 0:
-                    continue
-                obs.detdata[self.det_flags][det][:n_edge] |= self.edge_flag_mask
-                obs.detdata[self.det_flags][det][-n_edge:] |= self.edge_flag_mask
 
     def _finalize(self, data, **kwargs):
         return

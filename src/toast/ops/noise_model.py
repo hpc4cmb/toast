@@ -636,7 +636,7 @@ class FlagNoiseFit(Operator):
         help="In addition to flagging based on estimated model, also apply overall TOD cut",
     )
 
-    sigma_NET = Float(5.0, help="Flag detectors with NET values outside this range")
+    sigma_NET = Float(10.0, help="Flag detectors with NET values outside this range")
 
     sigma_fknee = Float(
         None,
@@ -645,7 +645,7 @@ class FlagNoiseFit(Operator):
     )
 
     low_noise_limit = Float(
-        0.1,
+        0.05,
         allow_none=False,
         help="Fraction of median NET or RMS to cut anomalously low detectors at",
     )
@@ -795,9 +795,9 @@ class FlagNoiseFit(Operator):
                                 log.debug(msg)
                                 all_good[idet] = False
                                 n_cut += 1
-                            elif (net < net_med * self.low_noise_limit):
+                            elif net < net_med * self.low_noise_limit:
                                 msg = f"obs {obs.name}, det {name} has NET {net} "
-                                msg += f"that is < {net_med * self.low_noise_limit}"
+                                msg += f"that is < {net_med} x {self.low_noise_limit}"
                                 log.debug(msg)
                                 all_good[idet] = False
                                 n_cut += 1
@@ -837,9 +837,12 @@ class FlagNoiseFit(Operator):
                                     log.debug(msg)
                                     all_good[idet] = False
                                     n_cut += 1
-                                elif (rms < rms_med * self.low_noise_limit):
-                                    msg = f"obs {obs.name}, det {name} has TOD RMS {rms} "
-                                    msg += f"that is < {rms_med * self.low_noise_limit}"
+                                elif rms < rms_med * self.low_noise_limit:
+                                    msg = (
+                                        f"obs {obs.name}, det {name} has TOD RMS {rms} "
+                                    )
+                                    msg += f"that is < {rms_med} * "
+                                    msg += f"{self.low_noise_limit}"
                                     log.debug(msg)
                                     all_good[idet] = False
                                     n_cut += 1

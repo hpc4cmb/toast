@@ -301,7 +301,7 @@ conf["install_requires"] = [
     "psutil",
     "h5py",
     "pshmem>=1.3.3",
-    "flacarray>=0.3.4",
+    "flacarray>=0.4.0",
     "ruamel.yaml",
     "astropy",
     "healpy",
@@ -353,6 +353,7 @@ conf["entry_points"] = {
         "toast_plot_healpix = toast.scripts.toast_plot_healpix:main",
         "toast_overlap_schedule = toast.scripts.toast_overlap_schedule:main",
         "toast_map_stats = toast.scripts.toast_map_stats:main",
+        "toast_volume_reindex = toast.scripts.toast_volume_reindex:main",
     ]
 }
 conf["cmdclass"] = {"build_ext": CMakeBuild}

@@ -28,6 +28,7 @@ set(ENTRY_POINTS
     toast_analyze_schedule.py
     toast_overlap_schedule.py
     toast_map_stats.py
+    toast_volume_reindex.py
 )
 
 foreach(pyscript ${ENTRY_POINTS})

@@ -111,6 +111,21 @@ class NoiseFilter(Operator):
 
             # The signal array: this is a list of detector array references.
             signal = obs.detdata[self.det_data][dets, :]
+            if self.det_flags is None:
+                flags = None
+                flag_mask = None
+            else:
+                flags = obs.detdata[self.det_flags][dets, :]
+                if self.shared_flags is not None:
+                    # These shared flags will effectively be propagated to
+                    # detector flags by this operator
+                    shflg = self.det_flag_mask * np.array(
+                        obs.shared[self.shared_flags].data & self.shared_flag_mask,
+                        dtype=np.uint8,
+                    )
+                    for detflag in flags:
+                        detflag |= shflg
+                flag_mask = self.det_flag_mask
 
             # Construct the N_tt'^-1 kernels for these detectors
             kernels = list()
@@ -164,6 +179,8 @@ class NoiseFilter(Operator):
             convolve(
                 signal,
                 rate,
+                flags=flags,
+                flag_mask=flag_mask,
                 kernel_freq=kern_freq,
                 kernels=kernels,
                 algorithm="numpy",

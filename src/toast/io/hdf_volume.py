@@ -16,7 +16,7 @@ from ..mpi import MPI
 from ..instrument import GroundSite
 from ..observation import default_values as defaults
 from .. import qarray as qa
-from ..timing import function_timer
+from ..timing import function_timer, Timer
 from ..utils import Logger, sqlite_connect, sqlite_scalar
 from .observation_hdf_load import load_hdf5
 
@@ -35,6 +35,13 @@ class VolumeIndex(object):
 
     def __init__(self, path):
         self._path = path
+        self._reset_db_info()
+
+    def _reset_db_info(self):
+        # These are only relevant on the rank zero process.
+        self._db_schema = None
+        self._db_null_count = None
+        self._db_rows = -1
 
     @function_timer
     def select(self, query, comm=None):
@@ -52,8 +59,21 @@ class VolumeIndex(object):
             (list):  The list of result tuples.
 
         """
+        log = Logger.get()
         result = None
         if comm is None or comm.rank == 0:
+            # Some columns may have NULL values.  We want to warn the user
+            # that their query may be over a subset of the data.
+            self._load_db_schema()
+            warn = f"Selection: '{query}' uses columns with NULL counts:"
+            do_warn = False
+            for col_name, n_null in self._db_null_count.items():
+                if re.search(col_name, query) is not None and n_null > 0:
+                    do_warn = True
+                    warn += f" {col_name} ({n_null}/{self._db_rows}),"
+            if do_warn:
+                log.warning(warn[:-1])
+
             conn = sqlite_connect(self._path, mode="r")
             cur = conn.cursor()
             cur.execute(query)
@@ -70,6 +90,7 @@ class VolumeIndex(object):
         """Parse strings into actual object references in the observation."""
         attr_pat = re.compile(r"\.(\w*)(.*)")
         dict_pat = re.compile(r"\[(\w*)\](.*)")
+        log = Logger.get()
 
         def _op_reduce(input, op):
             if op == "mean":
@@ -85,7 +106,7 @@ class VolumeIndex(object):
                 raise RuntimeError(msg)
 
         def _get_obj(parent, key):
-            if key == "":
+            if parent is None or key == "":
                 return parent
             attr_mat = attr_pat.match(key)
             if attr_mat is None:
@@ -111,7 +132,8 @@ class VolumeIndex(object):
                             except (ValueError, KeyError):
                                 # Not an int...
                                 msg = f"key {sub_key} not valid for object {parent}"
-                                raise RuntimeError(msg)
+                                log.warning(msg)
+                                child = None
                     else:
                         # Try converting key to integer index
                         try:
@@ -120,7 +142,8 @@ class VolumeIndex(object):
                         except (ValueError, KeyError):
                             # Not an int...
                             msg = f"key {sub_key} not valid for object {parent}"
-                            raise RuntimeError(msg)
+                            log.warning(msg)
+                            child = None
                     return _get_obj(child, remainder)
             else:
                 # Parse the attribute
@@ -135,7 +158,10 @@ class VolumeIndex(object):
         for fld, raw in indexfields.items():
             key_op = raw.split(":")
             obj = _get_obj(obs, key_op[0])
-            if len(key_op) > 1:
+            if obj is None:
+                # This observation has no value for the field
+                val = None
+            elif len(key_op) > 1:
                 # We are doing a reduction, does that make sense?
                 if not isinstance(obj, (np.ndarray, list, tuple)):
                     msg = f"Cannot apply reduction '{key_op[1]}' to object {obj}"
@@ -154,10 +180,11 @@ class VolumeIndex(object):
 
     def _field_schema(self, fields):
         """Determine the sqlite type for each field."""
-
         ftypes = dict()
         for fname, fval in fields.items():
-            if isinstance(fval, numbers.Integral):
+            if fval is None:
+                ftypes[fname] = "NONE"
+            elif isinstance(fval, numbers.Integral):
                 ftypes[fname] = "INTEGER"
             elif isinstance(fval, u.Quantity):
                 # We store the floating point value
@@ -170,31 +197,61 @@ class VolumeIndex(object):
                 ftypes[fname] = "TEXT"
         return ftypes
 
-    def _db_schema(self):
-        """Query the current DB schema"""
+    def _load_db_schema(self):
+        """Query the current DB schema and number of NULL values"""
+        if self._db_schema is not None:
+            # Already loaded
+            return
         conn = sqlite_connect(self._path, mode="r")
         cur = conn.cursor()
+
+        # Get schema with column types
         cur.execute(f"PRAGMA table_info({self.obs_table})")
         col_info = cur.fetchall()
+        self._db_schema = dict()
+        for col in col_info:
+            self._db_schema[col[1]] = col[2]
+
+        # Get the total number of rows
+        cur.execute(f"SELECT COUNT(*) FROM {self.obs_table}")
+        self._db_rows = int(cur.fetchall()[0][0])
+
+        # Get the number of nulls per column
+        self._db_null_count = dict()
+        for col_name in self._db_schema.keys():
+            cur.execute(
+                f"SELECT COUNT(*) FROM {self.obs_table} WHERE {col_name} IS NULL"
+            )
+            self._db_null_count[col_name] = int(cur.fetchall()[0][0])
+
         cur.close()
         del cur
         conn.close()
         del conn
-        col_types = dict()
-        for col in col_info:
-            col_types[col[1]] = col[2]
-        return col_types
 
     def _db_create(self, schema):
         """Create a new observation table."""
+        self._db_schema = dict()
+        self._db_rows = 0
+        self._db_null_count = dict()
+
+        # FIXME:  Decide what columns we should index after evaluating practical
+        # performance on real-world volumes.
+
         create_str = f"CREATE TABLE {self.obs_table} ("
         fcreate = list()
         for k, v in schema.items():
+            if v is None:
+                msg = f"DB field {k} has type NONE.  The index must be created with"
+                msg += " an observation that has valid values for all fields."
+                raise RuntimeError(msg)
             if k == "name":
                 # Primary key
                 fcreate.append(f"{k} {v} PRIMARY KEY")
             else:
                 fcreate.append(f"{k} {v}")
+            self._db_schema[k] = v
+            self._db_null_count[k] = 0
         create_str += ", ".join(fcreate)
         create_str += ")"
         # We create the temp directory in the same filesystem as the final index, so
@@ -216,6 +273,10 @@ class VolumeIndex(object):
         """If the observation is from a GroundSite, compute the scan center."""
         if isinstance(obs.telescope.site, GroundSite):
             # FIXME: Eventually handle arbitrary data distributions here
+            if not obs.is_distributed_by_detector:
+                msg = "Indexing of GroundSite data only supported for "
+                msg += "detector-distributed data"
+                raise RuntimeError(msg)
             result = None
             if obs.comm.group_rank == 0:
                 bad = (
@@ -314,7 +375,14 @@ class VolumeIndex(object):
         n_valid = int(n_valid)
 
         # Get ground scan center, if available
+        timer = Timer()
+        timer.start()
         ground_props = self._ground_scan_center(obs)
+        log.debug_rank(
+            f"{obs.name} append: compute scan center in",
+            comm=obs.comm.comm_group,
+            timer=timer,
+        )
 
         if obs.comm.group_rank == 0:
             # Get the user-specified properties
@@ -340,15 +408,22 @@ class VolumeIndex(object):
             field_types = self._field_schema(fields)
 
             if os.path.isfile(self._path):
-                # DB already exists, verify schema
+                # DB already exists, verify schema.  We allow observations (except for
+                # the first observation added) to be missing some fields.  These will
+                # be assigned NULL values in the DB.
                 msg = f"VolumeIndex.append(): {self._path} exists, checking schema"
                 log.verbose(msg)
-                db_types = self._db_schema()
-                if field_types != db_types:
-                    msg = f"Index {self._path}: "
-                    msg += f"Observation {obs.name} meta schema ({field_types}) does "
-                    msg += f"not match existing database schema ({db_types})"
-                    raise RuntimeError(msg)
+                self._load_db_schema()
+                errmsg = f"Index {self._path}: "
+                errmsg += f"Observation {obs.name} meta schema ({field_types}) does "
+                errmsg += f"not match existing database schema ({self._db_schema})"
+                if len(field_types) != len(self._db_schema):
+                    raise RuntimeError(errmsg)
+                for fkey, fval in field_types.items():
+                    if fkey not in self._db_schema:
+                        raise RuntimeError(errmsg)
+                    if fval != "NONE" and fval != self._db_schema[fkey]:
+                        raise RuntimeError(errmsg)
             else:
                 # Create DB
                 msg = f"VolumeIndex.append(): creating {self._path} with schema"
@@ -364,6 +439,12 @@ class VolumeIndex(object):
                 names.append(f"{k}")
                 wilds.append("?")
                 vals.append(sqlite_scalar(v))
+                if v is None:
+                    # Increment null count
+                    self._db_null_count[k] += 1
+            # Increment row count
+            self._db_rows += 1
+
             vals = tuple(vals)
             insert_str = f"INSERT INTO {self.obs_table} ("
             insert_str += ", ".join(names)
@@ -373,14 +454,19 @@ class VolumeIndex(object):
             insert_str += ")"
             conn = sqlite_connect(self._path, mode="w")
             cur = conn.cursor()
+            msg = f"VolumeIndex.append(): {insert_str} <= {vals}, "
+            log.verbose(msg)
             cur.execute(insert_str, vals)
             conn.commit()
             cur.close()
             del cur
             conn.close()
             del conn
-        if obs.comm.comm_group is not None:
-            obs.comm.comm_group.barrier()
+        log.debug_rank(
+            f"{obs.name} append: insert into DB in",
+            comm=obs.comm.comm_group,
+            timer=timer,
+        )
 
     @function_timer
     def append_file(self, volume_path, rel_path, indexfields=None, toastcomm=None):
@@ -402,6 +488,8 @@ class VolumeIndex(object):
         # Load the observation with only metadata and shared fields
         # (no detector data).
         obs_path = os.path.join(volume_path, rel_path)
+        timer = Timer()
+        timer.start()
         try:
             obs = load_hdf5(
                 obs_path,
@@ -414,12 +502,13 @@ class VolumeIndex(object):
                 detectors=None,
                 force_serial=False,
             )
-            msg = f"Loaded metadata for '{obs_path}'"
-            log.debug(msg)
+            log.debug_rank(
+                f"{obs.name} loaded metadata and pointing in",
+                comm=toastcomm.comm_group,
+                timer=timer,
+            )
             # Append it
             self.append(obs, rel_path, indexfields=indexfields)
-            msg = f"Appended metadata for '{obs_path}'"
-            log.debug(msg)
         except Exception as e:
             msg = f"File '{obs_path}' was not loadable as an Observation, skipping."
             log.warning(msg)
@@ -449,9 +538,9 @@ class VolumeIndex(object):
                     full_path = os.path.join(root, fname)
                     rel_path = os.path.relpath(full_path, start=volume_path)
                     obs_files.append(rel_path)
-        return obs_files
+        return list(sorted(obs_files))
 
-    def reindex(self, volume_path, indexfields=None, toastcomm=None):
+    def reindex(self, volume_path, indexfields=None, toastcomm=None, overwrite=False):
         log = Logger.get()
         if toastcomm.ngroups > 1:
             msg = "Toast communicator has multiple process groups- "
@@ -462,10 +551,25 @@ class VolumeIndex(object):
         msg = f"Re-building index for Volume '{volume_path}'"
         log.info_rank(msg, toastcomm.comm_world)
 
+        # Reset any schema info
+        self._reset_db_info()
+
+        if toastcomm.world_rank == 0:
+            if os.path.isfile(self._path):
+                if not overwrite:
+                    msg = f"Index path {self._path} already exists and overwrite"
+                    msg += "is not enabled."
+                    log.error(msg)
+                    raise RuntimeError(msg)
+                else:
+                    os.remove(self._path)
+
         # One process builds the list of files to try
         obs_files = None
         if toastcomm.world_rank == 0:
+            log.debug(f"reindex: scanning directory {volume_path}")
             obs_files = self.find_observations(volume_path)
+            log.debug(f"reindex: found {len(obs_files)} observation files")
         if toastcomm.comm_world is not None:
             obs_files = toastcomm.comm_world.bcast(obs_files, root=0)
         for fname in obs_files:
