@@ -81,6 +81,7 @@ from .simple_statcut import SimpleStatCut
 from .sss import SimScanSynchronousSignal
 from .statistics import Statistics
 from .stokes_weights import StokesWeights
+from .stokes_hwp import StokesWeightsHWP
 from .time_constant import TimeConstant
 from .totalconvolve import SimTotalconvolve
 from .weather_model import WeatherModel

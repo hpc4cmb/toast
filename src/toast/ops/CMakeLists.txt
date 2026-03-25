@@ -78,6 +78,7 @@ install(FILES
     demod_common_mode.py
     detrend.py
     decimate_focalplane.py
+    stokes_hwp.py
     DESTINATION ${PYTHON_SITE}/toast/ops
 )
 
