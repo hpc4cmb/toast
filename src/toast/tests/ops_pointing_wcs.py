@@ -201,9 +201,7 @@ class PointingWCSTest(MPITestCase):
 
                 self.assertFalse(pixels.auto_bounds)
                 self.assertTrue(pixels.center == center)
-                self.assertTrue(
-                    pixels.resolution == (0.02 * u.degree, 0.02 * u.degree)
-                )
+                self.assertTrue(pixels.resolution == (0.02 * u.degree, 0.02 * u.degree))
                 self.assertTrue(pixels.dimensions == self.proj_dims)
                 self.assertTrue(pixels.dimensions[0] == pixels.wcs_shape[1])
                 self.assertTrue(pixels.dimensions[1] == pixels.wcs_shape[0])
@@ -693,9 +691,9 @@ class PointingWCSTest(MPITestCase):
             # be realistic, but at least should cover the source
             for obs in data.obs:
                 if obs.comm_col_rank == 0:
-                    obs.shared["boresight_azel"].data[:, :] = obs.shared[
-                        "boresight_radec"
-                    ].data[:, :]
+                    obs.shared["boresight_azel"].set(obs.shared["boresight_radec"].data)
+                else:
+                    obs.shared["boresight_azel"].set(None)
 
             # Create source motion and simulated detector data.
             dbgdir = None
