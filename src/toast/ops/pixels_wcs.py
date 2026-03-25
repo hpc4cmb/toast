@@ -573,7 +573,7 @@ class PixelsWCS(Operator):
             # detector pointing.
             flags = None
             if self.detector_pointing.shared_flags is not None:
-                flags = ob.shared[self.detector_pointing.shared_flags].data
+                flags = np.copy(ob.shared[self.detector_pointing.shared_flags].data)
                 flags &= self.detector_pointing.shared_flag_mask
 
             center_lonlat = None

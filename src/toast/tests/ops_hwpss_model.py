@@ -60,7 +60,7 @@ class HWPModelTest(MPITestCase):
         for ob in data.obs:
             end_rampup = int(0.1 * ob.n_local_samples)
             begin_rampup = end_rampup - n_ramp
-            hwp_data = ob.shared[defaults.hwp_angle].data
+            hwp_data = ob.shared[defaults.hwp_angle]
             ang_end = hwp_data[end_rampup - 1]
             half_ramp = n_ramp // 2
             max_accel = ang_per_sample * 2 / n_ramp
@@ -77,8 +77,11 @@ class HWPModelTest(MPITestCase):
             ramp = ang_pos - off
 
             if ob.comm.group_rank == 0:
-                hwp_data[:end_rampup] = ramp[0]
+                hwp_data[:end_rampup] = ramp[0] * np.ones(end_rampup)
                 hwp_data[begin_rampup:end_rampup] = ramp
+            else:
+                hwp_data[:end_rampup] = None
+                hwp_data[begin_rampup:end_rampup] = None
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
