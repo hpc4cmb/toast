@@ -80,11 +80,29 @@ def stokes_weights_hwp_model_nominal(
             # Compute all intermediate trig arrays we need.
 
             sin2alpha = np.sin(2.0 * alpha)
+            # print(
+            #     f"sin2alpha: {np.amin(sin2alpha)} ... {np.amax(sin2alpha)}", flush=True
+            # )
             cos2alpha = np.cos(2.0 * alpha)
+            # print(
+            #     f"cos2alpha: {np.amin(cos2alpha)} ... {np.amax(cos2alpha)}", flush=True
+            # )
             sin2omega = np.sin(2.0 * omega)
+            # print(
+            #     f"sin2omega: {np.amin(sin2omega)} ... {np.amax(sin2omega)}", flush=True
+            # )
             cos2omega = np.cos(2.0 * omega)
+            # print(
+            #     f"cos2omega: {np.amin(cos2omega)} ... {np.amax(cos2omega)}", flush=True
+            # )
             sin4omega = np.sin(4.0 * omega)
+            # print(
+            #     f"sin4omega: {np.amin(sin4omega)} ... {np.amax(sin4omega)}", flush=True
+            # )
             cos4omega = np.cos(4.0 * omega)
+            # print(
+            #     f"cos4omega: {np.amin(cos4omega)} ... {np.amax(cos4omega)}", flush=True
+            # )
 
             # Assign values of the pointing matrix.  The weights are
             # (see notebook doc):
@@ -155,13 +173,9 @@ class StokesWeightsHWP(Operator):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
-    hwp_angle = Unicode(
-        defaults.hwp_angle, help="Observation shared key for HWP angle"
-    )
+    hwp_angle = Unicode(defaults.hwp_angle, help="Observation shared key for HWP angle")
 
-    fp_gamma = Unicode(
-        "gamma", help="Focalplane key for detector gamma offset angle"
-    )
+    fp_gamma = Unicode("gamma", help="Focalplane key for detector gamma offset angle")
 
     weights = Unicode(
         defaults.weights, help="Observation detdata key for output weights"
