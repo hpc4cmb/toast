@@ -24,7 +24,7 @@ class StokesWeightsHWPTest(MPITestCase):
     def setUp(self):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
-        self.nside = 128
+        self.nside = 64
 
     def create_test_data(self, testdir):
         # Slightly slower than 1 Hz
@@ -78,6 +78,151 @@ class StokesWeightsHWPTest(MPITestCase):
         ops.Delete(detdata=[pixels.pixels, weights.weights]).apply(data)
         return data
 
+    def plot_results(self, file_root):
+        import matplotlib.pyplot as plt
+
+        hit_file = f"{file_root}_hits.fits"
+        rcond_file = f"{file_root}_rcond.fits"
+        map_file = f"{file_root}_map.fits"
+        invcov_file = f"{file_root}_invcov.fits"
+
+        # The standard plotting tools in toast do not know how to handle
+        # the types of maps we are making, so we plot these manually.
+
+        def lonlat_range(nside, pix):
+            lon, lat = hp.pix2ang(
+                nside,
+                pix,
+                nest=True,
+                lonlat=True,
+            )
+            sortlon = np.sort(lon)
+            safelon = np.unwrap(sortlon, period=360.0)
+            maxlon = np.amax(safelon)
+            minlon = np.amin(safelon)
+            maxlat = np.amax(lat)
+            minlat = np.amin(lat)
+
+            loncenter = (maxlon + minlon) / 2
+            latcenter = (maxlat + minlat) / 2
+            lonhalf = 1.2 * ((maxlon - minlon) / 2)
+            lathalf = 1.2 * ((maxlat - minlat) / 2)
+            lonspan = [loncenter - lonhalf, loncenter + lonhalf]
+            latspan = [latcenter - lathalf, latcenter + lathalf]
+
+            prot = (loncenter, latcenter, 0.0)
+            return prot, lonspan, latspan
+
+        hitdata = read_healpix(hit_file, field=None, nest=True)
+        maxhits = np.amax(hitdata)
+        npix = len(hitdata)
+        nside = hp.npix2nside(npix)
+
+        goodhits = hitdata > 0
+        badhits = np.logical_not(goodhits)
+        goodindx = np.arange(npix, dtype=np.int32)[goodhits]
+        rot, lonspan, latspan = lonlat_range(nside, goodindx)
+
+        xsize = 1600
+        gnomres = 1.2 * (latspan[1] - latspan[0]) / xsize
+        gnomres *= 60
+        gnomres *= 1.2
+        grat_res = int((gnomres / 60.0) * (xsize / 10))
+
+        out_file = f"{hit_file}.png"
+        hp.gnomview(
+            map=hitdata,
+            rot=rot,
+            xsize=xsize,
+            reso=gnomres,
+            nest=True,
+            cmap="bwr",
+            min=0,
+            max=maxhits,
+            title="Hit Map",
+        )
+        hp.graticule(dpar=grat_res, dmer=grat_res)
+        plt.savefig(out_file, format="png")
+        plt.close()
+
+        rcond = read_healpix(rcond_file, field=None, nest=True)
+        rcond[badhits] = np.nan
+        out_file = f"{rcond_file}.png"
+        hp.gnomview(
+            map=rcond,
+            rot=rot,
+            xsize=xsize,
+            reso=gnomres,
+            nest=True,
+            cmap="bwr",
+            title="Inverse Condition Number",
+        )
+        hp.graticule(dpar=grat_res, dmer=grat_res)
+        plt.savefig(out_file, format="png")
+        plt.close()
+
+        for imap in range(15):
+            mdata = read_healpix(map_file, field=imap, nest=True)
+            mdata[badhits] = np.nan
+            out_file = f"{map_file}_{imap}.png"
+            hp.gnomview(
+                map=mdata,
+                rot=rot,
+                xsize=xsize,
+                reso=gnomres,
+                nest=True,
+                cmap="bwr",
+                title="Map Component {imap}",
+            )
+            hp.graticule(dpar=grat_res, dmer=grat_res)
+            plt.savefig(out_file, format="png")
+            plt.close()
+
+        # Make a panel plot of N_pp'^-1 blocks
+        invcov = read_healpix(invcov_file, field=None, nest=True)
+        print(f"invcov shape = {invcov.shape}", flush=True)
+        print(f"There are {len(goodindx)} hit pixels", flush=True)
+        nnz = int((np.sqrt(1 + 8 * invcov.shape[0]) - 1) // 2)
+        n_plot = len(goodindx)
+
+        # Extract the per-pixel matrices
+        pix_data = np.zeros((n_plot, nnz, nnz))
+        elem = 0
+        for row in range(nnz):
+            for col in range(row, nnz):
+                ivdata = invcov[elem]
+                for ipix, idx in enumerate(goodindx):
+                    pix_data[ipix, row, col] = ivdata[idx]
+                    pix_data[ipix, col, row] = ivdata[idx]
+                elem += 1
+        del invcov
+
+        # Giant panel plot...
+        n_col = 5
+        n_row = n_plot // n_col
+        if n_row * n_col != n_plot:
+            n_row += 1
+        panel_inches = 4
+        fig, axes = plt.subplots(
+            nrows=n_row,
+            ncols=n_col,
+            figsize=(n_col * panel_inches, n_row * panel_inches),
+            dpi=50,
+        )
+        iplot = 0
+        for irow in range(n_row):
+            for icol in range(n_col):
+                ax = axes[irow, icol]
+                cond = np.linalg.cond(pix_data[iplot])
+                im = ax.imshow(pix_data[iplot], interpolation=None, cmap="bwr", vmin=0, vmax=1000.0)
+                ax.set_title(f"Pix {goodindx[iplot]}, Cond = {cond:0.2e}")
+                iplot += 1
+        # Colorbar
+        fig.colorbar(im, ax=axes.ravel().tolist(), aspect=50)
+        out_file = f"{invcov_file}.png"
+        plt.savefig(out_file, format="png")
+        plt.close()
+
     def test_nominal(self):
         data = self.create_test_data(self.outdir)
         rank = 0
@@ -122,100 +267,5 @@ class StokesWeightsHWPTest(MPITestCase):
         close_data(data)
 
         if rank == 0:
-            import matplotlib.pyplot as plt
-
-            hit_file = os.path.join(self.outdir, "mapmaker_hits.fits")
-            rcond_file = os.path.join(self.outdir, "mapmaker_rcond.fits")
-            map_file = os.path.join(self.outdir, "mapmaker_map.fits")
-
-            # The standard plotting tools in toast do not know how to handle
-            # the types of maps we are making, so we plot these manually.
-
-            def lonlat_range(nside, pix):
-                lon, lat = hp.pix2ang(
-                    nside,
-                    pix,
-                    nest=True,
-                    lonlat=True,
-                )
-                sortlon = np.sort(lon)
-                safelon = np.unwrap(sortlon, period=360.0)
-                maxlon = np.amax(safelon)
-                minlon = np.amin(safelon)
-                maxlat = np.amax(lat)
-                minlat = np.amin(lat)
-
-                loncenter = (maxlon + minlon) / 2
-                latcenter = (maxlat + minlat) / 2
-                lonhalf = 1.2 * ((maxlon - minlon) / 2)
-                lathalf = 1.2 * ((maxlat - minlat) / 2)
-                lonspan = [loncenter - lonhalf, loncenter + lonhalf]
-                latspan = [latcenter - lathalf, latcenter + lathalf]
-
-                prot = (loncenter, latcenter, 0.0)
-                return prot, lonspan, latspan
-
-            hitdata = read_healpix(hit_file, field=None, nest=True)
-            maxhits = np.amax(hitdata)
-            npix = len(hitdata)
-            nside = hp.npix2nside(npix)
-
-            goodhits = hitdata > 0
-            badhits = np.logical_not(goodhits)
-            goodindx = np.arange(npix, dtype=np.int32)[goodhits]
-            rot, lonspan, latspan = lonlat_range(nside, goodindx)
-
-            xsize = 1600
-            gnomres = 1.2 * (latspan[1] - latspan[0]) / xsize
-            gnomres *= 60
-            gnomres *= 1.2
-            grat_res = int((gnomres / 60.0) * (xsize / 10))
-
-            out_file = f"{hit_file}.png"
-            hp.gnomview(
-                map=hitdata,
-                rot=rot,
-                xsize=xsize,
-                reso=gnomres,
-                nest=True,
-                cmap="bwr",
-                min=0,
-                max=maxhits,
-                title="Hit Map",
-            )
-            hp.graticule(dpar=grat_res, dmer=grat_res)
-            plt.savefig(out_file, format="png")
-            plt.close()
-
-            rcond = read_healpix(rcond_file, field=None, nest=True)
-            rcond[badhits] = np.nan
-            out_file = f"{rcond_file}.png"
-            hp.gnomview(
-                map=rcond,
-                rot=rot,
-                xsize=xsize,
-                reso=gnomres,
-                nest=True,
-                cmap="bwr",
-                title="Inverse Condition Number",
-            )
-            hp.graticule(dpar=grat_res, dmer=grat_res)
-            plt.savefig(out_file, format="png")
-            plt.close()
-
-            for imap in range(15):
-                mdata = read_healpix(map_file, field=imap, nest=True)
-                mdata[badhits] = np.nan
-                out_file = f"{map_file}_{imap}.png"
-                hp.gnomview(
-                    map=mdata,
-                    rot=rot,
-                    xsize=xsize,
-                    reso=gnomres,
-                    nest=True,
-                    cmap="bwr",
-                    title="Map Component {imap}",
-                )
-                hp.graticule(dpar=grat_res, dmer=grat_res)
-                plt.savefig(out_file, format="png")
-                plt.close()
+            file_root = os.path.join(self.outdir, mapper.name)
+            self.plot_results(file_root)
