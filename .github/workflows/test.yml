@@ -8,11 +8,10 @@ name:  Run Test Suite
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
-      - toast3
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -59,7 +58,7 @@ jobs:
             ompdisable: 1
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Conda Base
         run: |
