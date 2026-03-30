@@ -272,7 +272,7 @@ class MapmakerTest(MPITestCase):
             write_map=True,
             write_cov=False,
             write_rcond=False,
-            keep_solver_products=False,
+            keep_solver_products=True,
             keep_final_products=False,
             output_dir=testdir,
         )
@@ -303,6 +303,8 @@ class MapmakerTest(MPITestCase):
         binner.full_pointing = True
         mapper.name = "test2"
         mapper.apply(data, use_accel=use_accel)
+
+        # Plot the solved amplitudes
 
         close_data(data)
 
