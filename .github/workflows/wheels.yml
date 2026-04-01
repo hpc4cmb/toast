@@ -2,20 +2,9 @@
 name:  Binary Wheels
 
 on:
-  # workflow_dispatch:
-  # FIXME:  Remove these lines once this workflow merged
-  # to main branch.
-  # pull_request:
-  #   branches:
-  #     - toast3
-  # FIXME:  Remove tags stanza after we are doing releases
-  # from main, and restore release stanza.
-  push:
-    tags:
-      - '*'
-  # release:
-  #   types: [ published ]
-
+  workflow_dispatch:
+  release:
+    types: [ published ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -135,9 +124,9 @@ jobs:
         eval {project}/packaging/wheels/cibw_run_tests.sh ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         name: Install Python
         with:
           python-version: '3.12'
@@ -150,23 +139,19 @@ jobs:
         run: |
           python -m cibuildwheel --output-dir wheelhouse
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: toast-cp${{ matrix.python }}-${{ matrix.builder }}_${{ matrix.arch }}
           path: ./wheelhouse/toast*cp${{ matrix.python }}-${{ matrix.builder }}*${{ matrix.arch }}*.whl
 
-  # FIXME: before merge to main, comment out this whole block when
-  # testing without upload.
   upload_pypi:
     needs: build_wheels
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-    # FIXME: restore release / published conditional here after merge
-    # to main.
-    # if: github.event_name == 'release' && github.event.action == 'published'
+    if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           # Unpacks all artifacts into dist/
           pattern: toast-*
