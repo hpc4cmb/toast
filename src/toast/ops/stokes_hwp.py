@@ -9,7 +9,7 @@ from astropy import units as u
 from ..observation import default_values as defaults
 from .. import qarray as qa
 from ..timing import function_timer
-from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..traits import Bool, Instance, Int, List, Unicode, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
@@ -80,29 +80,11 @@ def stokes_weights_hwp_model_nominal(
             # Compute all intermediate trig arrays we need.
 
             sin2alpha = np.sin(2.0 * alpha)
-            # print(
-            #     f"sin2alpha: {np.amin(sin2alpha)} ... {np.amax(sin2alpha)}", flush=True
-            # )
             cos2alpha = np.cos(2.0 * alpha)
-            # print(
-            #     f"cos2alpha: {np.amin(cos2alpha)} ... {np.amax(cos2alpha)}", flush=True
-            # )
             sin2omega = np.sin(2.0 * omega)
-            # print(
-            #     f"sin2omega: {np.amin(sin2omega)} ... {np.amax(sin2omega)}", flush=True
-            # )
             cos2omega = np.cos(2.0 * omega)
-            # print(
-            #     f"cos2omega: {np.amin(cos2omega)} ... {np.amax(cos2omega)}", flush=True
-            # )
             sin4omega = np.sin(4.0 * omega)
-            # print(
-            #     f"sin4omega: {np.amin(sin4omega)} ... {np.amax(sin4omega)}", flush=True
-            # )
             cos4omega = np.cos(4.0 * omega)
-            # print(
-            #     f"cos4omega: {np.amin(cos4omega)} ... {np.amax(cos4omega)}", flush=True
-            # )
 
             # Assign values of the pointing matrix.  The weights are
             # (see notebook doc):
@@ -144,6 +126,151 @@ def stokes_weights_hwp_model_nominal(
             weights[widx][samples, :] *= cal[idet]
 
 
+def stokes_weights_hwp_model_mueller(
+    quat_index,
+    quats,
+    weight_index,
+    weights,
+    hwp,
+    intervals,
+    epsilon,
+    gamma,
+    mueller,
+    cal,
+    IAU,
+    include_V=False,
+):
+    """This implements the math for the "mueller" model.
+
+    In this model, all detectors have the same Mueller matrix coefficients
+    and this is specified by the user.
+
+    There are 3 non-zero elements in the pointing matrix unless `include_V`
+    is True, in which case the stokes V term is included.
+
+    """
+    if IAU:
+        U_sign = 1.0
+    else:
+        U_sign = -1.0
+
+    zaxis = np.array([0, 0, 1], dtype=np.float64)
+    xaxis = np.array([1, 0, 0], dtype=np.float64)
+    for idet in range(len(quat_index)):
+        qidx = quat_index[idet]
+        widx = weight_index[idet]
+        eta = (1.0 - epsilon[idet]) / (1.0 + epsilon[idet])
+        for vw in intervals:
+            samples = slice(vw.first, vw.last, 1)
+            vd = qa.rotate(quats[qidx][samples], zaxis)
+            vo = qa.rotate(quats[qidx][samples], xaxis)
+
+            # The vector orthogonal to the line of sight that is parallel
+            # to the local meridian.
+            dir_ang = np.arctan2(vd[:, 1], vd[:, 0])
+            dir_r = np.sqrt(1.0 - vd[:, 2] * vd[:, 2])
+            vm_z = -dir_r
+            vm_x = vd[:, 2] * np.cos(dir_ang)
+            vm_y = vd[:, 2] * np.sin(dir_ang)
+
+            # Compute the rotation angle from the meridian vector to the
+            # orientation vector.  The direction vector is normal to the plane
+            # containing these two vectors, so the rotation angle is:
+            #
+            # angle = atan2((v_m x v_o) . v_d, v_m . v_o)
+            #
+            alpha_y = (
+                vd[:, 0] * (vm_y * vo[:, 2] - vm_z * vo[:, 1])
+                - vd[:, 1] * (vm_x * vo[:, 2] - vm_z * vo[:, 0])
+                + vd[:, 2] * (vm_x * vo[:, 1] - vm_y * vo[:, 0])
+            )
+            alpha_x = vm_x * vo[:, 0] + vm_y * vo[:, 1] + vm_z * vo[:, 2]
+
+            # This is the final detector alpha angle on the sky
+            alpha = np.arctan2(alpha_y, alpha_x)
+
+            # The HWP "omega" angle is alpha + gamma_hwp(t) - gamma_det
+            omega = alpha + hwp - gamma[idet]
+
+            # Compute all intermediate trig arrays we need in multiple places.
+
+            sin2alpha = np.sin(2.0 * alpha)
+            cos2alpha = np.cos(2.0 * alpha)
+            sin2omega = np.sin(2.0 * omega)
+            cos2omega = np.cos(2.0 * omega)
+            sin4omega = np.sin(4.0 * omega)
+            cos4omega = np.cos(4.0 * omega)
+
+            sin2amo = np.sin(2.0 * (alpha - omega))
+            cos2amo = np.cos(2.0 * (alpha - omega))
+
+            # Assign values of the pointing matrix. (see notebook doc)
+
+            # Stokes I
+            weights[widx][samples, 0] = (
+                mueller[0, 0]
+                + mueller[1, 0] * eta * cos2amo
+                + mueller[2, 0] * eta * sin2amo
+            )
+
+            # Stokes Q
+            weights[widx][samples, 1] = (
+                mueller[0, 1] * cos2omega
+                + mueller[0, 2] * sin2omega
+                + 0.5 * mueller[1, 1] * eta * (
+                    sin2alpha * sin4omega +
+                    cos2alpha * (cos4omega + 1.0)
+                )
+                + mueller[1, 2] * eta * (
+                    sin2omega * (
+                        sin2alpha * sin2omega +
+                        cos2alpha * cos2omega
+                    )
+                )
+                - 0.5 * mueller[2, 1] * eta * (
+                    sin2alpha * (cos4omega + 1)
+                    - cos2alpha * sin4omega
+                )
+                - mueller[2, 2] * eta * sin2omega * (
+                    sin2alpha * cos2omega
+                    - cos2alpha * sin2omega
+                )
+            )
+
+            # Stokes U
+            weights[widx][samples, 2] = (
+                - mueller[0, 1] * sin2omega
+                + mueller[0, 2] * cos2omega
+                - mueller[1, 1] * eta * sin2omega * (
+                    sin2alpha * sin2omega
+                    + cos2alpha * cos2omega
+                )
+                + 0.5 * mueller[1, 2] * eta * (
+                    sin2alpha * sin4omega
+                    + cos2alpha * (cos4omega + 1)
+                )
+                + mueller[2, 1] * eta * sin2omega * (
+                    sin2alpha * cos2omega
+                    - cos2alpha * sin2omega
+                )
+                - 0.5 * mueller[2, 2] * eta * (
+                    sin2alpha * (cos4omega + 1)
+                    - cos2alpha * sin4omega
+                )
+            ) * U_sign
+
+            # Stokes V
+            if include_V:
+                weights[widx][samples, 3] = (
+                    mueller[0, 3]
+                    + mueller[1, 3] * eta * cos2amo
+                    - mueller[2, 3] * eta * sin2amo
+                )
+
+            # Apply overall calibration
+            weights[widx][samples, :] *= cal[idet]
+
+
 @trait_docs
 class StokesWeightsHWP(Operator):
     """Operator which generates HWP systematics pointing weights.
@@ -167,7 +294,9 @@ class StokesWeightsHWP(Operator):
         help="Operator that translates boresight pointing into detector frame",
     )
 
-    mode = Unicode("nominal", help="The data model to use")
+    mode = Unicode("nominal", help="The data model to use: 'nominal', 'mueller'")
+
+    mueller = List([], help="In 'mueller' mode, the common Mueller matrix to use")
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
@@ -219,8 +348,8 @@ class StokesWeightsHWP(Operator):
     @traitlets.validate("mode")
     def _check_mode(self, proposal):
         check = proposal["value"]
-        if check not in ["nominal"]:
-            raise traitlets.TraitError("Invalid mode (must be 'nominal' or ...)")
+        if check not in ["nominal", "mueller"]:
+            raise traitlets.TraitError("Invalid mode (must be 'nominal' or 'mueller')")
         return check
 
     def __init__(self, **kwargs):
@@ -233,6 +362,8 @@ class StokesWeightsHWP(Operator):
         # Compute the number of non-zeros in the pointing matrix
         if self.mode == "nominal":
             self._nnz = 15
+        elif self.mode == "mueller":
+            self._nnz = 3
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
@@ -338,6 +469,23 @@ class StokesWeightsHWP(Operator):
                     det_gamma,
                     cal,
                     bool(self.IAU),
+                )
+            elif self.mode == "mueller":
+                # Use a constant (local) Mueller matrix.  Ignore the Stokes V weights
+                # for now.
+                stokes_weights_hwp_model_mueller(
+                    quat_indx,
+                    ob.detdata[quats_name].data,
+                    weight_indx,
+                    weight_data,
+                    hwp_data,
+                    ob.intervals[self.view].data,
+                    det_epsilon,
+                    det_gamma,
+                    np.array(self.mueller),
+                    cal,
+                    bool(self.IAU),
+                    include_V=False,
                 )
             else:
                 raise RuntimeError(f"Unexpected mode: {self.mode}")
