@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -547,8 +547,8 @@ class Noise(object):
                     maxstr = max(maxstr, len(strm))
                     mixdata.append((det, strm, weight))
             maxstr += 1
-            mixdtype = np.dtype(f"a{maxstr}, a{maxstr}, f4")
-            wtdtype = np.dtype(f"a{maxstr}, f4")
+            mixdtype = np.dtype(f"S{maxstr}, S{maxstr}, f4")
+            wtdtype = np.dtype(f"S{maxstr}, f4")
             n_mix = len(mixdata)
             n_det = len(props["dets"])
             wtunit = props["weights"][props["dets"][0]].unit
@@ -670,7 +670,7 @@ class Noise(object):
                 inds = hf.create_dataset(
                     f"{fhash}_indices", (meta["n_psd"],), dtype=np.uint32
                 )
-                keytype = np.dtype(f"a{maxstr}")
+                keytype = np.dtype(f"S{maxstr}")
                 kds = hf.create_dataset(
                     f"{fhash}_keys", (meta["n_psd"],), dtype=keytype
                 )
