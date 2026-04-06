@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -251,7 +251,7 @@ class AnalyticNoise(Noise):
         ds = None
         if handle is not None:
             # Write the noise model parameters as a dataset
-            adtype = np.dtype(f"a{maxstr}, f8, f8, f8, f8, f8")
+            adtype = np.dtype(f"S{maxstr}, f8, f8, f8, f8, f8")
             ds = handle.create_dataset("analytic", (n_det,), dtype=adtype)
         if gcomm is not None:
             gcomm.barrier()
