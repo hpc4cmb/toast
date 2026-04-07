@@ -439,6 +439,7 @@ def simulate_data(args, job, toast_comm, telescope, schedule):
 
     # Simulate atmosphere
 
+    ops.sim_atmosphere.output_dir = args.out_dir
     ops.sim_atmosphere.detector_pointing = ops.det_pointing_azel
     if ops.sim_atmosphere.polarization_fraction != 0:
         ops.sim_atmosphere.detector_weights = ops.weights_azel

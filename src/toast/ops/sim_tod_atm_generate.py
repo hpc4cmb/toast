@@ -60,6 +60,11 @@ class GenerateAtmosphere(Operator):
         "atm_sim", help="Data key to store the dictionary of sims per session"
     )
 
+    output_dir = Unicode(
+        ".",
+        help="Write output data products to this directory",
+    )
+
     turnaround_interval = Unicode(
         "turnaround", allow_none=True, help="Interval name for turnarounds"
     )
@@ -672,6 +677,7 @@ class GenerateAtmosphere(Operator):
             node_comm=comm_node,
             node_rank_comm=comm_node_rank,
             corr_lim=self.corr_lim,
+            output_dir=self.output_dir,
         )
 
         msg = f"{prefix}SimulateAtmosphere:  Initialize atmosphere"
@@ -792,7 +798,7 @@ class GenerateAtmosphere(Operator):
             atmdata2d = atmdata.reshape(AZ.shape)
             my_snapshots.append((t, r, atmdata2d.copy()))
 
-        outdir = "snapshots"
+        outdir = os.path.join(self.output_dir, "snapshots")
         os.makedirs(outdir, exist_ok=True)
 
         if self.debug_snapshots:
