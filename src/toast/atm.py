@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -91,7 +91,7 @@ class AtmSim(object):
         corr_lim (float):  Truncate the element-element correlation function
             when it drops below this threshold.  This controls the number of
             correlated volume elements to imprint.
-
+        output_dir (str):  Output directory
     """
 
     def __init__(
@@ -132,6 +132,7 @@ class AtmSim(object):
         node_comm=None,
         node_rank_comm=None,
         corr_lim=1e-3,
+        output_dir=".",
     ):
         self._azmin = azmin.to_value(u.radian)
         self._azmax = azmax.to_value(u.radian)
@@ -173,6 +174,7 @@ class AtmSim(object):
         self._counter2 = self._counter2start
 
         self._corrlim = corr_lim
+        self._output_dir = output_dir
 
         self._ntask = 1
         self._rank = 0
@@ -1122,6 +1124,9 @@ class AtmSim(object):
 
     @function_timer
     def _initialize_kolmogorov(self):
+        """Derive a normalized correlation function from the Kolmogorov
+        spectrum"""
+
         log = Logger.get()
         timer = Timer()
         timer.start()
@@ -1129,6 +1134,8 @@ class AtmSim(object):
         # Size of interpolation grid
         self._nr = 1000
 
+        # Min/Max distances in the grid. We'll never need correlation
+        # function outside these limits
         self._rmin_kolmo = 0.0
         diag = np.sqrt(self._delta_x**2 + self._delta_y**2)
         self._rmax_kolmo = np.sqrt(diag**2 + self._delta_z**2) * 1.01
@@ -1149,37 +1156,53 @@ class AtmSim(object):
         if self._comm is not None:
             self._comm.Allreduce(MPI.IN_PLACE, [self._kolmo_y, MPI.DOUBLE], MPI.SUM)
 
-        # Normalize
+        # Normalize to unity at zero lag
 
         norm = 1.0 / self._kolmo_y[0]
         self._kolmo_y *= norm
 
+        # Output correlation function for debugging
+
         if (self._rank == 0) and self._write_debug:
-            with open("kolmogorov.txt", "w") as f:
+            fname_corr = os.path.join(self._output_dir, "kolmogorov.txt")
+            with open(fname_corr, "w") as f:
                 for ir in range(self._nr):
                     f.write(
-                        "{:.15e} {:.15e}\n".format(self._kolmo_x[ir], self._kolmo_y[ir])
+                        "{:.15e} {:.15e}\n".format(
+                            self._kolmo_x[ir], self._kolmo_y[ir]
+                        )
                     )
+            log.debug(f"Wrote Kolmogorov correlation in {fname_corr}")
 
         # Measure the correlation length
+
         icorr = self._nr - 1
         while np.absolute(self._kolmo_y[icorr]) < self._corrlim:
             icorr -= 1
         self._rcorr = self._kolmo_x[icorr]
 
-        log.debug_rank("Initialized Kolmogorov in", comm=self._comm, timer=timer)
+        log.debug_rank(
+            "Initialized Kolmogorov (corr_length = {self._rcorr}) in",
+            comm=self._comm,
+            timer=timer,
+        )
+
         return
 
     def get_repr(self):
         """Return string representation of local properties."""
         ret = ""
-        ret += f"  Az (deg) min = {np.degrees(self._azmin)}, max = {np.degrees(self._azmax)}, delta = {np.degrees(self._delta_az)}\n"
-        ret += f"  El (deg) min = {np.degrees(self._elmin)}, max = {np.degrees(self._elmax)}, delta = {np.degrees(self._delta_el)}\n"
-        ret += f"  Time (sec) min = {np.degrees(self._tmin)}, max = {np.degrees(self._tmax)}, delta = {np.degrees(self._delta_t)}\n"
+        ret += f"  Az (deg) min = {np.degrees(self._azmin)}, max = "
+        ret += f"{np.degrees(self._azmax)}, delta = {np.degrees(self._delta_az)}\n"
+        ret += f"  El (deg) min = {np.degrees(self._elmin)}, max = "
+        ret += f"{np.degrees(self._elmax)}, delta = {np.degrees(self._delta_el)}\n"
+        ret += f"  Time (sec) min = {np.degrees(self._tmin)}, max = "
+        ret += f"{np.degrees(self._tmax)}, delta = {np.degrees(self._delta_t)}\n"
         ret += f"  lmin (m) = {self._lmin_center} +/- {self._lmin_sigma}\n"
         ret += f"  lmax (m) = {self._lmax_center} +/- {self._lmax_sigma}\n"
         ret += f"  wind (m/s) = {self._w_center} +/- {self._w_sigma}\n"
-        ret += f"  wind dir (deg) = {np.degrees(self._wdir_center)} +/- {np.degrees(self._wdir_sigma)}\n"
+        ret += f"  wind dir (deg) = {np.degrees(self._wdir_center)} +/- "
+        ret += f"{np.degrees(self._wdir_sigma)}\n"
         ret += f"  z0 (m) = {self._z0_center} +/- {self._z0_sigma}\n"
         ret += f"  T0 (K) = {self._T0_center} +/- {self._T0_sigma}\n"
         ret += f"  RNG keys = {self._key1} / {self._key2}\n"

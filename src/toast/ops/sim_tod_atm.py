@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2023 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -108,6 +108,11 @@ class SimAtmosphere(Operator):
         123456, help="The component index to use for this atmosphere simulation"
     )
 
+    output_dir = Unicode(
+        ".",
+        help="Write output data products to this directory",
+    )
+
     lmin_center = Quantity(
         0.01 * u.meter, help="Kolmogorov turbulence dissipation scale center"
     )
@@ -165,7 +170,8 @@ class SimAtmosphere(Operator):
 
     n_bandpass_freqs = Int(
         100,
-        help="The number of sampling frequencies used when convolving the bandpass with atmosphere absorption and loading",
+        help="The number of sampling frequencies used when convolving the "
+        "bandpass with atmosphere absorption and loading",
     )
 
     cache_dir = Unicode(
@@ -328,6 +334,7 @@ class SimAtmosphere(Operator):
             shared_flags=self.shared_flags,
             shared_flag_mask=self.shared_flag_mask,
             output=atm_sim_key,
+            output_dir=self.output_dir,
             turnaround_interval=self.turnaround_interval,
             realization=self.realization,
             component=self.component,
