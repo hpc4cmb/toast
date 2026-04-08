@@ -391,3 +391,117 @@ class SimGroundTest(MPITestCase):
 
         close_data(data)
         del data
+
+    def test_load_pipe(self):
+        # Slow sampling
+        fp = fake_hexagon_focalplane(
+            n_pix=self.npix,
+            sample_rate=10.0 * u.Hz,
+        )
+
+        site = GroundSite("Atacama", "-22:57:30", "-67:47:10", 5200.0 * u.meter)
+
+        tele = Telescope("telescope", focalplane=fp, site=site)
+
+        sch_file = os.path.join(self.outdir, "exec_schedule.txt")
+        schedule = None
+
+        if self.comm is None or self.comm.rank == 0:
+            run_scheduler(
+                opts=[
+                    "--site-name",
+                    site.name,
+                    "--telescope",
+                    tele.name,
+                    "--site-lon",
+                    "{}".format(site.earthloc.lon.to_value(u.degree)),
+                    "--site-lat",
+                    "{}".format(site.earthloc.lat.to_value(u.degree)),
+                    "--site-alt",
+                    "{}".format(site.earthloc.height.to_value(u.meter)),
+                    "--patch",
+                    "small_patch,1,40,-40,44,-44",
+                    "--start",
+                    "2020-01-01 00:00:00",
+                    "--stop",
+                    "2020-01-01 12:00:00",
+                    "--out",
+                    sch_file,
+                    "--field-separator",
+                    "|",
+                ]
+            )
+            schedule = GroundSchedule()
+            schedule.read(sch_file)
+        if self.comm is not None:
+            schedule = self.comm.bcast(schedule, root=0)
+
+        # Sort the schedule to exercise that method
+        schedule.sort_by_RA()
+
+        data = Data(self.toastcomm)
+
+        # Build the loading pipe
+        detpointing = ops.PointingDetectorSimple()
+
+        load_pipe = ops.Pipeline(
+            operators = [
+                ops.Create(detdata=[("flags", "(1)", "uint8", None)]),
+                ops.DefaultNoiseModel(noise_model="noise_model"),
+                ops.ElevationNoise(
+                    noise_model="noise_model",
+                    out_model="el_weighted",
+                    detector_pointing=detpointing,
+                    noise_a=0.5,
+                    noise_c=0.5,
+                ),
+                ops.SimNoise(
+                    noise_model="el_weighted", det_data=defaults.det_data
+                ),
+            ]
+        )
+
+        sim_ground = ops.SimGround(
+            name="sim_ground",
+            telescope=tele,
+            schedule=schedule,
+            hwp_angle=defaults.hwp_angle,
+            hwp_rpm=1.0,
+            max_pwv=5 * u.mm,
+            load_pipe=load_pipe,
+            det_data=None,
+            det_flags=None,
+        )
+        sim_ground.apply(data)
+
+        # Expand pointing and make a hit map.
+
+        pixels = ops.PixelsHealpix(
+            nest=True,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+
+        pixels.nside_submap = 8
+        pixels.nside = 512
+        pixels.apply(data)
+
+        build_hits = ops.BuildHitMap(pixel_dist="pixel_dist", pixels=pixels.pixels)
+        build_hits.load_apply(data)
+
+        # Plot the hits
+
+        hit_path = os.path.join(self.outdir, "hits.fits")
+        data[build_hits.hits].write(hit_path)
+
+        if data.comm.world_rank == 0:
+            set_matplotlib_backend()
+            import matplotlib.pyplot as plt
+
+            hits = hp.read_map(hit_path, field=None, nest=pixels.nest)
+            outfile = os.path.join(self.outdir, "hits.png")
+            hp.mollview(hits, xsize=1600, max=50, nest=pixels.nest)
+            plt.savefig(outfile)
+            plt.close()
+
+        close_data(data)
