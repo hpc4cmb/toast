@@ -9,18 +9,10 @@ from astropy import units as u
 try:
     from ducc0 import totalconvolve
 
-    ducc_available = True
-except (ModuleNotFoundError, ImportError) as e:
-    ducc_available = False
-import healpy as hp
-from pshmem import MPIShared
-
-from .. import qarray as qa
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
-from ..timing import Timer, function_timer
-from ..traits import (Bool, Instance, Int, List, Quantity, Unicode, Unit,
-                      trait_docs)
+from ..timing import function_timer, Timer
+from ..traits import Bool, Instance, Int, List, Quantity, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .operator import Operator
 from .pipeline import Pipeline
