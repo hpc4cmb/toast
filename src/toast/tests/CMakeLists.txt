@@ -46,6 +46,7 @@ install(FILES
     ops_memory_counter.py
     ops_scan_map.py
     ops_interpolate_healpix.py
+    ops_scan_alm.py
     ops_scan_healpix.py
     ops_scan_healpix_detector.py
     ops_scan_wcs.py

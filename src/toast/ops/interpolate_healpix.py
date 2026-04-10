@@ -157,6 +157,7 @@ class InterpolateHealpixMap(Operator):
             self.file_names = self.file.split(";")
             nmap = len(self.file_names)
             self.maps = []
+
         self.det_data_keys = self.det_data.split(";")
         nkey = len(self.det_data_keys)
         if nkey != 1 and (nmap != nkey):
@@ -260,6 +261,4 @@ class InterpolateHealpixMap(Operator):
 
     def _provides(self):
         prov = {"global": list(), "detdata": [self.det_data]}
-        if self.save_map:
-            prov["global"] = self.map_names
         return prov
