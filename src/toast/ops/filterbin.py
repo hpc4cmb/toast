@@ -1788,20 +1788,14 @@ class FilterBin(Operator):
         """Extract useful information from the data object to record in
         map headers"""
         extra_header = {}
-        start = None
-        stop = None
+        start = 1e100
+        stop = -1e100
         all_dets = set()
         good_dets = set()
         for ob in data.obs:
             times = ob.shared[self.times].data
-            if start is None:
-                start = times[0]
-            else:
-                start = min(start, times[0])
-            if stop is None:
-                stop = times[-1]
-            else:
-                stop = max(stop, times[-1])
+            start = min(start, times[0])
+            stop = max(stop, times[-1])
             all_dets.update(ob.select_local_detectors(detectors))
             good_dets.update(
                 ob.select_local_detectors(detectors, flagmask=self.det_mask)
