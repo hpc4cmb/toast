@@ -118,6 +118,7 @@ class ScanAlmTest(MPITestCase):
                 rms2 = np.std(sig2)
                 rmsdiff = np.std(sig1 - sig2)
                 if rms1 < 1e-12:
+                    # Empty signal, cannot compare relative power
                     continue
                 assert np.abs(rms1 / rms2 - 1) < 1e-3
                 assert np.abs(rmsdiff / rms1) < 1e-1
