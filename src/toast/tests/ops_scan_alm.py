@@ -11,12 +11,8 @@ from astropy import units as u
 
 from .. import ops as ops
 from ..observation import default_values as defaults
-from .helpers import (
-    close_data,
-    create_fake_healpix_scanned_tod,
-    create_outdir,
-    create_satellite_data,
-)
+from .helpers import (close_data, create_fake_healpix_scanned_tod,
+                      create_outdir, create_satellite_data)
 from .mpi import MPITestCase
 
 
@@ -26,7 +22,16 @@ class ScanAlmTest(MPITestCase):
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
         np.random.seed(123456)
 
-    def test_scan(self):
+    def test_scan_I(self):
+        self._test_scan(mode="I")
+
+    def test_scan_QU(self):
+        self._test_scan(mode="QU")
+
+    def test_scan_IQU(self):
+        self._test_scan(mode="IQU")
+
+    def _test_scan(self, mode):
         if not ops.scan_alm.ducc_available:
             print("ducc0.totalconvolve is not available skipping tests")
             return
@@ -41,33 +46,42 @@ class ScanAlmTest(MPITestCase):
             create_dist="pixel_dist",
             detector_pointing=detpointing,
         )
-        pixels.apply(data)
-        weights = ops.StokesWeights(
+        # pixels.apply(data)
+        weights_scan = ops.StokesWeights(
             mode="IQU",
             hwp_angle=defaults.hwp_angle,
             detector_pointing=detpointing,
         )
-        weights.apply(data)
+        # weights.apply(data)
 
         # Create fake polarized sky signal
-        hpix_file = os.path.join(self.outdir, "fake.fits")
+
+        scales = []
+        for stokes in "IQU":
+            if stokes in mode:
+                scales.append(1.0)
+            else:
+                scales.append(0.0)
+
+        hpix_file = os.path.join(self.outdir, f"fake_{mode}.fits")
         map_key = "fake_map"
         create_fake_healpix_scanned_tod(
             data,
             pixels,
-            weights,
+            weights_scan,
             hpix_file,
             "pixel_dist",
             map_key=map_key,
             fwhm=30.0 * u.degree,
             lmax=3 * pixels.nside,
-            I_scale=0.001,
-            Q_scale=0.0001,
-            U_scale=0.0001,
+            I_scale=scales[0],
+            Q_scale=scales[1],
+            U_scale=scales[2],
             det_data=defaults.det_data,
         )
 
         # Expand the input map in spherical harmonics
+
         m = hp.read_map(hpix_file, None)
         nside = hp.get_nside(m)
         lmax = 2 * nside
@@ -77,12 +91,20 @@ class ScanAlmTest(MPITestCase):
             raise RuntimeError("Failed to synthesize an alm file name")
         hp.write_alm(alm_file, alm, out_dtype=np.complex64, lmax=lmax)
 
-        # Interpolate the map from the file
+        # Scan the alm from the file
+
+        weights_alm = ops.StokesWeights(
+            mode=mode,
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+            weights="weights_alm",
+        )
+
         scan_alm = ops.ScanAlm(
             file=alm_file,
             det_data="interp_data",
             detector_pointing=detpointing,
-            stokes_weights=weights,
+            stokes_weights=weights_alm,
         )
         scan_alm.apply(data)
 
@@ -90,10 +112,14 @@ class ScanAlmTest(MPITestCase):
 
         for ob in data.obs:
             for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
-                np.testing.assert_almost_equal(
-                    ob.detdata[defaults.det_data][det],
-                    ob.detdata["interp_data"][det],
-                    decimal=1,
-                )
+                sig1 = ob.detdata[defaults.det_data][det]
+                sig2 = ob.detdata["interp_data"][det]
+                rms1 = np.std(sig1)
+                rms2 = np.std(sig2)
+                rmsdiff = np.std(sig1 - sig2)
+                if rms1 < 1e-12:
+                    continue
+                assert np.abs(rms1 / rms2 - 1) < 1e-3
+                assert np.abs(rmsdiff / rms1) < 1e-1
 
         close_data(data)
