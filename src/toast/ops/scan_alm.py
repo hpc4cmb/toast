@@ -308,7 +308,6 @@ class ScanAlm(Operator):
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
-            focalplane = ob.telescope.focalplane
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
                 # Nothing to do for this observation
@@ -320,11 +319,6 @@ class ScanAlm(Operator):
                 )
                 if self.zero:
                     ob.detdata[key].reset()
-
-            if self.stokes_weights.hwp_angle is None:
-                hwp_angle = None
-            else:
-                hwp_angle = ob.shared[self.stokes_weights.hwp_angle].data
 
             ob_data = data.select(obs_name=ob.name)
             for det in dets:
