@@ -80,16 +80,21 @@ class ScanAlmTest(MPITestCase):
             det_data=defaults.det_data,
         )
 
-        # Expand the input map in spherical harmonics
+        # Expand the input map in spherical harmonics on root process
 
-        m = hp.read_map(hpix_file, None)
-        nside = hp.get_nside(m)
-        lmax = 2 * nside
-        alm = hp.map2alm(m, lmax=lmax, iter=0, pol=True)
         alm_file = hpix_file.replace(".fits", ".alm.fits")
-        if hpix_file == alm_file:
-            raise RuntimeError("Failed to synthesize an alm file name")
-        hp.write_alm(alm_file, alm, out_dtype=np.complex64, lmax=lmax)
+
+        if data.comm.comm_world is None or data.comm.comm_world.rank == 0:
+            m = hp.read_map(hpix_file, None)
+            nside = hp.get_nside(m)
+            lmax = 2 * nside
+            alm = hp.map2alm(m, lmax=lmax, iter=0, pol=True)
+            if hpix_file == alm_file:
+                raise RuntimeError("Failed to synthesize an alm file name")
+            hp.write_alm(alm_file, alm, out_dtype=np.complex64, lmax=lmax)
+
+        if data.comm.comm_world is not None:
+            data.comm.comm_world.Barrier()
 
         # Scan the alm from the file
 
