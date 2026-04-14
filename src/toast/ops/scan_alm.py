@@ -296,6 +296,10 @@ class ScanAlm(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
+        if not ducc_available:
+            msg = "ScanAlm requires ducc0"
+            raise RuntimeError(msg)
+
         for trait in ("detector_pointing", "stokes_weights"):
             if getattr(self, trait) is None:
                 msg = f"You must set the '{trait}' trait before calling exec()"
