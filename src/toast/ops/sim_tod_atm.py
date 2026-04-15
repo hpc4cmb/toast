@@ -278,13 +278,13 @@ class SimAtmosphere(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if not available_utils:
+        if self.enabled and not available_utils:
             log = Logger.get()
             msg = "TOAST was compiled without the libaatm library, which is "
             msg += "required for observations of simulated atmosphere."
             log.error(msg)
             raise RuntimeError(msg)
-        if not available_atm:
+        if self.enabled and not available_atm:
             log = Logger.get()
             msg = "TOAST was compiled without the SuiteSparse package, which is "
             msg += "required for observations of simulated atmosphere."
