@@ -251,7 +251,8 @@ def azel_to_radec(
         azel (array):  The Az / El boresight quaternions.
         use_ephem (bool):  Use pyephem instead of astropy
         use_qpoint (bool):  Use qpoint instead of astropy
-        so3g_compat_mode (bool):  Provide pointing maximally compatible with so3g
+        so3g_compat_mode (bool):  Provide pointing maximally compatible with so3g.
+            Overrides `use_ephem` and `use_qpoint`
 
     Returns:
         (array):  The RA / DEC boresight quaternions.
