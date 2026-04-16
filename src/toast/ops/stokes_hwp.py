@@ -31,14 +31,14 @@ def stokes_weights_hwp_model_nominal(
     In this model, all detectors have the same Mueller matrix coefficients,
     regardless of incidence angle.
 
-    There are 15 non-zero elements in the pointing matrix in this case.
+    There are 9 non-zero elements in the pointing matrix in this case.
 
     """
     if IAU:
         U_sign = 1.0
     else:
         U_sign = -1.0
-
+    print('AO gamma =', gamma)
     zaxis = np.array([0, 0, 1], dtype=np.float64)
     xaxis = np.array([1, 0, 0], dtype=np.float64)
     for idet in range(len(quat_index)):
@@ -78,32 +78,14 @@ def stokes_weights_hwp_model_nominal(
             omega = alpha + hwp - gamma[idet]
 
             # Compute all intermediate trig arrays we need.
-
-            sin2alpha = np.sin(2.0 * alpha)
             cos2alpha = np.cos(2.0 * alpha)
-            sin2omega = np.sin(2.0 * omega)
+            sin2alpha = np.sin(2.0 * alpha)
             cos2omega = np.cos(2.0 * omega)
-            sin4omega = np.sin(4.0 * omega)
-            cos4omega = np.cos(4.0 * omega)
-
-            # Assign values of the pointing matrix.  The weights are
-            # (see notebook doc):
-            #
-            # 1
-            # sin(2 * alpha)
-            # cos(2 * alpha)
-            # sin(2 * omega)
-            # cos(2 * omega)
-            # sin(2 * (alpha - omega))
-            # cos(2 * (alpha - omega))
-            # sin(2 * alpha) * sin(2 * omega)**2
-            # cos(2 * alpha) * sin(2 * omega)**2
-            # sin(2 * alpha) * sin(2 * omega) * cos(2 * omega)
-            # cos(2 * alpha) * sin(2 * omega) * cos(2 * omega)
-            # sin(2 * alpha) * sin(4 * omega)
-            # cos(2 * alpha) * sin(4 * omega)
-            # sin(2 * alpha) * cos(4 * omega)
-            # cos(2 * alpha) * cos(4 * omega)
+            sin2omega = np.sin(2.0 * omega)
+            cos2alpha2omega = np.cos(2.0 * alpha - 2.0 * omega)
+            sin2alpha2omega = np.sin(2.0 * alpha - 2.0 * omega)
+            cos2alpha4omega = np.cos(2.0 * alpha - 4.0 * omega)
+            sin2alpha4omega = np.sin(2.0 * alpha - 4.0 * omega)
 
             # FIXME:  Ignore the cross-polar response (eta) for now.
             weights[widx][samples, 0] = 1.0
@@ -111,16 +93,10 @@ def stokes_weights_hwp_model_nominal(
             weights[widx][samples, 2] = cos2alpha
             weights[widx][samples, 3] = sin2omega
             weights[widx][samples, 4] = cos2omega
-            weights[widx][samples, 5] = np.sin(2.0 * (alpha - omega))
-            weights[widx][samples, 6] = np.cos(2.0 * (alpha - omega))
-            weights[widx][samples, 7] = sin2alpha * sin2omega**2
-            weights[widx][samples, 8] = cos2alpha * sin2omega**2
-            weights[widx][samples, 9] = sin2alpha * sin2omega * cos2omega
-            weights[widx][samples, 10] = cos2alpha * sin2omega * cos2omega
-            weights[widx][samples, 11] = sin2alpha * sin4omega
-            weights[widx][samples, 12] = cos2alpha * sin4omega
-            weights[widx][samples, 13] = sin2alpha * cos4omega
-            weights[widx][samples, 14] = cos2alpha * cos4omega
+            weights[widx][samples, 5] = cos2alpha2omega
+            weights[widx][samples, 6] = sin2alpha2omega
+            weights[widx][samples, 7] = cos2alpha4omega
+            weights[widx][samples, 8] = sin2alpha4omega
 
             # Apply overall calibration
             weights[widx][samples, :] *= cal[idet]
@@ -194,77 +170,50 @@ def stokes_weights_hwp_model_mueller(
 
             # Compute all intermediate trig arrays we need in multiple places.
 
-            sin2alpha = np.sin(2.0 * alpha)
             cos2alpha = np.cos(2.0 * alpha)
-            sin2omega = np.sin(2.0 * omega)
+            sin2alpha = np.sin(2.0 * alpha)
             cos2omega = np.cos(2.0 * omega)
-            sin4omega = np.sin(4.0 * omega)
-            cos4omega = np.cos(4.0 * omega)
-
-            sin2amo = np.sin(2.0 * (alpha - omega))
-            cos2amo = np.cos(2.0 * (alpha - omega))
+            sin2omega = np.sin(2.0 * omega)
+            cos2alpha2omega = np.cos(2.0 * alpha - 2.0 * omega)
+            sin2alpha2omega = np.sin(2.0 * alpha - 2.0 * omega)
+            cos2alpha4omega = np.cos(2.0 * alpha - 4.0 * omega)
+            sin2alpha4omega = np.sin(2.0 * alpha - 4.0 * omega)
 
             # Assign values of the pointing matrix. (see notebook doc)
 
             # Stokes I
             weights[widx][samples, 0] = (
                 mueller[0, 0]
-                + mueller[1, 0] * eta * cos2amo
-                + mueller[2, 0] * eta * sin2amo
+                + eta  * mueller[1, 0] * cos2alpha2omega
+                - eta * mueller[2, 0] * sin2alpha2omega
             )
 
             # Stokes Q
             weights[widx][samples, 1] = (
-                mueller[0, 1] * cos2omega
-                + mueller[0, 2] * sin2omega
-                + 0.5 * mueller[1, 1] * eta * (
-                    sin2alpha * sin4omega +
-                    cos2alpha * (cos4omega + 1.0)
-                )
-                + mueller[1, 2] * eta * (
-                    sin2omega * (
-                        sin2alpha * sin2omega +
-                        cos2alpha * cos2omega
-                    )
-                )
-                - 0.5 * mueller[2, 1] * eta * (
-                    sin2alpha * (cos4omega + 1)
-                    - cos2alpha * sin4omega
-                )
-                - mueller[2, 2] * eta * sin2omega * (
-                    sin2alpha * cos2omega
-                    - cos2alpha * sin2omega
-                )
+                cos2omega * mueller[0, 1]
+                + sin2omega * mueller[0, 2]
+                + 0.5 * eta * cos2alpha * (mueller[1, 1] + mueller[2, 2])
+                + 0.5 * eta * sin2alpha * (mueller[1, 2] - mueller[2, 1])
+                + 0.5 * eta * cos2alpha4omega * (mueller[1, 1] - mueller[2, 2])
+                - 0.5 * eta * sin2alpha4omega * (mueller[1, 2] + mueller[2, 1])
             )
 
             # Stokes U
             weights[widx][samples, 2] = (
-                - mueller[0, 1] * sin2omega
-                + mueller[0, 2] * cos2omega
-                - mueller[1, 1] * eta * sin2omega * (
-                    sin2alpha * sin2omega
-                    + cos2alpha * cos2omega
-                )
-                + 0.5 * mueller[1, 2] * eta * (
-                    sin2alpha * sin4omega
-                    + cos2alpha * (cos4omega + 1)
-                )
-                + mueller[2, 1] * eta * sin2omega * (
-                    sin2alpha * cos2omega
-                    - cos2alpha * sin2omega
-                )
-                - 0.5 * mueller[2, 2] * eta * (
-                    sin2alpha * (cos4omega + 1)
-                    - cos2alpha * sin4omega
-                )
+                cos2omega * mueller[0, 2]
+                - sin2omega * mueller[0, 1]
+                + 0.5 * eta * cos2alpha * (mueller[1, 2] - mueller[2, 1])
+                - 0.5 * eta * sin2alpha * (mueller[1, 1] + mueller[2, 2])
+                + 0.5 * eta * cos2alpha4omega * (mueller[1, 2] + mueller[2, 1])
+                + 0.5 * eta * sin2alpha4omega * (mueller[1, 1] - mueller[2, 2])
             ) * U_sign
 
             # Stokes V
             if include_V:
                 weights[widx][samples, 3] = (
                     mueller[0, 3]
-                    + mueller[1, 3] * eta * cos2amo
-                    - mueller[2, 3] * eta * sin2amo
+                    + mueller[1, 3] * eta * cos2alpha2omega
+                    - mueller[2, 3] * eta * sin2alpha2omega
                 )
 
             # Apply overall calibration
@@ -361,7 +310,7 @@ class StokesWeightsHWP(Operator):
 
         # Compute the number of non-zeros in the pointing matrix
         if self.mode == "nominal":
-            self._nnz = 15
+            self._nnz = 9
         elif self.mode == "mueller":
             self._nnz = 3
 
