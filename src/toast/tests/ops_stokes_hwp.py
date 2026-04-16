@@ -207,11 +207,14 @@ class StokesWeightsHWPTest(MPITestCase):
             nrows=n_row,
             ncols=n_col,
             figsize=(n_col * panel_inches, n_row * panel_inches),
-            dpi=50,
+            dpi=100,
         )
         iplot = 0
         for irow in range(n_row):
             for icol in range(n_col):
+                if iplot >= n_plot:
+                    axes[irow, icol].set_visible(False)
+                    continue
                 ax = axes[irow, icol]
                 cond = np.linalg.cond(pix_data[iplot])
                 im = ax.imshow(
@@ -228,7 +231,7 @@ class StokesWeightsHWPTest(MPITestCase):
     def test_nominal(self):
         testdir = os.path.join(self.outdir, "nominal")
         if self.comm is None or self.comm.rank == 0:
-            os.makedirs(testdir)
+            os.makedirs(testdir, exist_ok=True)
 
         data = self.create_test_data(testdir)
         rank = 0
@@ -274,12 +277,12 @@ class StokesWeightsHWPTest(MPITestCase):
 
         if rank == 0:
             file_root = os.path.join(testdir, mapper.name)
-            self.plot_results(file_root, 15)
+            self.plot_results(file_root, 9)
 
     def test_mueller_ideal(self):
         testdir = os.path.join(self.outdir, "mueller_ideal")
         if self.comm is None or self.comm.rank == 0:
-            os.makedirs(testdir)
+            os.makedirs(testdir, exist_ok=True)
 
         data = self.create_test_data(testdir)
         rank = 0
