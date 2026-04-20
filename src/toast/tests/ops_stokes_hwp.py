@@ -18,6 +18,7 @@ from .helpers import (
     create_fake_healpix_scanned_tod,
 )
 from .mpi import MPITestCase
+from ..ops.stokes_hwp import get_group_a_detectors
 
 
 class StokesWeightsHWPTest(MPITestCase):
@@ -360,3 +361,69 @@ class StokesWeightsHWPTest(MPITestCase):
                 miqu = read_healpix(f"{iqu_root}_map.fits", field=imap, nest=True)
                 mhwp = read_healpix(f"{hwp_root}_map.fits", field=imap, nest=True)
                 self.assertTrue(np.allclose(mhwp[good], miqu[good]))
+
+    def test_pair_diff(self):
+        testdir = os.path.join(self.outdir, "pair_diff")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir, exist_ok=True)
+
+        data = self.create_test_data(testdir)
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        pair_block_size = 8
+
+        # Shared pointing model for both groups
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=self.nside,
+            detector_pointing=detpointing,
+        )
+
+        file_roots = []
+        for i, pair_group in enumerate(["0_90", "45_135"]):
+            a_dets = get_group_a_detectors( # Compute A detectors globally so the mapmaker only processes them
+                data.obs[0].telescope.focalplane, pair_group
+            )
+
+            weights = ops.StokesWeightsHWP(
+                mode="pair_diff",
+                detector_pointing=detpointing,
+                pair_block_size=pair_block_size,
+                pair_group=pair_group,
+                det_data=defaults.det_data,
+                weights=f"weights_{pair_group}",
+            )
+
+            binner = ops.BinMap(
+                pixel_dist="pixel_dist",
+                pixel_pointing=pixels,
+                stokes_weights=weights,
+                noise_model="noise_model",
+            )
+
+            mapper = ops.MapMaker(
+                name=f"mapmaker_pair_diff_{pair_group}",
+                det_data=defaults.det_data,
+                binning=binner,
+                map_rcond_threshold=1.0e-15,
+                write_hits=True,
+                write_map=True,
+                write_noiseweighted_map=True,
+                write_invcov=True,
+                write_rcond=True,
+                output_dir=testdir,
+                # Rebuild pixel dist for every group except the first
+                reset_pix_dist=(i > 0),
+            )
+
+            mapper.apply(data, detectors=a_dets) # Pass only A dets, mapmaker ignores B dets
+            file_roots.append(os.path.join(testdir, mapper.name))
+
+        close_data(data)
+
+        if rank == 0:
+            for file_root in file_roots:
+                # 5 map components: DC, cos2omega, sin2omega, cos4omega, sin4omega
+                self.plot_results(file_root, 5)
