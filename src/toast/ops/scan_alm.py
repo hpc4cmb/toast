@@ -54,7 +54,7 @@ class ScanAlm(Operator):
     )
 
     alms = List(
-        None,
+        [],
         help="a_lms to scan.  If set, `file` must be None.",
     )
 
