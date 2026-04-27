@@ -27,7 +27,7 @@ from toast.utils import Environment, Logger
 import toast
 
 
-def load_map(fname, prefix="", cache=None, dtype=float):
+def load_map(fname, prefix="", cache=None, dtype=np.float64):
     log = Logger.get()
     timer = Timer()
     timer.start()
@@ -325,7 +325,7 @@ def main(
         dtype_hits = np.int64
     else:
         dtype = np.float32
-        dtype_hits = np.int32
+        dtype_hits = np.int64
 
     noiseweighted_sum = None
     invcov_sum = None
@@ -345,7 +345,7 @@ def main(
             continue
         log.info(prefix + f"Processing file {ifile + 1} / {nfile}")
         inmap, nnz_test, npix_test, good = load_map(
-            infile_map, prefix=prefix, cache=cache, dtype=float,
+            infile_map, prefix=prefix, cache=cache, dtype=np.float64,
         )
         if nnz is None:
             nnz = nnz_test
@@ -365,7 +365,7 @@ def main(
 
         if infile_invcov is not None:
             invcov, nnz2, npix_test, good_cov = load_map(
-                infile_invcov, prefix=prefix, cache=cache, dtype=float
+                infile_invcov, prefix=prefix, cache=cache, dtype=np.float64
             )
             ngood = good_cov.size
             fsky = ngood / npix
@@ -378,7 +378,7 @@ def main(
             # Inverse covariance does not exist. Load and invert the
             # covariance matrix
             cov, nnz2, npix_test, good_cov = load_map(
-                infile_cov, prefix=prefix, cache=cache, dtype=float
+                infile_cov, prefix=prefix, cache=cache, dtype=np.float64
             )
             ngood = good_cov.size
             fsky = ngood / npix
@@ -387,7 +387,7 @@ def main(
                 timer=timer1,
                 comm=None,
             )
-            rcond = np.zeros(ngood, dtype=float)
+            rcond = np.zeros(ngood, dtype=np.float64)
             log.info(prefix + f"Inverting matrix")
             cov = cov.T.ravel().copy()
             cov_eigendecompose_diag(ngood, 1, nnz, cov, rcond, args.rcond_limit, True)
@@ -437,7 +437,7 @@ def main(
         if have_hits:
             if infile_hits is not None:
                 hits, nnz3, npix_test, good_hits = load_map(
-                    infile_hits, prefix=prefix, cache=cache, dtype=int
+                    infile_hits, prefix=prefix, cache=cache, dtype=np.int64
                 )
                 if good_hits.size != good.size:
                     # Hits can include pixels that fail matrix
@@ -488,10 +488,10 @@ def main(
         invcov *= invcov_weight
 
         if noiseweighted_sum is None:
-            noiseweighted_sum = np.zeros([nnz, npix], dtype=float)
-            invcov_sum = np.zeros([nnz2, npix], dtype=float)
+            noiseweighted_sum = np.zeros([nnz, npix], dtype=np.float64)
+            invcov_sum = np.zeros([nnz2, npix], dtype=np.float64)
             if have_hits:
-                hits_sum = np.zeros([1, npix], dtype=int)
+                hits_sum = np.zeros([1, npix], dtype=np.int64)
 
         noiseweighted_sum[:, good] += inmap
         invcov_sum[:, good] += invcov
@@ -551,10 +551,10 @@ def main(
         ngood = np.sum(hit_pixels)
         fsky = ngood / npix
         if noiseweighted_sum is None:
-            noiseweighted_sum = np.zeros([nnz, ngood], dtype=float)
-            invcov_sum = np.zeros([nnz2, ngood], dtype=float)
+            noiseweighted_sum = np.zeros([nnz, ngood], dtype=np.float64)
+            invcov_sum = np.zeros([nnz2, ngood], dtype=np.float64)
             if have_hits:
-                hits_sum = np.zeros([1, ngood], dtype=float)
+                hits_sum = np.zeros([1, ngood], dtype=np.float64)
         else:
             noiseweighted_sum = noiseweighted_sum[:, good].copy()
             invcov_sum = invcov_sum[:, good].copy()
@@ -660,7 +660,7 @@ def main(
         ind = slice(first_pix, last_pix)
         my_map = noiseweighted_sum[:, ind].T.ravel().copy()
         my_cov = invcov_sum[:, ind].T.ravel().copy()
-        my_rcond = np.zeros(my_npix, dtype=float)
+        my_rcond = np.zeros(my_npix, dtype=np.float64)
         log.debug(prefix + f"Inverting {my_npix} pixels")
         cov_eigendecompose_diag(
             my_npix, 1, nnz, my_cov, my_rcond, args.rcond_limit, True
@@ -670,9 +670,9 @@ def main(
         my_map = my_map.reshape(my_npix, -1).T.copy()
         my_cov = my_cov.reshape(my_npix, -1).T.copy()
     else:
-        my_map = np.zeros([nnz, 0], dtype=float)
-        my_cov = np.zeros([nnz2, 0], dtype=float)
-        my_rcond = np.zeros([0], dtype=float)
+        my_map = np.zeros([nnz, 0], dtype=np.float64)
+        my_cov = np.zeros([nnz2, 0], dtype=np.float64)
+        my_rcond = np.zeros([0], dtype=np.float64)
 
     log.info_rank(prefix + "Inverted and applied covariance in", timer=timer, comm=comm)
 
