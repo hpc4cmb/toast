@@ -3348,7 +3348,8 @@ def add_side(corner1, corner2, corners_temp, coordconv):
 
     Add one side of a rectangle with enough interpolation points.
     """
-    step = np.radians(1)
+    step = np.radians(1)  # Sample the sides at every degree
+
     try:
         lon1, lon2 = np.unwrap([corner1.ra, corner2.ra])
         lat1 = corner1.dec
@@ -3358,10 +3359,17 @@ def add_side(corner1, corner2, corners_temp, coordconv):
         lat1 = corner1.lat
         lat2 = corner2.lat
 
-    dlon = lon2 - lon1
+    # Measure the actual displacement in the longitude direction
+    min_lat = np.min(np.abs(lat1), np.abs(lat2))
+    dlon = (lon2 - lon1) * np.cos(min_lat)
+
+    # Displacement in latitude direction needs no scaling
     dlat = lat2 - lat1
+
+    # Pick number of steps based on the larger displacement
     dang = max(np.abs(dlon), np.abs(dlat))
     nstep = max(2, int(dang / step) + 1)
+
     for lon, lat in zip(
             np.linspace(lon1, lon2, nstep),
             np.linspace(lat1, lat2, nstep),
