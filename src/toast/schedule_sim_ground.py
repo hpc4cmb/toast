@@ -3360,7 +3360,7 @@ def add_side(corner1, corner2, corners_temp, coordconv):
         lat2 = corner2.lat
 
     # Measure the actual displacement in the longitude direction
-    min_lat = np.min(np.abs(lat1), np.abs(lat2))
+    min_lat = min(np.abs(lat1), np.abs(lat2))
     dlon = (lon2 - lon1) * np.cos(min_lat)
 
     # Displacement in latitude direction needs no scaling
