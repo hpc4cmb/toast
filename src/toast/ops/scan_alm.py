@@ -324,7 +324,7 @@ class ScanAlm(Operator):
                     key, detectors=dets, create_units=self.det_data_units
                 )
                 if self.zero:
-                    ob.detdata[key][:] = 0
+                    ob.detdata[key].reset()
 
             ob_data = data.select(obs_name=ob.name)
             for det in dets:
