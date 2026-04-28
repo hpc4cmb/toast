@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -3348,29 +3348,33 @@ def add_side(corner1, corner2, corners_temp, coordconv):
 
     Add one side of a rectangle with enough interpolation points.
     """
-    step = np.radians(1)
-    lon1, lon2 = np.unwrap([corner1.ra, corner2.ra])
-    lat1 = corner1.dec
-    lat2 = corner2.dec
-    if lon1 == lon2:
-        lon = lon1
-        if lat1 < lat2:
-            lat_step = step
-        else:
-            lat_step = -step
-        for lat in np.arange(lat1, lat2, lat_step):
-            corners_temp.append(ephem.Equatorial(coordconv(lon, lat, epoch="2000")))
-    elif lat1 == lat2:
-        lat = lat1
-        if lon1 < lon2:
-            lon_step = step / np.cos(lat)
-        else:
-            lon_step = -step / np.cos(lat)
-        for lon in np.arange(lon1, lon2, lon_step):
-            corners_temp.append(ephem.Equatorial(coordconv(lon, lat, epoch="2000")))
-    else:
-        raise RuntimeError("add_side: both latitude and longitude change")
-    corners_temp.append(ephem.Equatorial(corner2))
+    step = np.radians(1)  # Sample the sides at every degree
+
+    try:
+        lon1, lon2 = np.unwrap([corner1.ra, corner2.ra])
+        lat1 = corner1.dec
+        lat2 = corner2.dec
+    except AttributeError:
+        lon1, lon2 = np.unwrap([corner1.lon, corner2.lon])
+        lat1 = corner1.lat
+        lat2 = corner2.lat
+
+    # Measure the actual displacement in the longitude direction
+    min_lat = min(np.abs(lat1), np.abs(lat2))
+    dlon = (lon2 - lon1) * np.cos(min_lat)
+
+    # Displacement in latitude direction needs no scaling
+    dlat = lat2 - lat1
+
+    # Pick number of steps based on the larger displacement
+    dang = max(np.abs(dlon), np.abs(dlat))
+    nstep = max(2, int(dang / step) + 1)
+
+    for lon, lat in zip(
+            np.linspace(lon1, lon2, nstep),
+            np.linspace(lat1, lat2, nstep),
+    ):
+        corners_temp.append(ephem.Equatorial(coordconv(lon, lat, epoch="2000")))
     return
 
 
