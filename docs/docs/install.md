@@ -35,8 +35,8 @@ purposes.  This allows you to update / delete individual environments as needed 
 not contaminating or breaking the base environment where the conda tools themselves
 live.
 
-If you already have a (possibly old) conda base environment, make sure it is up to date
-with:
+If you already have a (possibly old) conda-forge base environment, make sure it is up to
+date with:
 
     conda update --all -n base
 
@@ -51,13 +51,13 @@ dependendencies:
 
     cd toast ./platforms/conda_dev_setup.sh toast-dev 3.13 no
 
-!!!  note
+!!! note
 
     You can also replace a name like `toast-dev` with the full path to the environment
     location.  The python version is optional.  If you specify "yes" for the final
     argument, libmadam and libconviqt will also be installed.
 
-!!!  note
+!!! note
 
     The script above will install the default conda MPI package.  If you have a custom
     MPI compiler already, set the `MPICC` environment variable to that compiler before
@@ -73,13 +73,102 @@ Now we are ready to install the toast package.  You can install toast once with:
 
 This will compile all C++ sources and build a python wheel and then install that wheel.
 If you are actively hacking on the code, you can install in "development mode" which
-just installs links to the build directory.  In development mode, if you change compiled
-source files, these files will be recompiled on the next import.
+just installs links to the build directory. In development mode, if you change compiled
+source files, these files will be recompiled on the next import. To install in
+development / editable mode:
+
+    pip install -v -e .
+
+If you need to uninstall this editable version (for example to test out a new stable
+version from conda-forge, etc), just use pip to uninstall toast first.
 
 
-### OS Packages
+### OS Package Dependencies
 
-!!!  warning
+It is not possible to document installation instructions for every flavor of UNIX-like
+operating system. Here we outline the packages to install in a Debian / Ubuntu OS to
+provide all dependencies needed. Start by installing all required compiled dependencies:
 
-    To-Do: discuss list of OS packages to install, creation of a virtualenv using the
-    system python3, etc.
+    sudo apt update
+    sudo apt install \
+        build-essential \
+        cmake \
+        libfftw3-dev \
+        libopenblas-openmp-dev \
+        python3 \
+        python3-dev
+
+When we create our python environment later, we will usually want to install `mpi4py`,
+since most of the parallelism in TOAST makes extensive use of MPI. You should install an
+MPI flavor with your OS package manager so that mpi4py can find it later. The optional
+`libconviqt` and `libmadam` packages below will also need this. For example:
+
+    sudo apt install \
+        libmpich-dev \
+        mpich
+
+#### Optional:  Atmosphere Simulation
+
+If you want to simulate timestreams of atmospheric pickup, you will need to install
+several other compiled packages, including SuiteSparse and the AATM library. These need
+to be installed *before* installing TOAST. SuiteSparse is available as a package:
+
+    sudo apt install libsuitesparse-dev
+
+The `libaatm` package [can be found here](https://github.com/hpc4cmb/libaatm). Follow
+instructions to compile and install that into a location that can be found by your user
+account when installing TOAST.
+
+#### Create a Virtualenv and Install
+
+Make sure that the system python3 has the venv module:
+
+    sudo apt install python3-venv
+
+Using the system python3, create a virtualenv for our work and activate it:
+
+    python3 -m venv ~/toast-dev
+    source ~/toast-dev/bin/activate
+
+You almost certainly want to install `mpi4py` as well, although it is optional:
+
+    python3 -m pip install mpi4py
+
+Then install TOAST to that virtualenv
+
+    cd toast
+    pip install -v . # Optionally use '-e' for editable install
+
+#### Optional:  Beam Convolution with Conviqt
+
+The `libconviqt` package enables simulating timestreams from a 4-PI arbitrary beam
+convolution of the sky. That package [is available
+here](https://github.com/hpc4cmb/libconviqt). Follow instructions to compile and install
+the library and python interface into a location that can be found by your user account
+at run time. We install this *after* setting up our virtualenv so that we can install
+the python bindings into our virtualenv. Before installing `libconviqt` you should
+install CFITSIO:
+
+    sudo apt install libcfitsio-dev
+
+#### Optional:  Mapmaking with MADAM
+
+The MADAM destriping mapmaker was developed and used for Planck data analysis. TOAST
+includes a wrapper that can call the python interface to `libmadam` if it is available.
+You can [download the package here](https://github.com/hpc4cmb/libmadam). Libmadam
+requires the CFITSIO package as well.
+
+## Verifying the Installation
+
+You should always run the test suite (especially if you have compiled from source), just
+to verify that everything is working. Start by testing with one process and a couple
+threads to not overload your machine:
+
+    OMP_NUM_THREADS=2 python -c 'import toast.tests; toast.tests.run()'
+
+Then you can try using more processes. We do not routinely run the unit tests on more
+than 4 processes currently. Although they should work, some tests may not have
+sufficient amounts of data to distribute over many processes:
+
+    OMP_NUM_THREADS=2 mpirun -np 4 python -c 'import toast.tests; toast.tests.run()'
+

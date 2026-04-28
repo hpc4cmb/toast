@@ -1,0 +1,79 @@
+[project]
+site_name = "TOAST"
+site_url = "https://hpc4cmb.github.io/toast/"
+site_description = "Time Ordered Astrophysics Scalable Tools"
+site_author = "TOAST Developers"
+docs_dir = "docs"
+site_dir = "site"
+nav = [
+  {"Introduction" = "index.md"},
+  {"Installation" = "install.md"},
+  {"Tutorials" = [
+    "tutorials/index.md",
+    {"Data Model" = "tutorials/data_model.html"},
+    {"Sims on the Ground" = "tutorials/sim_ground.html"},
+  ]},
+  {"Recipes" = [
+    "recipes/index.md",
+  ]},
+  {"Design" = [
+    {"Pointing Model" = "design/pointing_weights.html"},
+  ]},
+  {"API Reference" = [
+    "reference/global.md",
+    "reference/instrument.md",
+    "reference/data.md",
+    "reference/simulation.md",
+    "reference/reduction.md",
+    "reference/tod_io.md",
+    "reference/map_domain.md",
+    "reference/workflow.md",
+    "reference/cli_tools.md",
+  ]},
+  {"For Developers" = [
+    "develop/index.md",
+  ]},
+]
+extra_javascript = [
+    "javascripts/mathjax.js",
+    "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"
+]
+
+[project.theme]
+variant = "modern"
+logo = "toast_logo_small.png"
+favicon = "toast_logo_small.png"
+features = [
+    "navigation.tabs",
+    "navigation.tabs.sticky",
+    "navigation.sections",
+    "navigation.expand",
+    "navigation.path",
+    "toc.follow",
+    #"navigation.prune"
+]
+
+[project.markdown_extensions.toc]
+toc_depth = 2
+
+[project.markdown_extensions.admonition]
+
+[project.markdown_extensions.pymdownx.details]
+
+[project.markdown_extensions.pymdownx.superfences]
+
+[project.markdown_extensions.pymdownx.arithmatex]
+generic = true
+
+[project.plugins.mkdocstrings.handlers.python]
+inventories = ["https://docs.python.org/3/objects.inv"]
+#paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "google"
+show_root_heading = true
+inherited_members = false
+show_source = true
+show_symbol_type_heading = true
+show_symbol_type_toc = true
+
