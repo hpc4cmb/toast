@@ -38,6 +38,16 @@ class Offset(Template):
     so we arrange our template amplitudes in "detector major" order and store offsets
     into this for each observation.
 
+    If a noise model is used, the baseline covariance is computed from the detector
+    timestream noise model.  In this case, the baselines are assumed to be fixed in
+    length and contiguous across the observation.  As a result, the "view" (if
+    specified) will only be used to select good data samples.
+
+    If a noise model is not used and a "view" is specified, then the definition of
+    the offset sample ranges is changed.  A new offset will start at the beginning
+    of each interval.  If the step_time is longer than the interval, it will be
+    truncated at the interval end.
+
     """
 
     # Notes:  The TraitConfig base class defines a "name" attribute.  The Template
@@ -121,6 +131,13 @@ class Offset(Template):
         if self.use_noise_prior and self.noise_model is None:
             raise RuntimeError("cannot use noise prior without specifying noise_model")
 
+        if self.use_noise_prior:
+            # We do not use the view to define the baseline boundaries
+            self._bounds_view = None
+        else:
+            # We allow the view to dictate the boundaries
+            self._bounds_view = self.view
+
         # Units for inverse variance weighting
         detnoise_units = 1.0 / self.det_data_units**2
 
@@ -130,6 +147,9 @@ class Offset(Template):
 
         # Amplitude lengths of all views for each obs
         self._obs_views = dict()
+
+        # The common flags for each observation based on the specified view
+        self._obs_view_flags = dict()
 
         # Sample rate for each obs.
         self._obs_rate = dict()
@@ -152,18 +172,19 @@ class Offset(Template):
 
             # Track number of offset amplitudes per view, per det.
             ob_views = list()
-            for view_slice in ob.view[self.view]:
-                view_len = None
-                if view_slice.start < 0:
-                    # This is a view of the whole obs
-                    view_len = ob.n_local_samples
-                else:
-                    view_len = view_slice.stop - view_slice.start
+            for vw in ob.intervals[self._bounds_view].data:
+                view_len = vw.last - vw.first
                 view_n_amp = view_len // step_length
                 if view_n_amp * step_length < view_len:
                     view_n_amp += 1
                 ob_views.append(view_n_amp)
             self._obs_views[iob] = np.array(ob_views, dtype=np.int64)
+
+            # Even if we are using a noise prior, we still use the "view"
+            # to exclude samples.  Compute that common flag vector now.
+            self._obs_view_flags[iob] = np.ones(ob.n_local_samples, dtype=bool)
+            for vw in ob.intervals[self.view]:
+                self._obs_view_flags[iob][vw.first : vw.last] = 0
 
             # The noise model.
             if self.noise_model is not None:
@@ -178,11 +199,21 @@ class Offset(Template):
                 if self.use_noise_prior:
                     obstime = ob.shared[self.times][-1] - ob.shared[self.times][0]
                     tbase = self.step_time.to_value(u.second)
-                    powmin = np.floor(np.log10(1 / obstime)) - 1
-                    powmax = min(
-                        np.ceil(np.log10(1 / tbase)) + 2, np.log10(self._obs_rate[iob])
-                    )
-                    self._freq[iob] = np.logspace(powmin, powmax, 1000)
+                    fbase = 1.0 / tbase
+                    # powmin = np.floor(np.log10(1 / obstime)) - 1
+                    # powmax = min(
+                    #     np.ceil(np.log10(1 / tbase)) + 2, np.log10(self._obs_rate[iob])
+                    # )
+                    # self._freq[iob] = np.logspace(powmin, powmax, 1000)
+                    n_filt = 2 * int(obstime / tbase)
+                    if n_filt == 0:
+                        # We have only one baseline in this observation.  Disable noise
+                        # prior use.
+                        self._freq[iob] = None
+                    else:
+                        while n_filt < self.precond_width + 1:
+                            n_filt *= 2
+                        self._freq[iob] = fbase * (1.0 + np.arange(n_filt - 1))
 
             # Build up detector list
             self._obs_dets[iob] = set()
@@ -256,15 +287,10 @@ class Offset(Template):
                     self.step_time.to_value(u.second), self._obs_rate[iob]
                 )
 
-                # Loop over views
-                views = ob.view[self.view]
-                for ivw, vw in enumerate(views):
-                    view_samples = None
-                    if vw.start < 0:
-                        # This is a view of the whole obs
-                        view_samples = ob.n_local_samples
-                    else:
-                        view_samples = vw.stop - vw.start
+                # Loop over boundary views
+                for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
+                    vw_slc = slice(vw.first, vw.last, 1)
+                    view_samples = vw.last - vw.first
                     n_amp_view = self._obs_views[iob][ivw]
 
                     # Move this loop to compiled code if it is slow...
@@ -276,37 +302,32 @@ class Offset(Template):
                             self._offsetvar[offset + amp] = 0.0
                             self._amp_flags[offset + amp] = True
                     else:
-                        if self.det_flags is None:
-                            voff = 0
-                            for amp in range(n_amp_view):
-                                amplen = step_length
-                                if amp == n_amp_view - 1:
-                                    amplen = view_samples - voff
+                        flags = np.array(
+                            self._obs_view_flags[iob][vw_slc], dtype=np.uint8
+                        )
+                        if self.det_flags is not None:
+                            flags[:] |= (
+                                ob.detdata[self.det_flags][det, vw_slc]
+                                & self.det_flag_mask
+                            )
+                        voff = 0
+                        for amp in range(n_amp_view):
+                            amplen = step_length
+                            if amp == n_amp_view - 1:
+                                amplen = view_samples - voff
+                            n_good = amplen - np.count_nonzero(
+                                flags[voff : voff + amplen]
+                            )
+                            if (n_good / amplen) <= self.good_fraction:
+                                # This detector is cut or too many samples flagged
+                                self._offsetvar[offset + amp] = 0.0
+                                self._amp_flags[offset + amp] = True
+                            else:
+                                # Keep this
                                 self._offsetvar[offset + amp] = 1.0 / (
-                                    detnoise * amplen
+                                    detnoise * n_good
                                 )
-                                voff += step_length
-                        else:
-                            flags = views.detdata[self.det_flags][ivw]
-                            voff = 0
-                            for amp in range(n_amp_view):
-                                amplen = step_length
-                                if amp == n_amp_view - 1:
-                                    amplen = view_samples - voff
-                                n_good = amplen - np.count_nonzero(
-                                    flags[det][voff : voff + amplen]
-                                    & self.det_flag_mask
-                                )
-                                if (n_good / amplen) <= self.good_fraction:
-                                    # This detector is cut or too many samples flagged
-                                    self._offsetvar[offset + amp] = 0.0
-                                    self._amp_flags[offset + amp] = True
-                                else:
-                                    # Keep this
-                                    self._offsetvar[offset + amp] = 1.0 / (
-                                        detnoise * n_good
-                                    )
-                                voff += step_length
+                            voff += step_length
                     offset += n_amp_view
 
         # Compute the amplitude noise filter and preconditioner for each detector
@@ -335,6 +356,9 @@ class Offset(Template):
                         self.step_time.to_value(u.second),
                         det,
                     )
+                    print("OFFSET PSD", flush=True)
+                    for frq, opsd in zip(self._freq[iob], offset_psd):
+                        print(f"{frq} {opsd}", flush=True)
 
                     if self.debug_plots is not None:
                         set_matplotlib_backend()
@@ -373,7 +397,7 @@ class Offset(Template):
                         ax.loglog(
                             self._freq[iob],
                             offset_psd,
-                            label=f"Offset PSD",
+                            label="Offset PSD",
                         )
                         ax.set_xlabel("Frequency [Hz]")
                         ax.set_ylabel("PSD [K$^2$ / Hz]")
@@ -406,20 +430,16 @@ class Offset(Template):
                         fprec = os.path.join(
                             self.debug_plots, f"{self.name}_{det}_{ob.name}_prec.pdf"
                         )
-                        figfilter = plt.figure(figsize=[12, 8])
-                        axfilter = figfilter.add_subplot(1, 1, 1)
+                        figfilter = plt.figure(figsize=[12, 12])
+                        axfilter = figfilter.add_subplot(2, 1, 1)
+                        axffilter = figfilter.add_subplot(2, 1, 2)
                         figprec = plt.figure(figsize=[12, 8])
                         axprec = figprec.add_subplot(1, 1, 1)
 
                     # Loop over views
-                    views = ob.view[self.view]
-                    for ivw, vw in enumerate(views):
-                        view_samples = None
-                        if vw.start < 0:
-                            # This is a view of the whole obs
-                            view_samples = ob.n_local_samples
-                        else:
-                            view_samples = vw.stop - vw.start
+                    for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
+                        vw_slc = slice(vw.first, vw.last, 1)
+                        view_samples = vw.last - vw.first
                         n_amp_view = self._obs_views[iob][ivw]
                         offsetvar_slice = self._offsetvar[offset : offset + n_amp_view]
 
@@ -438,11 +458,17 @@ class Offset(Template):
                         # methods, we should instead keep this filter in the fourier
                         # domain.
 
-                        noisefilter = self._truncate(
-                            np.fft.irfft(
-                                self._interpolate_psd(filterfreq, logfreq, logfilter)
-                            )
+                        fourierfilter = self._interpolate_psd(
+                            filterfreq, logfreq, logfilter
                         )
+                        print("Interpolated 1/offset_psd", flush=True)
+                        for frq, oval in zip(filterfreq, fourierfilter):
+                            print(f"{frq} {oval}", flush=True)
+
+                        noisefilter = self._truncate(np.fft.irfft(fourierfilter))
+                        print("Real space filter", flush=True)
+                        for val in noisefilter:
+                            print(f"{val}", flush=True)
 
                         self._filters[iob][det].append(noisefilter)
 
@@ -451,6 +477,11 @@ class Offset(Template):
                                 np.arange(len(noisefilter)),
                                 noisefilter,
                                 label=f"Noise filter {ivw}",
+                            )
+                            axffilter.plot(
+                                np.arange(len(fourierfilter)),
+                                fourierfilter,
+                                label=f"Fourier Noise filter {ivw}",
                             )
 
                         # Build the preconditioner
@@ -492,9 +523,7 @@ class Offset(Template):
                             good_cholesky = False
                             while not good_cholesky:
                                 wband = min(try_width, icenter)
-                                precond_width = max(
-                                    wband, min(try_width, n_amp_view)
-                                )
+                                precond_width = max(wband, min(try_width, n_amp_view))
                                 preconditioner = np.zeros(
                                     [precond_width, n_amp_view], dtype=np.float64
                                 )
@@ -618,7 +647,6 @@ class Offset(Template):
         """Compute the PSD of the baseline offsets."""
         psdfreq = noise.freq(det).to_value(u.Hz)
         psd = noise.psd(det).to_value(self.det_data_units**2 * u.second)
-        rate = noise.rate(det).to_value(u.Hz)
 
         # Remove the white noise component from the PSD
         psd = self._remove_white_noise(psdfreq, psd)
@@ -626,6 +654,8 @@ class Offset(Template):
         # Log PSD for interpolation
         logfreq = np.log(psdfreq)
         logpsd = np.log(psd)
+
+        print(f"OFFSET freq = {freq}", flush=True)
 
         # The calculation of `offset_psd` is based on Keihänen, E. et al:
         # "Making CMB temperature and polarization maps with Madam",
@@ -644,23 +674,23 @@ class Offset(Template):
             good = np.logical_not(bad)
             result = np.empty_like(x)
             result[bad] = 1.0
-            result[good] = np.sin(x[good]) ** 2 / x[good] ** 2
+            result[good] = (np.sin(x[good]) / x[good]) ** 2
             return result
 
         offset_psd = np.zeros_like(freq)
 
         # The m = 0 term
-        offset_psd = self._interpolate_psd(freq, logfreq, logpsd) * g(freq, 0)
+        offset_psd = self._interpolate_psd(np.log(freq), logfreq, logpsd) * g(freq, 0)
 
         # The remaining terms
         for m in range(1, m_max):
             # Positive m
             offset_psd[:] += self._interpolate_psd(
-                freq + m * fbase, logfreq, logpsd
+                np.log(freq + m * fbase), logfreq, logpsd
             ) * g(freq, m)
             # Negative m
             offset_psd[:] += self._interpolate_psd(
-                freq - m * fbase, logfreq, logpsd
+                np.log(freq - m * fbase), logfreq, logpsd
             ) * g(freq, -m)
 
         offset_psd *= fbase
@@ -676,7 +706,7 @@ class Offset(Template):
         return z
 
     def _step_length(self, stime, rate):
-        return int(stime * rate + 0.5)
+        return int(np.rint(stime * rate))
 
     @function_timer
     def _add_to_signal(self, detector, amplitudes, use_accel=None, **kwargs):
@@ -742,7 +772,7 @@ class Offset(Template):
                 amplitudes.local_flags,
                 det_indx[0],
                 ob.detdata[self.det_data].data,
-                ob.intervals[self.view].data,
+                ob.intervals[self._bounds_view].data,
                 impl=implementation,
                 use_accel=use_accel,
             )
@@ -775,16 +805,18 @@ class Offset(Template):
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         amp_offset = self._det_start[detector]
+
         for iob, ob in enumerate(self.data.obs):
             if detector not in self._obs_dets[iob]:
                 continue
             det_indx = ob.detdata[self.det_data].indices([detector])
             if self.det_flags is not None:
                 flag_indx = ob.detdata[self.det_flags].indices([detector])
-                flag_data = ob.detdata[self.det_flags].data
+                flag_data = np.copy(ob.detdata[self.det_flags].data)
             else:
                 flag_indx = np.array([-1], dtype=np.int32)
                 flag_data = np.zeros(1, dtype=np.uint8)
+            flag_data |= self.det_flag_mask * self._obs_view_flags[iob]
             # The step length for this observation
             step_length = self._step_length(
                 self.step_time.to_value(u.second), self._obs_rate[iob]
@@ -815,7 +847,7 @@ class Offset(Template):
                 n_amp_views,
                 amplitudes.local,
                 amplitudes.local_flags,
-                ob.intervals[self.view].data,
+                ob.intervals[self._bounds_view].data,
                 impl=implementation,
                 use_accel=use_accel,
             )
@@ -850,7 +882,8 @@ class Offset(Template):
             for iob, ob in enumerate(self.data.obs):
                 if det not in self._obs_dets[iob]:
                     continue
-                for ivw, vw in enumerate(ob.view[self.view].detdata[self.det_data]):
+
+                for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
                     n_amp_view = self._obs_views[iob][ivw]
                     amp_slice = slice(offset, offset + n_amp_view, 1)
                     amps_in = amplitudes_in.local[amp_slice]
@@ -862,12 +895,13 @@ class Offset(Template):
                             amps_in,
                             self._filters[iob][det][ivw],
                             mode="same",
-                            method="direct",
+                            method="fft",
                         )
 
                         if self.debug_plots is not None:
                             # Find the first unused file name in the sequence
                             iter = -1
+                            fname = None
                             while iter < 0 or os.path.isfile(fname):
                                 iter += 1
                                 fname = os.path.join(
@@ -923,15 +957,7 @@ class Offset(Template):
                     if det not in self._obs_dets[iob]:
                         continue
                     # Loop over views
-                    views = ob.view[self.view]
-                    for ivw, vw in enumerate(views):
-                        view_samples = None
-                        if vw.start < 0:
-                            # This is a view of the whole obs
-                            view_samples = ob.n_local_samples
-                        else:
-                            view_samples = vw.stop - vw.start
-
+                    for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
                         n_amp_view = self._obs_views[iob][ivw]
                         amp_slice = slice(offset, offset + n_amp_view, 1)
 
@@ -1041,7 +1067,7 @@ class Offset(Template):
                     amp_last = list()
                     amp_start = list()
                     amp_stop = list()
-                    for ivw, vw in enumerate(ob.intervals[self.view]):
+                    for ivw, vw in enumerate(ob.intervals[self._bounds_view]):
                         n_amp_view = self._obs_views[iob][ivw]
                         for istep in range(n_amp_view):
                             istart = vw.first + istep * step_length
@@ -1062,8 +1088,7 @@ class Offset(Template):
                 # Loop over views and extract per-detector amplitudes and flags
                 det_amps = list()
                 det_flags = list()
-                views = ob.view[self.view]
-                for ivw, vw in enumerate(views):
+                for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
                     n_amp_view = self._obs_views[iob][ivw]
                     amp_slice = slice(amp_offset, amp_offset + n_amp_view, 1)
                     det_amps.append(amplitudes.local[amp_slice])
