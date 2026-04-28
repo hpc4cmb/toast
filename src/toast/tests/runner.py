@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -62,6 +62,7 @@ from . import ops_pointing_detector as test_ops_pointing_detector
 from . import ops_pointing_healpix as test_ops_pointing_healpix
 from . import ops_pointing_wcs as test_ops_pointing_wcs
 from . import ops_polyfilter as test_ops_polyfilter
+from . import ops_scan_alm as test_ops_scan_alm
 from . import ops_scan_healpix as test_ops_scan_healpix
 from . import ops_scan_healpix_detector as test_ops_scan_healpix_detector
 from . import ops_scan_map as test_ops_scan_map
@@ -224,6 +225,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_mapmaker))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_map))
         suite.addTest(loader.loadTestsFromModule(test_ops_interpolate_healpix))
+        suite.addTest(loader.loadTestsFromModule(test_ops_scan_alm))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_healpix))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_healpix_detector))
         suite.addTest(loader.loadTestsFromModule(test_ops_scan_wcs))

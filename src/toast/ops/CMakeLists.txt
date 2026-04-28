@@ -35,6 +35,7 @@ install(FILES
     pointing.py
     pointing_detector_fp.py
     interpolate_healpix.py
+    scan_alm.py
     scan_healpix.py
     scan_healpix_detector.py
     scan_wcs.py
