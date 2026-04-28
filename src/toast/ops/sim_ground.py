@@ -195,7 +195,7 @@ class SimGround(Operator):
         0.0 * u.degree,
         allow_none=True,
         help="Add a per subscan extra phase to the sine modulation. If negative adds random phase."
-    ) 
+    )
 
     distribute_time = Bool(
         False,
@@ -364,23 +364,42 @@ class SimGround(Operator):
 
     @traitlets.validate("use_ephem")
     def _check_use_ephem(self, proposal):
+        log = Logger.get()
         use_ephem = proposal["value"]
         if use_ephem:
-            if self.use_qpoint or self.so3g_compat_mode:
+            if self.so3g_compat_mode:
+                log.warning("so3g_compat_mode overrides use_ephem=True")
+            elif self.use_qpoint:
                 raise traitlets.TraitError("Cannot use both ephem and qpoint")
+
         return use_ephem
 
     @traitlets.validate("use_qpoint")
     def _check_use_qpoint(self, proposal):
+        log = Logger.get()
         use_qpoint = proposal["value"]
+        if self.so3g_compat_mode:
+            if not use_qpoint:
+                log.warning("so3g_compat_mode overrides use_qpoint=False")
+        elif use_qpoint and self.use_ephem:
+            raise traitlets.TraitError("Cannot use both ephem and qpoint")
         if use_qpoint or self.so3g_compat_mode:
-            if self.use_ephem:
-                raise traitlets.TraitError("Cannot use both ephem and qpoint")
             try:
                 import qpoint
             except ModuleNotFoundError as e:
                 raise RuntimeError(f"Cannot use qpoint: '{e}'")
         return use_qpoint
+
+    @traitlets.validate("so3g_compat_mode")
+    def _check_use_qpoint(self, proposal):
+        log = Logger.get()
+        so3g_compat_mode = proposal["value"]
+        if so3g_compat_mode:
+            try:
+                import qpoint
+            except ModuleNotFoundError as e:
+                raise RuntimeError(f"Cannot use qpoint: '{e}'")
+        return so3g_compat_mode
 
     @traitlets.validate("schedule")
     def _check_schedule(self, proposal):
