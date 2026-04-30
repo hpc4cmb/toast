@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2021-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -125,6 +125,9 @@ class LoadHDF5(Operator):
 
         # Get our list of observation files and relative sizes for load-balancing
         obs_props = self._get_obs_props(data.comm.comm_world)
+        if len(obs_props) == 0:
+            msg = f"Did not find any observations to load"
+            raise RuntimeError(msg)
 
         # Distribute observations among groups
         obs_sizes = [x[0] for x in obs_props]
@@ -185,7 +188,8 @@ class LoadHDF5(Operator):
             if index_exists:
                 vindx = VolumeIndex(index_path)
             else:
-                msg = f"Volume index '{index_path}' does not exist, scanning filesystem for observations."
+                msg = f"Volume index '{index_path}' does not exist, "
+                msg += "scanning filesystem for observations."
                 log.warning_rank(msg, comm=comm)
                 vindx = None
 
@@ -225,6 +229,9 @@ class LoadHDF5(Operator):
                         # We have no index, just check the filesystem.  This is slow
                         # for many observations.  Use the number of samples for load
                         # balancing.
+                        if not os.path.isdir(self.volume):
+                            msg = f"{self.volume} is not a valid directory."
+                            raise RuntimeError(msg)
                         rel_files = VolumeIndex.find_observations(
                             self.volume, pattern_str=self.pattern
                         )
