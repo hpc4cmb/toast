@@ -25,7 +25,9 @@ class Data(MutableMapping):
 
     """
 
-    def __init__(self, comm=Comm(), view=False):
+    def __init__(self, comm=None, view=False):
+        if comm is None:
+            comm = Comm()
         self._comm = comm
         self._view = view
         self.obs = []
