@@ -93,6 +93,7 @@ install(FILES
     ops_example_ground.py
     ops_fill_gaps.py
     ops_extend_flags.py
+    ops_stokes_hwp.py
     DESTINATION ${PYTHON_SITE}/toast/tests
 )
 
