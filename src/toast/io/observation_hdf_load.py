@@ -583,6 +583,7 @@ def load_hdf5_obs_meta(
     parallel=False,
     log_prefix="",
     meta=None,
+    attrs=None,
     detectors=None,
     process_rows=None,
     det_select=None,
@@ -732,6 +733,10 @@ def load_hdf5_obs_meta(
         attr_group = hgroup["attr"]
         for obj_name in attr_group.keys():
             obj = attr_group[obj_name]
+            if attrs is not None and obj_name not in attrs:
+                # The user restricted the list of things to load, and this is
+                # not in the list.
+                continue
             if isinstance(obj, h5py.Group):
                 # This might be an object to restore
                 if "class" in obj.attrs:
@@ -803,6 +808,7 @@ def load_hdf5(
     comm,
     process_rows=None,
     meta=None,
+    attrs=None,
     detdata=None,
     shared=None,
     intervals=None,
@@ -823,6 +829,7 @@ def load_hdf5(
             in the detector direction.  This number must evenly divide into the size of
             comm.  If not specified, defaults to the size of the communicator.
         meta (list):  Only load this list of metadata objects.
+        attrs (list):  Only load this list of observation attributes.
         detdata (list):  Only load this list of detdata objects.
         shared (list):  Only load this list of shared objects.
         intervals (list):  Only load this list of intervals objects.
@@ -918,6 +925,7 @@ def load_hdf5(
         parallel=parallel,
         log_prefix="",
         meta=meta,
+        attrs=attrs,
         detectors=detectors,
         process_rows=process_rows,
         det_select=det_select,

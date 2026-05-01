@@ -44,13 +44,13 @@ echo "Using homebrew installation in ${brew_root}"
 # export CXX=clang++
 # export CFLAGS="-O3 -fPIC"
 # export CXXFLAGS="-O3 -fPIC -std=c++11 -stdlib=libc++"
-export CC=gcc-12
-export CXX=g++-12
+export CC=gcc-14
+export CXX=g++-14
 export CFLAGS="-O3 -fPIC"
 export CXXFLAGS="-O3 -fPIC -std=c++11"
 
 # Use homebrew python for development files and compiler
-eval ${brew_com} install python3 gcc@12
+eval ${brew_com} install python3 gcc@14
 
 brew_py="${brew_root}/opt/python@3/bin/python3"
 brew_py_ver=$(eval ${brew_py} --version | awk '{print $2}')
@@ -83,19 +83,7 @@ export DYLD_LIBRARY_PATH="${venv_path}/lib"
 export CPATH="${venv_path}/include"
 
 # Set up toast build options
-export TOAST_BUILD_CMAKE_C_COMPILER="${CC}"
-export TOAST_BUILD_CMAKE_CXX_COMPILER="${CXX}"
-export TOAST_BUILD_CMAKE_C_FLAGS="${CFLAGS} -I${venv_path}/include"
-export TOAST_BUILD_BLAS_LIBRARIES="-L${venv_path}/lib -lopenblas -fopenmp -lm -lgfortran"
-export TOAST_BUILD_LAPACK_LIBRARIES="-L${venv_path}/lib -lopenblas -fopenmp -lm -lgfortran"
-export TOAST_BUILD_CMAKE_CXX_FLAGS="${CXXFLAGS} -I${venv_path}/include"
-export TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
-export TOAST_BUILD_AATM_ROOT="${venv_path}"
-export TOAST_BUILD_FFTW_ROOT="${venv_path}"
-export TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS="${venv_path}/include"
-export TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS="${venv_path}/lib"
-export TOAST_BUILD_CMAKE_LIBRARY_PATH="${venv_path}/lib"
-export TOAST_BUILD_TOAST_STATIC_DEPS=ON
+export CMAKE_ARGS="-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_FLAGS='-O3 -fPIC' -DCMAKE_CXX_FLAGS='-O3 -fPIC -std=c++11 -stdlib=libc++' -DDISABLE_OPENMP=1 -DBLAS_LIBRARIES='-L/usr/local/lib -lopenblas -lm -lgfortran' -DLAPACK_LIBRARIES='-L/usr/local/lib -lopenblas -lm -lgfortran' -DTOAST_STATIC_DEPS=ON -DFFTW_ROOT=/usr/local -DAATM_ROOT=/usr/local -DSUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include -DSUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib CMAKE_LIBRARY_PATH='${venv_path}/lib'"
 
 # Now build a wheel
 pushd "${topdir}" >/dev/null 2>&1
@@ -113,7 +101,7 @@ delocate-listdeps ${input_wheel} \
 && delocate-wheel -w ${topdir} ${input_wheel}
 
 # Install it
-python3 -m pip install ${topdir}/${wheel_file}
+python3 -m pip install -v ${topdir}/${wheel_file}
 
 # Run tests
 python3 -c 'import toast.tests; toast.tests.run()'

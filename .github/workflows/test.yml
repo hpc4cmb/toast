@@ -83,15 +83,14 @@ jobs:
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate base \
-            && ./platforms/conda_dev_setup.sh toast ${{ matrix.python }} yes \
+            && ./conda_setup.sh -e toast -p ${{ matrix.python }} -x \
             && python3 -m pip install 'spt3g==1.0.0'
 
       - name: Install
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate toast \
-            && export TOAST_BUILD_DISABLE_OPENMP=${{ matrix.ompdisable }} \
-            && ./platforms/conda.sh
+            && pip install -v .
 
       - name: Run Serial Tests
         run: |

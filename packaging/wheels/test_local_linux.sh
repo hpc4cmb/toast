@@ -83,7 +83,7 @@ export TOAST_BUILD_CMAKE_LIBRARY_PATH="${venv_path}/lib"
 
 # Install it
 pushd "${topdir}" 2>&1 >/dev/null
-python3 -m pip install -vvv .
+python3 -m pip install -v .
 popd 2>&1 >/dev/null
 
 # Run tests

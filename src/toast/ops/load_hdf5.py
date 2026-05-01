@@ -74,6 +74,8 @@ class LoadHDF5(Operator):
 
     meta = List([], help="Only load this list of meta objects")
 
+    attrs = List([], help="Only load this list of observation attributes")
+
     detdata = List(
         [defaults.det_data, defaults.det_flags],
         help="Only load this list of detdata objects",
@@ -110,6 +112,10 @@ class LoadHDF5(Operator):
         if len(self.meta) > 0:
             meta_fields = list(self.meta)
 
+        attrs_fields = None
+        if len(self.attrs) > 0:
+            attrs_fields = list(self.attrs)
+
         shared_fields = None
         if len(self.shared) > 0:
             shared_fields = list(self.shared)
@@ -144,6 +150,7 @@ class LoadHDF5(Operator):
                 data.comm,
                 process_rows=self.process_rows,
                 meta=meta_fields,
+                attrs=attrs_fields,
                 detdata=detdata_fields,
                 shared=shared_fields,
                 intervals=intervals_fields,

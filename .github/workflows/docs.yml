@@ -1,23 +1,25 @@
-name:  Deploy Documentation
+name:  Documentation
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - '*'
+  release:
+    types: [ published ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  update_docs:
-    name: Build and Deploy Documentation
+  build_docs:
+    name: Build Documentation
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash -l {0}
     steps:
+      - name: Configure pages
+        uses: actions/configure-pages@v6
+
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -31,30 +33,54 @@ jobs:
             && conda activate base \
             && conda update -n base --yes conda
 
-      - name: Create Build Env
+      - name: Check Conda Config
         run: |
           source ~/conda/etc/profile.d/conda.sh \
-            && ./platforms/conda_dev_setup.sh docs 3.13
+            && conda activate base \
+            && conda info \
+            && conda list \
+            && conda config --show-sources \
+            && conda config --show
 
-      - name: Install Package
+      - name: Create Conda Env
+        run: |
+          source ~/conda/etc/profile.d/conda.sh \
+            && conda activate base \
+            && ./conda_setup.sh docs
+
+      - name: Install TOAST
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate docs \
-            && ./platforms/conda.sh \
-            && python3 -c 'import toast'
+            && pip install -v .
 
       - name: Install Doc Dependencies
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate docs \
-            && conda install --yes --file docs/doc_requirements.txt \
-            && pip install mkdocs-print-site-plugin \
-            && git config user.name 'github-actions[bot]' \
-            && git config user.email 'github-actions[bot]@users.noreply.github.com'
+            && pip install -r docs/doc_requirements.txt
 
-      - name: Deploy Docs
+      - name: Build Docs
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate docs \
-            && cd docs \
-            && mkdocs gh-deploy --force
+            && pushd docs \
+            && ./build.sh \
+            && popd
+
+      - name: Upload Docs
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/site
+
+  deploy_docs:
+    name: Deploy Documentation
+    needs: build_docs
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

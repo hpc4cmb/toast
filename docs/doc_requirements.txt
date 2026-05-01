@@ -1,8 +1,9 @@
-mkdocs
+zensical
 mkdocstrings
 mkdocstrings-python
-mkdocs-material
-mkdocs-jupyter>=0.24.7
 nbconvert
+nbformat
+nbstripout
 wurlitzer
 sympy
+seaborn

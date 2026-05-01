@@ -1,6 +1,200 @@
-# Minimal config to ensure that setuptools is available
-# before loading setup.py.  We have extensive build and
-# version customization in setup.py that we intentionally
-# do not put in this file.
+
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = [
+    "scikit-build-core >=0.11",
+    "pybind11 >=3.0",
+    "numpy",
+    "setuptools>=80",
+    "setuptools-scm>=8",
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "toast"
+dynamic = ["version"]
+description = "Time Ordered Astrophysics Scalable Tools"
+readme = "README.md"
+maintainers = [
+    { name = "Theodore Kisner", email = "tskisner.public@gmail.com" },
+]
+requires-python = ">=3.10"
+dependencies = [
+    "tomlkit",
+    "traitlets",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "psutil",
+    "h5py",
+    "pshmem>=1.3.3",
+    "flacarray>=0.4.0",
+    "ruamel.yaml",
+    "astropy",
+    "healpy",
+    "ephem",
+    "wurlitzer",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: C",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.optional-dependencies]
+mpi = [
+    "mpi4py>=3.0",
+]
+totalconvolve = [
+    "ducc0",
+]
+interactive = [
+    "ipywidgets",
+    "plotly",
+    "plotly-resampler",
+]
+dev = [
+    "uncrustify",
+    "ruff",
+]
+
+[project.scripts]
+toast_env = "toast.scripts.toast_env:main"
+toast_run = "toast.scripts.toast_run:main"
+toast_fake_focalplane = "toast.scripts.toast_fake_focalplane:main"
+toast_fake_telescope = "toast.scripts.toast_fake_telescope:main"
+toast_ground_schedule = "toast.scripts.toast_ground_schedule:main"
+toast_project_schedule = "toast.scripts.toast_project_schedule:main"
+toast_analyze_schedule = "toast.scripts.toast_analyze_schedule:main"
+toast_satellite_schedule = "toast.scripts.toast_satellite_schedule:main"
+toast_benchmark_satellite = "toast.scripts.toast_benchmark_satellite:main"
+toast_benchmark_ground_setup = "toast.scripts.toast_benchmark_ground_setup:main"
+toast_benchmark_ground = "toast.scripts.toast_benchmark_ground:main"
+toast_mini = "toast.scripts.toast_mini:main"
+toast_healpix_convert = "toast.scripts.toast_healpix_convert:main"
+toast_healpix_coadd = "toast.scripts.toast_healpix_coadd:main"
+toast_healpix_compare = "toast.scripts.toast_healpix_compare:main"
+toast_hdf5_to_spt3g = "toast.scripts.toast_hdf5_to_spt3g:main"
+toast_timing_plot = "toast.scripts.toast_timing_plot:main"
+toast_obsmatrix_combine = "toast.scripts.toast_obsmatrix_combine:main"
+toast_obsmatrix_coadd = "toast.scripts.toast_obsmatrix_coadd:main"
+toast_config_verify = "toast.scripts.toast_config_verify:main"
+toast_config_compare = "toast.scripts.toast_config_compare:main"
+toast_plot_wcs = "toast.scripts.toast_plot_wcs:main"
+toast_plot_healpix = "toast.scripts.toast_plot_healpix:main"
+toast_overlap_schedule = "toast.scripts.toast_overlap_schedule:main"
+toast_map_stats = "toast.scripts.toast_map_stats:main"
+toast_volume_reindex = "toast.scripts.toast_volume_reindex:main"
+
+[project.urls]
+"Documentation" = "https://hpc4cmb.github.io/toast/"
+"Source" = "https://github.com/hpc4cmb/toast/"
+"Issue Tracker" = "https://github.com/hpc4cmb/toast/issues"
+
+# We use setuptools_scm as the "source of truth" for the version.
+# This is passed to a script from CMake which generates the C and
+# python version files.
+[tool.setuptools_scm]
+
+[tool.scikit-build]
+# A list of args to pass to CMake when configuring the project.
+cmake.args = []
+# A table of defines to pass to CMake when configuring the project. Additive.
+cmake.define = {}
+# The build type to use when building the project.
+cmake.build-type = "Release"
+# The source directory to use when building the project.
+cmake.source-dir = "."
+# Use Make as a fallback if a suitable Ninja executable is not found.
+ninja.make-fallback = true
+# The logging level to display.
+logging.level = "INFO"
+# Files to include in the SDist even if they are skipped by default.
+sdist.include = []
+# Files to exclude from the SDist even if they are included by default.
+sdist.exclude = [".github", "build", "wheelhouse", "docs/site"]
+# Try to build a reproducible distribution.
+sdist.reproducible = true
+# If set to True, CMake will be run before building the SDist.
+sdist.cmake = false
+# Fill out extra tags that are not required.
+wheel.expand-macos-universal-tags = false
+# The CMake install prefix relative to the platlib wheel path.
+wheel.install-dir = ""
+# A list of license files to include in the wheel. Supports glob patterns.
+wheel.license-files = ["LICENSE"]
+# Run CMake as part of building the wheel.
+wheel.cmake = true
+# Target the platlib or the purelib.
+wheel.platlib = true
+# A set of patterns to exclude from the wheel.
+wheel.exclude = []
+# The build tag to use for the wheel. If empty, no build tag is used.
+wheel.build-tag = ""
+# If CMake is less than this value, backport a copy of FindPython.
+backport.find-python = "3.26.1"
+# Select the editable mode to use. Can be "redirect" (default) or "inplace".
+editable.mode = "redirect"
+# Turn on verbose output for the editable mode rebuilds.
+editable.verbose = true
+# Rebuild the project when the package is imported.
+editable.rebuild = true
+# Extra args to pass directly to the builder in the build step.
+build.tool-args = ["-j", "4"]
+# The build targets to use when building the project.
+build.targets = []
+# Verbose printout when building.
+build.verbose = true
+# Additional ``build-system.requires``.
+build.requires = []
+# The components to install.
+install.components = []
+# Whether to strip the binaries.
+install.strip = true
+# Add the python build environment site_packages folder to the CMake prefix paths.
+search.site-packages = true
+# Strictly check all config options.
+strict-config = true
+# Enable early previews of features not finalized yet.
+experimental = true
+# If set, this will provide a method for backward compatibility.
+minimum-version = "0.11" # current version
+# The CMake build directory. Defaults to a unique temporary directory.
+build-dir = "build/{wheel_tag}"
+# Get version from setuptools_scm
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+
+# A list of packages to auto-copy into the wheel. These could also
+# be specified in CMakeLists.txt using the install() function.  This
+# list is not recursive, so all submodules must be listed.
+[tool.scikit-build.wheel.packages]
+"toast" = "src/toast"
+"toast/_aux" = "src/toast/_aux"
+"toast/_aux/benchmarks" = "src/toast/_aux/benchmarks"
+"toast/_aux/weather" = "src/toast/_aux/weather"
+"toast/accelerator" = "src/toast/accelerator"
+"toast/config" = "src/toast/config"
+"toast/interactive" = "src/toast/interactive"
+"toast/io" = "src/toast/io"
+"toast/jax" = "src/toast/jax"
+"toast/jax/math" = "src/toast/jax/math"
+"toast/ops" = "src/toast/ops"
+"toast/ops/mapmaker_utils" = "src/toast/ops/mapmaker_utils"
+"toast/ops/noise_weight" = "src/toast/ops/noise_weight"
+"toast/ops/pixels_healpix" = "src/toast/ops/pixels_healpix"
+"toast/ops/pointing_detector" = "src/toast/ops/pointing_detector"
+"toast/ops/polyfilter" = "src/toast/ops/polyfilter"
+"toast/ops/scan_map" = "src/toast/ops/scan_map"
+"toast/ops/stokes_weights" = "src/toast/ops/stokes_weights"
+"toast/scripts" = "src/toast/scripts"
+"toast/spt3g" = "src/toast/spt3g"
+"toast/templates/offset" = "src/toast/templates/offset"
+"toast/tests" = "src/toast/tests"
+"toast/tests/helpers" = "src/toast/tests/helpers"

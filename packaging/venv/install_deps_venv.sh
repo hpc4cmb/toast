@@ -56,11 +56,11 @@ if [ ! -e "${envname}/bin/activate" ]; then
 fi
 
 . "${envname}/bin/activate"
-python3 -m pip install install --upgrade pip setuptools wheel
+python3 -m pip install install --upgrade pip wheel
 
 # Install packages
 
-pkglist=$(cat "${scriptdir}/deps.txt" | xargs -I % echo -n '% ')
+pkglist=$(cat "${scriptdir}/requirements.txt" | xargs -I % echo -n '% ')
 echo "Installing pip packages:  ${pkglist}"
 python3 -m pip install --no-input ${pkglist}
 
@@ -138,7 +138,7 @@ if [ "x${LAPACK_LIBRARIES}" = "x" ]; then
     . "${depsdir}/openblas.sh"
 fi
 
-for pkg in cfitsio fftw libflac suitesparse libaatm; do
+for pkg in cfitsio fftw suitesparse libaatm; do
     . "${depsdir}/${pkg}.sh"
 done
 

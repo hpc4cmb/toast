@@ -52,21 +52,8 @@ export ENVNAME=${envname}
 
 # Install conda packages
 
-pkgfiles="${scriptdir}/deps.txt ${scriptdir}/extdeps.txt"
-if [ "x${optional}" = "xyes" ]; then
-    pkgfiles="${pkgfiles} ${scriptdir}/optdeps.txt"
-fi
-
-pkglist=""
-for pfile in ${pkgfiles}; do
-    plist=$(cat "${pfile}" | xargs -I % echo -n '"%" ')
-    pkglist="${pkglist} ${plist}"
-done
-pkglist="python=${pyversion} ${pkglist} compilers"
-echo "Installing conda packages:  ${pkglist}"
-conda install --yes --update-all ${pkglist}
-# The "cc" symlink breaks Crays...
-rm -f "${CONDA_PREFIX}/bin/cc"
+echo "Installing conda packages for development..."
+conda install --yes --update-all --file "${scriptdir}/requirements.txt"
 
 # Reload the environment to pick up compiler environment variables
 conda deactivate
@@ -81,8 +68,6 @@ if [ "x${optional}" != "xyes" ]; then
 fi
 
 # Now build the packages not available through conda
-
-python3 -m pip install qpoint
 
 # CC set by conda compilers
 # CXX set by conda compilers

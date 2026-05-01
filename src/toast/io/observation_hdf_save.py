@@ -470,6 +470,7 @@ def save_hdf5(
     obs,
     dir,
     meta=None,
+    attrs=None,
     detdata=None,
     shared=None,
     intervals=None,
@@ -505,6 +506,7 @@ def save_hdf5(
         obs (Observation):  The observation to write.
         dir (str):  The parent directory containing the file.
         meta (list):  Only save this list of metadata objects.
+        attrs (list):  Only save this list of attribute objects.
         detdata (list):  Only save this list of detdata objects, optionally with
             compression.
         shared (list):  Only save this list of shared objects.
@@ -643,6 +645,8 @@ def save_hdf5(
         attr_group = hgroup.create_group("attr")
     for k, v in vars(obs).items():
         if k.startswith("_"):
+            continue
+        if attrs is not None and k not in attrs:
             continue
         if hasattr(v, "save_hdf5"):
             kgroup = None

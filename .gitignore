@@ -2,23 +2,19 @@
 # backup saves
 *~
 
-# Byte-compiled / optimized / DLL files
-# __pycache__/
-# *.py[cod]
-
-# Compiled extensions
-# *.so
-
+# Generated outputs
 /examples/job_*
 /examples/data/
 
-# Build directories when using ./cmake/platforms/...
+# Build directories
 /build*
 
-# *_test_output
+# Documentation output
+/docs/site
 
 # generated files
-src/libtoast/src/version.cpp
+/src/libtoast/src/version.cpp
+/src/toast/_version.py
 
 # vim
 *.swp
