@@ -49,19 +49,25 @@ new conda environment we will create.  For this example, we will call it `toast-
 Use the included helper script to set up a new conda environment and install toast
 dependendencies:
 
-    cd toast ./platforms/conda_dev_setup.sh toast-dev 3.13 no
+    cd toast ./conda_setup.sh -e toast-dev -p 3.13
 
 !!! note
 
     You can also replace a name like `toast-dev` with the full path to the environment
-    location.  The python version is optional.  If you specify "yes" for the final
-    argument, libmadam and libconviqt will also be installed.
+    location.  The python version is optional.  If you specify `-x` then "extra"
+    dependencies (including libmadam and libconviqt) will also be installed.
 
 !!! note
 
     The script above will install the default conda MPI package.  If you have a custom
     MPI compiler already, set the `MPICC` environment variable to that compiler before
     running the script.
+
+Another example, creating a conda environment on a Cray system where the MPI compiler is
+called `cc` and where we want to install libmadam (MPI fortran code) and libconviqt (MPI
+C++ code):
+
+    MPICC=cc MPICXX=CC MPIFC=ftn ./conda_setup.sh -e toast-dev -p 3.13 -x
 
 After some waiting, the new conda environment will be set up.  Now activate it:
 

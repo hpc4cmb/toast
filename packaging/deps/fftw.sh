@@ -11,7 +11,7 @@
 # - MAKEJ
 # - CLEANUP (yes/no)
 
-fftw_version=3.3.10
+fftw_version=3.3.11
 fftw_dir=fftw-${fftw_version}
 fftw_pkg=${fftw_dir}.tar.gz
 

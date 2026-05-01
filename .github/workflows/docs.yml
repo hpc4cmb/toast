@@ -46,7 +46,7 @@ jobs:
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate base \
-            && ./platforms/conda_dev_setup.sh docs
+            && ./conda_setup.sh docs
 
       - name: Install TOAST
         run: |

@@ -71,6 +71,8 @@ class SaveHDF5(Operator):
 
     meta = List([], allow_none=True, help="Only save this list of meta objects")
 
+    attrs = List([], allow_none=True, help="Only save this list of obs attributes")
+
     detdata = List(
         [defaults.det_data, defaults.det_flags],
         help="Only save this list of detdata objects",
@@ -160,6 +162,10 @@ class SaveHDF5(Operator):
         if len(self.meta) > 0:
             meta_fields = list(self.meta)
 
+        attrs_fields = None
+        if len(self.attrs) > 0:
+            attrs_fields = list(self.attrs)
+
         shared_fields = None
         if len(self.shared) > 0:
             shared_fields = list(self.shared)
@@ -237,6 +243,7 @@ class SaveHDF5(Operator):
                 ob,
                 outdir,
                 meta=meta_fields,
+                attrs=attrs_fields,
                 detdata=detdata_fields,
                 shared=shared_fields,
                 intervals=intervals_fields,

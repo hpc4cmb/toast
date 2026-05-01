@@ -11,6 +11,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build sdist
+        run: pipx run build --sdist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cibw-sdist
+          path: dist/*.tar.gz
+
   build_wheels:
     name: Build wheel for cp${{ matrix.python }}-${{ matrix.builder }}_${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
@@ -87,28 +103,10 @@ jobs:
       CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.builder }}_2_28
       CIBW_BUILD_VERBOSITY: 3
       CIBW_ENVIRONMENT_LINUX: >
-        TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
-        TOAST_BUILD_TOAST_STATIC_DEPS=ON
-        TOAST_BUILD_BLAS_LIBRARIES='-L/usr/local/lib -lopenblas -fopenmp -lm -lgfortran'
-        TOAST_BUILD_LAPACK_LIBRARIES='-L/usr/local/lib -lopenblas -fopenmp -lm -lgfortran'
-        TOAST_BUILD_FFTW_ROOT=/usr/local
-        TOAST_BUILD_AATM_ROOT=/usr/local
-        TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include
-        TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib
+        CMAKE_ARGS="-DBLAS_LIBRARIES='-L/usr/local/lib -lopenblas -fopenmp -lm -lgfortran' -DLAPACK_LIBRARIES='-L/usr/local/lib -lopenblas -fopenmp -lm -lgfortran' -DTOAST_STATIC_DEPS=ON -DFFTW_ROOT=/usr/local -DAATM_ROOT=/usr/local -DSUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include -DSUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib"
       CIBW_ENVIRONMENT_MACOS: >
         MACOSX_DEPLOYMENT_TARGET=${{ matrix.deploy }}
-        TOAST_BUILD_CMAKE_C_COMPILER=clang
-        TOAST_BUILD_CMAKE_CXX_COMPILER=clang++
-        TOAST_BUILD_CMAKE_C_FLAGS='-O3 -fPIC'
-        TOAST_BUILD_CMAKE_CXX_FLAGS='-O3 -fPIC -std=c++11 -stdlib=libc++'
-        TOAST_BUILD_CMAKE_VERBOSE_MAKEFILE=ON
-        TOAST_BUILD_DISABLE_OPENMP=1
-        TOAST_BUILD_BLAS_LIBRARIES='/usr/local/lib/libopenblas.dylib'
-        TOAST_BUILD_LAPACK_LIBRARIES='/usr/local/lib/libopenblas.dylib'
-        TOAST_BUILD_FFTW_ROOT=/usr/local
-        TOAST_BUILD_AATM_ROOT=/usr/local
-        TOAST_BUILD_SUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include
-        TOAST_BUILD_SUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib
+        CMAKE_ARGS="-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_FLAGS='-O3 -fPIC' -DCMAKE_CXX_FLAGS='-O3 -fPIC -std=c++11 -stdlib=libc++' -DDISABLE_OPENMP=1 -DBLAS_LIBRARIES='/usr/local/lib/libopenblas.dylib' -DLAPACK_LIBRARIES='/usr/local/lib/libopenblas.dylib' -DFFTW_ROOT=/usr/local -DAATM_ROOT=/usr/local -DSUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include -DSUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib"
       CIBW_BEFORE_BUILD_LINUX: ./packaging/wheels/install_deps_linux.sh
       CIBW_BEFORE_BUILD_MACOS: ./packaging/wheels/install_deps_osx.sh
       CIBW_BEFORE_TEST: export OMP_NUM_THREADS=2
@@ -129,11 +127,11 @@ jobs:
       - uses: actions/setup-python@v6
         name: Install Python
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install cibuildwheel
         run: |
-          python -m pip install cibuildwheel==3.3.0
+          python -m pip install cibuildwheel==3.4.1
 
       - name: Build wheel
         run: |
@@ -141,11 +139,11 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: toast-cp${{ matrix.python }}-${{ matrix.builder }}_${{ matrix.arch }}
+          name: cibw-wheels_cp${{ matrix.python }}-${{ matrix.builder }}_${{ matrix.arch }}
           path: ./wheelhouse/toast*cp${{ matrix.python }}-${{ matrix.builder }}*${{ matrix.arch }}*.whl
 
   upload_pypi:
-    needs: build_wheels
+    needs: [build_sdist, build_wheels]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -154,7 +152,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           # Unpacks all artifacts into dist/
-          pattern: toast-*
+          pattern: cibw-*
           path: dist
           merge-multiple: true
 

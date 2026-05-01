@@ -1,0 +1,24 @@
+# Python requirements for building toast with OS compilers
+# and compiled dependencies.
+cmake
+ninja
+scikit-build-core>=0.11
+pybind11>=3.0
+setuptools>=80
+setuptools-scm>=8
+numpy
+scipy
+astropy
+healpy
+h5py
+ephem
+tomlkit
+traitlets
+matplotlib
+psutil
+ruamel.yaml
+wurlitzer
+pshmem>=1.3.3
+flacarray>=0.4.0
+qpoint
+ducc0

@@ -62,24 +62,17 @@ else
 fi
 
 # Install any pre-built dependencies with homebrew
-
-# Force uninstall flac tools, to avoid conflicts with our
-# custom compiled version.
-brew uninstall -f --ignore-dependencies flac libogg libsndfile libvorbis opusfile sox
 if [ "x${use_gcc}" = "xyes" ]; then
     brew install gcc@${gcc_version}
 fi
 
 # Update pip
-pip install --upgrade pip
-
-# Install a couple of base packages that are always required
-pip install -v wheel
+pip install --upgrade pip wheel
 
 pyver=$(python3 --version 2>&1 | awk '{print $2}' | sed -e "s#\(.*\)\.\(.*\)\..*#\1.\2#")
 
 # Install build requirements.
-CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/build_requirements.txt"
+CC="${CC}" CFLAGS="${CFLAGS}" pip install -v -r "${scriptdir}/requirements.txt"
 
 # Build compiled dependencies
 
@@ -92,6 +85,6 @@ export CLEANUP=yes
 export BLAS_LIBRARIES="-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}"
 export LAPACK_LIBRARIES="-L${PREFIX}/lib -lopenblas ${OMPFLAGS} -lm ${FCLIBS}"
 
-for pkg in openblas fftw libflac suitesparse libaatm; do
+for pkg in openblas fftw suitesparse libaatm; do
     source "${depsdir}/${pkg}.sh"
 done
