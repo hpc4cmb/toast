@@ -49,7 +49,7 @@ jobs:
         run: |
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate base \
-            && ./conda_setup.sh -e docs \
+            && ./conda_setup.sh -e docs -p 3.13 \
 
       - name: Install TOAST
         run: |
@@ -68,6 +68,7 @@ jobs:
           source ~/conda/etc/profile.d/conda.sh \
             && conda activate docs \
             && pushd docs \
+            && ./run_notebooks.sh ./docs \
             && ./build.sh \
             && popd
 
@@ -80,8 +81,12 @@ jobs:
     name: Deploy Documentation
     needs: build_docs
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     permissions:
       id-token: write
+      pages: write
     if: github.event_name == 'release' && github.event.action == 'published'
     steps:
       - name: Deploy to GitHub Pages

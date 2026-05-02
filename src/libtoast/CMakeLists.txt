@@ -1,4 +1,4 @@
-# This directory defines an object library with all the 
+# This directory defines an object library with all the
 # external dependencies.
 
 # Version file
@@ -52,13 +52,13 @@ target_include_directories(toast BEFORE PUBLIC
 # Dependencies
 
 if(AATM_FOUND)
-    target_compile_definitions(toast PRIVATE HAVE_AATM=1)
+    target_compile_definitions(toast PUBLIC HAVE_AATM=1)
     target_include_directories(toast PUBLIC "${AATM_INCLUDE_DIRS}")
     target_link_libraries(toast "${AATM_LIBRARIES}")
 endif(AATM_FOUND)
 
 if(CHOLMOD_FOUND)
-    target_compile_definitions(toast PRIVATE HAVE_CHOLMOD=1)
+    target_compile_definitions(toast PUBLIC HAVE_CHOLMOD=1)
     target_include_directories(toast PUBLIC "${CHOLMOD_INCLUDE_DIR}")
     target_link_libraries(toast
         ${CHOLMOD_LIBRARY}

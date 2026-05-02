@@ -62,6 +62,8 @@ import sys
 
 from ._version import __version__
 
+from ._libtoast import Environment
+
 from .config import load_config, parse_config
 from .data import Data
 from .instrument import Focalplane, GroundSite, SpaceSite, Telescope
