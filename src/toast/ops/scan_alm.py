@@ -228,7 +228,7 @@ class ScanAlm(Operator):
         """Scan one a_lm expansion into TOD"""
 
         signal = np.zeros(theta.size)
-        
+
         for stokes, stokes_weights in zip(self.stokes_weights.mode, weights):
             if np.all(stokes_weights == 0):
                 continue
@@ -246,6 +246,7 @@ class ScanAlm(Operator):
                 msg = f"Unsupported Stokes component: {stokes}"
                 raise RuntimeError(msg)
 
+            phi[phi<0] += 2*np.pi
             pointing = np.vstack([theta, phi, psi]).T
             signal += interpolator.interpol(pointing).ravel() * stokes_weights
 
