@@ -633,6 +633,19 @@ class FilterBin(Operator):
                     raise traitlets.TraitError(msg)
         return bin
 
+    def _load_filter_config(self):
+        if self.filter_config_file is not None:
+            with open(self.filter_config_file, "r") as f:
+                self.filter_config = yaml.load(f)
+            # Find and translate all quantities
+            for obs_name, obs_config in self.filter_config.items():
+                for key, value in obs_config.items():
+                    if value.endswith([" deg", " rad", " arcmin"]):
+                        obs_config[key] = u.Quantity(value)
+        else:
+            self.filter_config = None
+        return
+
     def _apply_filter_config(self, obs):
         """Use custom filter configuration for this observation"""
         log = Logger.get()
@@ -768,11 +781,7 @@ class FilterBin(Operator):
         memreport.prefix = "Before filtering"
         memreport.apply(data)
 
-        if self.filter_config_file is not None:
-            with open(self.filter_config_file, "r") as f:
-                self.filter_config = yaml.load(f)
-        else:
-            self.filter_config = None
+        self._load_filter_config()
 
         t1 = time()
         for iobs, obs in enumerate(data.obs):
