@@ -195,7 +195,6 @@ class HWPFilter(Operator):
     @function_timer
     def fit_templates(
         self,
-        obs,
         templates,
         ref,
         good,
@@ -205,13 +204,7 @@ class HWPFilter(Operator):
         last_rcond,
     ):
         log = Logger.get()
-        # communicator for processes with the same detectors
-        comm = obs.comm_row
         ngood = np.sum(good)
-        ntask = 1
-        if comm is not None:
-            ngood = comm.allreduce(ngood)
-            ntask = comm.size
         if ngood == 0:
             return None, None, None, None
 
@@ -220,18 +213,13 @@ class HWPFilter(Operator):
         proj = np.zeros(ntemplate)
 
         bin_proj_fast(ref, templates, good.astype(np.uint8), proj)
-        if last_good is not None and np.all(good == last_good) and ntask == 1:
+        if last_good is not None and np.all(good == last_good):
             # Flags have not changed, we can re-use the last inverse covariance
             invcov = last_invcov
             cov = last_cov
             rcond = last_rcond
         else:
             bin_invcov_fast(templates, good.astype(np.uint8), invcov)
-            if comm is not None:
-                # Reduce the binned data.  The detector signal is
-                # distributed across the group communicator.
-                comm.Allreduce(MPI.IN_PLACE, invcov, op=MPI.SUM)
-                comm.Allreduce(MPI.IN_PLACE, proj, op=MPI.SUM)
             rcond = get_rcond(invcov)
             cov = None
 
@@ -280,6 +268,9 @@ class HWPFilter(Operator):
         # Each group loops over its own CES:es
         nobs = len(data.obs)
         for iobs, obs in enumerate(data.obs):
+            if not obs.is_distributed_by_detector:
+                raise RuntimeError("HWPFilter assumes data is split by detector")
+
             if self.save_amplitudes not in obs:
                 if self.reverse:
                     msg = (
@@ -295,14 +286,14 @@ class HWPFilter(Operator):
             log_prefix = f"{data.comm.group} : {obs.name} :"
 
             if self.hwp_angle in obs.shared:
-                if data.comm.group_rank == 0:
+                if obs.comm.group_rank == 0:
                     msg = f"{log_prefix} HWPSS Filter: "
                     msg += f"Processing observation {iobs + 1} / {nobs}"
                     msg += f" ({obs.name}).  reverse = {self.reverse}"
                     log.debug(msg)
             else:
                 # This observation has no HWP
-                if data.comm.group_rank == 0:
+                if obs.comm.group_rank == 0:
                     msg = (
                         f"{log_prefix} HWPSS Filter:  skipping observation {obs.name},"
                     )
@@ -320,7 +311,7 @@ class HWPFilter(Operator):
 
             t1 = time()
             templates, legendre_trend, fourier_filter = self.build_templates(obs)
-            if data.comm.group_rank == 0:
+            if obs.comm.group_rank == 0:
                 msg = (
                     f"{log_prefix} HWPSS Filter: "
                     f"Built templates in {time() - t1:.1f}s"
@@ -331,10 +322,12 @@ class HWPFilter(Operator):
             last_invcov = None
             last_cov = None
             last_rcond = None
-            for det in obs.select_local_detectors(detectors, flagmask=self.det_mask):
-                if data.comm.group_rank == 0:
-                    msg = f"{log_prefix} HWPSS Filter: " f"Processing detector {det}"
-                    log.verbose(msg)
+            local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
+            msg = f"{log_prefix} {obs.comm.group_rank} HWPSS Filter: has {len(local_dets)} local dets"
+            log.verbose(msg)
+            for det in local_dets:
+                msg = f"{log_prefix} {det} HWPSS Filter: starting"
+                log.verbose(msg)
 
                 ref = obs.detdata[self.det_data][det]
 
@@ -355,7 +348,6 @@ class HWPFilter(Operator):
 
                     t1 = time()
                     coeff, last_invcov, last_cov, last_rcond = self.fit_templates(
-                        obs,
                         templates,
                         ref,
                         good,
@@ -369,31 +361,36 @@ class HWPFilter(Operator):
                         obs[self.save_amplitudes][det] = coeff
 
                     last_good = good
-                    if data.comm.group_rank == 0:
-                        msg = (
-                            f"{log_prefix} HWPSS Filter: "
-                            f"Fit templates in {time() - t1:.1f}s"
-                        )
-                        log.verbose(msg)
+                    msg = (
+                        f"{log_prefix} {det} HWPSS Filter: "
+                        f"  Fit templates in {time() - t1:.1f}s"
+                    )
+                    log.verbose(msg)
 
                     if coeff is None:
                         # All samples flagged or template fit failed.
                         curflag = obs.local_detector_flags[det]
-                        obs.update_local_detector_flags({det: curflag | self.hwp_flag_mask})
+                        obs.update_local_detector_flags(
+                            {det: curflag | self.hwp_flag_mask}
+                        )
                         continue
 
                 t1 = time()
                 self.subtract_templates(ref, coeff, legendre_trend, fourier_filter)
-                if data.comm.group_rank == 0:
-                    msg = (
-                        f"{log_prefix} HWPSS Filter: "
-                        f"Subtract templates in {time() - t1:.1f}s"
-                    )
-                    log.verbose(msg)
+                msg = (
+                    f"{log_prefix} {det} HWPSS Filter: "
+                    f"  Subtract templates in {time() - t1:.1f}s"
+                )
+                log.verbose(msg)
             del last_good
             del last_invcov
             del last_cov
             del last_rcond
+
+            msg = f"{log_prefix} {obs.comm.group_rank} HWPSS Filter: at group barrier"
+            log.verbose(msg)
+            if obs.comm.comm_group is not None:
+                obs.comm.comm_group.barrier()
 
         if wcomm is not None:
             self.nsingular = wcomm.allreduce(self.nsingular)

@@ -178,9 +178,6 @@ class ScanWCSDetectorMap(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
             # If our output detector data does not yet exist, create it
             key = self.det_data
             exists_data = ob.detdata.ensure(

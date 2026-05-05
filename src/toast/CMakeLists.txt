@@ -49,6 +49,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL NVHPC)
     target_compile_options(_libtoast PRIVATE -Wc,--pending_instantiations=0)
 endif()
 
+# Link to the libtoast object library
 target_link_libraries(_libtoast PRIVATE toast)
 
 # Include path to the toast headers
@@ -56,6 +57,82 @@ target_include_directories(_libtoast BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/_libtoast"
     "${CMAKE_CURRENT_SOURCE_DIR}/../libtoast/include"
 )
+
+# Add dependency linking flags to the final extension
+
+if(AATM_FOUND)
+    target_compile_definitions(_libtoast PUBLIC HAVE_AATM=1)
+    target_include_directories(_libtoast PUBLIC "${AATM_INCLUDE_DIRS}")
+    target_link_libraries(_libtoast PUBLIC "${AATM_LIBRARIES}")
+endif(AATM_FOUND)
+
+if(CHOLMOD_FOUND)
+    target_compile_definitions(_libtoast PUBLIC HAVE_CHOLMOD=1)
+    target_include_directories(_libtoast PUBLIC "${CHOLMOD_INCLUDE_DIR}")
+    target_link_libraries(_libtoast PUBLIC
+        ${CHOLMOD_LIBRARY}
+        ${CCOLAMD_LIBRARY}
+        ${CAMD_LIBRARY}
+        ${COLAMD_LIBRARY}
+        ${AMD_LIBRARY}
+        ${SUITESPARSE_CONFIG_LIBRARY}
+    )
+    if (METIS_FOUND)
+        target_link_libraries(_libtoast PUBLIC ${METIS_LIBRARY})
+    endif (METIS_FOUND)
+endif(CHOLMOD_FOUND)
+
+# Link to our FFT libraries
+
+if(MKL_FOUND)
+    target_compile_definitions(_libtoast PRIVATE HAVE_MKL=1)
+    target_include_directories(_libtoast PUBLIC "${MKL_INCLUDE_DIRS}")
+    target_link_libraries(_libtoast PUBLIC "${MKL_LIBRARIES}")
+    # If we are using GNU compilers, we will need to internally set the threading layer
+    # to use GNU.  Otherwise, assume we are using Intel threads.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_definitions(_libtoast PRIVATE USE_MKL_GNU_THREADS=1)
+    else()
+        target_compile_definitions(_libtoast PRIVATE USE_MKL_INTEL_THREADS=1)
+    endif()
+endif(MKL_FOUND)
+
+if(FFTW_FOUND)
+    target_compile_definitions(_libtoast PRIVATE HAVE_FFTW=1)
+    target_include_directories(_libtoast PUBLIC "${FFTW_INCLUDE_DIRS}")
+    if(FFTW_DOUBLE_OPENMP_LIB_FOUND)
+        target_compile_definitions(_libtoast PRIVATE HAVE_FFTW_THREADS=1)
+        target_link_libraries(_libtoast PUBLIC "${FFTW_DOUBLE_OPENMP_LIB}")
+    else()
+        if(FFTW_DOUBLE_THREADS_LIB_FOUND)
+            message(WARNING "OpenMP version of FFTW not found.  Using pthreads")
+            message(WARNING "version which may break thread affinity in slurm jobs.")
+            target_compile_definitions(_libtoast PRIVATE HAVE_FFTW_THREADS=1)
+            target_link_libraries(_libtoast PUBLIC "${FFTW_DOUBLE_THREADS_LIB}")
+        endif()
+    endif()
+    target_link_libraries(_libtoast PUBLIC "${FFTW_DOUBLE_LIB}")
+endif(FFTW_FOUND)
+
+# LAPACK / BLAS
+
+if(LAPACK_FOUND)
+    target_compile_definitions(_libtoast PRIVATE HAVE_LAPACK=1)
+    target_compile_definitions(_libtoast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
+    if(TOAST_STATIC_DEPS)
+        target_link_libraries(_libtoast PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${LAPACK_LIBRARIES}>")
+        target_link_libraries(_libtoast PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${BLAS_LIBRARIES}>")
+    else()
+        target_link_libraries(_libtoast PUBLIC "${LAPACK_LIBRARIES}")
+        target_link_libraries(_libtoast PUBLIC "${BLAS_LIBRARIES}")
+    endif()
+endif(LAPACK_FOUND)
+
+if(OpenMP_CXX_FOUND)
+    target_compile_options(_libtoast PRIVATE "${OpenMP_CXX_FLAGS}")
+    target_link_libraries(_libtoast PUBLIC "${OpenMP_CXX_LIBRARIES}")
+endif(OpenMP_CXX_FOUND)
+
 
 install(TARGETS _libtoast LIBRARY DESTINATION ${SKBUILD_PROJECT_NAME})
 

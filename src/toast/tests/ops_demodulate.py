@@ -31,7 +31,7 @@ class DemodulateTest(MPITestCase):
         # There are frame changes in all demodulation tests but this one
         # is run with higher resolution input map to minimize T->P leakage
 
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, flagged_obs=False)
         nside = 1024
 
         # Create an uncorrelated noise model from focalplane detector properties
@@ -114,7 +114,9 @@ class DemodulateTest(MPITestCase):
 
         # Check the weights
         for ob_radial, ob_radec in zip(demod_data_radial.obs, demod_data_radec.obs):
-            for qdet in ob_radial.local_detectors:
+            for qdet in ob_radial.select_local_detectors(
+                flagmask=defaults.det_mask_nonscience
+            ):
                 if not qdet.startswith("demod4r"):
                     continue
                 udet = qdet.replace("demod4r", "demod4i")
@@ -454,15 +456,15 @@ class DemodulateTest(MPITestCase):
         close_data(data)
 
     def test_demodulate_IQU(self):
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, flagged_obs=False)
         self._test_demodulate(weight_mode="IQU", data=data)
 
     def test_demodulate_QU(self):
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, flagged_obs=False)
         self._test_demodulate(weight_mode="QU", data=data)
 
     def test_demodulate_I(self):
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, flagged_obs=False)
         self._test_demodulate(weight_mode="I", data=data)
 
     def test_demodulate_IQU_overdist(self):
@@ -470,7 +472,7 @@ class DemodulateTest(MPITestCase):
         self._test_demodulate(weight_mode="IQU", data=data, suffix="-overdist")
 
     def test_demodulate_IQU_detcuts(self):
-        data = create_ground_data(self.comm, single_group=True)
+        data = create_ground_data(self.comm, single_group=True, flagged_obs=False)
         # Flag the second half of the pixels.  Due to the relatively low
         # resolution of the input sky, there is some T->P leakage in the
         # test that blows up when one of the two detectors in a pixel is
@@ -485,7 +487,7 @@ class DemodulateTest(MPITestCase):
         self._test_demodulate(weight_mode="IQU", data=data, suffix="-detcuts")
 
     def test_demodulate_leakage(self):
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, flagged_obs=False)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")

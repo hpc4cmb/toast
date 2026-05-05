@@ -656,6 +656,7 @@ class SimAtmTest(MPITestCase):
             self.comm,
             freqs=freq_list,
             pixel_per_process=ppp,
+            flagged_obs=False,
         )
         self.count_mem(full_data, "After full sim ground")
 
@@ -680,7 +681,11 @@ class SimAtmTest(MPITestCase):
         # Simulate data split by frequency and process
 
         split_data = create_ground_data(
-            self.comm, freqs=freq_list, pixel_per_process=ppp, split=True
+            self.comm,
+            freqs=freq_list,
+            pixel_per_process=ppp,
+            split=True,
+            flagged_obs=False,
         )
         self.count_mem(split_data, "After split sim ground")
 

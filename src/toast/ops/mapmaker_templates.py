@@ -312,9 +312,6 @@ class TemplateMatrix(Operator):
                     selection=detectors,
                     flagmask=self.det_mask,
                 )
-                if len(dets) == 0:
-                    # Nothing to do for this observation
-                    continue
                 exists = ob.detdata.ensure(
                     self.det_data,
                     detectors=dets,
@@ -690,9 +687,6 @@ class SolveAmplitudes(Operator):
 
         # Get the detectors we are using for this observation
         dets = ob.select_local_detectors(self._detectors, flagmask=self._save_det_mask)
-        if len(dets) == 0:
-            # Nothing to do for this observation
-            return
 
         if self.mc_mode:
             # Shortcut, just verify that our flags exist
@@ -711,6 +705,10 @@ class SolveAmplitudes(Operator):
 
         # Create the new solver flags
         exists = ob.detdata.ensure(self.solver_flags, dtype=np.uint8, detectors=dets)
+
+        if len(dets) == 0:
+            # Nothing to do for this observation
+            return
 
         # The data views
         views = ob.view[self._solve_view]

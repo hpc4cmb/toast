@@ -105,7 +105,7 @@ jobs:
       CIBW_MANYLINUX_I686_IMAGE: ${{ matrix.builder }}_2_28
       CIBW_BUILD_VERBOSITY: 3
       CIBW_ENVIRONMENT_LINUX: >
-        CMAKE_ARGS="-DBLAS_LIBRARIES='-L/usr/local/lib -lopenblas -fopenmp -lm -lgfortran' -DLAPACK_LIBRARIES='-L/usr/local/lib -lopenblas -fopenmp -lm -lgfortran' -DTOAST_STATIC_DEPS=ON -DFFTW_ROOT=/usr/local -DAATM_ROOT=/usr/local -DSUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include -DSUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib"
+        CMAKE_ARGS="-DBLAS_LIBRARIES='-L/usr/local/lib -lopenblas -fopenmp -lm -lgfortran' -DLAPACK_LIBRARIES='-L/usr/local/lib -lopenblas -fopenmp -lm -lgfortran' -DFFTW_ROOT=/usr/local -DAATM_ROOT=/usr/local -DTOAST_STATIC_DEPS=ON -DSUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include -DSUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib"
       CIBW_ENVIRONMENT_MACOS: >
         MACOSX_DEPLOYMENT_TARGET=${{ matrix.deploy }}
         CMAKE_ARGS="-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_FLAGS='-O3 -fPIC' -DCMAKE_CXX_FLAGS='-O3 -fPIC -std=c++11 -stdlib=libc++' -DDISABLE_OPENMP=1 -DBLAS_LIBRARIES='/usr/local/lib/libopenblas.dylib' -DLAPACK_LIBRARIES='/usr/local/lib/libopenblas.dylib' -DFFTW_ROOT=/usr/local -DAATM_ROOT=/usr/local -DSUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include -DSUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib"

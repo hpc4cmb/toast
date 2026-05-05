@@ -103,9 +103,6 @@ class Copy(Operator):
                     detectors,
                     flagmask=0,
                 )
-                if len(dets) == 0:
-                    # Nothing to do for this observation
-                    continue
                 for in_key, out_key in self.detdata:
                     if in_key not in ob.detdata:
                         continue

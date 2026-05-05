@@ -376,11 +376,11 @@ class DetectorData(AcceleratorObject):
         if self.accel_in_use():
             self.accel_reset()
         elif dets is None:
-            if self.data is not None:
+            if self._data is not None:
                 # Zero the whole thing
-                self.data[:] = 0
+                self._data[:] = 0
         else:
-            if self.data is not None:
+            if self._data is not None:
                 for d in dets:
                     self[d, :] = 0
 

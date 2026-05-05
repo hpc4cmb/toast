@@ -550,7 +550,9 @@ class IoHdf5Test(MPITestCase):
 
         # Version 1 did not save per-detector flags in the observation to HDF5,
         # so we disable them for this test.
-        data, config = self.create_data(split=True, no_meta=True, flagged_pixels=False)
+        data, config = self.create_data(
+            split=True, no_meta=True, flagged_pixels=False, flagged_obs=False
+        )
         det_data_names = ["signal", "flags", "alt_signal"]
         det_data_fields = [
             ("signal", {"type": "flac", "quanta": 1.0e-7}),
@@ -787,7 +789,7 @@ class IoHdf5Test(MPITestCase):
 
         # Generate the data
 
-        data, config = self.create_data(split=True, missing=True)
+        data, config = self.create_data(split=True, missing=True, flagged_obs=False)
         det_data_fields = [
             ("signal", {"quanta": 1.0e-7}),
             ("flags", {}),

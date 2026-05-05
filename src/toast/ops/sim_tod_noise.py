@@ -252,9 +252,6 @@ class SimNoise(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             # Unique session ID
             sindx = ob.session.uid
@@ -284,6 +281,10 @@ class SimNoise(Operator):
             exists = ob.detdata.ensure(
                 self.det_data, detectors=dets, create_units=self.det_data_units
             )
+
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
 
             # The units of the output timestream
             data_units = ob.detdata[self.det_data].units

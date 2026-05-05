@@ -54,23 +54,11 @@ target_include_directories(toast BEFORE PUBLIC
 if(AATM_FOUND)
     target_compile_definitions(toast PUBLIC HAVE_AATM=1)
     target_include_directories(toast PUBLIC "${AATM_INCLUDE_DIRS}")
-    target_link_libraries(toast "${AATM_LIBRARIES}")
 endif(AATM_FOUND)
 
 if(CHOLMOD_FOUND)
     target_compile_definitions(toast PUBLIC HAVE_CHOLMOD=1)
     target_include_directories(toast PUBLIC "${CHOLMOD_INCLUDE_DIR}")
-    target_link_libraries(toast
-        ${CHOLMOD_LIBRARY}
-        ${CCOLAMD_LIBRARY}
-        ${CAMD_LIBRARY}
-        ${COLAMD_LIBRARY}
-        ${AMD_LIBRARY}
-        ${SUITESPARSE_CONFIG_LIBRARY}
-    )
-    if (METIS_FOUND)
-        target_link_libraries(toast ${METIS_LIBRARY})
-    endif (METIS_FOUND)
 endif(CHOLMOD_FOUND)
 
 # Link to our FFT libraries
@@ -78,7 +66,6 @@ endif(CHOLMOD_FOUND)
 if(MKL_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_MKL=1)
     target_include_directories(toast PUBLIC "${MKL_INCLUDE_DIRS}")
-    target_link_libraries(toast "${MKL_LIBRARIES}")
     # If we are using GNU compilers, we will need to internally set the threading layer
     # to use GNU.  Otherwise, assume we are using Intel threads.
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -93,16 +80,13 @@ if(FFTW_FOUND)
     target_include_directories(toast PUBLIC "${FFTW_INCLUDE_DIRS}")
     if(FFTW_DOUBLE_OPENMP_LIB_FOUND)
         target_compile_definitions(toast PRIVATE HAVE_FFTW_THREADS=1)
-        target_link_libraries(toast "${FFTW_DOUBLE_OPENMP_LIB}")
     else()
         if(FFTW_DOUBLE_THREADS_LIB_FOUND)
             message(WARNING "OpenMP version of FFTW not found.  Using pthreads")
             message(WARNING "version which may break thread affinity in slurm jobs.")
             target_compile_definitions(toast PRIVATE HAVE_FFTW_THREADS=1)
-            target_link_libraries(toast "${FFTW_DOUBLE_THREADS_LIB}")
         endif()
     endif()
-    target_link_libraries(toast "${FFTW_DOUBLE_LIB}")
 endif(FFTW_FOUND)
 
 # LAPACK / BLAS
@@ -110,13 +94,10 @@ endif(FFTW_FOUND)
 if(LAPACK_FOUND)
     target_compile_definitions(toast PRIVATE HAVE_LAPACK=1)
     target_compile_definitions(toast PRIVATE "LAPACK_NAMES_${LAPACK_NAMES}")
-    target_link_libraries(toast "${LAPACK_LIBRARIES}")
-    target_link_libraries(toast "${BLAS_LIBRARIES}")
 endif(LAPACK_FOUND)
 
 if(OpenMP_CXX_FOUND)
     target_compile_options(toast PRIVATE "${OpenMP_CXX_FLAGS}")
-    target_link_libraries(toast "${OpenMP_CXX_LIBRARIES}")
 endif(OpenMP_CXX_FOUND)
 
 # CUDA

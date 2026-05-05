@@ -49,7 +49,8 @@ new conda environment we will create.  For this example, we will call it `toast-
 Use the included helper script to set up a new conda environment and install toast
 dependendencies:
 
-    cd toast ./conda_setup.sh -e toast-dev -p 3.13
+    cd toast
+    ./conda_setup.sh -e toast-dev -p 3.13
 
 !!! note
 
@@ -88,6 +89,13 @@ development / editable mode:
 If you need to uninstall this editable version (for example to test out a new stable
 version from conda-forge, etc), just use pip to uninstall toast first.
 
+!!! note
+
+    If you are using a conda environment created from scratch without using the
+    conda_setup.sh helper script (for example by conda installing toast to get
+    dependencies), then you may need to install additional packages when installing
+    in editable mode.  Conda install scikit-build-core, pybind11, cmake, and ninja
+    before using `pip install -e`.
 
 ### OS Package Dependencies
 
@@ -143,7 +151,17 @@ You almost certainly want to install `mpi4py` as well, although it is optional:
 Then install TOAST to that virtualenv
 
     cd toast
-    pip install -v . # Optionally use '-e' for editable install
+    pip install -v .
+
+If you want to install TOAST in editable mode, make sure you have some build
+dependencies installed persistently in your environment:
+
+    pip install scikit-build-core pybind11 cmake ninja
+
+Then editable mode should work:
+
+    cd toast
+    pip install -v -e .
 
 #### Optional:  Beam Convolution with Conviqt
 

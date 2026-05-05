@@ -50,9 +50,6 @@ class Reset(Operator):
             if len(self.detdata) > 0:
                 # Get the detectors we are using for this observation
                 dets = ob.select_local_detectors(detectors)
-                if len(dets) == 0:
-                    # Nothing to do for this observation
-                    continue
                 for key in self.detdata:
                     for d in dets:
                         ob.detdata[key][d, :] = 0
