@@ -271,7 +271,7 @@ class ScanAlm(Operator):
         self._blm_P *= np.sqrt(2)  # Seems to be required for E/B beam
 
         return
- 
+
     @function_timer
     def _cache_interpolators(self):
         """Set up the polarized and unpolarized interpolators"""
@@ -308,6 +308,7 @@ class ScanAlm(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        gcomm = data.comm.comm_group
 
         if not ducc_available:
             msg = "ScanAlm requires ducc0"
@@ -326,7 +327,10 @@ class ScanAlm(Operator):
 
         # Loop over all observations and local detectors, sampling each alm
 
-        for ob in data.obs:
+        timer = Timer()
+        timer.start()
+        nob = len(data.obs)
+        for iob,ob in enumerate(data.obs):
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
@@ -355,6 +359,7 @@ class ScanAlm(Operator):
                         ref -= sig
                     else:
                         ref += sig
+            log.debug_rank(f"{iob}/{nob} observation finished in", timer=timer, comm=gcomm)
 
         # Clean up our alm, if needed
         if not self.save_alm:
