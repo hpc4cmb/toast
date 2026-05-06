@@ -224,28 +224,35 @@ class ScanAlm(Operator):
         return theta, phi, weights
 
     @function_timer
-    def _scan_alm(self, alm, theta, phi, weights):
+    def _scan_alms(self, interpolators, theta, phi, weights):
         """Scan one a_lm expansion into TOD"""
 
         signal = np.zeros(theta.size)
+        
         for stokes, stokes_weights in zip(self.stokes_weights.mode, weights):
             if np.all(stokes_weights == 0):
                 continue
 
-            psi = np.zeros_like(theta)
-            if stokes == "Q":
-                psi[:] = np.radians(90)
+            if stokes == "I":
+                psi = np.zeros_like(theta)
+                interpolator = interpolators["I"]
+            elif stokes == "Q":
+                psi = np.zeros_like(theta) + np.radians(90)
+                interpolator = interpolators["QU"]
             elif stokes == "U":
-                psi[:] = np.radians(135)
+                psi = np.zeros_like(theta) + np.radians(135)
+                interpolator = interpolators["QU"]
+            else:
+                msg = f"Unsupported Stokes component: {stokes}"
+                raise RuntimeError(msg)
 
-            interpolator = self._get_interpolator(stokes, alm)
             pointing = np.vstack([theta, phi, psi]).T
             signal += interpolator.interpol(pointing).ravel() * stokes_weights
 
         return signal
 
     @function_timer
-    def _get_blm(self):
+    def _cache_blm(self):
         """Derive polarized and unpolarized beam expansions"""
 
         # Get an mmax=0 symmetric temperature beam expansion
@@ -263,31 +270,36 @@ class ScanAlm(Operator):
         self._blm_P *= np.sqrt(2)  # Seems to be required for E/B beam
 
         return
-
+ 
     @function_timer
-    def _get_interpolator(self, stokes, alm):
+    def _cache_interpolators(self):
         """Set up the polarized and unpolarized interpolators"""
 
         separate = False  # Co-add T/E/B
         epsilon = 1e-5
 
-        if stokes == "I":
-            kmax = 0  # Symmetric, unpolarized beam
-            alm_ref = np.atleast_2d(alm.data[0])
-            blm = self._blm_I
-        elif stokes in "QU":
-            kmax = 2  # Symmetric, polarized beams
-            alm_ref = alm.data
-            blm = self._blm_P
-        else:
-            msg = f"Unsupported Stokes component: {stokes}"
-            raise RuntimeError(msg)
+        self.interpolators = []
+        for ialm, alm in enumerate(self.alms):
+            interpolators = {}
+            for stokes in "I", "QU":
+                if stokes == "I":
+                    kmax = 0  # Symmetric, unpolarized beam
+                    alm_ref = np.atleast_2d(alm.data[0])
+                    blm = self._blm_I
+                elif stokes == "QU":
+                    kmax = 2  # Symmetric, polarized beams
+                    alm_ref = alm.data
+                    blm = self._blm_P
+                else:
+                    msg = f"Unsupported Stokes component: {stokes}"
+                    raise RuntimeError(msg)
 
-        interpolator = totalconvolve.Interpolator(
-            alm_ref, blm, separate, self.lmax, kmax, epsilon
-        )
+                interpolators[stokes] = totalconvolve.Interpolator(
+                    alm_ref, blm, separate, self.lmax, kmax, epsilon
+                )
+            self.interpolators.append(interpolators)
 
-        return interpolator
+        return
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -308,7 +320,8 @@ class ScanAlm(Operator):
         self._parse_alm()
         self._parse_detdata_keys()
         self._load_alm(data)
-        self._get_blm()
+        self._cache_blm()
+        self._cache_interpolators()
 
         # Loop over all observations and local detectors, sampling each alm
 
@@ -335,7 +348,8 @@ class ScanAlm(Operator):
                     else:
                         det_data_key = self.det_data_keys[ialm]
                     ref = ob.detdata[det_data_key][det]
-                    sig = self._scan_alm(alm, theta, phi, weights)
+                    interpolators = self.interpolators[ialm]
+                    sig = self._scan_alms(interpolators, theta, phi, weights)
                     if self.subtract:
                         ref -= sig
                     else:
@@ -346,6 +360,9 @@ class ScanAlm(Operator):
             for alm in self.alms:
                 alm.close()
             self.alms = []
+
+        # Clean up the interpolators
+        del self.interpolators
 
         return
 
