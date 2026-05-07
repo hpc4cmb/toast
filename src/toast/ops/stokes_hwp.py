@@ -19,7 +19,7 @@ def get_group_a_detectors(focalplane, pair_group, tol_deg=1.0):
     Parameters
     ----------
     focalplane : Focalplane
-    pair_group : str, '0_90' or '45_135'
+    pair_group : str, '0-90' or '45-135'
     tol_deg : float, tolerance in degrees
 
     Returns
@@ -27,9 +27,9 @@ def get_group_a_detectors(focalplane, pair_group, tol_deg=1.0):
     list of str
     """
     tol = np.deg2rad(tol_deg)
-    if pair_group == "0_90":
+    if pair_group == "0-90":
         gamma_a_target = 0.0
-    elif pair_group == "45_135":
+    elif pair_group == "45-135":
         gamma_a_target = np.pi / 4.0
     else:
         raise ValueError(f"Unknown pair_group: '{pair_group}'")
@@ -404,12 +404,12 @@ class StokesWeightsHWP(Operator):
     )
 
     pair_group = Unicode(
-        "0_90",
+        "0-90",
         help=(
             "In 'pair_diff' mode, which detector pair group to process, "
             "identified by the A detector gamma angle. "
-            "'0_90'   → pairs with A gamma ≈  0° (i.e. d(0°)  - d(90°) ). "
-            "'45_135' → pairs with A gamma ≈ 45° (i.e. d(45°) - d(135°))."
+            "'0-90'   → pairs with A gamma ≈  0° (i.e. d(0°)  - d(90°) ). "
+            "'45-135' → pairs with A gamma ≈ 45° (i.e. d(45°) - d(135°))."
         ),
     )
 
@@ -447,9 +447,9 @@ class StokesWeightsHWP(Operator):
     @traitlets.validate("pair_group")
     def _check_pair_group(self, proposal):
         check = proposal["value"]
-        if check not in ["0_90", "45_135"]:
+        if check not in ["0-90", "45-135"]:
             raise traitlets.TraitError(
-                "Invalid pair_group (must be '0_90' or '45_135')"
+                "Invalid pair_group (must be '0-90' or '45-135')"
             )
         return check
 
@@ -489,10 +489,10 @@ class StokesWeightsHWP(Operator):
         tol = np.deg2rad(1.0)
 
         # Select the target gamma angles for A and B based on pair_group
-        if self.pair_group == "0_90":
+        if self.pair_group == "0-90":
             gamma_a_target = 0.0
             gamma_b_target = np.pi / 2.0   # 90°
-        elif self.pair_group == "45_135":
+        elif self.pair_group == "45-135":
             gamma_a_target = np.pi / 4.0   # 45°
             gamma_b_target = 3.0 * np.pi / 4.0  # 135°
         else:

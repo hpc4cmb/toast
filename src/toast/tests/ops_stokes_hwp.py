@@ -382,7 +382,7 @@ class StokesWeightsHWPTest(MPITestCase):
         )
 
         file_roots = []
-        for i, pair_group in enumerate(["0_90", "45_135"]):
+        for i, pair_group in enumerate(["0-90", "45-135"]):
             a_dets = get_group_a_detectors( # Compute A detectors globally so the mapmaker only processes them
                 data.obs[0].telescope.focalplane, pair_group
             )
