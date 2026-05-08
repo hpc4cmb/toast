@@ -169,7 +169,7 @@ class ScanWCSDetectorMap(Operator):
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
-        nnz = len(self.stokes_weights.mode)
+        nnz = self.stokes_weights.nnz
         wcs = None
         wcs_shape = None
 

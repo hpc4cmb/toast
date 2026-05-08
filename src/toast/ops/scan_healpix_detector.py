@@ -161,7 +161,7 @@ class ScanHealpixDetectorMap(Operator):
             raise RuntimeError(msg)
 
         # Determine the number of non-zeros from the Stokes weights
-        nnz = len(self.stokes_weights.mode)
+        nnz = self.stokes_weights.nnz
         if nnz == 2:
             field = (1, 2)
         else:

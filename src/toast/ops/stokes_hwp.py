@@ -534,17 +534,21 @@ class StokesWeightsHWP(Operator):
 
         return a_dets, pairs
 
+    @property
+    def nnz(self):
+        """The number of non-zero pointing matrix weights."""
+        if self.mode == "nominal":
+            return 9
+        elif self.mode == "mueller":
+            return 3
+        elif self.mode == "pair_diff":
+            return 5
+        else:
+            return None
+
     @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         log = Logger.get()
-
-        # Compute the number of non-zeros in the pointing matrix
-        if self.mode == "nominal":
-            self._nnz = 9
-        elif self.mode == "mueller":
-            self._nnz = 3
-        elif self.mode == "pair_diff":
-            self._nnz = 5
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
@@ -611,7 +615,7 @@ class StokesWeightsHWP(Operator):
             # Create (or re-use) output data for the weights
             exists = ob.detdata.ensure(
                 self.weights,
-                sample_shape=(self._nnz,),
+                sample_shape=(self.nnz,),
                 dtype=np.float32 if self.single_precision else np.float64,
                 detectors=weight_dets,
                 accel=use_accel,

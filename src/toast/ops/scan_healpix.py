@@ -158,7 +158,7 @@ class ScanHealpixMap(Operator):
 
         # Use the pixel distribution and pointing configuration to allocate our
         # map data and read it in.
-        nnz = len(self.stokes_weights.mode)
+        nnz = self.stokes_weights.nnz
 
         filenames = self.file.split(";")
         detdata_keys = self.det_data.split(";")
