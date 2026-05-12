@@ -53,9 +53,10 @@ class FillGapsTest(MPITestCase):
             import matplotlib.pyplot as plt
 
             for ob in data.obs:
-                det = ob.select_local_detectors(flagmask=defaults.det_mask_nonscience)[
-                    0
-                ]
+                dets = ob.select_local_detectors(flagmask=defaults.det_mask_nonscience)
+                if len(dets) == 0:
+                    continue
+                det = dets[0]
                 n_all_samp = ob.n_all_samples
                 n_plot = 2
                 fig_height = 6 * n_plot

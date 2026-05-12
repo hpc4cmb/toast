@@ -93,6 +93,7 @@ def create_ground_data(
     turnarounds_invalid=False,
     single_group=False,
     flagged_pixels=True,
+    flagged_obs=True,
     schedule_hours=2,
 ):
     """Create a data object with a simple ground sim.
@@ -116,6 +117,10 @@ def create_ground_data(
     if flagged_pixels:
         # We are going to flag half the pixels
         pixel_per_process *= 2
+
+    if flagged_obs:
+        # We are going to flag all detectors in half the observations
+        schedule_hours *= 2
 
     tele = create_ground_telescope(
         toastcomm.group_size,
@@ -204,6 +209,14 @@ def create_ground_data(
                 if idet % 2 != 0:
                     det_flags[det] = defaults.det_mask_invalid
             ob.update_local_detector_flags(det_flags)
+
+    if flagged_obs:
+        for iob, ob in enumerate(data.obs):
+            if iob % 2 != 0:
+                det_flags = dict()
+                for det in ob.local_detectors:
+                    det_flags[det] = defaults.det_mask_invalid
+                ob.update_local_detector_flags(det_flags)
 
     return data
 

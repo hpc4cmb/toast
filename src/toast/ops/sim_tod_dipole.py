@@ -155,14 +155,15 @@ class SimDipole(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             # Make sure detector data output exists
             exists = ob.detdata.ensure(
                 self.det_data, detectors=dets, create_units=self.det_data_units
             )
+
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
 
             # Unit conversion from dipole timestream (K) to det data units
             scale = unit_conversion(u.K, ob.detdata[self.det_data].units)

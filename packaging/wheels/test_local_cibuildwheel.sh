@@ -6,7 +6,7 @@
 export CIBW_BUILD="cp313-manylinux_x86_64"
 export CIBW_MANYLINUX_X86_64_IMAGE="manylinux_2_28"
 export CIBW_BUILD_VERBOSITY=3
-export CIBW_ENVIRONMENT_LINUX="CMAKE_ARGS=\"-DBLAS_LIBRARIES='-L/usr/local/lib -lopenblas -fopenmp -lm -lgfortran' -DLAPACK_LIBRARIES='-L/usr/local/lib -lopenblas -fopenmp -lm -lgfortran' -DTOAST_STATIC_DEPS=ON -DFFTW_ROOT=/usr/local -DAATM_ROOT=/usr/local -DSUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include -DSUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib\""
+export CIBW_ENVIRONMENT_LINUX="CMAKE_ARGS=\"-DBLAS_LIBRARIES='/usr/local/lib/libopenblas.a -fopenmp -lm -lgfortran' -DTOAST_STATIC_DEPS=ON -DFFTW_ROOT=/usr/local -DAATM_ROOT=/usr/local -DSUITESPARSE_INCLUDE_DIR_HINTS=/usr/local/include -DSUITESPARSE_LIBRARY_DIR_HINTS=/usr/local/lib\""
 export CIBW_BEFORE_BUILD_LINUX=./packaging/wheels/install_deps_linux.sh
 export CIBW_BEFORE_TEST="export OMP_NUM_THREADS=2"
 export CIBW_TEST_COMMAND=". {project}/packaging/wheels/cibw_run_tests.sh"

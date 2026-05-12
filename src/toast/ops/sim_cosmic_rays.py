@@ -142,15 +142,18 @@ class InjectCosmicRays(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
+            
             comm = ob.comm.comm_group
             rank = ob.comm.group_rank
             # Make sure detector data output exists
             exists = ob.detdata.ensure(
                 self.det_data, detectors=dets, create_units=self.det_data_units
             )
+
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
+
             sindx = ob.session.uid
             telescope = ob.telescope.uid
             focalplane = ob.telescope.focalplane

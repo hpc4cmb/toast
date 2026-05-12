@@ -408,9 +408,6 @@ class BuildInverseCovariance(Operator):
                 dets = ob.select_local_detectors(
                     selection=detectors, flagmask=self.det_mask
                 )
-                if len(dets) == 0:
-                    # Nothing to do for this observation
-                    continue
                 if self.weights in ob.detdata:
                     if len(ob.detdata[self.weights].detector_shape) == 1:
                         cur_nnz = 1
@@ -438,9 +435,6 @@ class BuildInverseCovariance(Operator):
             dets = ob.select_local_detectors(
                 selection=detectors, flagmask=self.det_mask
             )
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             # Check that the noise model exists
             if self.noise_model not in ob:
@@ -448,6 +442,10 @@ class BuildInverseCovariance(Operator):
                     self.noise_model, ob.name
                 )
                 raise RuntimeError(msg)
+
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
 
             noise = ob[self.noise_model]
 
@@ -726,9 +724,6 @@ class BuildNoiseWeighted(Operator):
                 dets = ob.select_local_detectors(
                     selection=detectors, flagmask=self.det_mask
                 )
-                if len(dets) == 0:
-                    # Nothing to do for this observation
-                    continue
                 if self.weights in ob.detdata:
                     if len(ob.detdata[self.weights].detector_shape) == 1:
                         weight_nnz = 1
@@ -797,9 +792,6 @@ class BuildNoiseWeighted(Operator):
             dets = ob.select_local_detectors(
                 selection=detectors, flagmask=self.det_mask
             )
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             # Check that the noise model exists
             if self.noise_model not in ob:
@@ -807,6 +799,10 @@ class BuildNoiseWeighted(Operator):
                     self.noise_model, ob.name
                 )
                 raise RuntimeError(msg)
+            
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
 
             noise = ob[self.noise_model]
 

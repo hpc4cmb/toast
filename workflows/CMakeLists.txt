@@ -6,5 +6,5 @@ install(PROGRAMS
     toast_sim_ground.py
     toast_sim_satellite_simple.py
     toast_sim_ground_simple.py
-    DESTINATION bin
+    DESTINATION "${SKBUILD_SCRIPTS_DIR}"
 )

@@ -398,7 +398,6 @@ class GroundFilter(Operator):
         log = Logger.get()
 
         wcomm = data.comm.comm_world
-        gcomm = data.comm.comm_group
 
         self.nsingular = 0
         self.ngood = 0
@@ -407,17 +406,16 @@ class GroundFilter(Operator):
         # Each group loops over its own CES:es
         nobs = len(data.obs)
         for iobs, obs in enumerate(data.obs):
-            
             pat = re.compile(self.pattern)
-            if obs.comm_row is not None and obs.comm_row.size != 1:
+            if not obs.is_distributed_by_detector:
                 raise RuntimeError("GroundFilter assumes data is split by detector")
 
             # Prefix for logging
             log_prefix = f"{data.comm.group} : {obs.name} :"
 
-            if data.comm.group_rank == 0:
+            if obs.comm.group_rank == 0:
                 msg = (
-                    f"{log_prefix} OpGroundFilter: "
+                    f"{log_prefix} GroundFilter: "
                     f"Processing observation {iobs + 1} / {nobs}"
                 )
                 log.debug(msg)
@@ -432,9 +430,9 @@ class GroundFilter(Operator):
 
             t1 = time()
             templates = self.build_templates(obs)
-            if data.comm.group_rank == 0:
+            if obs.comm.group_rank == 0:
                 msg = (
-                    f"{log_prefix} OpGroundFilter: "
+                    f"{log_prefix} GroundFilter: "
                     f"Built templates in {time() - t1:.1f}s"
                 )
                 log.debug(msg)
@@ -447,9 +445,8 @@ class GroundFilter(Operator):
             for det in obs.select_local_detectors(detectors, flagmask=self.det_mask):
                 if pat.match(det) is None:
                     continue
-                if data.comm.group_rank == 0:
-                    msg = f"{log_prefix} OpGroundFilter: " f"Processing detector {det}"
-                    log.verbose(msg)
+                msg = f"{log_prefix}:{det} GroundFilter: starting"
+                log.verbose(msg)
 
                 ref = obs.detdata[self.det_data][det]
                 if self.det_flags is not None:
@@ -470,12 +467,11 @@ class GroundFilter(Operator):
                     last_rcond,
                 )
                 last_good = good
-                if data.comm.group_rank == 0:
-                    msg = (
-                        f"{log_prefix} OpGroundFilter: "
-                        f"Fit templates in {time() - t1:.1f}s"
-                    )
-                    log.verbose(msg)
+                msg = (
+                    f"{log_prefix}:{det} GroundFilter: "
+                    f"  Fit templates in {time() - t1:.1f}s"
+                )
+                log.verbose(msg)
 
                 if coeff is None:
                     # All samples flagged or template fit failed.
@@ -492,16 +488,17 @@ class GroundFilter(Operator):
                     coeff,
                     templates,  # legendre_trend, legendre_filter
                 )
-                if data.comm.group_rank == 0:
-                    msg = (
-                        f"{log_prefix} OpGroundFilter: "
-                        f"Subtract templates in {time() - t1:.1f}s"
-                    )
-                    log.verbose(msg)
+                msg = (
+                    f"{log_prefix}:{det} GroundFilter: "
+                    f"  Subtract templates in {time() - t1:.1f}s"
+                )
+                log.verbose(msg)
             del last_good
             del last_invcov
             del last_cov
             del last_rcond
+            if obs.comm.comm_group is not None:
+                obs.comm.comm_group.barrier()
 
         if wcomm is not None:
             self.nsingular = wcomm.allreduce(self.nsingular)

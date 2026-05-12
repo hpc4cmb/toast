@@ -502,9 +502,6 @@ class PixelsWCS(Operator):
             dets = ob.select_local_detectors(
                 detectors, flagmask=self.detector_pointing.det_mask
             )
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own
@@ -564,6 +561,10 @@ class PixelsWCS(Operator):
                         f"already computed for {dets}"
                     )
                     log.verbose(msg)
+                continue
+
+            if len(dets) == 0:
+                # Nothing to do for this observation
                 continue
 
             # Focalplane for this observation
