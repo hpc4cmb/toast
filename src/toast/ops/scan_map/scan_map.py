@@ -115,9 +115,6 @@ class ScanMap(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             if self.weights is not None:
                 # Sanity check the number of non-zeros between the map and the
@@ -140,6 +137,10 @@ class ScanMap(Operator):
                 create_units=self.det_data_units,
                 accel=use_accel,
             )
+
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
 
             intervals = ob.intervals[self.view].data
             det_data = ob.detdata[self.det_data].data

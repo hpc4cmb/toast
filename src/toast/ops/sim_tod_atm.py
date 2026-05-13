@@ -421,9 +421,6 @@ class SimAtmosphere(Operator):
 
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             tmr = Timer()
             tmr.start()
@@ -437,6 +434,10 @@ class SimAtmosphere(Operator):
                 detectors=dets,
                 create_units=self.det_data_units,
             )
+
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
 
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own

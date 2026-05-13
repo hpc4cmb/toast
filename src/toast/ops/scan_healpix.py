@@ -181,9 +181,6 @@ class ScanHealpixMap(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
             for key in self.det_data_keys:
                 # If our output detector data does not yet exist, create it
                 exists_data = ob.detdata.ensure(
@@ -363,9 +360,6 @@ class ScanHealpixMask(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
             # If our output detector data does not yet exist, create it
             exists_flags = ob.detdata.ensure(
                 self.det_flags, dtype=np.uint8, detectors=dets

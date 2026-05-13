@@ -135,6 +135,8 @@ class TimeConstant(Operator):
         for obs in data.obs:
             dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
             if len(dets) == 0:
+                if obs.comm.comm_group is not None:
+                    obs.comm.comm_group.barrier()
                 continue
 
             fsample = obs.telescope.focalplane.sample_rate.to_value(u.Hz)
@@ -165,13 +167,18 @@ class TimeConstant(Operator):
                     kernel = 1.0 / kernel
                 return kernel
 
-            # The slice of detector data and flags we will use
-            signal = obs.detdata[self.det_data][dets, :]
+            # The slice of detector data and flags we will use.  Ensure we
+            # always have a list of signals, even if there is only one detector
+            signal = list()
+            for d in dets:
+                signal.append(obs.detdata[self.det_data][d])
             if self.det_flags is None:
                 flags = None
                 flag_mask = None
             else:
-                flags = obs.detdata[self.det_flags][dets, :]
+                flags = list()
+                for d in dets:
+                    flags.append(obs.detdata[self.det_flags][d])
                 if self.shared_flags is not None:
                     # These shared flags will effectively be propagated to
                     # detector flags by this operator
@@ -182,11 +189,6 @@ class TimeConstant(Operator):
                     for detflag in flags:
                         detflag |= shflg
                 flag_mask = self.det_flag_mask
-            if len(dets) == 1:
-                # Corner case, signal is a vector, not a list of vectors
-                signal = [signal]
-                if flags is not None:
-                    flags = [flags]
 
             if self.batch:
                 # Use the internal batched (threaded) implementation.  This
@@ -213,6 +215,8 @@ class TimeConstant(Operator):
                 algorithm=algo,
                 debug=debug_root,
             )
+            if obs.comm.comm_group is not None:
+                obs.comm.comm_group.barrier()
 
     def _finalize(self, data, **kwargs):
         return

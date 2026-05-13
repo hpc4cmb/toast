@@ -698,7 +698,7 @@ class AlgorithmNonUniform(AlgorithmBase):
 
 
 def convolve(
-    data,
+    raw,
     rate,
     flags=None,
     flag_mask=None,
@@ -801,8 +801,32 @@ def convolve(
         msg = "Both flags and flag_mask must be specified or set to None"
         raise RuntimeError(msg)
 
-    n_tod = len(data)
-    n_samp = len(data[0])
+    if isinstance(raw, np.ndarray):
+        # Input is an array
+        if raw.ndim == 1:
+            # Single timestream
+            n_tod = 1
+            data = [raw,]
+        elif raw.ndim == 2:
+            n_tod = raw.shape[0]
+            n_samp = raw.shape[1]
+            data = raw
+        else:
+            msg = "Only 1D and 2D arrays are supported as inputs"
+            raise RuntimeError(msg)
+    else:
+        # Some other container
+        if np.isscalar(raw[0]):
+            # Single timestream
+            n_tod = 1
+            n_samp = len(raw)
+            data = [raw,]
+        else:
+            # Multiple timestreams
+            n_tod = len(raw)
+            n_samp = len(raw[0])
+            data = raw
+
     for itod in range(1, n_tod):
         if len(data[itod]) != n_samp:
             msg = "All detector arrays should be the same length"

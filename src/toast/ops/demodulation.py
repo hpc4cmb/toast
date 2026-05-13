@@ -1050,8 +1050,6 @@ class StokesWeightsDemod(Operator):
 
         for obs in data.obs:
             dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
-            if len(dets) == 0:
-                continue
 
             exists_weights = obs.detdata.ensure(
                 self.weights,
@@ -1059,6 +1057,10 @@ class StokesWeightsDemod(Operator):
                 dtype=dtype,
                 detectors=dets,
             )
+
+            if len(dets) == 0:
+                continue
+
             nsample = obs.n_local_samples
             ones = np.ones(nsample, dtype=dtype)
             zeros = np.zeros(nsample, dtype=dtype)

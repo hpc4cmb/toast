@@ -137,6 +137,9 @@ class HWPModelTest(MPITestCase):
         # Every process will plot its first detector.
         selected_dets = obs.select_local_detectors(flagmask=det_mask)
 
+        if len(selected_dets) == 0:
+            return
+
         # Recall that we have flagged the first half of each detector above.
         # Plot the whole TOD and also a slice near the transition.
         n_all_samp = obs.n_all_samples

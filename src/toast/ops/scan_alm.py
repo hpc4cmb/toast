@@ -228,7 +228,7 @@ class ScanAlm(Operator):
         """Scan one a_lm expansion into TOD"""
 
         signal = np.zeros(theta.size)
-        
+
         for stokes, stokes_weights in zip(self.stokes_weights.mode, weights):
             if np.all(stokes_weights == 0):
                 continue
@@ -246,6 +246,7 @@ class ScanAlm(Operator):
                 msg = f"Unsupported Stokes component: {stokes}"
                 raise RuntimeError(msg)
 
+            phi[phi<0] += 2*np.pi
             pointing = np.vstack([theta, phi, psi]).T
             signal += interpolator.interpol(pointing).ravel() * stokes_weights
 
@@ -270,7 +271,7 @@ class ScanAlm(Operator):
         self._blm_P *= np.sqrt(2)  # Seems to be required for E/B beam
 
         return
- 
+
     @function_timer
     def _cache_interpolators(self):
         """Set up the polarized and unpolarized interpolators"""
@@ -307,6 +308,7 @@ class ScanAlm(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        gcomm = data.comm.comm_group
 
         if not ducc_available:
             msg = "ScanAlm requires ducc0"
@@ -325,12 +327,12 @@ class ScanAlm(Operator):
 
         # Loop over all observations and local detectors, sampling each alm
 
-        for ob in data.obs:
+        timer = Timer()
+        timer.start()
+        nob = len(data.obs)
+        for iob,ob in enumerate(data.obs):
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
             for key in self.det_data_keys:
                 # If our output detector data does not yet exist, create it
                 exists_data = ob.detdata.ensure(
@@ -354,6 +356,7 @@ class ScanAlm(Operator):
                         ref -= sig
                     else:
                         ref += sig
+            log.debug_rank(f"{iob}/{nob} observation finished in", timer=timer, comm=gcomm)
 
         # Clean up our alm, if needed
         if not self.save_alm:

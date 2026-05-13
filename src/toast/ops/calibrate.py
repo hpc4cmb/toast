@@ -91,8 +91,6 @@ class CalibrateDetectors(Operator):
                 continue
 
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-            if len(dets) == 0:
-                continue
 
             fp = ob.telescope.focalplane
             if self.cal_value is not None:
