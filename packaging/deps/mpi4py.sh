@@ -15,6 +15,8 @@ if [ "x${MPICC}" = "x" ]; then
     fi
 else
     echo "Building mpi4py with MPICC=\"${MPICC}\""
+    echo "Removing any potential 'cc' symlink conflict"
+    rm -f "${CONDA_PREFIX}/bin/cc"
     CFLAGS="-O2 -g -fPIC" pip install --force-reinstall --no-cache-dir --no-binary=mpi4py mpi4py
 fi
 

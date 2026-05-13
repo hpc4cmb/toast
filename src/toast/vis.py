@@ -721,7 +721,7 @@ def plot_healpix_maps(
         else:
             # Only I
             imapdata = mapdata
-            complist = ["I", "Q", "U"]
+            complist = ["I"]
             mlist = [mapdata]
             rglist = [range_I]
 
@@ -732,6 +732,7 @@ def plot_healpix_maps(
         imapdata[goodhits] -= mono
 
         for icomp, (comp, rge, mdata) in enumerate(zip(complist, rglist, mlist)):
+            mdata[badhits] = np.nan
             mmin, mmax = sym_range(mdata[goodhits])
             if rge is not None:
                 mmin, mmax = rge
