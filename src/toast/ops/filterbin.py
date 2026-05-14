@@ -667,10 +667,17 @@ class FilterBin(Operator):
                     msg = f"{self.filter_config_file} specifies {key} for "
                     msg += f"{obs.name} but it is not recognized"
                     raise RuntimeError(msg)
+                log.debug_rank(
+                    f"Setting {key} = {value} for {obs.name}",
+                    comm=obs.comm.comm_group,
+                )
                 setattr(self, key, value)
         else:
             log.warning(f"No filter configuration for {obs.name}")
             success = False
+
+        if obs.comm.comm_group is not None:
+            obs.comm.comm_group.Barrier()
 
         return success
 
