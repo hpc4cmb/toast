@@ -74,6 +74,7 @@ def create_fake_healpix_file(
         coord="C",
         column_units=unit_str,
         dtype=np.float32,
+        overwrite=True,
     )
     del maps
 
