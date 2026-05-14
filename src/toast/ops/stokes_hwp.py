@@ -2,9 +2,9 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np
-import traitlets
-from astropy import units as u
+import numpy as np # pyright: ignore[reportMissingImports]
+import traitlets # pyright: ignore[reportMissingImports]
+from astropy import units as u # pyright: ignore[reportMissingImports]
 
 from ..observation import default_values as defaults
 from .. import qarray as qa

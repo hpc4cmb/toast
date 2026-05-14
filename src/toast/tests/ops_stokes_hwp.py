@@ -4,9 +4,9 @@
 
 import os
 
-import healpy as hp
-import numpy as np
-from astropy import units as u
+import healpy as hp # pyright: ignore[reportMissingImports]
+import numpy as np # pyright: ignore[reportMissingImports]
+from astropy import units as u # pyright: ignore[reportMissingImports]
 
 from .. import ops as ops
 from ..observation import default_values as defaults
@@ -80,7 +80,7 @@ class StokesWeightsHWPTest(MPITestCase):
         return data
 
     def plot_results(self, file_root, nnz):
-        import matplotlib.pyplot as plt
+        import matplotlib.pyplot as plt # pyright: ignore[reportMissingModuleSource]
 
         hit_file = f"{file_root}_hits.fits"
         rcond_file = f"{file_root}_rcond.fits"
