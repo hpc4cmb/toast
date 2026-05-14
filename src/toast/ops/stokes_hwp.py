@@ -2,9 +2,9 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
-import numpy as np # pyright: ignore[reportMissingImports]
-import traitlets # pyright: ignore[reportMissingImports]
-from astropy import units as u # pyright: ignore[reportMissingImports]
+import numpy as np
+import traitlets
+from astropy import units as u
 
 from ..observation import default_values as defaults
 from .. import qarray as qa
@@ -121,10 +121,10 @@ def stokes_weights_hwp_model_nominal(
 
             # FIXME:  Ignore the cross-polar response (eta) for now.
             weights[widx][samples, 0] = 1.0
-            weights[widx][samples, 1] = sin2alpha
-            weights[widx][samples, 2] = cos2alpha
-            weights[widx][samples, 3] = sin2omega
-            weights[widx][samples, 4] = cos2omega
+            weights[widx][samples, 1] = cos2alpha
+            weights[widx][samples, 2] = sin2alpha
+            weights[widx][samples, 3] = cos2omega
+            weights[widx][samples, 4] = sin2omega
             weights[widx][samples, 5] = cos2alpha2omega
             weights[widx][samples, 6] = sin2alpha2omega
             weights[widx][samples, 7] = cos2alpha4omega
