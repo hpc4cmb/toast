@@ -633,6 +633,29 @@ class FilterBin(Operator):
                     raise traitlets.TraitError(msg)
         return bin
 
+    @function_timer
+    def _load_filter_config(self):
+        log = Logger.get()
+        timer = Timer()
+        timer.start()
+        if self.filter_config_file is not None:
+            with open(self.filter_config_file, "r") as f:
+                self.filter_config = yaml.load(f)
+            # Find and translate all quantities
+            for obs_name, obs_config in self.filter_config.items():
+                for key, value in obs_config.items():
+                    if isinstance(value, str) and \
+                       value.endswith((" deg", " rad", " arcmin")):
+                        obs_config[key] = u.Quantity(value)
+            log.info_rank(
+                f"Loaded filter config from {self.filter_config_file} in",
+                comm=self.comm, timer=timer
+            )
+        else:
+            self.filter_config = None
+        return
+
+    @function_timer
     def _apply_filter_config(self, obs):
         """Use custom filter configuration for this observation"""
         log = Logger.get()
@@ -644,10 +667,17 @@ class FilterBin(Operator):
                     msg = f"{self.filter_config_file} specifies {key} for "
                     msg += f"{obs.name} but it is not recognized"
                     raise RuntimeError(msg)
+                log.debug_rank(
+                    f"Setting {key} = {value} for {obs.name}",
+                    comm=obs.comm.comm_group,
+                )
                 setattr(self, key, value)
         else:
             log.warning(f"No filter configuration for {obs.name}")
             success = False
+
+        if obs.comm.comm_group is not None:
+            obs.comm.comm_group.Barrier()
 
         return success
 
@@ -768,11 +798,7 @@ class FilterBin(Operator):
         memreport.prefix = "Before filtering"
         memreport.apply(data)
 
-        if self.filter_config_file is not None:
-            with open(self.filter_config_file, "r") as f:
-                self.filter_config = yaml.load(f)
-        else:
-            self.filter_config = None
+        self._load_filter_config()
 
         t1 = time()
         for iobs, obs in enumerate(data.obs):
@@ -1812,6 +1838,10 @@ class FilterBin(Operator):
         extra_header["NDET"] = (len(all_dets), "Total number of detectors")
         extra_header["NGOOD"] = (len(good_dets), "Total number of usable detectors")
         extra_header["OPERATOR"] = ("TOAST FilterBin", "Generating code")
+        n_obs = data.n_obs()
+        if n_obs == 1:
+            extra_header["OBS"] = data.obs[0].name
+        extra_header["NOBS"] = n_obs
 
         return extra_header
 
@@ -1833,8 +1863,10 @@ class FilterBin(Operator):
         ]:
             key = prefix + param
             value = getattr(self, param)
-            if value is None:
-                # Header cannot have Python objects
+            # Header cannot have Python objects
+            if isinstance(value, u.Quantity):
+                value = str(value)
+            elif value is None:
                 value = "None"
             header[key] = value
 

@@ -102,6 +102,18 @@ class Data(MutableMapping):
                     all_dets[d] = None
         return list(all_dets.keys())
 
+    def n_obs(self):
+        """Count the current number of observations across all groups.
+
+        Must be called collectively or will cause a hang.
+        """
+        n_obs = len(self.obs)
+        comm = self._comm.comm_group_rank
+        if comm is not None:
+            n_obs = comm.allreduce(n_obs)
+
+        return n_obs
+
     def detector_units(self, det_data):
         """Get the detector data units for a given field.
 
