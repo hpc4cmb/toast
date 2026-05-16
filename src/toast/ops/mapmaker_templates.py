@@ -766,7 +766,7 @@ class SolveAmplitudes(Operator):
         if self.mc_mode:
             # Shortcut, just verified that our flags exist
             self._log.info_rank(
-                f"{self._log_prefix} MC mode, reusing flags for solver", comm=comm
+                f"{self._log_prefix} MC mode, reusing flags for solver", comm=self._comm
             )
             return
 
@@ -834,7 +834,7 @@ class SolveAmplitudes(Operator):
         if self.mc_mode:
             # Shortcut, verify that our covariance and other products exist.
             if self.binning.pixel_dist not in self._data:
-                msg = f"MC mode, pixel distribution "
+                msg = "MC mode, pixel distribution "
                 msg += f"'{self.binning.pixel_dist}' does not exist"
                 self._log.error(msg)
                 raise RuntimeError(msg)
