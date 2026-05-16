@@ -332,7 +332,6 @@ class PixelDistribution(AcceleratorObject):
             return self._alltoallv_info
 
         owners = self.submap_owners
-        our_submaps = self.owned_submaps
 
         send_counts = None
         send_displ = None
