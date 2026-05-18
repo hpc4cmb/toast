@@ -20,7 +20,7 @@ class Operator(TraitConfig):
     timing_total = Bool(False, help="If True, print timing of finalize()")
 
     def __init__(self, **kwargs):
-        self._timer = None
+        self._op_timer = None
         super().__init__(**kwargs)
 
     def _exec(self, data, detectors=None, **kwargs):
@@ -49,23 +49,23 @@ class Operator(TraitConfig):
         """
         log = Logger.get()
         if self.enabled:
-            if self.timing or (self._timer is None and self.timing_total):
+            if self.timing or (self._op_timer is None and self.timing_total):
                 wcomm = data.comm.comm_world
                 op_name = f"{self.name} ({type(self).__name__})"
                 log.info_rank(f"{op_name} starting...", comm=wcomm)
-            if self._timer is None:
+            if self._op_timer is None:
                 # The timer is instantiated on the first call to exec()
-                self._timer = Timer()
-            timer_offset = self._timer.seconds()
-            self._timer.start()
+                self._op_timer = Timer()
+            timer_offset = self._op_timer.seconds()
+            self._op_timer.start()
             self._exec(
                 data,
                 detectors=detectors,
                 **kwargs,
             )
-            self._timer.stop()
+            self._op_timer.stop()
             if self.timing:
-                elapsed = self._timer.seconds() - timer_offset
+                elapsed = self._op_timer.seconds() - timer_offset
                 log.info_rank(
                     f"{op_name} executed in {elapsed:.1f} s", comm=wcomm,
                 )
@@ -100,7 +100,7 @@ class Operator(TraitConfig):
             if self.timing_total:
                 wcomm = data.comm.comm_world
                 op_name = f"{self.name} ({type(self).__name__})"
-                elapsed = self._timer.seconds()
+                elapsed = self._op_timer.seconds()
                 log.info_rank(
                     f"{op_name} applied in {elapsed:.1f} s", comm=wcomm,
                 )
