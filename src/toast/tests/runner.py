@@ -40,6 +40,7 @@ from . import ops_fill_gaps as test_ops_fill_gaps
 from . import ops_extend_flags as test_ops_extend_flags
 from . import ops_filterbin as test_ops_filterbin
 from . import ops_flag_sso as test_ops_flag_sso
+from . import ops_flag_nans as test_ops_flag_nans
 from . import ops_gainscrambler as test_ops_gainscrambler
 from . import ops_groundfilter as test_ops_groundfilter
 from . import ops_hwpfilter as test_ops_hwpfilter
@@ -209,6 +210,7 @@ def test(name=None, verbosity=2):
         # suite.addTest(loader.loadTestsFromModule(test_ops_sim_tod_totalconvolve))
 
         suite.addTest(loader.loadTestsFromModule(test_ops_flag_sso))
+        suite.addTest(loader.loadTestsFromModule(test_ops_flag_nans))
         suite.addTest(loader.loadTestsFromModule(test_ops_statistics))
         suite.addTest(loader.loadTestsFromModule(test_ops_statcut))
         suite.addTest(loader.loadTestsFromModule(test_ops_loader))
