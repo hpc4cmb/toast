@@ -50,6 +50,8 @@ class ScanAlm(Operator):
         None,
         allow_none=True,
         help="Path to a_lm FITS file.  Use ';' if providing multiple files.  "
+        "Any focalplane key listed in `focalplane_keys` can be used here and even "
+        "formatted. For example: {psi_pol:.0f}"
         "If set, `alms` must be empty.",
     )
 
@@ -76,6 +78,13 @@ class ScanAlm(Operator):
     det_mask = Int(
         defaults.det_mask_invalid,
         help="Bit mask value for per-detector flagging",
+    )
+
+    focalplane_keys = Unicode(
+        None,
+        allow_none=True,
+        help="Comma-separated list of keys to retrieve from the focalplane.  "
+        "Used to expand map file names.",
     )
 
     subtract = Bool(
@@ -143,10 +152,39 @@ class ScanAlm(Operator):
                     raise traitlets.TraitError(msg)
         return weights
 
+    def _get_sorted_dets(self, data, detectors=None):
+        if self.focalplane_keys is None:
+            dets_sorted = [ [], [] ]
+            for ob in data.obs:
+                dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
+                for det in dets:
+                    dets_sorted[-2].append(ob.name)
+                    dets_sorted[-1].append(det)
+            dets_sorted = sorted(zip(*dets_sorted))
+        else:
+            dets_sorted = [[] for i in range(2 + len(self.focalplane_keys.split(",")))]
+            # Loop over all observations and local detectors, sort dets according to focalplane_keys
+            for ob in data.obs:
+                focalplane = ob.telescope.focalplane
+                dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
+                for det in dets:
+                    for ikey, key in enumerate(self.focalplane_keys.split(",")):
+                        if key not in focalplane.detector_data.keys():
+                            msg = f"{key} is not in the focalplane during {ob.name}"
+                            raise KeyError(msg)
+                        dets_sorted[ikey].append(str(focalplane[det][key]))
+                    dets_sorted[-2].append(ob.name)
+                    dets_sorted[-1].append(det)
+            dets_sorted = sorted(zip(*dets_sorted))
+        return dets_sorted
+
     def _parse_alm(self):
         if self.file is None:
             if len(self.alms) == 0:
                 msg = "You must set either the `file` or `alms` trait"
+                raise RuntimeError(msg)
+            if self.focalplane_keys is not None:
+                msg = "You must **unset** `alms` and  set `file` when using `focalplane_keys`"
                 raise RuntimeError(msg)
             # Maps are pre-loaded
             nalm = len(self.alms)
@@ -170,7 +208,7 @@ class ScanAlm(Operator):
         return
 
     @function_timer
-    def _load_alm(self, data):
+    def _load_alm(self, data, focalplane_key_value=None):
         """Load, broadcast and save sky a_lm in shared memory"""
 
         world_comm = data.comm.comm_world
@@ -183,7 +221,10 @@ class ScanAlm(Operator):
         for file_name in self.file_names:
             dtype = complex  # totalconvolve requires dtype=complex
             if world_rank == 0:
-                alm = hp.read_alm(file_name, hdu=(1, 2, 3)).astype(dtype)
+                if self.focalplane_keys is None:
+                    alm = hp.read_alm(file_name, hdu=(1, 2, 3)).astype(dtype)
+                else:
+                    alm = hp.read_alm(file_name.format(**focalplane_key_value), hdu=(1, 2, 3)).astype(dtype)
                 alm_shape = alm.shape
                 lmax = hp.Alm.getlmax(alm[0].size)
             else:
@@ -321,17 +362,13 @@ class ScanAlm(Operator):
 
         self._parse_alm()
         self._parse_detdata_keys()
-        self._load_alm(data)
-        self._cache_blm()
-        self._cache_interpolators()
+        dets_sorted = self._get_sorted_dets(data, detectors)
+        if self.focalplane_keys is None:
+            self._load_alm(data)
+            self._cache_blm()
+            self._cache_interpolators()
 
-        # Loop over all observations and local detectors, sampling each alm
-
-        timer = Timer()
-        timer.start()
-        nob = len(data.obs)
-        for iob,ob in enumerate(data.obs):
-            # Get the detectors we are using for this observation
+        for ob in data.obs:
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
             for key in self.det_data_keys:
                 # If our output detector data does not yet exist, create it
@@ -341,22 +378,47 @@ class ScanAlm(Operator):
                 if self.zero:
                     ob.detdata[key].reset()
 
-            ob_data = data.select(obs_name=ob.name)
-            for det in dets:
-                theta, phi, weights = self._get_pointing(ob_data, det)
-                for ialm, alm in enumerate(self.alms):
-                    if len(self.det_data_keys) == 1:
-                        det_data_key = self.det_data_keys[0]
-                    else:
-                        det_data_key = self.det_data_keys[ialm]
-                    ref = ob.detdata[det_data_key][det]
-                    interpolators = self.interpolators[ialm]
-                    sig = self._scan_alms(interpolators, theta, phi, weights)
-                    if self.subtract:
-                        ref -= sig
-                    else:
-                        ref += sig
-            log.debug_rank(f"{iob}/{nob} observation finished in", timer=timer, comm=gcomm)
+        # Loop over all observations and local detectors, sampling each alm
+        timer = Timer()
+        timer.start()
+        ndet = len(dets_sorted)
+        prev_focalplane_keys = None
+        for idet, key_ob_det in enumerate(dets_sorted):
+            ob_name = key_ob_det[-2]
+            ob_data = data.select(obs_name=ob_name)
+            ob = ob_data.obs[0]
+            det = key_ob_det[-1]
+            focalplane_keys = key_ob_det[:-2]
+            if self.focalplane_keys is not None and focalplane_keys != prev_focalplane_keys:
+                # Clean up our alm, if needed
+                if not self.save_alm:
+                    for alm in self.alms:
+                        alm.close()
+                    self.alms = []
+                focalplane_key_value = {}
+                for ikey, key in enumerate(self.focalplane_keys.split(",")):
+                    focalplane_key_value[key] = key_ob_det[ikey]
+                self._load_alm(data, focalplane_key_value)
+                self._cache_blm()
+                self._cache_interpolators()
+                prev_focalplane_keys = focalplane_keys
+                log.info_rank(f"Group {data.comm.group:4} : Start detectors with {focalplane_key_value}", timer=timer, comm=gcomm)
+
+            theta, phi, weights = self._get_pointing(ob_data, det)
+            for ialm, alm in enumerate(self.alms):
+                if len(self.det_data_keys) == 1:
+                    det_data_key = self.det_data_keys[0]
+                else:
+                    det_data_key = self.det_data_keys[ialm]
+                ref = ob.detdata[det_data_key][det]
+                interpolators = self.interpolators[ialm]
+                sig = self._scan_alms(interpolators, theta, phi, weights)
+                if self.subtract:
+                    ref -= sig
+                else:
+                    ref += sig
+            if idet % 100 == 0:
+                log.debug_rank(f"Group {data.comm.group:4} : {idet}/{ndet} detectors finished in", timer=timer, comm=gcomm)
 
         # Clean up our alm, if needed
         if not self.save_alm:
