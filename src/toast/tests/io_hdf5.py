@@ -322,7 +322,7 @@ class IoHdf5Test(MPITestCase):
                     )
                     self.assertTrue(False)
 
-            close_data(check_data)
+            del check_data
             close_data(data)
 
     def test_save_load_ops(self):
@@ -367,7 +367,7 @@ class IoHdf5Test(MPITestCase):
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
-        close_data(check_data)
+        del check_data
 
         # Also test loading explicit files
         check_data = Data(data.comm)
@@ -380,7 +380,7 @@ class IoHdf5Test(MPITestCase):
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
-        close_data(check_data)
+        del check_data
 
         # Also check loading by regex, in this case only one frequency
         check_data = Data(data.comm)
@@ -394,7 +394,7 @@ class IoHdf5Test(MPITestCase):
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
-        close_data(check_data)
+        del check_data
 
         close_data(data)
 
@@ -440,7 +440,7 @@ class IoHdf5Test(MPITestCase):
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
-        close_data(check_data)
+        del check_data
 
         close_data(data)
 
@@ -484,7 +484,7 @@ class IoHdf5Test(MPITestCase):
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
-        close_data(check_data)
+        del check_data
 
         close_data(data)
 
@@ -530,7 +530,7 @@ class IoHdf5Test(MPITestCase):
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
-        close_data(check_data)
+        del check_data
 
         close_data(data)
 
@@ -592,7 +592,7 @@ class IoHdf5Test(MPITestCase):
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
-        close_data(check_data)
+        del check_data
 
         close_data(data)
 
@@ -905,7 +905,7 @@ class IoHdf5Test(MPITestCase):
             msg = f"select all returned {loaded_obs} not {orig_obs}"
             print(msg, flush=True)
             self.assertTrue(False)
-        close_data(check_data)
+        del check_data
 
         # Check that we can load individual sessions
 
@@ -921,7 +921,7 @@ class IoHdf5Test(MPITestCase):
                 msg = f"select {ses} returned {loaded_obs} not {orig_ses_obs[ses]}"
                 print(msg, flush=True)
                 self.assertTrue(False)
-            close_data(check_data)
+            del check_data
 
         # Check that we can load observations based on some metadata.
         check_val = np.mean(check_leaf.value)
@@ -942,7 +942,7 @@ class IoHdf5Test(MPITestCase):
             msg = f"select on common meta returned {loaded_obs} not {orig_obs}"
             print(msg, flush=True)
             self.assertTrue(False)
-        close_data(check_data)
+        del check_data
 
         # Check we can load observations based on session times
         for ses in sorted(orig_ses_times.keys()):
@@ -965,7 +965,7 @@ class IoHdf5Test(MPITestCase):
                 msg = f"select time {ses} returned {loaded_obs} not {orig_ses_obs[ses]}"
                 print(msg, flush=True)
                 self.assertTrue(False)
-            close_data(check_data)
+            del check_data
 
         close_data(data)
 
@@ -1052,6 +1052,6 @@ class IoHdf5Test(MPITestCase):
                     f32=True,
                 )
             )
-        close_data(check_data)
+        del check_data
 
         close_data(data)
