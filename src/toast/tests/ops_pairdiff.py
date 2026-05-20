@@ -1,0 +1,324 @@
+# Copyright (c) 2026 by the parties listed in the AUTHORS file.
+# All rights reserved.  Use of this source code is governed by
+# a BSD-style license that can be found in the LICENSE file.
+
+import os
+
+import healpy as hp
+import numpy as np
+from astropy import units as u
+
+from .. import ops as ops
+from .. import qarray as qa
+from ..observation import default_values as defaults
+from ..vis import set_matplotlib_backend
+from .helpers import (
+    close_data,
+    create_fake_healpix_scanned_tod,
+    create_ground_data,
+    create_outdir,
+    create_overdistributed_data,
+)
+from .mpi import MPITestCase
+
+
+class PairDiffTest(MPITestCase):
+    def setUp(self):
+        fixture_name = os.path.splitext(os.path.basename(__file__))[0]
+        self.outdir = create_outdir(self.comm, subdir=fixture_name)
+
+    def _test_pairdiff(self, weight_mode, data, suffix=""):
+        nside = 256
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Pointing operators
+
+        detpointing_azel = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec,
+            shared_flag_mask=0,
+        )
+        detpointing_radec = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec,
+            shared_flag_mask=0,
+        )
+
+        pixels = ops.PixelsHealpix(
+            nside=nside,
+            detector_pointing=detpointing_radec,
+        )
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_radec,
+        )
+
+        sky_file = os.path.join(self.outdir, f"fake_sky_{weight_mode}{suffix}.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            sky_file,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=1.0 * u.deg,
+            lmax=3 * nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+
+        # Bin signal without demodulation
+
+        binner = ops.BinMap(
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        mapper = ops.MapMaker(
+            name=f"modulated_{weight_mode}{suffix}",
+            det_data=defaults.det_data,
+            binning=binner,
+            template_matrix=None,
+            write_hits=True,
+            write_map=True,
+            write_cov=True,
+            write_invcov=True,
+            write_rcond=True,
+            keep_final_products=True,
+            output_dir=self.outdir,
+            map_rcond_threshold=1e-2,
+        )
+        mapper.apply(data)
+
+        # Write one timestream for comparison
+
+        if data.comm.world_rank == 0:
+            oname = data.obs[0].name
+            valid_dets = data.obs[0].select_local_detectors(
+                flagmask=defaults.det_mask_invalid
+            )
+            dname = valid_dets[0]
+            tod_input = os.path.join(
+                self.outdir,
+                f"tod_{oname}_{dname}{suffix}_in.np",
+            )
+            data.obs[0].detdata[defaults.det_data][dname].tofile(tod_input)
+
+        # Pairdifference
+
+        pairdiff = ops.PairDiff(fpkeys=["pixel"])
+        pairdiff_data = pairdiff.apply(data)
+
+        # Demodulate
+
+        demod_weights_in = ops.StokesWeights(
+            weights="demod_weights_in",
+            mode=weight_mode,
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_azel,
+        )
+
+        downsample = 3
+        demod = ops.Demodulate(
+            stokes_weights=demod_weights_in,
+            nskip=downsample,
+            purge=False,
+            mode=weight_mode,
+        )
+        demod_data = demod.apply(pairdiff_data)
+
+        # Map again
+
+        demod_weights = ops.StokesWeightsDemod(
+            detector_pointing_in=detpointing_azel,
+            detector_pointing_out=detpointing_radec,
+            mode=weight_mode,
+        )
+
+        mapper.name = f"demodulated_{weight_mode}{suffix}"
+        binner.stokes_weights = demod_weights
+        mapper.apply(demod_data)
+
+        if data.comm.world_rank == 0:
+            set_matplotlib_backend()
+            import matplotlib.pyplot as plt
+
+            # Plot demodulated timestreams for comparison
+            oname = data.obs[0].name
+            valid_dets = data.obs[0].select_local_detectors(
+                flagmask=defaults.det_mask_invalid
+            )
+            dname = valid_dets[0]
+            tod_in_file = os.path.join(
+                self.outdir,
+                f"tod_{oname}_{dname}{suffix}_in.np",
+            )
+            tod_in = np.fromfile(tod_in_file)
+            tod_plot = os.path.join(self.outdir, f"tod_{oname}_{dname}{suffix}.pdf")
+
+            slc_in = slice(0, 50)
+            slc_demod = slice(0, 50 // downsample)
+
+            fig = plt.figure(figsize=(12, 12), dpi=72)
+            ax = fig.add_subplot(2, 1, 1, aspect="auto")
+            ax.plot(
+                data.obs[0].shared[defaults.times].data[slc_in],
+                tod_in[slc_in],
+                c="black",
+                label="Original Signal",
+            )
+            ax.plot(
+                data.obs[0].shared[defaults.times].data[slc_in],
+                data.obs[0].shared[defaults.hwp_angle].data[slc_in],
+                c="purple",
+                label="HWP Angle",
+            )
+            ax.legend(loc="best")
+            ax = fig.add_subplot(2, 1, 2, aspect="auto")
+            if "I" in weight_mode:
+                ax.plot(
+                    demod_data.obs[0].shared[defaults.times].data[slc_demod],
+                    demod_data.obs[0].detdata[defaults.det_data][
+                        f"demod0_{dname}", slc_demod
+                    ],
+                    c="red",
+                    label="Demod0",
+                )
+            if "QU" in weight_mode:
+                ax.plot(
+                    demod_data.obs[0].shared[defaults.times].data[slc_demod],
+                    demod_data.obs[0].detdata[defaults.det_data][
+                        f"demod4r_{dname}", slc_demod
+                    ],
+                    c="blue",
+                    label="Demod4r",
+                )
+                ax.plot(
+                    demod_data.obs[0].shared[defaults.times].data[slc_demod],
+                    demod_data.obs[0].detdata[defaults.det_data][
+                        f"demod4i_{dname}", slc_demod
+                    ],
+                    c="green",
+                    label="Demod4i",
+                )
+            ax.legend(loc="best")
+            plt.title("Demodulation")
+            plt.savefig(tod_plot)
+            plt.close()
+
+            fname_mod = os.path.join(
+                self.outdir, f"modulated_{weight_mode}{suffix}_map.fits"
+            )
+            fname_demod = os.path.join(
+                self.outdir, f"demodulated_{weight_mode}{suffix}_map.fits"
+            )
+            fname_hits = os.path.join(
+                self.outdir, f"demodulated_{weight_mode}{suffix}_hits.fits"
+            )
+
+            map_mod = hp.read_map(fname_mod, None)
+            map_demod = np.atleast_2d(hp.read_map(fname_demod, None))
+            hits = hp.read_map(fname_hits)
+            map_input = np.atleast_2d(hp.read_map(sky_file, None))
+
+            # Develop a comparison mask that excludes poorly observed pixels
+            sorted_hits = np.sort(hits[hits != 0])
+            nhit = len(sorted_hits)
+            hit_min = sorted_hits[int(0.1 * nhit)]  # worst 10% of hit pixels
+            rms_mask = hits > hit_min
+
+            fig = plt.figure(figsize=[18, 12])
+            nrow, ncol = 3, 3
+            rot = [42, -42]
+            reso = 1
+            xsize = 800
+
+            amp = 1e-5
+            for i, m in enumerate(map_mod):
+                # Modulated map is full IQU
+                value = map_input[i]
+                good = m != 0
+                rms = np.sqrt(np.mean((m - value)[rms_mask] ** 2))
+                m[m == 0] = hp.UNSEEN
+                stokes = "IQU"[i]
+                hp.gnomview(
+                    m,
+                    sub=[nrow, ncol, 1 + i],
+                    reso=reso,
+                    xsize=xsize,
+                    rot=rot,
+                    title=f"Modulated {stokes} : rms = {rms}",
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
+                    cmap="coolwarm",
+                )
+
+            all_good = True
+            for stokes, m in zip(weight_mode, map_demod):
+                # Demodulated map only has the prescribed components
+                i = "IQU".index(stokes)
+                value = map_input[i]
+                good = m != 0
+                rms0 = np.sqrt(np.mean(value[rms_mask] ** 2))
+                rms = np.sqrt(np.mean(m[rms_mask] ** 2))
+                rms1 = np.sqrt(np.mean((m - value)[rms_mask] ** 2))
+                m[m == 0] = hp.UNSEEN
+                hp.gnomview(
+                    m,
+                    sub=[nrow, ncol, ncol + i + 1],
+                    reso=reso,
+                    xsize=xsize,
+                    rot=rot,
+                    title=f"Demodulated {stokes} : rms = {rms / rms0:.3f} x rms(in)",
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
+                    cmap="coolwarm",
+                )
+                resid = m - value
+                resid[m == 0] = hp.UNSEEN
+                hp.gnomview(
+                    resid,
+                    sub=[nrow, ncol, 2 * ncol + i + 1],
+                    reso=reso,
+                    xsize=xsize,
+                    rot=rot,
+                    title=f"Residual {stokes} : resid rms = {rms1 / rms0:.3f} x rms(in)",
+                    min=np.amin(value[good]) - amp,
+                    max=np.amax(value[good]) + amp,
+                    cmap="coolwarm",
+                )
+                if rms1 / rms0 > 0.1:
+                    print(
+                        f"input - demodulated map RMS = {rms1}, (input RMS = {rms0})",
+                        flush=True,
+                    )
+                    all_good = False
+
+            outfile = os.path.join(
+                self.outdir, f"map_comparison.{weight_mode}{suffix}.png"
+            )
+            fig.savefig(outfile)
+            self.assertTrue(all_good)
+
+        if self.comm is not None:
+            self.comm.barrier()
+        close_data(demod_data)
+        close_data(data)
+
+    def test_pairdiff_IQU(self):
+        data = create_ground_data(self.comm, flagged_obs=False)
+        self._test_pairdiff(weight_mode="IQU", data=data)
+
+    def test_pairdiff_QU(self):
+        data = create_ground_data(self.comm, flagged_obs=False)
+        self._test_pairdiff(weight_mode="QU", data=data)
+
+    def test_pairdiff_I(self):
+        data = create_ground_data(self.comm, flagged_obs=False)
+        self._test_pairdiff(weight_mode="I", data=data)
