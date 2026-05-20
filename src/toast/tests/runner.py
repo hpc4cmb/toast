@@ -55,6 +55,7 @@ from . import ops_mapmaker_utils as test_ops_mapmaker_utils
 from . import ops_memory_counter as test_ops_memory_counter
 from . import ops_noise_estim as test_ops_noise_estim
 from . import ops_noise_filter as test_ops_noise_filter
+from . import ops_pairdiff as test_ops_pairdiff
 from . import ops_perturbhwp as test_ops_perturbhwp
 from . import ops_pixels_healpix as test_ops_pixels_healpix
 from . import ops_pointing_detector as test_ops_pointing_detector
@@ -242,6 +243,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_ops_crosslinking))
         suite.addTest(loader.loadTestsFromModule(test_ops_sss))
         suite.addTest(loader.loadTestsFromModule(test_ops_stokes_weights))
+        suite.addTest(loader.loadTestsFromModule(test_ops_pairdiff))
         suite.addTest(loader.loadTestsFromModule(test_ops_demodulate))
         suite.addTest(loader.loadTestsFromModule(test_ops_demod_common_mode))
         suite.addTest(loader.loadTestsFromModule(test_ops_detrend))

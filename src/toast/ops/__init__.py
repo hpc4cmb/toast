@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -48,6 +48,7 @@ from .noise_model import DefaultNoiseModel, FitNoiseModel, FlagNoiseFit
 from .noise_weight import NoiseWeight
 from .obsmat import ObsMat, coadd_observation_matrix
 from .operator import Operator
+from .pairdiff import PairDifference, StokesWeightsPairDiff
 from .pipeline import Pipeline
 from .pixels_healpix import PixelsHealpix
 from .pixels_wcs import PixelsWCS
