@@ -42,7 +42,7 @@ class InjectCosmicRays(Operator):
     from simulations.   For each observation and each detector, we estimate the number of hits expected
     theroretically and draw a random integer, `N`,  with a Poissonian distribution given the expected number
     of events, `Nexp`.  We then  select randomly `N` timestamps where   the hits will be injected into the tod simulated in TOAST.
-    Evaluate the function :math:\gamma at a higher sampling rate (~150 Hz), decimate it to the TOD sample rate and coadd  it.
+    Evaluate the function :math:\\gamma at a higher sampling rate (~150 Hz), decimate it to the TOD sample rate and coadd  it.
 
     Args:
         crfile (string):  A `*.npz`  file encoding 4 attributes,
@@ -142,7 +142,7 @@ class InjectCosmicRays(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
-            
+
             comm = ob.comm.comm_group
             rank = ob.comm.group_rank
             # Make sure detector data output exists

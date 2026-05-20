@@ -289,11 +289,14 @@ class IoHdf5Test(MPITestCase):
             data, config = self.create_data()
             det_data_fields = ["signal", "flags", "alt_signal"]
 
-            # Export the data, and make a copy for later comparison.
-            original = list()
+            # Index for later comparison
+            original = dict()
+            for iob, ob in enumerate(data.obs):
+                original[ob.name] = iob
+
+            # Export the data
             obfiles = list()
             for ob in data.obs:
-                original.append(ob.duplicate(times="times"))
                 obf = save_hdf5(
                     ob,
                     datadir,
@@ -315,13 +318,15 @@ class IoHdf5Test(MPITestCase):
                 )
 
             # Verify
-            for ob, orig in zip(check_data.obs, original):
+            for ob in check_data.obs:
+                orig = data.obs[original[ob.name]]
                 if not orig.__eq__(ob, approx=True):
                     print(
                         f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}"
                     )
                     self.assertTrue(False)
 
+            del check_data
             close_data(data)
 
     def test_save_load_ops(self):
@@ -338,10 +343,10 @@ class IoHdf5Test(MPITestCase):
         data, config = self.create_data(split=True)
         det_data_fields = ["signal", "flags", "alt_signal"]
 
-        # Make a copy for later comparison.
+        # Index for later comparison
         original = dict()
-        for ob in data.obs:
-            original[ob.name] = ob.duplicate(times="times")
+        for iob, ob in enumerate(data.obs):
+            original[ob.name] = iob
 
         # Disable index for this test, to check that the loader works in this case
         saver = ops.SaveHDF5(
@@ -362,7 +367,7 @@ class IoHdf5Test(MPITestCase):
 
         # Verify
         for ob in check_data.obs:
-            orig = original[ob.name]
+            orig = data.obs[original[ob.name]]
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
@@ -375,7 +380,7 @@ class IoHdf5Test(MPITestCase):
         loader.apply(check_data)
 
         for ob in check_data.obs:
-            orig = original[ob.name]
+            orig = data.obs[original[ob.name]]
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
@@ -389,7 +394,7 @@ class IoHdf5Test(MPITestCase):
         loader.apply(check_data)
 
         for ob in check_data.obs:
-            orig = original[ob.name]
+            orig = data.obs[original[ob.name]]
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
@@ -411,10 +416,10 @@ class IoHdf5Test(MPITestCase):
         data, config = self.create_data(split=True)
         det_data_fields = ["signal", "flags", "alt_signal"]
 
-        # Make a copy for later comparison.
+        # Index for later comparison
         original = dict()
-        for ob in data.obs:
-            original[ob.name] = ob.duplicate(times="times")
+        for iob, ob in enumerate(data.obs):
+            original[ob.name] = iob
 
         saver = ops.SaveHDF5(
             volume=datadir,
@@ -435,7 +440,7 @@ class IoHdf5Test(MPITestCase):
 
         # Verify
         for ob in check_data.obs:
-            orig = original[ob.name]
+            orig = data.obs[original[ob.name]]
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
@@ -459,10 +464,10 @@ class IoHdf5Test(MPITestCase):
         # Set detdata to an empty list so that no detector data is written or loaded.
         det_data_fields = []
 
-        # Make a copy for later comparison.
+        # Index for later comparison
         original = dict()
-        for ob in data.obs:
-            original[ob.name] = ob.duplicate(times="times")
+        for iob, ob in enumerate(data.obs):
+            original[ob.name] = iob
 
         saver = ops.SaveHDF5(
             volume=datadir, detdata=det_data_fields, config=config, verify=True
@@ -478,7 +483,7 @@ class IoHdf5Test(MPITestCase):
 
         # Verify.  Before checking equality, purge detdata from the original.
         for ob in check_data.obs:
-            orig = original[ob.name]
+            orig = data.obs[original[ob.name]]
             orig.detdata.clear()
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
@@ -506,10 +511,10 @@ class IoHdf5Test(MPITestCase):
         ]
         det_data_names = ["signal", "flags", "alt_signal"]
 
-        # Make a copy for later comparison.
+        # Index for later comparison
         original = dict()
-        for ob in data.obs:
-            original[ob.name] = ob.duplicate(times="times")
+        for iob, ob in enumerate(data.obs):
+            original[ob.name] = iob
 
         saver = ops.SaveHDF5(
             volume=datadir, detdata=det_data_fields, config=config, verify=True
@@ -525,7 +530,7 @@ class IoHdf5Test(MPITestCase):
 
         # Verify
         for ob in check_data.obs:
-            orig = original[ob.name]
+            orig = data.obs[original[ob.name]]
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
@@ -560,11 +565,14 @@ class IoHdf5Test(MPITestCase):
             ("alt_signal", {"type": "flac", "quanta": 1.0e-7}),
         ]
 
-        # Export the data, and make a copy for later comparison.
-        original = list()
+        # Index for later comparison
+        original = dict()
+        for iob, ob in enumerate(data.obs):
+            original[ob.name] = iob
+
+        # Export the data
         obfiles = list()
         for ob in data.obs:
-            original.append(ob.duplicate(times="times"))
             obf = save_v1(
                 ob,
                 datadir,
@@ -587,10 +595,12 @@ class IoHdf5Test(MPITestCase):
             )
 
         # Verify
-        for ob, orig in zip(check_data.obs, original):
+        for ob in check_data.obs:
+            orig = data.obs[original[ob.name]]
             if not orig.__eq__(ob, approx=True):
                 print(f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}")
                 self.assertTrue(False)
+        del check_data
 
         close_data(data)
 
@@ -1050,6 +1060,6 @@ class IoHdf5Test(MPITestCase):
                     f32=True,
                 )
             )
-
         del check_data
+
         close_data(data)
