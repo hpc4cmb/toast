@@ -181,6 +181,7 @@ class MapmakerSolveTest(MPITestCase):
         # Manually set the data for this template (normally done by
         # TemplateMatrix.initialize()) so we can pre-generate amplitudes.
         tmpl.data = data
+        tmpl.initialize()
         data["amplitudes"] = AmplitudesMap()
         data["amplitudes"][tmpl.name] = tmpl.zeros()
         data["amplitudes"][tmpl.name].local[:] = np.random.uniform(

@@ -213,56 +213,59 @@ class Amplitudes(AcceleratorObject):
 
     def __eq__(self, value):
         if isinstance(value, Amplitudes):
-            return self.local == value.local
+            oval = value.local
         else:
-            return self.local == value
+            oval = value
+        if self.local is None:
+            if oval is None:
+                return True
+            else:
+                return False
+        return self.local == value.local
 
     # Arithmetic.  These assume that flagging is consistent between the pairs of
     # Amplitudes (always true when used in the mapmaking) or that the flagged values
     # have been zeroed out.
 
-    def __iadd__(self, other):
-        if self.local is None:
-            return self
+    @staticmethod
+    def _math_validate(local, other):
         if isinstance(other, Amplitudes):
-            if other.local is not None:
-                self.local[:] += other.local
+            if local is None and other.local is not None:
+                msg = f"Cannot combine non-None Amplitudes {other}"
+                raise RuntimeError(msg)
+            if local is not None and other.local is None:
+                msg = f"Cannot combine None Amplitudes {other}"
+                raise RuntimeError(msg)
+            return other.local
         else:
-            if other is not None:
-                self.local[:] += other
+            # Arithmetic with numeric values
+            if local is not None and other is None:
+                msg = "Cannot combine with None value"
+                raise RuntimeError(msg)
+            return other
+
+    def __iadd__(self, other):
+        oval = self._math_validate(self.local, other)
+        if self.local is not None:
+            self.local[:] += oval
         return self
 
     def __isub__(self, other):
-        if self.local is None:
-            return self
-        if isinstance(other, Amplitudes):
-            if other.local is not None:
-                self.local[:] -= other.local
-        else:
-            if other is not None:
-                self.local[:] -= other
+        oval = self._math_validate(self.local, other)
+        if self.local is not None:
+            self.local[:] -= oval
         return self
 
     def __imul__(self, other):
-        if self.local is None:
-            return self
-        if isinstance(other, Amplitudes):
-            if other.local is not None:
-                self.local[:] *= other.local
-        else:
-            if other is not None:
-                self.local[:] *= other
+        oval = self._math_validate(self.local, other)
+        if self.local is not None:
+            self.local[:] *= oval
         return self
 
     def __itruediv__(self, other):
-        if self.local is None:
-            return self
-        if isinstance(other, Amplitudes):
-            if other.local is not None:
-                self.local[:] /= other.local
-        else:
-            if other is not None:
-                self.local[:] /= other
+        oval = self._math_validate(self.local, other)
+        if self.local is not None:
+            self.local[:] /= oval
         return self
 
     def __add__(self, other):
@@ -381,6 +384,10 @@ class Amplitudes(AcceleratorObject):
         """
         if self._mpicomm is None:
             # Nothing to do
+            return
+
+        if self.n_global == 0:
+            # No amplitudes!
             return
 
         if not self._full and (
@@ -553,8 +560,15 @@ class Amplitudes(AcceleratorObject):
         if other.n_local != self.n_local:
             raise RuntimeError("Amplitudes must have the same number of local values")
 
+        if self.n_global == 0:
+            # There are no amplitudes at all!
+            return 0.0
+
         if self._mpicomm is None or self._full:
             # Only one process, or every process has the full set of values.
+            if self.n_local == 0:
+                # No amplitudes
+                return 0.0
             return np.dot(
                 np.where(self.local_flags == 0, self.local, 0),
                 np.where(other.local_flags == 0, other.local, 0),
@@ -829,6 +843,10 @@ class AmplitudesMap(MutableMapping, AcceleratorObject):
             raise RuntimeError(
                 "Only Amplitudes objects may be assigned to an AmplitudesMap"
             )
+        if key in self._internal:
+            msg = f"Cannot assign amplitudes to map with duplicate key '{key}'."
+            msg += " Do your templates all have unique names?"
+            raise RuntimeError(msg)
         self._internal[key] = value
 
     def __iter__(self):

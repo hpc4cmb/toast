@@ -161,7 +161,7 @@ class MapmakerTest(MPITestCase):
         mapper.apply(data)
 
         # Check that we can also run in full-memory mode
-        tmatrix.reset()
+        tmatrix.reset_templates()
         mapper.reset_pix_dist = True
         pixels.apply(data)
         weights.apply(data)
@@ -183,6 +183,308 @@ class MapmakerTest(MPITestCase):
         binner.full_pointing = True
         mapper.name = "test2"
         mapper.apply(data, use_accel=use_accel)
+
+        close_data(data)
+
+    def test_flagged_process(self):
+        if sys.platform.lower() == "darwin":
+            print("WARNING:  Skipping test_offset on MacOS")
+            return
+
+        if self.comm is None or self.comm.size < 2:
+            print("Flagged process test requires > 1 process, skipping")
+            return
+
+        testdir = os.path.join(self.outdir, "flagged_process")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
+        # Create a fake satellite data set for testing
+
+        data = create_satellite_data(
+            self.comm,
+            obs_per_group=self.obs_per_group,
+            obs_time=10.0 * u.minute,
+            single_group=True,
+        )
+
+        # Create some sky signal timestreams.
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.01,
+            Q_scale=0.001,
+            U_scale=0.001,
+            det_data=defaults.det_data,
+        )
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(
+            detdata=[detpointing.quats, pixels.pixels, weights.weights]
+        )
+        delete_pointing.apply(data)
+        pixels.create_dist = None
+
+        # Take the last process and cut all of its local detectors across
+        # all observations
+        if data.comm.group_rank == data.comm.group_size - 1:
+            for ob in data.obs:
+                dflags = dict(ob.local_detector_flags)
+                for k in list(dflags.keys()):
+                    dflags[k] = defaults.det_mask_invalid
+                ob.update_local_detector_flags(dflags)
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data=defaults.det_data
+        )
+        sim_noise.apply(data)
+
+        # Set up binning operator for solving
+        binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        # Set up template matrix with just an offset template.
+
+        # Use 1/10 of an observation as the baseline length.  Make it not evenly
+        # divisible in order to test handling of the final amplitude.
+        ob_time = (
+            data.obs[0].shared[defaults.times][-1]
+            - data.obs[0].shared[defaults.times][0]
+        )
+        step_seconds = float(int(ob_time / 10.0))
+        tmpl = templates.Offset(
+            times=defaults.times,
+            noise_model=default_model.noise_model,
+            step_time=step_seconds * u.second,
+        )
+
+        tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        # Map maker
+        mapper = ops.MapMaker(
+            name="test",
+            det_data=defaults.det_data,
+            binning=binner,
+            template_matrix=tmatrix,
+            solve_rcond_threshold=1.0e-1,
+            map_rcond_threshold=1.0e-1,
+            write_hits=False,
+            write_map=True,
+            write_cov=False,
+            write_rcond=False,
+            keep_solver_products=False,
+            keep_final_products=False,
+            output_dir=testdir,
+        )
+
+        # Make the map
+        mapper.apply(data)
+
+        close_data(data)
+
+    def test_pattern_template(self):
+        if sys.platform.lower() == "darwin":
+            print("WARNING:  Skipping test_offset on MacOS")
+            return
+
+        testdir = os.path.join(self.outdir, "pattern_template")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
+        # Create a fake satellite data set for testing
+
+        data = create_satellite_data(
+            self.comm,
+            obs_per_group=self.obs_per_group,
+            obs_time=10.0 * u.minute,
+            single_group=True,
+        )
+
+        # Create some sky signal timestreams.
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(
+            detdata=[detpointing.quats, pixels.pixels, weights.weights]
+        )
+        delete_pointing.apply(data)
+        pixels.create_dist = None
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data=defaults.det_data
+        )
+        sim_noise.apply(data)
+
+        # Demodulate
+
+        downsample = 3
+        demod = ops.Demodulate(
+            stokes_weights=weights,
+            nskip=downsample,
+            in_place=True,
+            noise_model=default_model.noise_model,
+            mode="IQU",
+        )
+        demod.apply(data)
+
+        demod_weights = ops.StokesWeightsDemod(
+            detector_pointing_in=detpointing,
+            detector_pointing_out=detpointing,
+            mode="IQU",
+        )
+
+        # Destripe signal with one template for all detectors
+
+        step_seconds = 2.0
+        tmpl_all = templates.Offset(
+            name="offset_all",
+            times=defaults.times,
+            noise_model=default_model.noise_model,
+            step_time=step_seconds * u.second,
+        )
+
+        tmatrix_all = ops.TemplateMatrix(templates=[tmpl_all])
+
+        binner = ops.BinMap(
+            pixel_pointing=pixels,
+            stokes_weights=demod_weights,
+            noise_model=default_model.noise_model,
+        )
+
+        mapper = ops.MapMaker(
+            name="mapmaker_all",
+            det_data=defaults.det_data,
+            binning=binner,
+            template_matrix=tmatrix_all,
+            write_hits=True,
+            write_map=True,
+            write_cov=True,
+            write_invcov=True,
+            write_rcond=True,
+            keep_final_products=False,
+            output_dir=testdir,
+            solve_rcond_threshold=1e-3,
+            map_rcond_threshold=1e-3,
+            reset_pix_dist=True,
+        )
+        mapper.apply(data)
+
+        print(data._internal)
+
+        # Now use two identical templates, each applying to only
+        # a subset of detectors.
+
+        tmpl_I = templates.Offset(
+            name="offset_I",
+            times=defaults.times,
+            noise_model=default_model.noise_model,
+            step_time=step_seconds * u.second,
+            pattern="demod0.*",
+        )
+        tmpl_QU = templates.Offset(
+            name="offset_QU",
+            times=defaults.times,
+            noise_model=default_model.noise_model,
+            step_time=step_seconds * u.second,
+            pattern="demod4.*",
+        )
+
+        tmatrix_split = ops.TemplateMatrix(templates=[tmpl_I, tmpl_QU])
+
+        mapper.name = "mapmaker_split"
+        mapper.template_matrix = tmatrix_split
+        mapper.apply(data)
+
+        # Compare maps
+
+        if data.comm.world_rank == 0:
+            hit_all_file = os.path.join(testdir, "mapmaker_all_hits.fits")
+            hit_split_file = os.path.join(testdir, "mapmaker_split_hits.fits")
+            hit_all = hp.read_map(hit_all_file, field=None, nest=True)
+            hit_split = hp.read_map(hit_split_file, field=None, nest=True)
+            if not np.array_equal(hit_all, hit_split):
+                msg = "hit maps for all and split cases do not match"
+                print(msg, flush=True)
+                self.assertTrue(False)
+            map_all_file = os.path.join(testdir, "mapmaker_all_map.fits")
+            map_split_file = os.path.join(testdir, "mapmaker_split_map.fits")
+            map_all = hp.read_map(map_all_file, field=None, nest=True)
+            map_split = hp.read_map(map_split_file, field=None, nest=True)
+
+            bad = hit_all == 0
+            good = np.logical_not(bad)
+            for comp in range(3):
+                if not np.allclose(map_all[comp][good], map_split[comp][good]):
+                    msg = f"Stokes map {comp} does not match between split / all"
+                    print(msg, flush=True)
+                    self.assertTrue(False)
 
         close_data(data)
 
@@ -295,7 +597,7 @@ class MapmakerTest(MPITestCase):
         mapper.apply(data)
 
         # Check that we can also run in full-memory mode
-        tmatrix.reset()
+        tmatrix.reset_templates()
         mapper.reset_pix_dist = True
         pixels.apply(data)
         weights.apply(data)
@@ -362,6 +664,148 @@ class MapmakerTest(MPITestCase):
                 gnomres=3.0,
                 image_format="png",
             )
+
+        close_data(data)
+
+    def test_pattern_select(self):
+        if sys.platform.lower() == "darwin":
+            print("WARNING:  Skipping test_offset on MacOS")
+            return
+
+        testdir = os.path.join(self.outdir, "pattern_select")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
+        # Create a fake ground data set for testing
+
+        data = create_ground_data(self.comm)
+
+        # Create some sky signal timestreams.
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+            view="scanning",
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.01,
+            Q_scale=0.001,
+            U_scale=0.001,
+            det_data=defaults.det_data,
+        )
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(
+            detdata=[detpointing.quats, pixels.pixels, weights.weights]
+        )
+        delete_pointing.apply(data)
+        pixels.create_dist = None
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data=defaults.det_data
+        )
+        sim_noise.apply(data)
+
+        # Copy the data for later use
+        ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
+
+        # Set up binning operator for solving
+        binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        # Set up template matrix with just an offset template.
+
+        # Use a long baseline length, which we will truncate to the scanning
+        # interval.
+        step_seconds = 3.0
+        tmpl = templates.Offset(
+            times=defaults.times,
+            noise_model=default_model.noise_model,
+            step_time=step_seconds * u.second,
+            use_noise_prior=True,
+            precond_width=1,
+        )
+
+        tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        # Map maker
+        mapper = ops.MapMaker(
+            name="mapmaker",
+            det_data=defaults.det_data,
+            binning=binner,
+            template_matrix=tmatrix,
+            solve_rcond_threshold=1.0e-1,
+            map_rcond_threshold=1.0e-1,
+            write_hits=True,
+            write_map=True,
+            write_cov=False,
+            write_rcond=False,
+            keep_solver_products=False,
+            keep_final_products=False,
+            output_dir=testdir,
+        )
+
+        # Make the map separately for A and B dets
+        mapper.name = "map_A"
+        mapper.pattern = ".*A"
+        mapper.apply(data)
+
+        mapper.name = "map_B"
+        mapper.pattern = ".*B"
+        mapper.apply(data)
+
+        # Make a total map
+        mapper.name = "map_total"
+        mapper.pattern = None
+        mapper.apply(data)
+
+        # Compare hit maps
+
+        if data.comm.world_rank == 0:
+            hit_A_file = os.path.join(testdir, "map_A_hits.fits")
+            hit_B_file = os.path.join(testdir, "map_B_hits.fits")
+            hit_total_file = os.path.join(testdir, "map_total_hits.fits")
+            hit_A = hp.read_map(hit_A_file, field=None, nest=True)
+            hit_B = hp.read_map(hit_B_file, field=None, nest=True)
+            hit_total = hp.read_map(hit_total_file, field=None, nest=True)
+            bad = np.logical_or(
+                hit_A == 0,
+                hit_B == 0,
+            )
+            good = np.logical_not(bad)
+            if not np.array_equal(hit_total[good], hit_A[good] + hit_B[good]):
+                msg = f"{hit_total[good]} != {hit_A[good]} + {hit_B[good]}"
+                print(msg, flush=True)
+                self.assertTrue(False)
 
         close_data(data)
 

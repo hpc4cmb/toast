@@ -643,7 +643,8 @@ def solve(
     # The proposal
     # d = s
     for k, v in proposal.items():
-        v.local[:] = precond[k].local
+        if v.local is not None:
+            v.local[:] = precond[k].local
 
     # Set LHS amplitude inputs to this proposal
     lhs_op.template_matrix.amplitudes = proposal_key
@@ -680,7 +681,8 @@ def solve(
         # x += alpha * d
         temp.reset()
         for k, v in temp.items():
-            v.local[:] = proposal[k].local
+            if v.local is not None:
+                v.local[:] = proposal[k].local
         temp *= alpha
         result += temp
         # print(f"{comm.rank} LHS {iter}:  new result = {result}", flush=True)
@@ -689,7 +691,8 @@ def solve(
         # r -= alpha * q
         temp.reset()
         for k, v in temp.items():
-            v.local[:] = lhs_out[k].local
+            if v.local is not None:
+                v.local[:] = lhs_out[k].local
         temp *= alpha
         residual -= temp
         # print(f"{comm.rank} LHS {iter}:  new residual = {residual}", flush=True)

@@ -3,6 +3,7 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import re
 from collections import OrderedDict
 
 import numpy as np
@@ -135,9 +136,14 @@ class Fourier2D(Template):
             self._obs_view_global_offset[iob] = list()
 
             # Build up detector list
+            det_pat = None
+            if self.pattern is not None:
+                det_pat = re.compile(self.pattern)
             self._obs_dets[iob] = set()
             for d in ob.select_local_detectors(flagmask=self.det_mask):
                 if d not in ob.detdata[self.det_data].detectors:
+                    continue
+                if det_pat is not None and det_pat.match(d) is None:
                     continue
                 self._obs_dets[iob].add(d)
                 if d not in all_dets:

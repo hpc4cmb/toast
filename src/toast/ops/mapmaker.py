@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import re
 import os
 
 import numpy as np
@@ -73,6 +74,12 @@ class MapMaker(Operator):
 
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key for the timestream data"
+    )
+
+    pattern = Unicode(
+        None,
+        allow_none=True,
+        help="Regex pattern to match against detector names. Only these are mapped.",
     )
 
     convergence = Float(1.0e-12, help="Relative convergence limit")
@@ -301,6 +308,28 @@ class MapMaker(Operator):
         self.map_name = f"{self.name}_map"
         self.noiseweighted_map_name = f"{self.name}_noiseweighted_map"
 
+        self._pattern_flags = None
+        # If we are selecting detectors with a pattern, save the per-detector
+        # flags and temporarily modify those to mark other dets as invalid.
+        if self.pattern is not None:
+            self._pattern_flags = dict()
+            self._save_detectors = self._detectors
+            self._detectors = set()
+            det_pat = re.compile(self.pattern)
+            for ob in self._data.obs:
+                # Make a copy of the original
+                self._pattern_flags[ob.uid] = dict(ob.local_detector_flags)
+                cutdets = dict()
+                for det in ob.local_detectors:
+                    if det_pat.match(det) is None:
+                        # Cut this det
+                        cutdets[det] = defaults.det_mask_invalid
+                    else:
+                        # Keep this det
+                        self._detectors.add(det)
+                ob.update_local_detector_flags(cutdets)
+            self._detectors = list(sorted(self._detectors))
+
         self._timer.start()
 
         return
@@ -371,9 +400,10 @@ class MapMaker(Operator):
                 self.map_name,
                 self.noiseweighted_map_name,
                 map_binning.pixel_dist,
+                map_binning.noiseweighted,
                 map_binning.covariance,
             ]:
-                if name in self._data:
+                if name is not None and name in self._data:
                     del self._data[name]
 
         if map_binning.pixel_dist not in self._data:
@@ -617,6 +647,13 @@ class MapMaker(Operator):
     @function_timer
     def _closeout(self):
         """Explicitly delete members used by the _exec() method"""
+
+        # Restore detector flags, if we modified them.
+        if self._pattern_flags is not None:
+            self._detectors = self._save_detectors
+            for ob in self._data.obs:
+                orig = self._pattern_flags[ob.uid]
+                ob.set_local_detector_flags(orig)
 
         del self._log
         del self._timer

@@ -4,6 +4,7 @@
 
 import json
 import os
+import re
 from collections import OrderedDict
 
 import h5py
@@ -219,9 +220,14 @@ class Offset(Template):
                         self._freq[iob] = np.logspace(powmin, powmax, 1000)
 
             # Build up detector list
+            det_pat = None
+            if self.pattern is not None:
+                det_pat = re.compile(self.pattern)
             self._obs_dets[iob] = set()
             for d in ob.select_local_detectors(flagmask=self.det_mask):
                 if d not in ob.detdata[self.det_data].detectors:
+                    continue
+                if det_pat is not None and det_pat.match(d) is None:
                     continue
                 self._obs_dets[iob].add(d)
                 if d not in all_dets:
@@ -1000,6 +1006,9 @@ class Offset(Template):
         else:
             # Since we do not have a noise filter term in our LHS, our diagonal
             # preconditioner is just the application of offset variance.
+            if self._offsetvar is None:
+                # All local detectors are flagged
+                return
 
             # Kernel selection
             implementation, use_accel = self.select_kernels(use_accel=use_accel)
@@ -1012,7 +1021,6 @@ class Offset(Template):
                 impl=implementation,
                 use_accel=use_accel,
             )
-        return
 
     def _implementations(self):
         return [

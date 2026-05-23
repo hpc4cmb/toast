@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import re
 import types
 
 import numpy as np
@@ -678,19 +679,23 @@ class FlagNoiseFit(Operator):
                 msg = f"Observation {obs.name} does not contain noise model {self.noise_model}"
                 raise RuntimeError(msg)
 
-            all_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
-            all_det_set = set(all_dets)
+            local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
 
-            _ = obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=all_dets)
+            if len(local_dets) > 0 and local_dets[0].startswith("demod"):
+                # Demodulated case. Process I/Q/U detectors separately
+                prefixes = ["demod0", "demod4r", "demod4i"]
+            else:
+                # Standad processing
+                prefixes = None
 
-            model = obs[self.noise_model]
+            _ = obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=local_dets)
 
             if self.focalplane_key is not None:
                 all_groups = obs.telescope.focalplane.detector_groups(
                     self.focalplane_key
                 )
             else:
-                all_groups = {"ALL": all_dets}
+                all_groups = {"ALL": local_dets}
             if self.focalplane_value is not None:
                 if self.focalplane_value not in all_groups:
                     msg = f"Focalplane column '{self.focalplane_key}' has no "
@@ -701,190 +706,229 @@ class FlagNoiseFit(Operator):
                         self.focalplane_value: all_groups[self.focalplane_value]
                     }
 
-            for group, dets in all_groups.items():
-                local_net = list()
-                local_fknee = list()
-                local_rms = list()
-                local_names = list()
+            detpat = re.compile(r"(demod[024ri]+)_(.*)")
 
-                for det in dets:
-                    if det not in all_det_set:
-                        continue
-                    local_names.append(det)
-                    # If we have an analytic noise model from a simulation or fit, then
-                    # we can access the properties directly.  If not, we will use the
-                    # detector weight as a proxy for the NET and make a crude estimate
-                    # of the knee frequency.
-
-                    try:
-                        NET = model.NET(det)
-                    except AttributeError:
-                        wt = model.detector_weight(det)
-                        NET = np.sqrt(1.0 / (wt * model.rate(det)))
-                    local_net.append(NET.to_value(u.K * np.sqrt(1.0 * u.second)))
-                    if self.sigma_fknee is not None:
-                        try:
-                            fknee = model.fknee(det)
-                            local_fknee.append(fknee.to_value(u.Hz))
-                        except AttributeError:
-                            msg = f"Observation {obs.name}, noise model "
-                            msg += f"{self.noise_model} has no f_knee estimate.  "
-                            msg += "Use FitNoiseModel before flagging."
-                    if self.sigma_rms is not None:
-                        good = (
-                            obs.detdata[self.det_flags][det] & self.det_flag_mask
-                        ) == 0
-                        ddata = np.copy(obs.detdata[self.det_data][det, good])
-                        avg = np.mean(ddata)
-                        ddata -= avg
-                        local_rms.append(np.std(ddata))
-                        del ddata
-
-                local_net = np.array(local_net, dtype=np.float64)
-                local_fknee = np.array(local_fknee, dtype=np.float64)
-                local_rms = np.array(local_rms, dtype=np.float64)
-
-                # Send all values to one process for the trivial calculation
-                all_net = None
-                all_fknee = None
-                all_rms = None
-                all_names = None
-                if obs.comm_row_rank == 0:
-                    # First process column.  Gather results to rank zero.
-                    if obs.comm_col is None:
-                        all_net = local_net
-                        all_fknee = local_fknee
-                        all_names = local_names
-                        all_rms = local_rms
-                    else:
-                        proc_vals = obs.comm_col.gather(local_net, root=0)
-                        if obs.comm_col_rank == 0:
-                            all_net = np.hstack(proc_vals)
-                        proc_vals = obs.comm_col.gather(local_fknee, root=0)
-                        if obs.comm_col_rank == 0:
-                            all_fknee = np.hstack(proc_vals)
-                        proc_vals = obs.comm_col.gather(local_rms, root=0)
-                        if obs.comm_col_rank == 0:
-                            all_rms = np.hstack(proc_vals)
-                        proc_vals = obs.comm_col.gather(local_names, root=0)
-                        if obs.comm_col_rank == 0:
-                            all_names = list(flatten(proc_vals))
-
-                # Iteratively cut
-                group_flags = None
-                if obs.comm.group_rank == 0:
-                    all_good = all_net > 0.0
-                    n_good_fit = np.count_nonzero(all_good)
-                    msg = f"obs {obs.name}: {n_good_fit} / {len(all_good)} "
-                    msg += "detectors have valid noise model"
-                    log.debug(msg)
-                    n_cut = 1
-                    flag_pass = 0
-                    while n_cut > 0:
-                        n_cut = 0
-                        net_med = np.median(all_net[all_good])
-                        net_std = np.std(all_net[all_good])
-                        for idet, (name, net) in enumerate(zip(all_names, all_net)):
-                            if not all_good[idet]:
-                                # Already cut
-                                continue
-                            if np.absolute(net - net_med) > net_std * self.sigma_NET:
-                                msg = f"obs {obs.name}, det {name} has NET "
-                                msg += f"{net} that is > {self.sigma_NET} "
-                                msg += f"x {net_std} from {net_med}"
-                                log.debug(msg)
-                                all_good[idet] = False
-                                n_cut += 1
-                            elif net < net_med * self.low_noise_limit:
-                                msg = f"obs {obs.name}, det {name} has NET {net} "
-                                msg += f"that is < {net_med} x {self.low_noise_limit}"
-                                log.debug(msg)
-                                all_good[idet] = False
-                                n_cut += 1
-                        if self.sigma_fknee is not None:
-                            fknee_med = np.median(all_fknee[all_good])
-                            fknee_std = np.std(all_fknee[all_good])
-                            for idet, (name, fknee) in enumerate(
-                                zip(all_names, all_fknee)
-                            ):
-                                if not all_good[idet]:
-                                    # Already cut
-                                    continue
-                                if (
-                                    np.absolute(fknee - fknee_med)
-                                    > fknee_std * self.sigma_fknee
-                                ):
-                                    msg = f"obs {obs.name}, det {name} has f_knee "
-                                    msg += f"{fknee} that is > {self.sigma_fknee} "
-                                    msg += f"x {fknee_std} from {fknee_med}"
-                                    log.debug(msg)
-                                    all_good[idet] = False
-                                    n_cut += 1
-                        if self.sigma_rms is not None:
-                            rms_med = np.median(all_rms[all_good])
-                            rms_std = np.std(all_rms[all_good])
-                            for idet, (name, rms) in enumerate(zip(all_names, all_rms)):
-                                if not all_good[idet]:
-                                    # Already cut
-                                    continue
-                                if (
-                                    np.absolute(rms - rms_med)
-                                    > rms_std * self.sigma_rms
-                                ):
-                                    msg = f"obs {obs.name}, det {name} has TOD RMS "
-                                    msg += f"{rms} that is > {self.sigma_rms} "
-                                    msg += f"x {rms_std} from {rms_med}"
-                                    log.debug(msg)
-                                    all_good[idet] = False
-                                    n_cut += 1
-                                elif rms < rms_med * self.low_noise_limit:
-                                    msg = (
-                                        f"obs {obs.name}, det {name} has TOD RMS {rms} "
-                                    )
-                                    msg += f"that is < {rms_med} * "
-                                    msg += f"{self.low_noise_limit}"
-                                    log.debug(msg)
-                                    all_good[idet] = False
-                                    n_cut += 1
-                        msg = f"pass {flag_pass}, {n_cut} detectors flagged"
-                        log.debug(msg)
-                        flag_pass += 1
-                    group_flags = {
-                        x: self.outlier_flag_mask
-                        for i, x in enumerate(all_names)
-                        if not all_good[i]
-                    }
-                    msg = f"obs {obs.name}|{group}: flagged {len(group_flags)}"
-                    msg += " noise model outlier detectors"
-                    log.info(msg)
-                    nobs += 1
-                    nbad += len(group_flags)
-                    ndet += len(all_names)
-                if obs.comm.comm_group is not None:
-                    group_flags = obs.comm.comm_group.bcast(group_flags, root=0)
+            for group, group_dets in all_groups.items():
+                if prefixes is None:
+                    group_flags = self._process_group_prefix(
+                        obs, local_dets, group, group_dets, ""
+                    )
+                else:
+                    group_flags = dict()
+                    for prefix in prefixes:
+                        flags = self._process_group_prefix(
+                            obs, local_dets, group, group_dets, prefix
+                        )
+                        # Merge this prefix result
+                        for det, flg in flags.items():
+                            mat = detpat.match(det)
+                            dname = mat.group(2)
+                            if dname in group_flags:
+                                group_flags[dname] |= flg
+                            else:
+                                group_flags[dname] = flg
+                nbad += len(group_flags)
+                ndet += len(group_dets)
 
                 # Every process flags its local detectors
-                det_check = set(dets)
+                det_check = set(local_dets)
                 local_flags = dict(obs.local_detector_flags)
                 for det, val in group_flags.items():
                     if det in det_check:
                         local_flags[det] |= val
-                        obs.detdata[self.det_flags][det, :] |= val
+                        obs.detdata[self.det_flags][det] |= val
                 obs.update_local_detector_flags(local_flags)
-            log.debug_rank(
-                f"Flagged noise outliers for {obs.name} in",
-                comm=data.comm.comm_group,
-                timer=obs_timer,
-            )
-        if data.comm.comm_world is not None:
-            nobs = data.comm.comm_world.reduce(nobs)
-            nbad = data.comm.comm_world.reduce(nbad)
-            ndet = data.comm.comm_world.reduce(ndet)
+                log.debug_rank(
+                    f"Flagged noise outliers for {obs.name} in",
+                    comm=data.comm.comm_group,
+                    timer=obs_timer,
+                )
+            nobs += 1
+        if data.comm.comm_group_rank is not None and data.comm.group_rank == 0:
+            nobs = data.comm.comm_group_rank.reduce(nobs)
+            nbad = data.comm.comm_group_rank.reduce(nbad)
+            ndet = data.comm.comm_group_rank.reduce(ndet)
 
         log.info_rank(
             f"Flagged {nbad} / {ndet} noise outliers over {nobs} observations",
             comm=data.comm.comm_world,
         )
+
+    def _process_group_prefix(self, obs, local_dets, group, group_dets, prefix):
+        log = Logger.get()
+
+        local_net = list()
+        local_fknee = list()
+        local_rms = list()
+        local_names = list()
+
+        local_dset = set(local_dets)
+
+        model = obs[self.noise_model]
+
+        if prefix == "":
+            prefix_dets = group_dets
+        else:
+            prefix_dets = list()
+            for det in group_dets:
+                if det.startswith(prefix):
+                    prefix_dets.append(det)
+        ndet = len(prefix_dets)
+
+        for det in prefix_dets:
+            if det not in local_dset:
+                continue
+            local_names.append(det)
+            # If we have an analytic noise model from a simulation or fit,
+            # then we can access the properties directly.  If not, we will
+            # use the detector weight as a proxy for the NET and make a
+            # crude estimate of the knee frequency.
+
+            try:
+                NET = model.NET(det)
+            except AttributeError:
+                wt = model.detector_weight(det)
+                NET = np.sqrt(1.0 / (wt * model.rate(det)))
+            local_net.append(NET.to_value(u.K * np.sqrt(1.0 * u.second)))
+            if self.sigma_fknee is not None:
+                try:
+                    fknee = model.fknee(det)
+                    local_fknee.append(fknee.to_value(u.Hz))
+                except AttributeError:
+                    msg = f"Observation {obs.name}, noise model "
+                    msg += f"{self.noise_model} has no f_knee estimate.  "
+                    msg += "Use FitNoiseModel before flagging."
+            if self.sigma_rms is not None:
+                good = (
+                    obs.detdata[self.det_flags][det] & self.det_flag_mask
+                ) == 0
+                ddata = np.copy(obs.detdata[self.det_data][det, good])
+                avg = np.mean(ddata)
+                ddata -= avg
+                local_rms.append(np.std(ddata))
+                del ddata
+
+        local_net = np.array(local_net, dtype=np.float64)
+        local_fknee = np.array(local_fknee, dtype=np.float64)
+        local_rms = np.array(local_rms, dtype=np.float64)
+
+        # Send all values to one process for the trivial calculation
+        all_net = None
+        all_fknee = None
+        all_rms = None
+        all_names = None
+        if obs.comm_row_rank == 0:
+            # First process column.  Gather results to rank zero.
+            if obs.comm_col is None:
+                all_net = local_net
+                all_fknee = local_fknee
+                all_names = local_names
+                all_rms = local_rms
+            else:
+                proc_vals = obs.comm_col.gather(local_net, root=0)
+                if obs.comm_col_rank == 0:
+                    all_net = np.hstack(proc_vals)
+                proc_vals = obs.comm_col.gather(local_fknee, root=0)
+                if obs.comm_col_rank == 0:
+                    all_fknee = np.hstack(proc_vals)
+                proc_vals = obs.comm_col.gather(local_rms, root=0)
+                if obs.comm_col_rank == 0:
+                    all_rms = np.hstack(proc_vals)
+                proc_vals = obs.comm_col.gather(local_names, root=0)
+                if obs.comm_col_rank == 0:
+                    all_names = list(flatten(proc_vals))
+
+        # Iteratively cut
+        flags = None
+        if obs.comm.group_rank == 0:
+            all_good = all_net > 0.0
+            n_good_fit = np.count_nonzero(all_good)
+            msg = f"obs {obs.name}:{group}:{prefix} {n_good_fit} / "
+            msg += f"{len(all_good)} detectors have valid noise model"
+            log.debug(msg)
+            n_cut = 1
+            flag_pass = 0
+            while n_cut > 0:
+                n_cut = 0
+                net_med = np.median(all_net[all_good])
+                net_std = np.std(all_net[all_good])
+                for idet, (name, net) in enumerate(zip(all_names, all_net)):
+                    if not all_good[idet]:
+                        # Already cut
+                        continue
+                    if np.absolute(net - net_med) > net_std * self.sigma_NET:
+                        msg = f"obs {obs.name}, det {name} has NET "
+                        msg += f"{net} that is > {self.sigma_NET} "
+                        msg += f"x {net_std} from {net_med}"
+                        log.debug(msg)
+                        all_good[idet] = False
+                        n_cut += 1
+                    elif net < net_med * self.low_noise_limit:
+                        msg = f"obs {obs.name}, det {name} has NET {net} "
+                        msg += f"that is < {net_med} x {self.low_noise_limit}"
+                        log.debug(msg)
+                        all_good[idet] = False
+                        n_cut += 1
+                if self.sigma_fknee is not None:
+                    fknee_med = np.median(all_fknee[all_good])
+                    fknee_std = np.std(all_fknee[all_good])
+                    for idet, (name, fknee) in enumerate(
+                        zip(all_names, all_fknee)
+                    ):
+                        if not all_good[idet]:
+                            # Already cut
+                            continue
+                        if (
+                            np.absolute(fknee - fknee_med)
+                            > fknee_std * self.sigma_fknee
+                        ):
+                            msg = f"obs {obs.name}, det {name} has f_knee "
+                            msg += f"{fknee} that is > {self.sigma_fknee} "
+                            msg += f"x {fknee_std} from {fknee_med}"
+                            log.debug(msg)
+                            all_good[idet] = False
+                            n_cut += 1
+                if self.sigma_rms is not None:
+                    rms_med = np.median(all_rms[all_good])
+                    rms_std = np.std(all_rms[all_good])
+                    for idet, (name, rms) in enumerate(zip(all_names, all_rms)):
+                        if not all_good[idet]:
+                            # Already cut
+                            continue
+                        if (
+                            np.absolute(rms - rms_med)
+                            > rms_std * self.sigma_rms
+                        ):
+                            msg = f"obs {obs.name}, det {name} has TOD RMS "
+                            msg += f"{rms} that is > {self.sigma_rms} "
+                            msg += f"x {rms_std} from {rms_med}"
+                            log.debug(msg)
+                            all_good[idet] = False
+                            n_cut += 1
+                        elif rms < rms_med * self.low_noise_limit:
+                            msg = (
+                                f"obs {obs.name}, det {name} has TOD RMS {rms} "
+                            )
+                            msg += f"that is < {rms_med} * "
+                            msg += f"{self.low_noise_limit}"
+                            log.debug(msg)
+                            all_good[idet] = False
+                            n_cut += 1
+                msg = f"pass {flag_pass}, {n_cut} detectors flagged"
+                log.debug(msg)
+                flag_pass += 1
+            flags = {
+                x: self.outlier_flag_mask
+                for i, x in enumerate(all_names)
+                if not all_good[i]
+            }
+            msg = f"obs {obs.name}|{group}|{prefix}: flagged "
+            msg += f"{len(flags)} noise model outlier detectors"
+            log.info(msg)
+
+        if obs.comm.comm_group is not None:
+            flags = obs.comm.comm_group.bcast(flags, root=0)
+        return flags
 
     def _finalize(self, data, **kwargs):
         return
