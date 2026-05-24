@@ -41,7 +41,8 @@ class TemplateOffsetTest(MPITestCase):
 
         tmpl = Offset(
             det_data=defaults.det_data,
-            det_flags=None,
+            det_flags=defaults.det_flags,
+            det_flag_mask=defaults.det_mask_invalid,
             times=defaults.times,
             noise_model=noise_model.noise_model,
             step_time=step_seconds * u.second,
@@ -51,7 +52,11 @@ class TemplateOffsetTest(MPITestCase):
 
         # Get some amplitudes and set to one
         amps = tmpl.zeros()
-        amps.local[:] = 1.0
+        good = amps.local_flags == 0
+        bad = np.logical_not(good)
+        amps.local[good] = 1.0
+        amps.local[bad] = 0.0
+        check = amps.duplicate()
 
         # Project.
         for ob in data.obs:
@@ -60,8 +65,30 @@ class TemplateOffsetTest(MPITestCase):
 
         # Verify
         for ob in data.obs:
-            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
-                np.testing.assert_equal(ob.detdata[defaults.det_data][det], 1.0)
+            step_samp = int(
+                step_seconds * ob.telescope.focalplane.sample_rate.to_value(u.Hz)
+            )
+            n_det_amps = ob.n_local_samples // step_samp
+            if n_det_amps * step_samp < ob.n_local_samples:
+                n_det_amps += 1
+            for idet, det in enumerate(
+                ob.select_local_detectors(flagmask=defaults.det_mask_invalid)
+            ):
+                ampoff = idet * n_det_amps
+                compare = np.zeros(ob.n_local_samples)
+                for iamp in range(n_det_amps):
+                    begin = iamp * step_samp
+                    end = (iamp + 1) * step_samp
+                    if end > ob.n_local_samples:
+                        end = ob.n_local_samples
+                    compare[begin:end] = amps.local[ampoff + iamp]
+                    check.local[ampoff + iamp] += amps.local[ampoff + iamp] * (
+                        end - begin
+                    )
+                np.testing.assert_equal(
+                    ob.detdata[defaults.det_data][det],
+                    compare,
+                )
 
         # Accumulate amplitudes
         for ob in data.obs:
@@ -69,26 +96,7 @@ class TemplateOffsetTest(MPITestCase):
             tmpl.project_signal(ob, dets, amps)
 
         # Verify
-        for ob in data.obs:
-            # Get the step boundaries
-            (rate, dt, dt_min, dt_max, dt_std) = rate_from_times(
-                ob.shared[defaults.times]
-            )
-            step_samples = int(step_seconds * rate)
-            n_step = ob.n_local_samples // step_samples
-            slices = [
-                slice(x * step_samples, (x + 1) * step_samples, 1)
-                for x in range(n_step - 1)
-            ]
-            sizes = [step_samples for x in range(n_step - 1)]
-            slices.append(slice((n_step - 1) * step_samples, ob.n_local_samples, 1))
-            sizes.append(ob.n_local_samples - (n_step - 1) * step_samples)
-
-            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
-                for slc, sz in zip(slices, sizes):
-                    np.testing.assert_equal(
-                        np.sum(ob.detdata[defaults.det_data][det, slc]), 1.0 * sz
-                    )
+        self.assertTrue(np.array_equal(amps.local, check.local))
 
         close_data(data)
 
@@ -266,9 +274,6 @@ class TemplateOffsetTest(MPITestCase):
         # input amplitudes (with starting value 1.0) without clearing those,
         # so we add 1.0 to the expected values.
         offset = 0
-        all_dets = list(
-            data.obs[0].select_local_detectors(flagmask=defaults.det_mask_invalid)
-        )
         expected = list()
         for iob, ob in enumerate(data.obs):
             # Get the step boundaries

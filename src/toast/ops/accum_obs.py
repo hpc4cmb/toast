@@ -55,7 +55,9 @@ class CacheLoader(object):
         fields = [self._det_data]
         if self._det_flags is not None:
             fields.append(self._det_flags)
-        load_hdf5_detdata(obs, hf, fields, "Cache {obs.name} detdata:", parallel)
+        load_hdf5_detdata(
+            obs, obs.all_detectors, hf, fields, "Cache {obs.name} detdata:", parallel
+        )
 
         if obs.comm.comm_group is not None:
             obs.comm.comm_group.barrier()
@@ -443,7 +445,9 @@ class AccumulateObservation(Operator):
             if map_object in data:
                 if data[map_object].distribution != data[self.pixel_dist]:
                     # Inconsistent.  Delete and re-create
-                    print(f"data[{map_object}] has inconsistent dist, delete.", flush=True)
+                    print(
+                        f"data[{map_object}] has inconsistent dist, delete.", flush=True
+                    )
                     del data[map_object]
             if map_object not in data:
                 print(f"data[{map_object}] does not exist, creating", flush=True)
@@ -457,7 +461,9 @@ class AccumulateObservation(Operator):
             if obs_object in data:
                 if data[obs_object].distribution != data[obs_pixel_dist]:
                     # Inconsistent.  Delete and re-create
-                    print(f"data[{obs_object}] has inconsistent dist, delete.", flush=True)
+                    print(
+                        f"data[{obs_object}] has inconsistent dist, delete.", flush=True
+                    )
                     del data[obs_object]
             if obs_object not in data:
                 print(f"data[{obs_object}] does not exist, creating", flush=True)
@@ -634,7 +640,7 @@ class AccumulateObservation(Operator):
         accum_pipe.exec(data)
 
         if self.zmap is not None:
-            nz = data[f'{self.name}_{self.zmap}'].data[:, :] != 0
+            nz = data[f"{self.name}_{self.zmap}"].data[:, :] != 0
             print(f"ACCUM obs zmap = {data[f'{self.name}_{self.zmap}'].data[nz]}")
 
         if self.obs_pointing and not self.save_pointing:

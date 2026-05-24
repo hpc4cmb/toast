@@ -154,7 +154,7 @@ class Offset(Template):
         self._freq = dict()
 
         # Good detectors to use for each observation
-        self._obs_dets = dict()
+        self._obs_det_list = dict()
 
         for ob in new_data.obs:
             # Compute sample rate from timestamps
@@ -215,11 +215,12 @@ class Offset(Template):
                         self._freq[ob.uid] = np.logspace(powmin, powmax, 1000)
 
             # Build up detector list
-            self._obs_dets[ob.uid] = set()
+            self._obs_det_list[ob.uid] = list()
+            ddets = set(ob.detdata[self.det_data].detectors)
             for d in ob.select_local_detectors(flagmask=self.det_mask):
-                if d not in ob.detdata[self.det_data].detectors:
+                if d not in ddets:
                     continue
-                self._obs_dets[ob.uid].add(d)
+                self._obs_det_list[ob.uid].append(d)
 
         # Go through the data and compute the offsets into the amplitudes for each
         # observation and detector.
@@ -228,7 +229,7 @@ class Offset(Template):
         offset = 0
         for ob in new_data.obs:
             self._det_start[ob.uid] = dict()
-            for det in self._obs_dets[ob.uid]:
+            for det in self._obs_det_list[ob.uid]:
                 self._det_start[ob.uid][det] = offset
                 offset += np.sum(self._obs_views[ob.uid])
 
@@ -262,7 +263,7 @@ class Offset(Template):
 
         offset = 0
         for ob in new_data.obs:
-            for det in self._obs_dets[ob.uid]:
+            for det in self._obs_det_list[ob.uid]:
                 # "Noise weight" (time-domain inverse variance)
                 detnoise = 1.0
                 if self.noise_model is not None:
@@ -288,14 +289,13 @@ class Offset(Template):
                     # why the "noise weight" (inverse variance) is in the denominator.
                     if detnoise <= 0:
                         # This detector is cut in the noise model
-                        for amp in range(n_amp_view):
-                            self._offsetvar[offset + amp] = 0.0
-                            self._amp_flags[offset + amp] = True
+                        self._offsetvar[offset:offset + n_amp_view] = 0.0
+                        self._amp_flags[offset:offset + n_amp_view] = True
                     else:
                         flags = np.copy(self._obs_view_flags[ob.uid][vw_slc])
                         if self.det_flags is not None:
                             flags[:] |= (
-                                ob.detdata[self.det_flags][det, vw_slc]
+                                ob.detdata[self.det_flags][det][vw_slc]
                                 & self.det_flag_mask
                             )
                         voff = 0
@@ -332,7 +332,7 @@ class Offset(Template):
         if self.use_noise_prior:
             offset = 0
             for ob in new_data.obs:
-                for det in self._obs_dets[ob.uid]:
+                for det in self._obs_det_list[ob.uid]:
                     if ob.uid not in self._filters:
                         self._filters[ob.uid] = dict()
                         self._precond[ob.uid] = dict()
@@ -786,7 +786,7 @@ class Offset(Template):
             import matplotlib.pyplot as plt
 
         for ob in self.data.obs:
-            for det in self._obs_dets[ob.uid]:
+            for det in self._obs_det_list[ob.uid]:
                 offset = self._det_start[ob.uid][det]
                 for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
                     n_amp_view = self._obs_views[ob.uid][ivw]
@@ -856,7 +856,7 @@ class Offset(Template):
             # Our design matrix includes a term with the inverse offset covariance.
             # This means that our preconditioner should include this term as well.
             for ob in self.data.obs:
-                for det in self._obs_dets[ob.uid]:
+                for det in self._obs_det_list[ob.uid]:
                     offset = self._det_start[ob.uid][det]
                     # Loop over views
                     for ivw, vw in enumerate(ob.intervals[self._bounds_view].data):
@@ -948,7 +948,7 @@ class Offset(Template):
         obs_det_amps = dict()
 
         for ob in self.data.obs:
-            for det in self._obs_dets[ob.uid]:
+            for det in self._obs_det_list[ob.uid]:
                 amp_offset = self._det_start[ob.uid][det]
 
                 if not ob.is_distributed_by_detector:

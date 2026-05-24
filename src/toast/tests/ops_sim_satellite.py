@@ -171,7 +171,7 @@ class SimSatelliteTest(MPITestCase):
         # Build the loading pipe
         load_pipe = ops.Pipeline(
             operators = [
-                ops.Create(detdata=[("flags", "(1)", "uint8", None)]),
+                ops.Create(detdata=[("flags", "(1,)", "uint8", "")]),
                 ops.DefaultNoiseModel(noise_model="noise_model"),
                 ops.SimNoise(
                     noise_model="noise_model", det_data=defaults.det_data
