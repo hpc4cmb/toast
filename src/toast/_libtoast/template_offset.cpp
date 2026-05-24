@@ -133,6 +133,7 @@ void init_template_offset(py::module & m) {
                         int64_t amp = amp_offset + amp_view_off[iview] + (int64_t)(
                             (isamp - raw_intervals[iview].first) / step_length
                         );
+
                         if (raw_amplitude_flags[amp] == 0) {
                             raw_det_data[d] += raw_amplitudes[amp];
                         }

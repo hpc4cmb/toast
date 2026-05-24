@@ -446,7 +446,7 @@ class SimGroundTest(MPITestCase):
 
         load_pipe = ops.Pipeline(
             operators = [
-                ops.Create(detdata=[("flags", "(1)", "uint8", None)]),
+                ops.Create(detdata=[("flags", "(1,)", "uint8", "")]),
                 ops.DefaultNoiseModel(noise_model="noise_model"),
                 ops.ElevationNoise(
                     noise_model="noise_model",
