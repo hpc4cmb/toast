@@ -453,6 +453,26 @@ def simulate_stare(t_start, t_stop, rate, el, az):
         [],
     )
 
+@function_timer
+def simulate_spinning_scan(t_start, t_stop, rate, el, az_start, az_rate): 
+    """ Return times, azimuth, elevation assuming a spinning boresight (Taurus, Quijote) """
+    samples = int((t_stop - t_start) * rate)
+    times = t_start + np.arange(samples) / rate
+    az_sample = az_start + az_rate * np.arange(samples) / rate 
+    el_sample = np.zeros(samples) + el
+    return (
+        times, 
+        az_sample, 
+        el_sample,
+        az_start,
+        az_start,
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
 
 @function_timer
 def simulate_ces_scan(

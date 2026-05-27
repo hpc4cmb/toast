@@ -51,6 +51,7 @@ from .sim_ground_utils import (
     add_solar_intervals,
     oscillate_el,
     simulate_ces_scan,
+    simulate_spinning_scan,
     simulate_elnod,
     step_el,
 )
@@ -261,6 +262,8 @@ class SimGround(Operator):
     hwp_step_time = Quantity(
         None, allow_none=True, help="For stepped HWP, the time between steps"
     )
+
+    spinning_scan = Bool(False, help="Perform a scan that never turns around")
 
     elnod_start = Bool(False, help="Perform an el-nod before the scan")
 
@@ -984,37 +987,60 @@ class SimGround(Operator):
                 el.append(elnod_el_data)
                 ival_elnod.append((elnod_times[0], elnod_times[-1]))
 
-        # Now do the main scan
-        (
-            scan_times,
-            scan_az_data,
-            scan_el_data,
-            scan_min_az,
-            scan_max_az,
-            ival_scan_leftright,
-            ival_turn_leftright,
-            ival_scan_rightleft,
-            ival_turn_rightleft,
-            ival_throw_leftright,
-            ival_throw_rightleft,
-        ) = simulate_ces_scan(
-            site,
-            start_time.timestamp(),
-            stop_time.timestamp(),
-            rate,
-            scan.el.to_value(u.radian),
-            scan.az_min.to_value(u.radian),
-            scan.az_max.to_value(u.radian),
-            scan.az_min.to_value(u.radian),
-            self.scan_rate_az.to_value(u.radian / u.second),
-            self.fix_rate_on_sky,
-            self.scan_accel_az.to_value(u.radian / u.second**2),
-            scan_min_az,
-            scan_max_az,
-            cosecant_modulation=self.scan_cosecant_modulation,
-            randomize_phase=self.randomize_phase,
-            track_azimuth=self.track_azimuth,
-        )
+        if self.spinning_scan:     
+            # A scan with no turnarounds. Think Quijote, Taurus
+            (
+                scan_times,
+                scan_az_data,
+                scan_el_data,
+                scan_min_az,
+                scan_max_az,
+                ival_scan_leftright,
+                ival_turn_leftright,
+                ival_scan_rightleft,
+                ival_turn_rightleft,
+                ival_throw_leftright,
+                ival_throw_rightleft,
+            ) = simulate_spinning_scan(
+                start_time.timestamp(),
+                stop_time.timestamp(),
+                rate,
+                scan.el.to_value(u.radian),
+                scan.az_min.to_value(u.radian),
+                self.scan_rate_az.to_value(u.radian / u.second),
+            )
+        else:
+            # Now do the main scan
+            (
+                scan_times,
+                scan_az_data,
+                scan_el_data,
+                scan_min_az,
+                scan_max_az,
+                ival_scan_leftright,
+                ival_turn_leftright,
+                ival_scan_rightleft,
+                ival_turn_rightleft,
+                ival_throw_leftright,
+                ival_throw_rightleft,
+            ) = simulate_ces_scan(
+                site,
+                start_time.timestamp(),
+                stop_time.timestamp(),
+                rate,
+                scan.el.to_value(u.radian),
+                scan.az_min.to_value(u.radian),
+                scan.az_max.to_value(u.radian),
+                scan.az_min.to_value(u.radian),
+                self.scan_rate_az.to_value(u.radian / u.second),
+                self.fix_rate_on_sky,
+                self.scan_accel_az.to_value(u.radian / u.second**2),
+                scan_min_az,
+                scan_max_az,
+                cosecant_modulation=self.scan_cosecant_modulation,
+                randomize_phase=self.randomize_phase,
+                track_azimuth=self.track_azimuth,
+            )
 
         # Do any adjustments to the El motion
         if self.el_mod_rate.to_value(u.Hz) > 0:
