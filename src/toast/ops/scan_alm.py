@@ -47,17 +47,9 @@ class ScanAlm(Operator):
     API = Int(0, help="Internal interface version for this operator")
 
     file = Unicode(
-        None,
-        allow_none=True,
         help="Path to a_lm FITS file.  Use ';' if providing multiple files.  "
         "Any focalplane key listed in `focalplane_keys` can be used here and even "
         "formatted. For example: {psi_pol:.0f}"
-        "If set, `alms` must be empty.",
-    )
-
-    alms = List(
-        [],
-        help="a_lms to scan.  If set, `file` must be None.",
     )
 
     fwhm = Quantity(
@@ -104,8 +96,6 @@ class ScanAlm(Operator):
         allow_none=True,
         help="This must be an instance of a Stokes weights operator",
     )
-
-    save_alm = Bool(False, help="If True, do not delete alm during finalize")
 
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
@@ -179,24 +169,10 @@ class ScanAlm(Operator):
         return dets_sorted
 
     def _parse_alm(self):
-        if self.file is None:
-            if len(self.alms) == 0:
-                msg = "You must set either the `file` or `alms` trait"
-                raise RuntimeError(msg)
-            if self.focalplane_keys is not None:
-                msg = "You must **unset** `alms` and  set `file` when using `focalplane_keys`"
-                raise RuntimeError(msg)
-            # Maps are pre-loaded
-            nalm = len(self.alms)
-            self.file_names = []
-        else:
-            if len(self.alms) != 0:
-                msg = "You cannot set both `file` and `alms` traits"
-                raise RuntimeError(msg)
-            # Split up the file and map names
-            self.file_names = self.file.split(";")
-            nalm = len(self.file_names)
-            self.alms = []
+        # Split up the file and map names
+        self.file_names = self.file.split(";")
+        nalm = len(self.file_names)
+        self.alms = []
         return nalm
 
     def _parse_detdata_keys(self):
@@ -208,41 +184,52 @@ class ScanAlm(Operator):
         return
 
     @function_timer
-    def _load_alm(self, data, focalplane_key_value=None):
+    def _load_alm(self, data, file_name, focalplane_key_value=None):
         """Load, broadcast and save sky a_lm in shared memory"""
 
         world_comm = data.comm.comm_world
-        if world_comm is None:
-            world_rank = 0
-        else:
-            world_rank = world_comm.rank
+        world_rank = data.comm.world_rank
 
-        self.lmax = None
-        for file_name in self.file_names:
-            dtype = complex  # totalconvolve requires dtype=complex
+        #for file_name in self.file_names:
+        dtype = complex  # totalconvolve requires dtype=complex
+        if self.focalplane_keys is not None:
+            # When self.focalplane_keys is set, each group may process
+            # differnt input maps. Therefore the alms can't be shared.
+            self.alm = hp.read_alm(file_name.format(**focalplane_key_value), hdu=(1, 2, 3)).astype(dtype)
+            alm_shape = self.alm.shape
+            lmax = hp.Alm.getlmax(self.alm[0].size)
+        else:
             if world_rank == 0:
-                if self.focalplane_keys is None:
-                    alm = hp.read_alm(file_name, hdu=(1, 2, 3)).astype(dtype)
-                else:
-                    alm = hp.read_alm(file_name.format(**focalplane_key_value), hdu=(1, 2, 3)).astype(dtype)
+                alm = hp.read_alm(file_name, hdu=(1, 2, 3)).astype(dtype)
                 alm_shape = alm.shape
                 lmax = hp.Alm.getlmax(alm[0].size)
             else:
                 alm = None
                 alm_shape = None
                 lmax = None
+
             if world_comm is not None:
                 alm_shape = world_comm.bcast(alm_shape)
                 lmax = world_comm.bcast(lmax)
-            if self.lmax is None:
-                self.lmax = lmax
-            elif lmax != self.lmax:
-                msg = f"lmax({file_name}) = {lmax} but "
-                msg += f"lmax({self.file_names[0]}) = {self.lmax}"
-                raise RuntimeError(msg)
-            shared = MPIShared(alm_shape, dtype, world_comm)
-            shared.set(alm)
-            self.alms.append(shared)
+
+                self.alm = MPIShared(
+                    alm_shape,
+                    dtype,
+                    world_comm,
+                    comm_node=data.comm.comm_world_node,
+                    comm_node_rank=data.comm.comm_world_node_rank,
+                )
+                self.alm.set(alm)
+            else:
+                self.alm = alm
+
+        if self.lmax is None:
+            self.lmax = lmax
+        elif lmax != self.lmax:
+            msg = f"lmax({file_name}) = {lmax} but "
+            msg += f"lmax({self.file_names[0]}) = {self.lmax}"
+            raise RuntimeError(msg)
+
         return
 
     @function_timer
@@ -294,44 +281,94 @@ class ScanAlm(Operator):
         return signal
 
     @function_timer
-    def _cache_blm(self):
+    def _cache_blm(self, data):
         """Derive polarized and unpolarized beam expansions"""
 
-        # Get an mmax=0 symmetric temperature beam expansion
-        self._blm_I = np.atleast_2d(
-            hp.blm_gauss(
-                self.fwhm.to_value(u.rad),
-                self.lmax,
-                pol=False,
-            )
-        )
+        world_comm = data.comm.comm_world
+        world_rank = data.comm.world_rank
 
-        # Get an mmax=2 symmetric IQU beam expansion
-        self._blm_P = hp.blm_gauss(self.fwhm.to_value(u.rad), self.lmax, pol=True)
-        self._blm_P[0] = 0  # Only scan polarization
-        self._blm_P *= np.sqrt(2)  # Seems to be required for E/B beam
+        if world_rank == 0:
+            # Get an mmax=0 symmetric temperature beam expansion
+            blm_I = np.atleast_2d(
+                hp.blm_gauss(
+                    self.fwhm.to_value(u.rad),
+                    self.lmax,
+                    pol=False,
+                )
+            )
+            blm_I_shape = blm_I.shape
+            # Get an mmax=2 symmetric IQU beam expansion
+            blm_P = hp.blm_gauss(self.fwhm.to_value(u.rad), self.lmax, pol=True)
+            blm_P[0] = 0  # Only scan polarization
+            blm_P *= np.sqrt(2)  # Seems to be required for E/B beam
+            blm_P_shape = blm_P.shape
+        else:
+            blm_I = None
+            blm_I_shape = None
+            blm_P = None
+            blm_P_shape = None
+
+        if world_comm is not None:
+            blm_I_shape = world_comm.bcast(blm_I_shape)
+            blm_P_shape = world_comm.bcast(blm_P_shape)
+
+        if world_comm is not None:
+            self._blm_I = MPIShared(
+                blm_I_shape,
+                complex,
+                world_comm,
+                comm_node=data.comm.comm_world_node,
+                comm_node_rank=data.comm.comm_world_node_rank,
+            )
+            self._blm_I.set(blm_I)
+            self._blm_P = MPIShared(
+                blm_P_shape,
+                complex,
+                world_comm,
+                comm_node=data.comm.comm_world_node,
+                comm_node_rank=data.comm.comm_world_node_rank,
+            )
+            self._blm_P.set(blm_P)
+        else:
+            self._blm_I = blm_I
+            self._blm_P = blm_P
 
         return
 
     @function_timer
-    def _cache_interpolators(self):
+    def _cache_interpolators(self, data, focalplane_key_value=None):
         """Set up the polarized and unpolarized interpolators"""
 
         separate = False  # Co-add T/E/B
         epsilon = 1e-5
 
         self.interpolators = []
-        for ialm, alm in enumerate(self.alms):
+        for file_name in self.file_names:
+            self._load_alm(data, file_name, focalplane_key_value)
+            if self._blm_I is None:
+                self._cache_blm(data)
             interpolators = {}
             for stokes in "I", "QU":
                 if stokes == "I":
                     kmax = 0  # Symmetric, unpolarized beam
-                    alm_ref = np.atleast_2d(alm.data[0])
-                    blm = self._blm_I
+                    if focalplane_key_value is None and data.comm.comm_world is not None:
+                        alm_ref = np.atleast_2d(self.alm.data[0])
+                    else:
+                        alm_ref = np.atleast_2d(self.alm[0])
+                    if data.comm.comm_world is not None:
+                        blm = self._blm_I.data
+                    else:
+                        blm = self._blm_I
                 elif stokes == "QU":
                     kmax = 2  # Symmetric, polarized beams
-                    alm_ref = alm.data
-                    blm = self._blm_P
+                    if focalplane_key_value is None and data.comm.comm_world is not None:
+                        alm_ref = self.alm.data
+                    else:
+                        alm_ref = self.alm
+                    if data.comm.comm_world is not None:
+                        blm = self._blm_P.data
+                    else:
+                        blm = self._blm_P
                 else:
                     msg = f"Unsupported Stokes component: {stokes}"
                     raise RuntimeError(msg)
@@ -341,6 +378,10 @@ class ScanAlm(Operator):
                 )
             self.interpolators.append(interpolators)
 
+            del alm_ref
+            if focalplane_key_value is None and data.comm.comm_world is not None:
+                self.alm.close()
+            del self.alm
         return
 
     def __init__(self, **kwargs):
@@ -362,11 +403,12 @@ class ScanAlm(Operator):
 
         self._parse_alm()
         self._parse_detdata_keys()
+        self._blm_I = None
+        self.lmax = None
+
         dets_sorted = self._get_sorted_dets(data, detectors)
         if self.focalplane_keys is None:
-            self._load_alm(data)
-            self._cache_blm()
-            self._cache_interpolators()
+            self._cache_interpolators(data)
 
         for ob in data.obs:
             dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
@@ -382,52 +424,51 @@ class ScanAlm(Operator):
         timer = Timer()
         timer.start()
         ndet = len(dets_sorted)
-        prev_focalplane_keys = None
-        for idet, key_ob_det in enumerate(dets_sorted):
-            ob_name = key_ob_det[-2]
+        prev_fp = None
+        for idet, fp_ob_det in enumerate(dets_sorted):
+            ob_name = fp_ob_det[-2]
             ob_data = data.select(obs_name=ob_name)
             ob = ob_data.obs[0]
-            det = key_ob_det[-1]
-            focalplane_keys = key_ob_det[:-2]
-            if self.focalplane_keys is not None and focalplane_keys != prev_focalplane_keys:
-                # Clean up our alm, if needed
-                if not self.save_alm:
-                    for alm in self.alms:
-                        alm.close()
-                    self.alms = []
+            det = fp_ob_det[-1]
+            fp = fp_ob_det[:-2]
+            if self.focalplane_keys is not None and fp != prev_fp:
+                # Clean up the interpolators
+                if prev_fp is not None:
+                    log.info(f"Group {data.comm.group:4} : Done detectors with {focalplane_key_value}")
+                    del self.interpolators
                 focalplane_key_value = {}
                 for ikey, key in enumerate(self.focalplane_keys.split(",")):
-                    focalplane_key_value[key] = key_ob_det[ikey]
-                self._load_alm(data, focalplane_key_value)
-                self._cache_blm()
-                self._cache_interpolators()
-                prev_focalplane_keys = focalplane_keys
-                log.info_rank(f"Group {data.comm.group:4} : Start detectors with {focalplane_key_value}", timer=timer, comm=gcomm)
+                    focalplane_key_value[key] = fp_ob_det[ikey]
+                self._cache_interpolators(data, focalplane_key_value)
+                prev_fp = fp
+                log.info(f"Group {data.comm.group:4} : Done building interpolator with {focalplane_key_value}")
 
             theta, phi, weights = self._get_pointing(ob_data, det)
-            for ialm, alm in enumerate(self.alms):
+            for ialm in range(len(self.file_names)):
                 if len(self.det_data_keys) == 1:
                     det_data_key = self.det_data_keys[0]
                 else:
                     det_data_key = self.det_data_keys[ialm]
-                ref = ob.detdata[det_data_key][det]
                 interpolators = self.interpolators[ialm]
                 sig = self._scan_alms(interpolators, theta, phi, weights)
                 if self.subtract:
-                    ref -= sig
+                    ob.detdata[det_data_key][det] -= sig
                 else:
-                    ref += sig
-            if idet % 100 == 0:
-                log.debug_rank(f"Group {data.comm.group:4} : {idet}/{ndet} detectors finished in", timer=timer, comm=gcomm)
+                    ob.detdata[det_data_key][det] += sig
+                del interpolators, sig, theta, phi, weights
+            if idet % 1000 == 0:
+                log.debug(f"Group {data.comm.group:4} : {idet}/{ndet} detectors finished")
 
-        # Clean up our alm, if needed
-        if not self.save_alm:
-            for alm in self.alms:
-                alm.close()
-            self.alms = []
-
-        # Clean up the interpolators
+        # Clean up
         del self.interpolators
+        if data.comm.comm_world is None:
+            del self._blm_I
+            del self._blm_P
+        else:
+            self._blm_I.close()
+            del self._blm_I
+            self._blm_P.close()
+            del self._blm_P
 
         return
 
