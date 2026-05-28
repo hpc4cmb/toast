@@ -209,10 +209,10 @@ class SolverRHS(Operator):
         timer.start()
         log.debug_rank("MapMaker   RHS begin binned map", comm=comm)
 
-        print(f"Binner rcond set to {self.binning.rcond}", flush=True)
-        print(f"Binner det_flags set to {self.binning.det_flags}", flush=True)
-        for ob in data.obs:
-            print(f"Binner   {ob.name} det_flags nz = {np.count_nonzero(ob.detdata[self.binning.det_flags][:])} / {len(ob.local_detectors) * ob.n_local_samples}", flush=True)
+        #print(f"Binner rcond set to {self.binning.rcond}", flush=True)
+        #print(f"Binner det_flags set to {self.binning.det_flags}", flush=True)
+        # for ob in data.obs:
+        #     print(f"Binner   {ob.name} det_flags nz = {np.count_nonzero(ob.detdata[self.binning.det_flags][:])} / {len(ob.local_detectors) * ob.n_local_samples}", flush=True)
 
         self.binning.det_data = self.det_data
         self.binning.det_data_units = self.det_data_units

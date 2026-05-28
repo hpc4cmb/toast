@@ -50,7 +50,7 @@ class CacheLoader(object):
         parallel, _, _ = hdf5_config(
             comm=obs.comm.comm_group, force_serial=force_serial
         )
-        print(f"ACCUM CacheLoader load {file}", flush=True)
+        # print(f"ACCUM CacheLoader load {file}", flush=True)
         hf = hdf5_open(file, "r", comm=obs.comm.comm_group, force_serial=force_serial)
         fields = [self._det_data]
         if self._det_flags is not None:
@@ -66,7 +66,7 @@ class CacheLoader(object):
         del hf
 
     def unload(self, obs, **kwargs):
-        print(f"ACCUM CacheLoader unload {self._det_data}", flush=True)
+        # print(f"ACCUM CacheLoader unload {self._det_data}", flush=True)
         del obs.detdata[self._det_flags]
         del obs.detdata[self._det_data]
 
@@ -291,7 +291,7 @@ class AccumulateObservation(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        print(f"ACCUM exec cache: {self.cache_dir} {self.cache_detdata}", flush=True)
+        # print(f"ACCUM exec cache: {self.cache_dir} {self.cache_detdata}", flush=True)
 
         if len(data.obs) > 1:
             msg = "Each call to exec() should be used on a Data object with no "
@@ -346,6 +346,8 @@ class AccumulateObservation(Operator):
             nvalue = 3
         elif self.stokes_weights.mode == "I":
             nvalue = 1
+        elif self.stokes_weights.mode == "QU":
+            nvalue = 2
         else:
             raise RuntimeError(
                 f"Invalid Stokes weights mode: {self.stokes_weights.mode}"
@@ -445,12 +447,12 @@ class AccumulateObservation(Operator):
             if map_object in data:
                 if data[map_object].distribution != data[self.pixel_dist]:
                     # Inconsistent.  Delete and re-create
-                    print(
-                        f"data[{map_object}] has inconsistent dist, delete.", flush=True
-                    )
+                    # print(
+                    #     f"data[{map_object}] has inconsistent dist, delete.", flush=True
+                    # )
                     del data[map_object]
             if map_object not in data:
-                print(f"data[{map_object}] does not exist, creating", flush=True)
+                # print(f"data[{map_object}] does not exist, creating", flush=True)
                 data[map_object] = PixelData(
                     data[self.pixel_dist],
                     map_dt,
@@ -461,12 +463,12 @@ class AccumulateObservation(Operator):
             if obs_object in data:
                 if data[obs_object].distribution != data[obs_pixel_dist]:
                     # Inconsistent.  Delete and re-create
-                    print(
-                        f"data[{obs_object}] has inconsistent dist, delete.", flush=True
-                    )
+                    # print(
+                    #     f"data[{obs_object}] has inconsistent dist, delete.", flush=True
+                    # )
                     del data[obs_object]
             if obs_object not in data:
-                print(f"data[{obs_object}] does not exist, creating", flush=True)
+                # print(f"data[{obs_object}] does not exist, creating", flush=True)
                 data[obs_object] = PixelData(
                     data[obs_pixel_dist],
                     map_dt,
@@ -474,7 +476,7 @@ class AccumulateObservation(Operator):
                     units=map_units,
                 )
             # Zero for use with the current observation.
-            print(f"data[{obs_object}]: reset to zero", flush=True)
+            # print(f"data[{obs_object}]: reset to zero", flush=True)
             data[obs_object].reset()
 
     def _check_cache(self, obs):
@@ -542,7 +544,7 @@ class AccumulateObservation(Operator):
                 continue
 
             # Load the object into the data
-            print(f"ACCUM load from cache: {obs_object_path}", flush=True)
+            # print(f"ACCUM load from cache: {obs_object_path}", flush=True)
             data[obs_object].read(obs_object_path)
 
         if self.cache_detdata:
@@ -556,7 +558,8 @@ class AccumulateObservation(Operator):
             if not obs_have_obj:
                 have_all = False
             else:
-                print(f"ACCUM load from cache: {det_object} exists", flush=True)
+                #print(f"ACCUM load from cache: {det_object} exists", flush=True)
+                pass
         return have_all
 
     def _create_pipeline(self, ob_dist):
@@ -639,9 +642,9 @@ class AccumulateObservation(Operator):
         # We can then accumulate these to the global objects.
         accum_pipe.exec(data)
 
-        if self.zmap is not None:
-            nz = data[f"{self.name}_{self.zmap}"].data[:, :] != 0
-            print(f"ACCUM obs zmap = {data[f'{self.name}_{self.zmap}'].data[nz]}")
+        # if self.zmap is not None:
+        #     nz = data[f"{self.name}_{self.zmap}"].data[:, :] != 0
+        #     print(f"ACCUM obs zmap = {data[f'{self.name}_{self.zmap}'].data[nz]}")
 
         if self.obs_pointing and not self.save_pointing:
             # We created full detector pointing for this observation, but we are
@@ -667,14 +670,14 @@ class AccumulateObservation(Operator):
                 continue
             obs_object = f"{self.name}_{map_object}"
             obs_object_path = os.path.join(ob_dir, f"{prefix}.h5")
-            print(f"ACCUM write {obs_object_path}", flush=True)
+            # print(f"ACCUM write {obs_object_path}", flush=True)
             data[obs_object].write(obs_object_path)
 
         if self.cache_detdata:
             obs = data.obs[0]
 
             det_object = os.path.join(ob_dir, f"{self.det_data}.h5")
-            print(f"ACCUM write {det_object}", flush=True)
+            # print(f"ACCUM write {det_object}", flush=True)
             temp_path = f"{det_object}.tmp"
             if obs.comm.group_size == 1:
                 # Force serial usage in this case, to avoid any MPI overhead
@@ -727,16 +730,16 @@ class AccumulateObservation(Operator):
             if map_object is None:
                 continue
             obs_object = f"{self.name}_{map_object}"
-            if map_object == self.zmap:
-                nz = data[self.zmap].data != 0
-                print(f"ACCUM zmap BEFORE = {data[self.zmap].data[nz]}")
+            # if map_object == self.zmap:
+            #     nz = data[self.zmap].data != 0
+            #     print(f"ACCUM zmap BEFORE = {data[self.zmap].data[nz]}")
             data[map_object].data[:] += data[obs_object].data
-            if map_object == self.zmap:
-                nz = data[self.zmap].data != 0
-                print(f"ACCUM zmap AFTER = {data[self.zmap].data[nz]}")
-        if self.zmap is not None:
-            nz = data[self.zmap].data != 0
-            print(f"ACCUM zmap OUT = {data[self.zmap].data[nz]}")
+            # if map_object == self.zmap:
+            #     nz = data[self.zmap].data != 0
+            #     print(f"ACCUM zmap AFTER = {data[self.zmap].data[nz]}")
+        # if self.zmap is not None:
+        #     nz = data[self.zmap].data != 0
+        #     print(f"ACCUM zmap OUT = {data[self.zmap].data[nz]}")
 
     def _finalize(self, data, **kwargs):
         log = Logger.get()
