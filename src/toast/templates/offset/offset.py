@@ -173,6 +173,7 @@ class Offset(Template):
                 view_n_amp = view_len // step_length
                 if view_n_amp * step_length < view_len:
                     view_n_amp += 1
+                print(f"DBG view {vw.first} - {vw.last} has {view_n_amp} baselines", flush=True)
                 ob_views.append(view_n_amp)
             self._obs_views[ob.uid] = np.array(ob_views, dtype=np.int64)
 
@@ -306,6 +307,7 @@ class Offset(Template):
                             n_good = amplen - np.count_nonzero(
                                 flags[voff : voff + amplen]
                             )
+                            print(f"DBG {ob.name}:{det}:{ivw}:{amp} has {n_good} good samples", flush=True)
                             if (n_good / step_length) <= self.good_fraction:
                                 # This detector is cut or too many samples flagged,
                                 # OR the amplitude length is truncated and too short

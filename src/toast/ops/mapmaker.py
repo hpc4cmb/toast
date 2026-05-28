@@ -499,10 +499,10 @@ class MapMaker(Operator):
     def _fit_templates(self):
         """Solve for template amplitudes"""
 
-        print(
-            f"DEBUG mapmaker {self.name} call SolveAmplitudes, cache_detdata = {self.binning.cache_detdata}",
-            flush=True,
-        )
+        # print(
+        #     f"DEBUG mapmaker {self.name} call SolveAmplitudes, cache_detdata = {self.binning.cache_detdata}",
+        #     flush=True,
+        # )
 
         amplitudes_solve = SolveAmplitudes(
             name=self.name,
@@ -556,7 +556,7 @@ class MapMaker(Operator):
         # (which may differ from the solver flags due to masks).  The original
         # data may not be persistent in memory and running this operation may
         # trigger data loading from disk for each observation.
-        print("----------- Begin Binned Raw -----------", flush=True)
+        #print("----------- Begin Binned Raw -----------", flush=True)
 
         # Get the units used across the distributed data for our desired
         # input detector data
@@ -599,7 +599,7 @@ class MapMaker(Operator):
 
         cdata = self._data[self.cov_name]
         nonz = cdata.data != 0
-        print(f"Raw covariance = {cdata.data[nonz]}", flush=True)
+        #print(f"Raw covariance = {cdata.data[nonz]}", flush=True)
 
         # Write outputs
 
@@ -627,7 +627,7 @@ class MapMaker(Operator):
             self._mc_root,
             extra_header=extra_header,
         )
-        print("-----------   End Binned Raw -----------", flush=True)
+        #print("-----------   End Binned Raw -----------", flush=True)
 
     @function_timer
     def _bin_template_map(self, template_amplitudes, extra_header):
@@ -636,7 +636,7 @@ class MapMaker(Operator):
         # the destriped map.  Depending on other options, the "cleaned" timestreams
         # (original - projected templates) are saved.
 
-        print("----------- Begin Binned Templates -----------", flush=True)
+        #print("----------- Begin Binned Templates -----------", flush=True)
 
         # Get the units used across the distributed data for our desired
         # input detector data
@@ -711,7 +711,7 @@ class MapMaker(Operator):
 
         cdata = self._data[self.cov_name]
         nonz = cdata.data != 0
-        print(f"Template covariance = {cdata.data[nonz]}", flush=True)
+        #print(f"Template covariance = {cdata.data[nonz]}", flush=True)
 
         self.final_binning.apply(self._data)
 
@@ -720,7 +720,7 @@ class MapMaker(Operator):
 
         if do_restore:
             self._data.restore_loaders(saved)
-        print("-----------   End Binned Templates -----------", flush=True)
+        #print("-----------   End Binned Templates -----------", flush=True)
 
     @function_timer
     def _closeout(self):
@@ -782,7 +782,7 @@ class MapMaker(Operator):
 
     @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
-        print(f"DEBUG mapmaker {self.name} call _setup", flush=True)
+        #print(f"DEBUG mapmaker {self.name} call _setup", flush=True)
         self._setup(data, detectors, use_accel)
 
         # Confirm that there is at least one valid detector
@@ -815,7 +815,7 @@ class MapMaker(Operator):
             )
 
         if self._using_templates:
-            print(f"DEBUG mapmaker {self.name} call _fit_templates", flush=True)
+            #print(f"DEBUG mapmaker {self.name} call _fit_templates", flush=True)
             template_amplitudes = self._fit_templates()
 
         if not self._final_is_solver:

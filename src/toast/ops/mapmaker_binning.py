@@ -250,10 +250,10 @@ class BinMap(Operator):
 
         if self.covariance not in data:
             cov = None
-            print(f"BinMap covariance {self.covariance} does not exist, will build", flush=True)
+            #print(f"BinMap covariance {self.covariance} does not exist, will build", flush=True)
         else:
             cov = data[self.covariance]
-            print(f"BinMap covariance {self.covariance} already exists", flush=True)
+            #print(f"BinMap covariance {self.covariance} already exists", flush=True)
 
             # Check that covariance has consistent units
             if cov.units != (self.det_data_units**2).decompose():
@@ -291,7 +291,7 @@ class BinMap(Operator):
         if self.binned in data:
             indata = data[self.binned]
             nonz = indata.data != 0
-            print(f"BinMap input zmap = {indata.data[nonz]}", flush=True)
+            #print(f"BinMap input zmap = {indata.data[nonz]}", flush=True)
 
         # Use the same detector mask in the pointing
         self.pixel_pointing.detector_pointing.det_mask = self.det_mask
@@ -339,7 +339,7 @@ class BinMap(Operator):
             rcond_threshold=self.rcond_threshold,
             sync_type=self.sync_type,
         )
-        print(f"BIN accum cache_detdata: {self.cache_detdata} -> {obs_accum.cache_detdata}", flush=True)
+        #print(f"BIN accum cache_detdata: {self.cache_detdata} -> {obs_accum.cache_detdata}", flush=True)
 
         # Build a pipeline to expand pointing and accumulate
 

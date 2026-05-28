@@ -320,7 +320,7 @@ class TemplateMatrix(Operator):
                     accel=use_accel,
                     create_units=self.det_data_units,
                 )
-                print(f"TemplateMatrix: ensured {self.det_data} in {ob.name}", flush=True)
+                #print(f"TemplateMatrix: ensured {self.det_data} in {ob.name}", flush=True)
                 if exists:
                     # We need to clear our detector TOD before projecting amplitudes
                     # into timestreams.  Note:  in the accelerator case, the reset call
@@ -702,10 +702,10 @@ class SolveAmplitudes(Operator):
             self.solver_flags, dtype=np.uint8, detectors=self._detectors
         )
         ob.detdata[self.solver_flags][:] = defaults.det_mask_processing
-        print(
-            f"DEBUG _prepare_flagging_ob {ob.name} called ensure {self.solver_flags}",
-            flush=True,
-        )
+        # print(
+        #     f"DEBUG _prepare_flagging_ob {ob.name} called ensure {self.solver_flags}",
+        #     flush=True,
+        # )
 
         starting_flags = np.zeros(ob.n_local_samples, dtype=np.uint8)
         if self._save_shared_flags is not None:
@@ -715,14 +715,14 @@ class SolveAmplitudes(Operator):
                 1,
                 0,
             )
-        print(f"DEBUG {ob.name} starting flags = {np.count_nonzero(starting_flags)}")
+        #print(f"DEBUG {ob.name} starting flags = {np.count_nonzero(starting_flags)}")
         for d in dets:
             for vw in ob.intervals[self._solve_view]:
                 vw_slc = slice(vw.first, vw.last, 1)
                 detflgs = ob.detdata[self.solver_flags][d]
                 detflgs[vw_slc] = starting_flags[vw_slc]
                 if self._save_det_flags is not None:
-                    print(f"DEBUG {ob.name}:{d}:{vw} pre flags = {np.count_nonzero(detflgs[vw_slc])}")
+                    #print(f"DEBUG {ob.name}:{d}:{vw} pre flags = {np.count_nonzero(detflgs[vw_slc])}")
                     detflgs[vw_slc] |= np.where(
                         (
                             detflgs[vw_slc]
@@ -732,8 +732,8 @@ class SolveAmplitudes(Operator):
                         1,
                         0,
                     ).astype(ob.detdata[self.solver_flags].dtype)
-                    print(f"DEBUG {ob.name}:{d}:{vw} post flags = {np.count_nonzero(detflgs[vw_slc])}")
-        print(f"_prepare_flag_ob: {ob.name} det_flags nz = {np.count_nonzero(ob.detdata[self.solver_flags][:])} / {len(ob.local_detectors) * ob.n_local_samples}", flush=True)
+                    #print(f"DEBUG {ob.name}:{d}:{vw} post flags = {np.count_nonzero(detflgs[vw_slc])}")
+        #print(f"_prepare_flag_ob: {ob.name} det_flags nz = {np.count_nonzero(ob.detdata[self.solver_flags][:])} / {len(ob.local_detectors) * ob.n_local_samples}", flush=True)
 
     @function_timer
     def _prepare_flagging(self, scan_pipe):
@@ -837,7 +837,7 @@ class SolveAmplitudes(Operator):
         rcond_mask = self._data[self.solver_rcond_mask_name].data
         bad = rcond < self.solve_rcond_threshold
         n_bad = np.count_nonzero(bad)
-        print(f"RCOND MASK {n_bad} bad pixels")
+        #print(f"RCOND MASK {n_bad} bad pixels")
         n_good = rcond.size - n_bad
         rcond_mask[bad] = 1
 
@@ -901,10 +901,10 @@ class SolveAmplitudes(Operator):
 
         self.template_matrix.amplitudes = self.solver_rhs
 
-        print(
-            f"SolveAmplitudes _get_rhs cache_detdata: {self.binning.cache_detdata}",
-            flush=True,
-        )
+        # print(
+        #     f"SolveAmplitudes _get_rhs cache_detdata: {self.binning.cache_detdata}",
+        #     flush=True,
+        # )
 
         rhs_calc = SolverRHS(
             name=f"{self.name}_rhs",
@@ -915,13 +915,13 @@ class SolveAmplitudes(Operator):
         )
         rhs_calc.apply(self._data, detectors=self._detectors)
 
-        print("RHS Writing...", flush=True)
+        #print("RHS Writing...", flush=True)
         for tmpl in self.template_matrix.templates:
             tmpl_amps = self._data[self.solver_rhs][tmpl.name]
             out_root = os.path.join(self.output_dir, f"RHS_{tmpl.name}")
             tmpl.write(tmpl_amps, out_root)
 
-        print(f"RHS rcond = {self._data[self.solver_rcond_name].data}")
+        #print(f"RHS rcond = {self._data[self.solver_rcond_name].data}")
 
         if write_hits:
             self._write_del(self.solver_hits_name)
@@ -1033,7 +1033,7 @@ class SolveAmplitudes(Operator):
         ):
             return
 
-        print(f"DEBUG SolveAmplitudes {self.name} call _setup", flush=True)
+        #print(f"DEBUG SolveAmplitudes {self.name} call _setup", flush=True)
 
         self._setup(data, detectors, use_accel)
 
@@ -1044,10 +1044,10 @@ class SolveAmplitudes(Operator):
 
         self._timer.start()
 
-        print(f"DEBUG SolveAmplitudes {self.name} call _prepare_flagging", flush=True)
+        #print(f"DEBUG SolveAmplitudes {self.name} call _prepare_flagging", flush=True)
         self._prepare_flagging(scan_pipe)
 
-        print(f"DEBUG SolveAmplitudes {self.name} call _get_rhs", flush=True)
+        #print(f"DEBUG SolveAmplitudes {self.name} call _get_rhs", flush=True)
         self._get_rhs()
 
         self._get_rcond_mask(scan_pipe)
