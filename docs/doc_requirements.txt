@@ -7,3 +7,4 @@ nbstripout
 wurlitzer
 sympy
 seaborn
+ipyparallel
