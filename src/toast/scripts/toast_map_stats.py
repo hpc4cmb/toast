@@ -208,7 +208,10 @@ def main(opts=None, comm=None):
             compute_spectra(args, remaining, out_dir)
 
 
-if __name__ == "__main__":
+def cli():
     world, procs, rank = toast.mpi.get_world()
     with toast.mpi.exception_guard(comm=world):
         main(comm=world)
+
+if __name__ == "__main__":
+    cli()
