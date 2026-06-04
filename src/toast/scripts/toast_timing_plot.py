@@ -164,5 +164,8 @@ def main():
     fig.write_image(args.out)
 
 
-if __name__ == "__main__":
+def cli():
     main()
+
+if __name__ == "__main__":
+    cli()

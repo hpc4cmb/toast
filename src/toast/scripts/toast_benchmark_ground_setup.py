@@ -340,8 +340,10 @@ def main():
         timer.stop()
 
 
-if __name__ == "__main__":
+def cli():
     world, procs, rank = toast.mpi.get_world()
-    python_startup_time(rank)
     with toast.mpi.exception_guard(comm=world):
         main()
+
+if __name__ == "__main__":
+    cli()
