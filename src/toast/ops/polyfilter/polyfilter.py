@@ -20,6 +20,7 @@ from ...observation import default_values as defaults
 from ...timing import GlobalTimers, Timer, function_timer
 from ...traits import Bool, Dict, Instance, Int, Quantity, Unicode, UseEnum, trait_docs
 from ...utils import AlignedF64, AlignedU8, Environment, Logger, dtype_to_aligned
+from ..demodulation import Lowpass
 from ..operator import Operator
 from .kernels import filter_poly2D, filter_polynomial
 
@@ -713,6 +714,18 @@ class CommonModeFilter(Operator):
         help="If True, plot regression coefficients",
     )
 
+    lowpass = Quantity(
+        None,
+        allow_none=True,
+        help="Optionally low pass filter the common mode",
+    )
+
+    template_save_key = Unicode(
+        None,
+        allow_none=True,
+        help="Save the templates to this observation key instead of filtering",
+    )
+
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
         check = proposal["value"]
@@ -890,6 +903,18 @@ class CommonModeFilter(Operator):
             nsample = temp_ob.n_local_samples
             ndet = len(temp_ob.local_detectors)
 
+            lp = None
+            lp_buffer = 0
+            if self.lowpass is not None:
+                lp = Lowpass(
+                    self.lowpass,
+                    obs.telescope.focalplane.sample_rate,
+                )
+                lp_buffer = 4 * int(
+                    obs.telescope.focalplane.sample_rate.to_value(u.Hz) / 
+                    self.lowpass.to_value(u.Hz)
+                )
+
             # Loop over all values of the focalplane key
             for value in values:
                 local_dets = []
@@ -940,8 +965,27 @@ class CommonModeFilter(Operator):
                     comm.Allreduce(MPI.IN_PLACE, template, op=MPI.SUM)
                     comm.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
 
-                if self.regress:
+                if self.lowpass is not None:
+                    template = lp(template)
+                    template[:lp_buffer] = 0
+                    template[-lp_buffer:] = 0
+                    for det in local_dets:
+                        temp_ob.detdata[self.det_flags][det][:lp_buffer] |= defaults.det_mask_invalid
+                        temp_ob.detdata[self.det_flags][det][-lp_buffer:] |= defaults.det_mask_invalid
+
+                if self.template_save_key is not None:
+                    # Save this template to the observation dictionary for
+                    # later use.
+                    if self.template_save_key not in obs:
+                        obs[self.template_save_key] = dict()
+                        obs[self.template_save_key]["det_to_key"] = dict()
+                    obs[self.template_save_key][value] = template
+                    for det in local_dets:
+                        obs[self.template_save_key]["det_to_key"][det] = value
+                elif self.regress:
                     good = hits != 0
+                    good[:lp_buffer] = 0
+                    good[-lp_buffer:] = 0
                     ngood = np.sum(good)
                     mean_template = template.copy()
                     mean_template[good] /= hits[good]
