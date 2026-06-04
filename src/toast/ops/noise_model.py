@@ -713,6 +713,7 @@ class FlagNoiseFit(Operator):
                     group_flags = self._process_group_prefix(
                         obs, local_dets, group, group_dets, ""
                     )
+                    nbad += len(group_flags)
                 else:
                     group_flags = dict()
                     for prefix in prefixes:
@@ -727,7 +728,7 @@ class FlagNoiseFit(Operator):
                                 group_flags[dname] |= flg
                             else:
                                 group_flags[dname] = flg
-                nbad += len(group_flags)
+                        nbad += len(flags)
                 ndet += len(group_dets)
 
                 # Every process flags its local detectors
