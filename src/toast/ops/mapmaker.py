@@ -82,6 +82,10 @@ class MapMaker(Operator):
         help="Regex pattern to match against detector names. Only these are mapped.",
     )
 
+    focalplane_key = Unicode(
+        None, allow_none=True, help="Focalplane key for split mapmaking."
+    )
+
     convergence = Float(1.0e-12, help="Relative convergence limit")
 
     iter_min = Int(3, help="Minimum number of iterations")
@@ -416,7 +420,9 @@ class MapMaker(Operator):
                 pixel_pointing=map_binning.pixel_pointing,
                 save_pointing=map_binning.full_pointing,
             )
-            pix_dist.apply(self._data, use_accel=self._use_accel)
+            pix_dist.apply(
+                self._data, detectors=self._detectors, use_accel=self._use_accel
+            )
             self._log.info_rank(
                 f"{self._log_prefix}  finished build of pixel distribution in",
                 comm=self._comm,
@@ -728,36 +734,82 @@ class MapMaker(Operator):
             # No valid detectors, no mapmaking
             return
 
+        # Loop over focalplane splits, if needed
+        if self.focalplane_key is None:
+            splits = {None: None}
+        else:
+            # Each process gathers their local values for the focalplane keys
+            local_fp_values = dict()
+            for ob in data.obs:
+                for det in ob.select_local_detectors(
+                    selection=detectors, flagmask=map_binning.det_mask
+                ):
+                    for row in ob.telescope.focalplane.detector_data:
+                        val = row[self.focalplane_key]
+                        if val not in local_fp_values:
+                            local_fp_values[val] = set()
+                        local_fp_values[val].add(row["name"])
+            fp_vals = None
+            if data.comm.comm_world is not None:
+                proc_fp_vals = data.comm.comm_world.gather(local_fp_values, root=0)
+            else:
+                proc_fp_vals = [local_fp_values]
+            if data.comm.world_rank == 0:
+                fp_vals = dict()
+                for pvals in proc_fp_vals:
+                    for k, v in pvals.items():
+                        if k not in fp_vals:
+                            fp_vals[k] = set()
+                        fp_vals[k].update(v)
+            if data.comm.comm_world is not None:
+                fp_vals = data.comm.comm_world.bcast(fp_vals, root=0)
+            splits = dict()
+            for k, v in fp_vals.items():
+                splits[k] = list(sorted(v))
+
         # Destripe data and make maps
 
-        self._setup(data, detectors, use_accel)
+        for split_key, split_dets in splits.items():
+            if split_key is not None:
+                self._save_reset_state = self.reset_pix_dist
+                self.reset_pix_dist = True
+                self._save_split_name = self.name
+                self.name = f"{self._save_split_name}_{split_key}"
+            if split_dets is None:
+                split_dets = detectors
 
-        extra_header = self._get_extra_header(data, detectors)
+            self._setup(data, detectors, use_accel)
 
-        self._memreport.prefix = "Start of mapmaking"
-        self._memreport.apply(self._data, use_accel=self._use_accel)
+            extra_header = self._get_extra_header(data, detectors)
 
-        template_amplitudes = self._fit_templates()
+            self._memreport.prefix = "Start of mapmaking"
+            self._memreport.apply(self._data, use_accel=self._use_accel)
 
-        map_binning = self._prepare_binning()
+            template_amplitudes = self._fit_templates()
 
-        self._build_pixel_covariance(map_binning)
+            map_binning = self._prepare_binning()
 
-        self._bin_and_write_raw_signal(map_binning, extra_header=extra_header)
+            self._build_pixel_covariance(map_binning)
 
-        out_cleaned = self._clean_signal(template_amplitudes)
+            self._bin_and_write_raw_signal(map_binning, extra_header=extra_header)
 
-        if self.write_noiseweighted_map or self.write_map or self.keep_final_products:
-            self._bin_cleaned_signal(map_binning, out_cleaned)
+            out_cleaned = self._clean_signal(template_amplitudes)
 
-        self._purge_cleaned_tod()  # Potentially frees memory for writing maps
+            if self.write_noiseweighted_map or self.write_map or self.keep_final_products:
+                self._bin_cleaned_signal(map_binning, out_cleaned)
 
-        self._write_maps(extra_header=extra_header)
+            self._purge_cleaned_tod()  # Potentially frees memory for writing maps
 
-        self._memreport.prefix = "End of mapmaking"
-        self._memreport.apply(self._data, use_accel=self._use_accel)
+            self._write_maps(extra_header=extra_header)
 
-        self._closeout()
+            self._memreport.prefix = "End of mapmaking"
+            self._memreport.apply(self._data, use_accel=self._use_accel)
+
+            self._closeout()
+
+            if split_key is not None:
+                self.reset_pix_dist = self._save_reset_state
+                self.name = self._save_split_name
 
         return
 
