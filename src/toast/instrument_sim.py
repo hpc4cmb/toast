@@ -1058,6 +1058,7 @@ def plot_focalplane(
     xieta=False,
     show_centers=False,
     show_gamma=False,
+    hide_pol=False,
 ):
     """Visualize a projected Focalplane.
 
@@ -1088,6 +1089,7 @@ def plot_focalplane(
             boresight X/Y/Z.
         show_centers (bool):  If True, label the pixel centers.
         show_gamma (bool):  If True, show gamma angle (for debugging).
+        hide_pol (bool):  If True, hide the polarization vectors.
 
     Returns:
         (Figure):  The figure.
@@ -1243,18 +1245,19 @@ def plot_focalplane(
                     ec="gray",
                     length_includes_head=True,
                 )
-            ax.arrow(
-                xtail,
-                ytail,
-                dx,
-                dy,
-                width=0.1 * detradius,
-                head_width=0.3 * detradius,
-                head_length=0.3 * detradius,
-                fc=detcolor,
-                ec=detcolor,
-                length_includes_head=True,
-            )
+            if not hide_pol:
+                ax.arrow(
+                    xtail,
+                    ytail,
+                    dx,
+                    dy,
+                    width=0.1 * detradius,
+                    head_width=0.3 * detradius,
+                    head_length=0.3 * detradius,
+                    fc=detcolor,
+                    ec=detcolor,
+                    length_includes_head=True,
+                )
 
     # Draw a "mini" coordinate axes for reference
     xmini = -0.8 * half_width
