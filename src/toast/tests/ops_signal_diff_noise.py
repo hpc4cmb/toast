@@ -22,7 +22,7 @@ class SignalDiffNoiseTest(MPITestCase):
     def test_diff_noise(self):
         # Create fake observing of a small patch
         data = create_ground_data(
-            self.comm, sample_rate=100 * u.Hz, fknee=1e-3 * u.Hz
+            self.comm, sample_rate=100 * u.Hz, fknee=1e-3 * u.Hz, schedule_hours=1
         )
 
         # Create a noise model from focalplane detector properties

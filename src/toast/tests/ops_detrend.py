@@ -19,7 +19,7 @@ class DetrendTest(MPITestCase):
 
     def _test_detrend(self, method):
 
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Flag some samples
         for ob in data.obs:

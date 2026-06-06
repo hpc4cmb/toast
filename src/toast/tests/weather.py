@@ -57,6 +57,6 @@ class WeatherTest(MPITestCase):
 
     def test_append(self):
         # Append weather model to a simulation
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
         weather = ops.WeatherModel(weather="atacama")
         weather.apply(data)

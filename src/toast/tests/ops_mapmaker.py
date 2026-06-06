@@ -436,8 +436,6 @@ class MapmakerTest(MPITestCase):
         )
         mapper.apply(data)
 
-        print(data._internal)
-
         # Now use two identical templates, each applying to only
         # a subset of detectors.
 
@@ -499,7 +497,7 @@ class MapmakerTest(MPITestCase):
 
         # Create a fake ground data set for testing
 
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Create some sky signal timestreams.
         detpointing = ops.PointingDetectorSimple()
@@ -676,9 +674,9 @@ class MapmakerTest(MPITestCase):
         if self.comm is None or self.comm.rank == 0:
             os.makedirs(testdir)
 
-        # Create a fake ground data set for testing
+        # Create a data set for testing
 
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Create some sky signal timestreams.
         detpointing = ops.PointingDetectorSimple()

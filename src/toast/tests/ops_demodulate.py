@@ -472,7 +472,9 @@ class DemodulateTest(MPITestCase):
         self._test_demodulate(weight_mode="IQU", data=data, suffix="-overdist")
 
     def test_demodulate_IQU_detcuts(self):
-        data = create_ground_data(self.comm, single_group=True, flagged_obs=False)
+        data = create_ground_data(
+            self.comm, single_group=True, flagged_obs=False
+        )
         # Flag the second half of the pixels.  Due to the relatively low
         # resolution of the input sky, there is some T->P leakage in the
         # test that blows up when one of the two detectors in a pixel is

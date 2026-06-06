@@ -112,7 +112,8 @@ class Offset(Template):
         if hasattr(self, "_offsetvar"):
             del self._offsetvar
         if hasattr(self, "_offsetvar_raw"):
-            self._offsetvar_raw.clear()
+            if self._offsetvar_raw is not None:
+                self._offsetvar_raw.clear()
             del self._offsetvar_raw
 
     def __del__(self):

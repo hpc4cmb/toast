@@ -40,7 +40,7 @@ class FilterBinTest(MPITestCase):
             print(f"WARNING:  Skipping test_filterbin_with_config during wheel tests")
             return
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, turnarounds_invalid=True)
+        data = create_ground_data(self.comm, turnarounds_invalid=True, schedule_hours=1)
 
         nside = 256
 
@@ -131,7 +131,7 @@ class FilterBinTest(MPITestCase):
             print(f"WARNING:  Skipping test_filterbin during wheel tests")
             return
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, turnarounds_invalid=True)
+        data = create_ground_data(self.comm, turnarounds_invalid=True, schedule_hours=1)
 
         nside = 256
 
@@ -321,7 +321,9 @@ class FilterBinTest(MPITestCase):
             return
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=1 * u.Hz, pixel_per_process=4)
+        data = create_ground_data(
+            self.comm, sample_rate=1 * u.Hz, pixel_per_process=4, schedule_hours=1
+        )
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -421,7 +423,7 @@ class FilterBinTest(MPITestCase):
             return
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz, schedule_hours=1)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -521,7 +523,7 @@ class FilterBinTest(MPITestCase):
             return
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz, schedule_hours=1)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -717,7 +719,7 @@ class FilterBinTest(MPITestCase):
         data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
 
         # Create some detector pointing matrices
-        detpointing = ops.PointingDetectorSimple(shared_flag_mask=0)
+        detpointing = ops.PointingDetectorSimple(shared_flag_mask=0, schedule_hours=1)
         pixels = ops.PixelsHealpix(
             nside=self.nside,
             create_dist="pixel_dist",

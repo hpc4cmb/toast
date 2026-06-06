@@ -496,7 +496,7 @@ class ObservationTest(MPITestCase):
         # Populate the observations
         np.random.seed(12345)
         rms = 10.0
-        data = create_ground_data(self.comm, sample_rate=10.0 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=10.0 * u.Hz, schedule_hours=1)
         ops.DefaultNoiseModel().apply(data)
 
         for obs in data.obs:

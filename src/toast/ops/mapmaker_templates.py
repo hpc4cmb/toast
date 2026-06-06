@@ -262,7 +262,7 @@ class TemplateMatrix(Operator):
                 if ob.detdata[self.det_data].units != input_units:
                     msg = f"obs {ob.name} detdata {self.det_data}"
                     msg += f" does not have units of {input_units}"
-                    msg += f" before template matrix projection"
+                    msg += " before template matrix projection"
                     log.error(msg)
                     raise RuntimeError(msg)
 
@@ -339,7 +339,6 @@ class TemplateMatrix(Operator):
                             use_accel=use_accel,
                             **kwargs,
                         )
-        return
 
     def _finalize(self, data, use_accel=None, **kwargs):
         if self.transpose:

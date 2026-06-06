@@ -162,7 +162,7 @@ class TimeConstantTest(MPITestCase):
 
     def test_time_constant_flags(self):
         # Create fake ground data so that we have turnaround shared flags
-        data = create_ground_data(self.comm, sample_rate=10.0 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=10.0 * u.Hz, schedule_hours=1)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")

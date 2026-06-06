@@ -107,55 +107,58 @@ class Amplitudes(AcceleratorObject):
         self._full = False
         self._global_first = None
         self._global_last = None
-        if self._n_global == self._n_local:
+
+        if self._mpicomm is not None:
+            rank = self._mpicomm.rank
+            raw_n_local = self._mpicomm.allgather(self._n_local)
+            all_n_local = np.array(raw_n_local, dtype=np.int64)
+        else:
+            rank = 0
+            all_n_local = np.array([self._n_local], dtype=np.int64)
+
+        if np.sum(all_n_local) == len(all_n_local) * self._n_global:
+            # All processes have a full copy
             self._full = True
             self._global_first = 0
             self._global_last = self._n_local - 1
-        else:
-            if (self._local_indices is None) and (self._local_ranges is None):
-                rank = 0
-                if self._mpicomm is not None:
-                    all_n_local = self._mpicomm.gather(self._n_local, root=0)
-                    rank = self._mpicomm.rank
-                    if rank == 0:
-                        all_n_local = np.array(all_n_local, dtype=np.int64)
-                        if np.sum(all_n_local) != self._n_global:
-                            msg = "Total amplitudes on all processes does "
-                            msg += "not equal n_global"
-                            raise RuntimeError(msg)
-                    all_n_local = self._mpicomm.bcast(all_n_local, root=0)
-                else:
-                    all_n_local = np.array([self._n_local], dtype=np.int64)
-                self._global_first = 0
-                for i in range(rank):
-                    self._global_first += all_n_local[i]
-                self._global_last = self._global_first + self._n_local - 1
-            elif self._local_ranges is not None:
-                # local data is specified by ranges
-                check = 0
-                last = 0
-                for off, n in self._local_ranges:
-                    check += n
-                    if off < last:
-                        msg = "local_ranges must not overlap and must be sorted"
-                        raise RuntimeError(msg)
-                    last = off + n
-                    if last > self._n_global:
-                        msg = "local_ranges extends beyond the number of global amps"
-                        raise RuntimeError(msg)
-                if check != self._n_local:
-                    raise RuntimeError("local_ranges must sum to n_local")
-                self._global_first = self._local_ranges[0][0]
-                self._global_last = (
-                    self._local_ranges[-1][0] + self._local_ranges[-1][1] - 1
-                )
-            else:
-                # local data has explicit global indices
-                if len(self._local_indices) != self._n_local:
-                    msg = "Length of local_indices must match n_local"
+        elif (self._local_indices is None) and (self._local_ranges is None):
+            # Disjoint set of local amplitudes
+            if np.sum(all_n_local) != self._n_global:
+                msg = "Total amplitudes on all processes does "
+                msg += "not equal n_global"
+                raise RuntimeError(msg)
+            self._global_first = 0
+            for i in range(rank):
+                self._global_first += all_n_local[i]
+            self._global_last = self._global_first + self._n_local - 1
+        elif self._local_ranges is not None:
+            # local data is specified by ranges
+            check = 0
+            last = 0
+            for off, n in self._local_ranges:
+                check += n
+                if off < last:
+                    msg = "local_ranges must not overlap and must be sorted"
                     raise RuntimeError(msg)
-                self._global_first = self._local_indices[0]
-                self._global_last = self._local_indices[-1]
+                last = off + n
+                if last > self._n_global:
+                    msg = "local_ranges extends beyond the number of global amps"
+                    raise RuntimeError(msg)
+            if check != self._n_local:
+                raise RuntimeError("local_ranges must sum to n_local")
+            self._global_first = self._local_ranges[0][0]
+            self._global_last = (
+                self._local_ranges[-1][0] + self._local_ranges[-1][1] - 1
+            )
+        else:
+            # local data has explicit global indices
+            if len(self._local_indices) != self._n_local:
+                msg = "Length of local_indices must match n_local"
+                raise RuntimeError(msg)
+            self._global_first = self._local_indices[0]
+            self._global_last = self._local_indices[-1]
+
+        # Allocate memory
         if self._n_local == 0:
             self._raw = None
             self.local = None

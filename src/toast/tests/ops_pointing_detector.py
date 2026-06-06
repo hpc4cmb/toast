@@ -70,7 +70,7 @@ class PointingDetectorTest(MPITestCase):
 
     def test_detector_pointing_hwp_deflect(self):
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Regular pointing
         detpointing1 = ops.PointingDetectorSimple()
@@ -101,7 +101,9 @@ class PointingDetectorTest(MPITestCase):
 
     def test_detector_pointing_hwp_deflect_plot(self):
         # Create fake observing.
-        data = create_ground_data(self.comm, sample_rate=30.0 * u.Hz, hwp_rpm=60.0)
+        data = create_ground_data(
+            self.comm, sample_rate=30.0 * u.Hz, hwp_rpm=60.0, schedule_hours=1
+        )
 
         # Regular pointing in Az/El
         detpointing1 = ops.PointingDetectorSimple(
