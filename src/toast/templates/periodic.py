@@ -36,6 +36,12 @@ class Periodic(Template):
 
     The periodic quantity to consider can be either a shared or detdata field.
 
+    The overall TemplateMatrix view is used to indicate valid samples.
+    Separately, the `select_view` trait is used to restrict the samples to
+    project into amplitudes.  This is useful (for example) if a periodic template
+    has different amplitudes for different timespans in an observation, like
+    right and left-going scans.
+
     """
 
     # Notes:  The TraitConfig base class defines a "name" attribute.  The Template
@@ -49,33 +55,37 @@ class Periodic(Template):
     #    det_flag_mask    : Bit mask for detector solver flags
     #
 
-    is_detdata_key = Bool(
-        False,
-        help="If True, the periodic data and flags are detector fields, not shared",
+    periodic_key = Unicode(
+        None, allow_none=True, help="Observation shared key for the periodic quantity"
     )
 
-    key = Unicode(
-        None, allow_none=True, help="Observation data key for the periodic quantity"
+    periodic_flags = Unicode(
+        defaults.shared_flags,
+        allow_none=True,
+        help="Observation shared key for flags",
     )
 
-    flags = Unicode(
+    periodic_flag_mask = Int(
+        defaults.shared_mask_invalid,
+        help="Bit mask value for optional flagging of periodic_key values",
+    )
+
+    select_view = Unicode(
         None,
         allow_none=True,
-        help="Observation data key for flags to use",
+        help="Only solve for amplitudes within these intervals",
     )
-
-    flag_mask = Int(0, help="Bit mask value for flags")
 
     bins = Int(
         10,
         allow_none=True,
-        help="Number of bins between min / max values of data key",
+        help="Number of bins between min / max values of periodic key",
     )
 
     increment = Float(
         None,
         allow_none=True,
-        help="The increment of the data key for each bin",
+        help="The increment of the periodic key for each bin",
     )
 
     minimum_bin_hits = Int(3, help="Minimum number of samples per amplitude bin")
@@ -85,67 +95,61 @@ class Periodic(Template):
 
     def _initialize(self, new_data):
         log = Logger.get()
-        if self.key is None:
-            msg = "You must set key before initializing"
+        if self.periodic_key is None:
+            msg = "You must set periodic_key before initializing"
             raise RuntimeError(msg)
 
         if self.bins is not None and self.increment is not None:
             msg = "Only one of bins and increment can be specified"
             raise RuntimeError(msg)
 
-        # Use this as an "Ordered Set".  We want the unique detectors on this process,
-        # but sorted in order of occurrence.
-        all_dets = OrderedDict()
-
         # Good detectors to use for each observation
         self._obs_dets = dict()
 
-        # Find the binning for each observation and the total detectors on this
-        # process.
-        self._obs_min = list()
-        self._obs_max = list()
-        self._obs_incr = list()
-        self._obs_nbins = list()
+        # The sample flags for the combined intervals to use for each observation,
+        # which is the intersection of `view` and `select_view` intervals, as well
+        # as any flags for the key field.
+        self._obs_flags = dict()
+
+        # Find the binning for each observation
+        self._obs_min = dict()
+        self._obs_max = dict()
+        self._obs_incr = dict()
+        self._obs_nbins = dict()
         total_bins = 0
-        for iob, ob in enumerate(new_data.obs):
-            if self.is_detdata_key:
-                if self.key not in ob.detdata:
-                    continue
+        for ob in new_data.obs:
+            if self.periodic_key not in ob.shared:
+                continue
+
+            # The total intervals we are using for projection
+            if self.select_view is not None:
+                select = ob.intervals[self.view] & ob.intervals[self.select_view]
             else:
-                if self.key not in ob.shared:
-                    continue
-            omin = None
-            omax = None
-            for vw in ob.intervals[self.view].data:
-                vw_slc = slice(vw.first, vw.last, 1)
-                good = slice(None)
-                if self.is_detdata_key:
-                    vw_data = ob.detdata[self.key].data[vw_slc]
-                    if self.flags is not None:
-                        # We have some flags
-                        bad = ob.detdata[self.flags].data[vw_slc] & self.flag_mask
-                        good = np.logical_not(bad)
-                else:
-                    vw_data = ob.shared[self.key].data[vw_slc]
-                    if self.flags is not None:
-                        # We have some flags
-                        bad = ob.shared[self.flags].data[vw_slc] & self.flag_mask
-                        good = np.logical_not(bad)
-                vmin = np.amin(vw_data[good])
-                vmax = np.amax(vw_data[good])
-                if omin is None:
-                    omin = vmin
-                    omax = vmax
-                else:
-                    omin = min(omin, vmin)
-                    omax = max(omax, vmax)
+                select = ob.intervals[self.view]
+
+            # The common flags we will use for this observation:  Cut samples
+            # outside our selection intervals and any data where the periodic
+            # key is flagged.
+            self._obs_flags[ob.uid] = np.ones(ob.n_local_samples, dtype=np.uint8)
+            for vw in select:
+                self._obs_flags[ob.uid][vw.first : vw.last] = 0
+
+            if self.periodic_flags is not None:
+                self._obs_flags[ob.uid] |= (
+                    ob.shared[self.periodic_flags].data & self.periodic_flag_mask
+                )
+
+            good = self._obs_flags[ob.uid] == 0
+            omin = np.amin(ob.shared[self.periodic_key].data[good])
+            omax = np.amax(ob.shared[self.periodic_key].data[good])
 
             if omin == omax:
-                msg = f"Periodic data {self.key} is constant for observation "
+                msg = f"Periodic data {self.periodic_key} is constant for observation "
                 msg += f"{ob.name}"
                 raise RuntimeError(msg)
-            self._obs_min.append(omin)
-            self._obs_max.append(omax)
+
+            self._obs_min[ob.uid] = omin
+            self._obs_max[ob.uid] = omax
             if self.bins is not None:
                 obins = int(self.bins)
                 oincr = (omax - omin) / obins
@@ -156,51 +160,39 @@ class Periodic(Template):
                 msg = f"Template {self.name}, obs {ob.name} has zero amplitude bins"
                 log.warning(msg)
             total_bins += obins
-            self._obs_nbins.append(obins)
-            self._obs_incr.append(oincr)
+            self._obs_nbins[ob.uid] = obins
+            self._obs_incr[ob.uid] = oincr
 
             # Build up detector list
-            self._obs_dets[iob] = set()
+            self._obs_dets[ob.uid] = list()
+            ddets = set(ob.detdata[self.det_data].detectors)
             for d in ob.select_local_detectors(flagmask=self.det_mask):
-                if d not in ob.detdata[self.det_data].detectors:
+                if d not in ddets:
                     continue
-                self._obs_dets[iob].add(d)
-                if d not in all_dets:
-                    all_dets[d] = None
-
-        self._all_dets = list(all_dets.keys())
+                self._obs_dets[ob.uid].append(d)
 
         if total_bins == 0:
             msg = f"Template {self.name} process group {new_data.comm.group}"
-            msg += f" has zero amplitude bins- change the binning size."
+            msg += " has zero amplitude bins- change the binning size."
             raise RuntimeError(msg)
 
-        # During application of the template, we will be looping over detectors
-        # in the outer loop.  So we pack the amplitudes by detector and then by
-        # observation.  Compute the per-detector offsets into the amplitudes.
+        # Go through the data and compute the offsets into the amplitudes for each
+        # observation and detector.
 
         self._det_offset = dict()
-
         offset = 0
-        for det in self._all_dets:
-            self._det_offset[det] = offset
-            for iob, ob in enumerate(new_data.obs):
-                if det not in self._obs_dets[iob]:
-                    continue
-                if self.is_detdata_key:
-                    if self.key not in ob.detdata:
-                        continue
-                else:
-                    if self.key not in ob.shared:
-                        continue
-                offset += self._obs_nbins[iob]
+        for ob in new_data.obs:
+            self._det_offset[ob.uid] = dict()
+            for det in self._obs_dets[ob.uid]:
+                self._det_offset[ob.uid][det] = offset
+                offset += np.sum(self._obs_nbins[ob.uid])
 
         # Now we know the total number of local amplitudes.
 
         if offset == 0:
             # This means that no observations included the shared key
             # we are using.
-            msg = f"Data has no observations with key '{self.key}'."
+            msg = f"Data has no observations with key '{self.periodic_key}'."
             msg += "  You should disable this template."
             log.error(msg)
             raise RuntimeError(msg)
@@ -228,52 +220,25 @@ class Periodic(Template):
         else:
             self._amp_hits = np.zeros(self._n_local, dtype=np.int32)
 
-        self._obs_bin_hits = list()
-        for det in self._all_dets:
-            amp_offset = self._det_offset[det]
-            for iob, ob in enumerate(self.data.obs):
-                if det not in self._obs_dets[iob]:
-                    continue
-                if self.is_detdata_key:
-                    if self.key not in ob.detdata:
-                        continue
-                else:
-                    if self.key not in ob.shared:
-                        continue
-                nbins = self._obs_nbins[iob]
-                det_indx = ob.detdata[self.det_data].indices([det])[0]
+        for ob in new_data.obs:
+            for det in self._obs_dets[ob.uid]:
+                amp_offset = self._det_offset[ob.uid][det]
+                nbins = self._obs_nbins[ob.uid]
                 amp_hits = self._amp_hits[amp_offset : amp_offset + nbins]
                 amp_flags = self._amp_flags[amp_offset : amp_offset + nbins]
-                if self.det_flags is not None:
-                    flag_indx = ob.detdata[self.det_flags].indices([det])[0]
-                else:
-                    flag_indx = None
-                for vw in ob.intervals[self.view].data:
-                    vw_slc = slice(vw.first, vw.last, 1)
-                    if self.is_detdata_key:
-                        vw_data = ob.detdata[self.key].data[vw_slc]
-                    else:
-                        vw_data = ob.shared[self.key].data[vw_slc]
-                    good, amp_indx = self._view_flags_and_index(
-                        det_indx,
-                        iob,
-                        ob,
-                        vw,
-                        flag_indx=flag_indx,
-                        det_flags=True,
-                    )
-                    np.add.at(
-                        amp_hits,
-                        amp_indx,
-                        np.ones(len(vw_data[good]), dtype=np.int32),
-                    )
-                    flag_thresh = amp_hits < self.minimum_bin_hits
-                    amp_flags[flag_thresh] = True
-                amp_offset += nbins
-        return
 
-    def _detectors(self):
-        return self._all_dets
+                good, amp_indx = self._flags_and_index(ob, det)
+                n_good = np.count_nonzero(good)
+
+                np.add.at(
+                    amp_hits,
+                    amp_indx,
+                    np.ones(n_good, dtype=np.int32),
+                )
+                # Flag amplitudes based on hits
+                flag_thresh = amp_hits < self.minimum_bin_hits
+                amp_flags[flag_thresh] = True
+        return
 
     def _zeros(self):
         z = Amplitudes(self.data.comm, self._n_global, self._n_local)
@@ -281,113 +246,54 @@ class Periodic(Template):
             z.local_flags[:] = np.where(self._amp_flags, 1, 0)
         return z
 
-    def _view_flags_and_index(
-        self, det_indx, ob_indx, ob, view, flag_indx=None, det_flags=False
-    ):
-        """Get the flags and amplitude indices for one detector and view."""
-        vw_slc = slice(view.first, view.last, 1)
-        vw_len = view.last - view.first
-        incr = self._obs_incr[ob_indx]
-        # Determine good samples
-        if self.is_detdata_key:
-            vw_data = ob.detdata[self.key].data[vw_slc]
-            if self.flags is not None:
-                # We have some flags
-                bad = ob.detdata[self.flags].data[vw_slc] & self.flag_mask
-            else:
-                bad = np.zeros(vw_len, dtype=np.uint8)
+    def _flags_and_index(self, obs, det):
+        """Get the good samples and amplitude indices for one detector."""
+        nbins = self._obs_nbins[obs.uid]
+        if self.det_flags is None:
+            flags = self._obs_flags[obs.uid]
         else:
-            vw_data = ob.shared[self.key].data[vw_slc]
-            if self.flags is not None:
-                # We have some flags
-                bad = ob.shared[self.flags].data[vw_slc] & self.flag_mask
-            else:
-                bad = np.zeros(vw_len, dtype=np.uint8)
-        if det_flags and self.det_flags is not None:
-            # We have some det flags
-            bad |= ob.detdata[self.det_flags][flag_indx, vw_slc] & self.det_flag_mask
-        good = np.logical_not(bad)
-
-        # Find the amplitude index for every good sample
+            flags = np.copy(self._obs_flags[obs.uid])
+            flags |= obs.detdata[self.det_flags][det] & self.det_flag_mask
+        good = flags == 0
         amp_indx = np.array(
-            ((vw_data[good] - self._obs_min[ob_indx]) / incr),
+            (
+                (obs.shared[self.periodic_key].data[good] - self._obs_min[obs.uid])
+                / self._obs_incr[obs.uid]
+            ),
             dtype=np.int32,
         )
-        overflow = amp_indx >= self._obs_nbins[ob_indx]
-        amp_indx[overflow] = self._obs_nbins[ob_indx] - 1
-
+        # Place any amplitudes at the max value into the final bin
+        overflow = amp_indx == nbins
+        amp_indx[overflow] = nbins - 1
         return good, amp_indx
 
-    def _add_to_signal(self, detector, amplitudes, **kwargs):
-        if detector not in self._all_dets:
-            # This must have been cut by per-detector flags during initialization
-            return
-
-        amp_offset = self._det_offset[detector]
-        for iob, ob in enumerate(self.data.obs):
-            if detector not in self._obs_dets[iob]:
+    def _add_to_signal(self, obs, detectors, amplitudes, **kwargs):
+        for det in detectors:
+            if det not in self._det_offset[obs.uid]:
                 continue
-            if self.is_detdata_key:
-                if self.key not in ob.detdata:
-                    continue
-            else:
-                if self.key not in ob.shared:
-                    continue
-            nbins = self._obs_nbins[iob]
-            det_indx = ob.detdata[self.det_data].indices([detector])[0]
+            amp_offset = self._det_offset[obs.uid][det]
+            nbins = self._obs_nbins[obs.uid]
+            good, amp_indx = self._flags_and_index(obs, det)
             amps = amplitudes.local[amp_offset : amp_offset + nbins]
-            for vw in ob.intervals[self.view].data:
-                vw_slc = slice(vw.first, vw.last, 1)
-                good, amp_indx = self._view_flags_and_index(
-                    det_indx,
-                    iob,
-                    ob,
-                    vw,
-                    det_flags=False,
-                )
-                # Accumulate to timestream
-                ob.detdata[self.det_data][det_indx, vw_slc][good] += amps[amp_indx]
-            amp_offset += nbins
 
-    def _project_signal(self, detector, amplitudes, **kwargs):
-        if detector not in self._all_dets:
-            # This must have been cut by per-detector flags during initialization
-            return
+            # Accumulate to timestream
+            obs.detdata[self.det_data][det][good] += amps[amp_indx]
 
-        amp_offset = self._det_offset[detector]
-        for iob, ob in enumerate(self.data.obs):
-            if detector not in self._obs_dets[iob]:
+    def _project_signal(self, obs, detectors, amplitudes, **kwargs):
+        for det in detectors:
+            if det not in self._det_offset[obs.uid]:
                 continue
-            if self.is_detdata_key:
-                if self.key not in ob.detdata:
-                    continue
-            else:
-                if self.key not in ob.shared:
-                    continue
-            nbins = self._obs_nbins[iob]
-            det_indx = ob.detdata[self.det_data].indices([detector])[0]
+            amp_offset = self._det_offset[obs.uid][det]
+            nbins = self._obs_nbins[obs.uid]
+            good, amp_indx = self._flags_and_index(obs, det)
             amps = amplitudes.local[amp_offset : amp_offset + nbins]
-            if self.det_flags is not None:
-                flag_indx = ob.detdata[self.det_flags].indices([detector])[0]
-            else:
-                flag_indx = None
-            for vw in ob.intervals[self.view].data:
-                vw_slc = slice(vw.first, vw.last, 1)
-                good, amp_indx = self._view_flags_and_index(
-                    det_indx,
-                    iob,
-                    ob,
-                    vw,
-                    flag_indx=flag_indx,
-                    det_flags=True,
-                )
-                # Accumulate to amplitudes
-                np.add.at(
-                    amps,
-                    amp_indx,
-                    ob.detdata[self.det_data][det_indx, vw_slc][good],
-                )
-            amp_offset += nbins
+
+            # Accumulate to amplitudes
+            np.add.at(
+                amps,
+                amp_indx,
+                obs.detdata[self.det_data][det][good],
+            )
 
     def _add_prior(self, amplitudes_in, amplitudes_out, **kwargs):
         # No prior for this template, nothing to accumulate to output.
@@ -396,27 +302,16 @@ class Periodic(Template):
     def _apply_precond(self, amplitudes_in, amplitudes_out, **kwargs):
         # Apply weights based on the number of samples hitting each
         # amplitude bin.
-        for det in self._all_dets:
-            amp_offset = self._det_offset[det]
-            for iob, ob in enumerate(self.data.obs):
-                if det not in self._obs_dets[iob]:
-                    continue
-                if self.is_detdata_key:
-                    if self.key not in ob.detdata:
-                        continue
-                else:
-                    if self.key not in ob.shared:
-                        continue
-                nbins = self._obs_nbins[iob]
+        for ob in self.data.obs:
+            for det in self._obs_dets[ob.uid]:
+                amp_offset = self._det_offset[ob.uid][det]
+                nbins = self._obs_nbins[ob.uid]
                 amps_in = amplitudes_in.local[amp_offset : amp_offset + nbins]
                 amps_out = amplitudes_out.local[amp_offset : amp_offset + nbins]
                 amp_flags = amplitudes_in.local_flags[amp_offset : amp_offset + nbins]
                 amp_hits = self._amp_hits[amp_offset : amp_offset + nbins]
                 amp_good = amp_flags == 0
-
                 amps_out[amp_good] = amps_in[amp_good] * amp_hits[amp_good]
-
-                amp_offset += nbins
 
     @function_timer
     def write(self, amplitudes, out):
@@ -440,20 +335,14 @@ class Periodic(Template):
 
         obs_det_amps = dict()
 
-        for det in self._all_dets:
-            amp_offset = self._det_offset[det]
-            for iob, ob in enumerate(self.data.obs):
-                if det not in self._obs_dets[iob]:
+        for ob in self.data.obs:
+            for det in self._obs_dets[ob.uid]:
+                if self.periodic_key not in ob.shared:
                     continue
-                if self.is_detdata_key:
-                    if self.key not in ob.detdata:
-                        continue
-                else:
-                    if self.key not in ob.shared:
-                        continue
                 if ob.name not in obs_det_amps:
                     obs_det_amps[ob.name] = dict()
-                nbins = self._obs_nbins[iob]
+                amp_offset = self._det_offset[ob.uid][det]
+                nbins = self._obs_nbins[ob.uid]
                 amp_data = amplitudes.local[amp_offset : amp_offset + nbins]
                 amp_hits = self._amp_hits[amp_offset : amp_offset + nbins]
                 amp_flags = self._amp_flags[amp_offset : amp_offset + nbins]
@@ -461,11 +350,10 @@ class Periodic(Template):
                     "amps": amp_data,
                     "hits": amp_hits,
                     "flags": amp_flags,
-                    "min": self._obs_min[iob],
-                    "max": self._obs_max[iob],
-                    "incr": self._obs_incr[iob],
+                    "min": self._obs_min[ob.uid],
+                    "max": self._obs_max[ob.uid],
+                    "incr": self._obs_incr[ob.uid],
                 }
-                amp_offset += nbins
 
         if self.data.comm.world_size == 1:
             all_obs_dets_amps = [obs_det_amps]

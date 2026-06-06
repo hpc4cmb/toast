@@ -121,22 +121,22 @@ class Template(TraitConfig):
                 log.debug(msg)
             return False
 
-    def _detectors(self):
-        # Derived classes should return the list of detectors they support.
-        raise NotImplementedError("Derived class must implement _detectors()")
+    # def _detectors(self):
+    #     # Derived classes should return the list of detectors they support.
+    #     raise NotImplementedError("Derived class must implement _detectors()")
 
-    def detectors(self):
-        """Return a list of detectors supported by the template.
+    # def detectors(self):
+    #     """Return a list of detectors supported by the template.
 
-        This list will change whenever the `data` trait is set, which initializes
-        the template.
+    #     This list will change whenever the `data` trait is set, which initializes
+    #     the template.
 
-        Returns:
-            (list):  The detectors with local amplitudes across all observations.
+    #     Returns:
+    #         (list):  The detectors with local amplitudes across all observations.
 
-        """
-        if self._check_enabled():
-            return self._detectors()
+    #     """
+    #     if self._check_enabled():
+    #         return self._detectors()
 
     def _zeros(self):
         raise NotImplementedError("Derived class must implement _zeros()")
@@ -155,11 +155,11 @@ class Template(TraitConfig):
         if self._check_enabled():
             return self._zeros()
 
-    def _add_to_signal(self, detector, amplitudes, **kwargs):
+    def _add_to_signal(self, obs, detectors, amplitudes, **kwargs):
         raise NotImplementedError("Derived class must implement _add_to_signal()")
 
     @function_timer_stackskip
-    def add_to_signal(self, detector, amplitudes, use_accel=None, **kwargs):
+    def add_to_signal(self, obs, detectors, amplitudes, use_accel=None, **kwargs):
         """Accumulate the projected amplitudes to a timestream.
 
         This performs the operation:
@@ -170,7 +170,8 @@ class Template(TraitConfig):
         Where `s` is the det_data signal, `F` is the template and `a` is the amplitudes.
 
         Args:
-            detector (str):  The detector name.
+            obs (Observation):  The observation to process.
+            detectors (list):  The list of detectors to process.
             amplitudes (Amplitudes):  The Amplitude values for this template.
 
         Returns:
@@ -178,13 +179,15 @@ class Template(TraitConfig):
 
         """
         if self._check_enabled(use_accel=use_accel):
-            self._add_to_signal(detector, amplitudes, use_accel=use_accel, **kwargs)
+            self._add_to_signal(
+                obs, detectors, amplitudes, use_accel=use_accel, **kwargs
+            )
 
-    def _project_signal(self, detector, amplitudes, **kwargs):
+    def _project_signal(self, obs, detectors, amplitudes, **kwargs):
         raise NotImplementedError("Derived class must implement _project_signal()")
 
     @function_timer_stackskip
-    def project_signal(self, detector, amplitudes, use_accel=None, **kwargs):
+    def project_signal(self, obs, detectors, amplitudes, use_accel=None, **kwargs):
         """Project a timestream into template amplitudes.
 
         This performs:
@@ -195,7 +198,8 @@ class Template(TraitConfig):
         Where `s` is the det_data signal, `F` is the template and `a` is the amplitudes.
 
         Args:
-            detector (str):  The detector name.
+            obs (Observation):  The observation to process.
+            detectors (list):  The list of detectors to process.
             amplitudes (Amplitudes):  The Amplitude values for this template.
 
         Returns:
@@ -203,7 +207,9 @@ class Template(TraitConfig):
 
         """
         if self._check_enabled(use_accel=use_accel):
-            self._project_signal(detector, amplitudes, use_accel=use_accel, **kwargs)
+            self._project_signal(
+                obs, detectors, amplitudes, use_accel=use_accel, **kwargs
+            )
 
     def _add_prior(self, amplitudes_in, amplitudes_out, **kwargs):
         # Not all Templates implement the prior

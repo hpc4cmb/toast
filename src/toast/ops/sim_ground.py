@@ -46,7 +46,7 @@ from ..weather import SimWeather
 from .azimuth_intervals import AzimuthRanges
 from .flag_intervals import FlagIntervals
 from .operator import Operator
-from .pipeline import Pipeline
+from .pipeline import Pipeline, PipelineLoader
 from .sim_ground_utils import (
     add_solar_intervals,
     oscillate_el,
@@ -84,7 +84,9 @@ class SimGround(Operator):
     )
 
     telescope_file = Unicode(
-        None, allow_none=True, help="Path to HDF5 file containing an instrument group."
+        None,
+        allow_none=True,
+        help="Path to HDF5 file containing an instrument group."
     )
 
     session_split_key = Unicode(
@@ -350,6 +352,12 @@ class SimGround(Operator):
         help="Bit mask to raise elevation nod flags with",
     )
 
+    load_pipe = Instance(
+        klass=Pipeline,
+        allow_none=True,
+        help="A Pipeline to add as a Loader to each observation"
+    )
+
     @traitlets.validate("telescope")
     def _check_telescope(self, proposal):
         tele = proposal["value"]
@@ -488,10 +496,14 @@ class SimGround(Operator):
                 self.telescope = comm.comm_world.bcast(self.telescope, root=0)
 
         if self.schedule is None:
-            schedule = GroundSchedule()
-            schedule.read(self.schedule_file, comm=comm.comm_world)
-            if self.sort_schedule_file:
-                schedule.sort_by_RA()
+            schedule = None
+            if comm.world_rank == 0:
+                schedule = GroundSchedule()
+                schedule.read(self.schedule_file, comm=comm.comm_world)
+                if self.sort_schedule_file:
+                    schedule.sort_by_RA()
+            if comm.comm_world is not None:
+                schedule = comm.comm_world.bcast(schedule, root=0)
         else:
             schedule = self.schedule
 
@@ -504,6 +516,13 @@ class SimGround(Operator):
 
         if len(schedule.scans) == 0:
             raise RuntimeError("Schedule has no scans!")
+
+        if self.load_pipe is not None and (
+            self.det_data is not None or self.det_flags is not None
+        ):
+            msg = "If load_pipe is specified, the detector data and flags should be "
+            msg += "specified by that operator, not with det_data and det_flags."
+            raise RuntimeError(msg)
 
         # Get per-observation telescopes
         obs_tele = self._obs_telescopes(data, det_ranks, detectors)
@@ -733,6 +752,9 @@ class SimGround(Operator):
                     self.det_flags,
                     dtype=np.uint8,
                 )
+
+            if self.load_pipe is not None:
+                ob.loader = PipelineLoader(pipeline=self.load_pipe)
 
             # Only the first rank of the process grid columns sets / computes these.
 

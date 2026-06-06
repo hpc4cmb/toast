@@ -5,17 +5,14 @@
 import os
 
 import numpy as np
-import numpy.testing as nt
 from astropy import units as u
 
 from .. import ops
-from ..accelerator import ImplementationType, accel_enabled
 from ..atm import available_atm
 from ..observation import default_values as defaults
-from ..templates import Fourier2D, Offset, Periodic
+from ..templates import Offset, Periodic
 from ..templates.offset import plot as offplot
 from ..templates.periodic import plot as perplot
-from ..utils import rate_from_times
 from ..vis import plot_healpix_maps, plot_noise_estim, plot_wcs_maps
 from .helpers import (
     close_data,
@@ -107,7 +104,7 @@ class TemplatePeriodicTest(MPITestCase):
                         ob.shared[defaults.times].data[plot_slc],
                         ob.detdata["input"][det, plot_slc],
                         c="blue",
-                        label=f"Total Input Signal",
+                        label="Total Input Signal",
                     )
                     ax.set_ylim(bottom=dmin, top=dmax)
                     ax.legend(loc="best")
@@ -466,9 +463,9 @@ class TemplatePeriodicTest(MPITestCase):
         # Set up template with 2-degree bins.
         hwpss_tmpl = Periodic(
             name="hwpss_template",
-            key=defaults.hwp_angle,
-            flags=defaults.shared_flags,
-            flag_mask=defaults.shared_mask_invalid,
+            periodic_key=defaults.hwp_angle,
+            periodic_flags=defaults.shared_flags,
+            periodic_flag_mask=defaults.shared_mask_invalid,
             bins=64,
         )
 
@@ -660,9 +657,7 @@ class TemplatePeriodicTest(MPITestCase):
         # Set up template for HWPSS
         hwpss_tmpl = Periodic(
             name="hwpss_template",
-            key=defaults.hwp_angle,
-            flags=defaults.shared_flags,
-            flag_mask=defaults.shared_mask_invalid,
+            periodic_key=defaults.hwp_angle,
             bins=64,
         )
 

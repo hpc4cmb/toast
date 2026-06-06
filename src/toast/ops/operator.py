@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from ..data import obs_loader_name
 from ..timing import function_timer_stackskip
 from ..traits import Bool, TraitConfig
 from ..utils import Logger
@@ -157,18 +158,24 @@ class Operator(TraitConfig):
         if self.enabled:
             for iobs, obs in enumerate(data.obs):
                 unload = False
-                if hasattr(obs, "loader"):
-                    obs.loader.load(obs)
+                if hasattr(obs, obs_loader_name):
+                    msg = f"Loading detector data for {obs.name}"
+                    log.debug_rank(msg, comm=obs.comm.comm_group)
+                    obs.loader.load(obs, data=data)
                     unload = True
+                else:
+                    msg = f"No detector data loader used for {obs.name}"
+                    log.debug_rank(msg, comm=obs.comm.comm_group)
                 temp_data = data.select(obs_index=iobs)
                 self.exec(temp_data, detectors=detectors, **kwargs)
                 del temp_data
                 if unload:
-                    obs.loader.unload(obs)
+                    msg = f"Unloading detector data for {obs.name}"
+                    log.debug_rank(msg, comm=obs.comm.comm_group)
+                    obs.loader.unload(obs, data=data)
         else:
-            if data.comm.world_rank == 0:
-                msg = f"Operator {self.name} is disabled, skipping call to load_exec()"
-                log.debug(msg)
+            msg = f"Operator {self.name} is disabled, skipping call to load_exec()"
+            log.debug_rank(msg, comm=data.comm.comm_world)
 
     @function_timer_stackskip
     def load_apply(self, data, detectors=None, **kwargs):
