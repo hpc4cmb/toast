@@ -362,6 +362,11 @@ class FilterBin(Operator):
         help="Bit mask value for flagging samples that fail filtering",
     )
 
+    filter_detector_mask = Int(
+        defaults.shared_mask_invalid,
+        help="Bit mask value for detectors that fail filtering",
+    )
+
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
         help="Bit mask value for detector sample flagging",
@@ -689,6 +694,10 @@ class FilterBin(Operator):
         log = Logger.get()
         wcomm = data.comm.comm_world
 
+        if data.n_obs() == 0:
+            log.info_rank(f"There are no observations to map", comm=wcomm)
+            return
+
         timer = Timer()
         timer.start()
 
@@ -971,7 +980,7 @@ class FilterBin(Operator):
                 if det_templates.template_covariance is None:
                     # template covariance failed to invert. Flag detector data
                     flags |= self.filter_flag_mask
-                    obs.local_detector_flags[det] |= self.filter_flag_mask
+                    obs.local_detector_flags[det] |= self.filter_detector_mask
                 else:
                     self._regress_templates(det_templates, signal, good_fit)
                     if self.grank == 0:
