@@ -29,7 +29,15 @@ from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..timing import Timer, function_timer
 from ..traits import (
-    Bool, Float, Instance, Int, Quantity, Unicode, trait_docs, string_to_trait
+    Bool,
+    Float,
+    Instance,
+    Int,
+    Quantity,
+    Unicode,
+    trait_docs,
+    string_to_trait,
+    trait_to_string,
 )
 from ..utils import Logger
 from .copy import Copy
@@ -1869,14 +1877,11 @@ class FilterBin(Operator):
             "rightleft_interval",
             "poly_filter_order",
             "poly_filter_view",
+            "precomputed_templates",
+            "precomputed_template_view",
         ]:
             key = prefix + param
-            value = getattr(self, param)
-            # Header cannot have Python objects
-            if isinstance(value, u.Quantity):
-                value = str(value)
-            elif value is None:
-                value = "None"
+            value = trait_to_string(getattr(self, param))
             header[key] = value
 
         return
