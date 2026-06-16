@@ -54,7 +54,7 @@ class FlagNaNsTest(MPITestCase):
         det2 = dets[1]
         obs.detdata[defaults.det_data][det2][:] = np.nan
 
-        ops.FlagNaNs().apply(data)
+        ops.FlagNaNs(replace_value=0).apply(data)
 
         # Verify success
 

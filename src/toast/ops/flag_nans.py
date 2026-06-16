@@ -50,6 +50,8 @@ class FlagNaNs(Operator):
 
     det_flag_mask = Int(defaults.det_mask_invalid, help="Bit mask to raise flags with")
 
+    replace_value = Float(0, allow_none=True, help="Replace NaNs with a finite value")
+
     @traitlets.validate("det_flag_mask")
     def _check_det_flag_mask(self, proposal):
         check = proposal["value"]
@@ -78,15 +80,28 @@ class FlagNaNs(Operator):
 
                 good = np.isfinite(signal)
                 bad = np.logical_not(good)
+                ngood = np.sum(good)
+                nbad = signal.size - ngood
+                not_flagged = (flags & self.det_flag_mask)
+                nnan = np.sum(bad[not_flagged])
+                if nnan != 0:
+                    log.warning(f"{det} on {obs.name} has {nnan} unflagged NaNs")
 
-                if np.all(bad):
+                if ngood == 0:
                     # Flag the detector and all data
-                    signal[:] = 0
+                    if self.replace_value is not None:
+                        signal[:] = 0
                     flags |= self.det_flag_mask
+                    if input_det_flags[det] & self.det_mask == 0:
+                        log.warning(
+                            f"{det} on {obs.name} has all NaN signal but "
+                            "the detector is not flagged"
+                        )
                     output_det_flags[det] = input_det_flags[det] | self.det_mask
-                else:
+                elif nbad > 0:
                     # Flag bad samples
-                    signal[bad] = 0
+                    if self.replace_value is not None:
+                        signal[bad] = 0
                     flags[bad] |= self.det_flag_mask
 
             obs.update_local_detector_flags(output_det_flags)
