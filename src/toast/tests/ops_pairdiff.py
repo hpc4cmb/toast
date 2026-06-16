@@ -112,7 +112,7 @@ class PairDiffTest(MPITestCase):
 
         # Pairdifference
 
-        pairdiff = ops.PairDiff(fpkeys=["pixel"])
+        pairdiff = ops.PairDifference(fpkeys=["pixel"])
         pairdiff_data = pairdiff.apply(data)
 
         # Demodulate
