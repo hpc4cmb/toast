@@ -28,7 +28,9 @@ from ..mpi import MPI, get_world
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import (
+    Bool, Float, Instance, Int, Quantity, Unicode, trait_docs, string_to_trait
+)
 from ..utils import Logger
 from .copy import Copy
 from .delete import Delete
@@ -646,12 +648,10 @@ class FilterBin(Operator):
         if self.filter_config_file is not None:
             with open(self.filter_config_file, "r") as f:
                 self.filter_config = yaml.load(f)
-            # Find and translate all quantities
+            # Translate strings into traits
             for obs_name, obs_config in self.filter_config.items():
                 for key, value in obs_config.items():
-                    if isinstance(value, str) and \
-                       value.endswith((" deg", " rad", " arcmin")):
-                        obs_config[key] = u.Quantity(value)
+                    obs_config[key] = string_to_trait(value)
             log.info_rank(
                 f"Loaded filter config from {self.filter_config_file} in",
                 comm=self.comm, timer=timer

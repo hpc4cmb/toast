@@ -22,6 +22,7 @@ from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import read_healpix
+from ..traits import trait_to_string
 from ..vis import set_matplotlib_backend
 from .helpers import close_data, create_ground_data, create_outdir, fake_flags
 from .mpi import MPITestCase
@@ -92,9 +93,9 @@ class FilterBinTest(MPITestCase):
         config = {}
         for obs in data.obs:
             config[obs.name] = {
-                "poly_filter_order": 1,
+                "poly_filter_order": "1",
                 "poly_filter_view": "scanning",
-                "ground_filter_bin_width": None,
+                "ground_filter_bin_width": trait_to_string(1 * u.deg),
                 "ground_filter_order": None,
             }
         if data.comm.comm_world is not None:
