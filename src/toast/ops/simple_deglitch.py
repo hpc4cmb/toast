@@ -170,15 +170,13 @@ class SimpleDeglitch(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         wcomm = data.comm.comm_world
+        gcomm = data.comm.comm_group
 
-        nobs = 0
-        nbad = 0
-        ndet = 0
         obstimer = Timer()
         obstimer.start()
+        ndet_tot = 0
+        ncut_tot = 0
         for ob in data.obs:
-            if ob.comm.comm_group is None or ob.comm.comm_group.rank == 0:
-                nobs += 1
             if not ob.is_distributed_by_detector:
                 msg = "Observation data must be distributed by detector, not samples"
                 log.error(msg)
@@ -187,13 +185,16 @@ class SimpleDeglitch(Operator):
             focalplane = ob.telescope.focalplane
 
             local_dets = ob.select_local_detectors(flagmask=self.det_mask)
-            ndet += len(local_dets)
             shared_flags = ob.shared[self.shared_flags].data & self.shared_flag_mask
             if self.reset_det_flags:
                 for det in local_dets:
                     ob.detdata[self.det_flags][det][:] = 0
+
             bad_detectors = set()
+            glitch_flags = dict()
+            ndet = 0
             for det in local_dets:
+                ndet += 1
                 if det in bad_detectors:
                     # This detector was coupled to a detector with too many glitches
                     continue
@@ -273,7 +274,7 @@ class SimpleDeglitch(Operator):
                 if np.all((det_flags & self.det_flag_mask) != 0):
                     # This detector is a total loss. Raise the detector flag
                     for alt_det in coupled_detectors:
-                        ob.local_detector_flags[alt_det] |= defaults.det_mask_invalid
+                        glitch_flags[alt_det] = defaults.det_mask_invalid
                         bad_detectors.add(alt_det)
                 elif self.fill_gaps:
                     for alt_det in coupled_detectors:
@@ -284,25 +285,29 @@ class SimpleDeglitch(Operator):
                             poly_order=self.fill_gaps_order,
                             no_white_noise=True,
                         )
-            nbad_obs = len(bad_detectors)
-            ndet_obs = len(local_dets)
-            nbad += nbad_obs
-            if ob.comm.comm_group is not None:
-                nbad_obs = ob.comm.comm_group.reduce(nbad_obs)
-                ndet_obs = ob.comm.comm_group.reduce(ndet_obs)
+
+            # Update per-detector flags
+            ob.update_local_detector_flags(glitch_flags)
+
+            ncut = len(glitch_flags)
+            ndet_tot += ndet
+            ncut_tot += ncut
+            if gcomm is not None:
+                ndet = gcomm.reduce(ndet)
+                ncut = gcomm.reduce(ncut)
             log.debug_rank(
-                f"Flagged {nbad_obs} / {ndet_obs} badly glitched detectors "
-                f"in {ob.name} in",
-                comm=ob.comm.comm_group,
+                f"SimpleDeglitch flagged {ncut} / {ndet} surviving detectors in {ob.name}",
+                comm=gcomm,
                 timer=obstimer,
             )
-        if data.comm.comm_world is not None:
-            nobs = data.comm.comm_world.reduce(nobs)
-            nbad = data.comm.comm_world.reduce(nbad)
-            ndet = data.comm.comm_world.reduce(ndet)
 
+        if wcomm is not None:
+            ndet_tot = data.comm.comm_world.reduce(ndet_tot)
+            ncut_tot = data.comm.comm_world.reduce(ncut_tot)
+
+        n_obs = data.n_obs()
         log.info_rank(
-            f"Flagged {nbad} / {ndet} badly glitched detectors over {nobs} "
+            f"Flagged {ncut_tot} / {ndet_tot} badly glitched detectors over {n_obs} "
             f"observations",
             comm=wcomm,
         )

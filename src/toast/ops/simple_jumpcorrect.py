@@ -238,6 +238,11 @@ class SimpleJumpCorrect(Operator):
                 npeak = 0
             else:
                 npeak = np.ma.sum(np.abs(mytoi) > sigma * lim)
+        # DEBUG begin
+        import pdb
+        import matplotlib.pyplot as plt
+        # pdb.set_trace()
+        # DEBUG end
 
         return peaks
 
@@ -322,6 +327,7 @@ class SimpleJumpCorrect(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        gcomm = data.comm.comm_group
 
         if self.save_jumps is not None and self.apply_jumps is not None:
             msg = "Cannot both save to and apply pre-existing jumps"
@@ -344,12 +350,17 @@ class SimpleJumpCorrect(Operator):
                 phase = None
             if self.save_jumps is not None:
                 jump_props = dict()
+
+            jump_flags = dict()
+            ndet = 0
             for det in local_dets:
+                ndet += 1
                 if self.save_jumps is None:
                     jumps = None
                 else:
                     jumps = list()
                 sig = ob.detdata[self.det_data][det]
+                orig = sig.copy()  # DEBUG
                 det_flags = ob.detdata[self.det_flags][det]
                 if self.reset_det_flags:
                     det_flags[:] = 0
@@ -411,7 +422,12 @@ class SimpleJumpCorrect(Operator):
                         > len(sig) - self.nsample_min
                     ):
                         # Too many flagged samples, cut the detector
-                        ob.update_local_detector_flags({det: self.jump_mask})
+                        jump_flags[det] = self.jump_mask
+                        # DEBUG begin
+                        import pdb
+                        import matplotlib.pyplot as plt
+                        # pdb.set_trace()
+                        # DEBUG end
                     elif self.fill_gaps:
                         flagged_noise_fill(
                             ob.detdata[self.det_data][det],
@@ -423,6 +439,18 @@ class SimpleJumpCorrect(Operator):
 
             if self.save_jumps is not None:
                 ob[self.save_jumps] = jump_props
+
+            # Update per-detector flags
+            ob.update_local_detector_flags(jump_flags)
+
+            ncut = len(jump_flags)
+            if gcomm is not None:
+                ndet = gcomm.reduce(ndet)
+                ncut = gcomm.reduce(ncut)
+            log.debug_rank(
+                f"SimpleJumpCorrect flagged {ncut} / {ndet} surviving detectors in {ob.name}",
+                comm=gcomm,
+            )
 
         return
 
