@@ -22,7 +22,7 @@ from ..noise import Noise
 from ..observation import Observation
 from ..observation import default_values as defaults
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import Bool, Float, Instance, Int, List, Quantity, Unicode, trait_docs
 from ..utils import Logger, dtype_to_aligned, name_UID
 from .operator import Operator
 
@@ -41,6 +41,11 @@ class PairDifference(Operator):
         help="List of focalplane keys that must match for detectors to "
         "be differenced.  If more than two detectors match, an error "
         "is raised",
+    )
+
+    times = Unicode(
+        defaults.times,
+        help="Observation shared key for timestamps",
     )
 
     det_data = Unicode(
@@ -151,10 +156,13 @@ class PairDifference(Operator):
                     full_key = f"{fpkey}={value}"
                 else:
                     full_key += f";{fpkey}={value}"
-            if full_key not in detector_pairs:
+            if full_key not in detector_sets:
                 detector_sets[full_key] = [det]
-            else: len(detector_pairs[full_key]) == 1:
-                detector_sets[full_key] += [det]
+            elif len(detector_sets[full_key]) == 1:
+                detector_sets[full_key].append(det)
+            else:
+                msg = f"Too many detectors matching {full_key}"
+                raise RuntimeError(msg)
                 
         # Discard sets that have only one detector.  Raise error if
         # there are more than two in a set
@@ -219,9 +227,9 @@ class PairDifference(Operator):
             # Redistribute so pairs are always on a single task
             temp_ob = obs.duplicate(times=self.times)
             temp_ob.redistribute(
-                obs.comm.size,
+                obs.comm.group_size,
                 times=self.times,
-                override_detector_dets=list(detector_pairs.values()),
+                override_detector_sets=list(detector_pairs.values()),
             )
 
             # Find the subset of pairs that are operational
@@ -257,7 +265,7 @@ class PairDifference(Operator):
             dropped_pairs = []
             for det_pair in detector_pairs:
                 if det_pair not in all_pairs:
-                    dropped_pairs.append(det_pairs)
+                    dropped_pairs.append(det_pair)
             for dropped_pair in dropped_pairs:
                 del detector_pairs[dropped_pair]
             
@@ -325,11 +333,10 @@ class PairDifference(Operator):
 
     @function_timer
     def _pairdiff_telescope(self, obs, detector_pairs):
-        focalplane = obs.telescope.focalplane
+        fp = obs.telescope.focalplane
         field_names = fp.properties
         # Initialize fields to empty lists
         fields = {name: list() for name in field_names}
-        all_set = set(all_dets)
         for det_pair, (det1, det2) in detector_pairs.items():
             for field_name in field_names:
                 # Each detector pair translates into one or two entries
@@ -347,13 +354,13 @@ class PairDifference(Operator):
 
         pairdiff_focalplane = Focalplane(
             detector_data=pairdiff_det_data,
-            field_of_view=focalplane.field_of_view,
-            sample_rate=focalplane.sample_rate,
+            field_of_view=fp.field_of_view,
+            sample_rate=fp.sample_rate,
         )
         pairdiff_name = f"pairdiff_{obs.telescope.name}"
         pairdiff_telescope = Telescope(
             name=pairdiff_name,
-            uid=name_UID(pairdff_name),
+            uid=name_UID(pairdiff_name),
             focalplane=pairdiff_focalplane,
             site=obs.telescope.site,
         )
