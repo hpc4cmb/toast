@@ -90,6 +90,7 @@ class ObservationTest(MPITestCase):
         np.random.seed(12345)
         rms = 10.0
         data = create_satellite_empty(self.comm, obs_per_group=1, samples=10)
+        n_obs = data.n_obs()  # Test observation counting
         for obs in data.obs:
             n_samp = obs.n_local_samples
             dets = obs.local_detectors
