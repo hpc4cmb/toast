@@ -238,11 +238,6 @@ class SimpleJumpCorrect(Operator):
                 npeak = 0
             else:
                 npeak = np.ma.sum(np.abs(mytoi) > sigma * lim)
-        # DEBUG begin
-        import pdb
-        import matplotlib.pyplot as plt
-        # pdb.set_trace()
-        # DEBUG end
 
         return peaks
 
@@ -360,7 +355,6 @@ class SimpleJumpCorrect(Operator):
                 else:
                     jumps = list()
                 sig = ob.detdata[self.det_data][det]
-                orig = sig.copy()  # DEBUG
                 det_flags = ob.detdata[self.det_flags][det]
                 if self.reset_det_flags:
                     det_flags[:] = 0
@@ -423,11 +417,6 @@ class SimpleJumpCorrect(Operator):
                     ):
                         # Too many flagged samples, cut the detector
                         jump_flags[det] = self.jump_mask
-                        # DEBUG begin
-                        import pdb
-                        import matplotlib.pyplot as plt
-                        # pdb.set_trace()
-                        # DEBUG end
                     elif self.fill_gaps:
                         flagged_noise_fill(
                             ob.detdata[self.det_data][det],
