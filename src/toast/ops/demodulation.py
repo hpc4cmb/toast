@@ -305,7 +305,7 @@ class Demodulate(Operator):
             else:
                 n_dets = obs.comm.comm_group.allreduce(n_local, op=MPI.SUM)
                 n_good = obs.comm.comm_group.allreduce(n_local_good, op=MPI.SUM)
-            if n_good / n_dets < self.keep_dets_frac:
+            if n_good / n_dets <= self.keep_dets_frac:
                 msg = f"Obs {obs.name} has only {n_good} / {n_dets} good dets, cutting"
                 log.debug_rank(msg, obs.comm.comm_group)
                 if self.in_place:
@@ -313,9 +313,6 @@ class Demodulate(Operator):
                     obs.clear()
                 continue
             demodulate_input_obs.append(obs)
-        n_obs = len(demodulate_input_obs)
-        if data.comm.comm_world is not None:
-            n_obs = data.comm.comm_world.allreduce(n_obs)
 
         # Each modulated detector demodulates into one or more pseudo detectors
 
