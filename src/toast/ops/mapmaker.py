@@ -724,61 +724,30 @@ class MapMaker(Operator):
         else:
             # Use the same binning used in the solver.
             map_binning = self.binning
-        all_local_dets = data.all_local_detectors(
-            selection=detectors, flagmask=map_binning.det_mask
+
+        splits = data.all_detector_groups(
+            column=self.focalplane_key,
+            selection=detectors,
+            flagmask=map_binning.det_mask,
         )
-        ndet = len(all_local_dets)
-        if data.comm.comm_world is not None:
-            ndet = data.comm.comm_world.allreduce(ndet, op=MPI.SUM)
-        if ndet == 0:
+
+        if len(splits) == 0:
             # No valid detectors, no mapmaking
             return
-
-        # Loop over focalplane splits, if needed
-        if self.focalplane_key is None:
-            splits = {None: None}
-        else:
-            # Each process gathers their local values for the focalplane keys
-            local_fp_values = dict()
-            for ob in data.obs:
-                for det in ob.select_local_detectors(
-                    selection=detectors, flagmask=map_binning.det_mask
-                ):
-                    for row in ob.telescope.focalplane.detector_data:
-                        val = row[self.focalplane_key]
-                        if val not in local_fp_values:
-                            local_fp_values[val] = set()
-                        local_fp_values[val].add(row["name"])
-            fp_vals = None
-            if data.comm.comm_world is not None:
-                proc_fp_vals = data.comm.comm_world.gather(local_fp_values, root=0)
-            else:
-                proc_fp_vals = [local_fp_values]
-            if data.comm.world_rank == 0:
-                fp_vals = dict()
-                for pvals in proc_fp_vals:
-                    for k, v in pvals.items():
-                        if k not in fp_vals:
-                            fp_vals[k] = set()
-                        fp_vals[k].update(v)
-            if data.comm.comm_world is not None:
-                fp_vals = data.comm.comm_world.bcast(fp_vals, root=0)
-            splits = dict()
-            for k, v in fp_vals.items():
-                splits[k] = list(sorted(v))
 
         # Destripe data and make maps
 
         for split_key, split_dets in splits.items():
-            if split_key is not None:
+            if split_key != "ALL":
+                safe_split = re.sub(r"\s", "", str(split_key))
                 self._save_reset_state = self.reset_pix_dist
                 self.reset_pix_dist = True
                 self._save_split_name = self.name
-                self.name = f"{self._save_split_name}_{split_key}"
+                self.name = f"{self._save_split_name}_{safe_split}"
             if split_dets is None:
                 split_dets = detectors
 
-            self._setup(data, detectors, use_accel)
+            self._setup(data, split_dets, use_accel)
 
             extra_header = self._get_extra_header(data, detectors)
 
@@ -795,7 +764,11 @@ class MapMaker(Operator):
 
             out_cleaned = self._clean_signal(template_amplitudes)
 
-            if self.write_noiseweighted_map or self.write_map or self.keep_final_products:
+            if (
+                self.write_noiseweighted_map
+                or self.write_map
+                or self.keep_final_products
+            ):
                 self._bin_cleaned_signal(map_binning, out_cleaned)
 
             self._purge_cleaned_tod()  # Potentially frees memory for writing maps
@@ -807,7 +780,7 @@ class MapMaker(Operator):
 
             self._closeout()
 
-            if split_key is not None:
+            if split_key != "ALL":
                 self.reset_pix_dist = self._save_reset_state
                 self.name = self._save_split_name
 

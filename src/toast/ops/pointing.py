@@ -80,11 +80,6 @@ class BuildPixelDistribution(Operator):
             msg = f"pixel distribution `{self.pixel_dist}` already exists"
             raise RuntimeError(msg)
 
-        if detectors is not None:
-            msg = "A subset of detectors is specified, but the pixel distribution\n"
-            msg += "does not yet exist- and creating this requires all detectors."
-            raise RuntimeError(msg)
-
         msg = "Creating pixel distribution '{}' in Data".format(self.pixel_dist)
         if data.comm.world_rank == 0:
             log.debug(msg)

@@ -120,7 +120,7 @@ class Offset(Template):
         self.clear()
 
     @function_timer
-    def _initialize(self, new_data):
+    def _initialize(self, new_data, detectors=None):
         log = Logger.get()
         # This function is called whenever a new data trait is assigned to the template.
         # Clear any C-allocated buffers from previous uses.
@@ -216,7 +216,8 @@ class Offset(Template):
                         # Choose equal spacing in log units
                         powmin = np.floor(np.log10(1 / obstime)) - 1
                         powmax = min(
-                            np.ceil(np.log10(1 / tbase)) + 2, np.log10(self._obs_rate[iob])
+                            np.ceil(np.log10(1 / tbase)) + 2,
+                            np.log10(self._obs_rate[iob]),
                         )
                         self._freq[iob] = np.logspace(powmin, powmax, 1000)
 
@@ -225,7 +226,9 @@ class Offset(Template):
             if self.pattern is not None:
                 det_pat = re.compile(self.pattern)
             self._obs_dets[iob] = set()
-            for d in ob.select_local_detectors(flagmask=self.det_mask):
+            for d in ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            ):
                 if d not in ob.detdata[self.det_data].detectors:
                     continue
                 if det_pat is not None and det_pat.match(d) is None:

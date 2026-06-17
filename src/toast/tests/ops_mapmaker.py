@@ -667,7 +667,7 @@ class MapmakerTest(MPITestCase):
 
     def test_pattern_select(self):
         if sys.platform.lower() == "darwin":
-            print("WARNING:  Skipping test_offset on MacOS")
+            print("WARNING:  Skipping test_pattern_select on MacOS")
             return
 
         testdir = os.path.join(self.outdir, "pattern_select")
@@ -676,7 +676,7 @@ class MapmakerTest(MPITestCase):
 
         # Create a data set for testing
 
-        data = create_ground_data(self.comm, schedule_hours=1)
+        data = create_satellite_data(self.comm)
 
         # Create some sky signal timestreams.
         detpointing = ops.PointingDetectorSimple()
@@ -684,7 +684,6 @@ class MapmakerTest(MPITestCase):
             nside=64,
             create_dist="pixel_dist",
             detector_pointing=detpointing,
-            view="scanning",
         )
         pixels.apply(data)
         weights = ops.StokesWeights(
@@ -763,6 +762,7 @@ class MapmakerTest(MPITestCase):
             template_matrix=tmatrix,
             solve_rcond_threshold=1.0e-1,
             map_rcond_threshold=1.0e-1,
+            iter_max=5,
             write_hits=True,
             write_map=True,
             write_cov=False,
@@ -803,6 +803,147 @@ class MapmakerTest(MPITestCase):
             if not np.array_equal(hit_total[good], hit_A[good] + hit_B[good]):
                 msg = f"{hit_total[good]} != {hit_A[good]} + {hit_B[good]}"
                 print(msg, flush=True)
+                self.assertTrue(False)
+
+        close_data(data)
+
+    def test_focalplane_select(self):
+        if sys.platform.lower() == "darwin":
+            print("WARNING:  Skipping test_focalplane_select on MacOS")
+            return
+
+        testdir = os.path.join(self.outdir, "focalplane_select")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
+        # Create a data set for testing
+
+        data = create_satellite_data(
+            self.comm,
+            freqs=[90.0 * u.GHz, 150.0 * u.GHz],
+        )
+
+        # Create some sky signal timestreams.
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.01,
+            Q_scale=0.001,
+            U_scale=0.001,
+            det_data=defaults.det_data,
+        )
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(
+            detdata=[detpointing.quats, pixels.pixels, weights.weights]
+        )
+        delete_pointing.apply(data)
+        pixels.create_dist = None
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data=defaults.det_data
+        )
+        sim_noise.apply(data)
+
+        # Copy the data for later use
+        ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
+
+        # Set up binning operator for solving
+        binner = ops.BinMap(
+            pixel_dist="pixel_dist",
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        # Set up template matrix with just an offset template.
+
+        step_seconds = 3.0
+        tmpl = templates.Offset(
+            times=defaults.times,
+            noise_model=default_model.noise_model,
+            step_time=step_seconds * u.second,
+            use_noise_prior=True,
+            precond_width=1,
+        )
+
+        tmatrix = ops.TemplateMatrix(templates=[tmpl])
+
+        # Map maker
+        mapper = ops.MapMaker(
+            name="mapmaker",
+            det_data=defaults.det_data,
+            binning=binner,
+            template_matrix=tmatrix,
+            solve_rcond_threshold=1.0e-6,
+            map_rcond_threshold=1.0e-6,
+            iter_max=5,
+            write_hits=True,
+            write_map=True,
+            write_cov=False,
+            write_rcond=False,
+            keep_solver_products=False,
+            keep_final_products=False,
+            output_dir=testdir,
+        )
+
+        # Make the map separately for different frequencies
+        mapper.focalplane_key = "bandcenter"
+        mapper.apply(data)
+
+        # Make a total map
+        mapper.focalplane_key = None
+        mapper.apply(data)
+
+        # Compare hit maps
+
+        if data.comm.world_rank == 0:
+            hit_A_file = os.path.join(testdir, "mapmaker_90.0GHz_hits.fits")
+            hit_B_file = os.path.join(testdir, "mapmaker_150.0GHz_hits.fits")
+            hit_total_file = os.path.join(testdir, "mapmaker_hits.fits")
+            hit_A = hp.read_map(hit_A_file, field=None, nest=True)
+            hit_B = hp.read_map(hit_B_file, field=None, nest=True)
+            hit_total = hp.read_map(hit_total_file, field=None, nest=True)
+            bad = np.logical_or(
+                hit_A < 3,
+                hit_B < 3,
+            )
+            good = np.logical_not(bad)
+            good_idx = np.arange(len(hit_A), dtype=np.int64)[good]
+            if not np.array_equal(hit_total[good], hit_A[good] + hit_B[good]):
+                for idx, tot, hA, hB in zip(
+                    good_idx, hit_total[good], hit_A[good], hit_B[good]
+                ):
+                    msg = f"pix {idx}: A = {hA}, B = {hB}, Total = {tot}"
+                    print(msg, flush=True)
                 self.assertTrue(False)
 
         close_data(data)

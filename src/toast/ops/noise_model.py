@@ -709,6 +709,9 @@ class FlagNoiseFit(Operator):
             detpat = re.compile(r"(demod[024ri]+)_(.*)")
 
             for group, group_dets in all_groups.items():
+                # Flag detectors in groups, in case detectors have very different noise
+                # properties.  For example, if we have dichroic pixels we are processing
+                # simultaneously, we might group them by frequency.
                 if prefixes is None:
                     group_flags = self._process_group_prefix(
                         obs, local_dets, group, group_dets, ""
@@ -756,6 +759,24 @@ class FlagNoiseFit(Operator):
         )
 
     def _process_group_prefix(self, obs, local_dets, group, group_dets, prefix):
+        """Flag outliers in a group of detectors.
+
+        When looking for outliers, we want to consider only detectors that should have
+        the same noise properties.  For example, we might look at only a given detector
+        frequency (group) and only a particular component of the demodulated
+        timestreams (prefix).
+
+        Args:
+            obs (Observation):  The current observation
+            local_dets (list):  The list of local good (unflagged) dets in this obs
+            group (str):  The name of the detector group to process.
+            group_dets (list):  The list of all observation dets in this group.
+            prefix (str):  The additional detector name prefix to use for selection.
+
+        Returns:
+            None
+
+        """
         log = Logger.get()
 
         local_net = list()
@@ -774,7 +795,6 @@ class FlagNoiseFit(Operator):
             for det in group_dets:
                 if det.startswith(prefix):
                     prefix_dets.append(det)
-        ndet = len(prefix_dets)
 
         for det in prefix_dets:
             if det not in local_dset:

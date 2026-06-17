@@ -189,7 +189,7 @@ class TemplateMatrix(Operator):
         return n_enabled_templates
 
     @function_timer
-    def initialize(self, data, use_accel=False):
+    def initialize(self, data, detectors=None, use_accel=False):
         if not self._initialized:
             if use_accel:
                 # fail when a user tries to run the initialization pipeline on GPU
@@ -207,7 +207,7 @@ class TemplateMatrix(Operator):
                 tmpl.det_flags = self.det_flags
                 tmpl.det_flag_mask = self.det_flag_mask
                 tmpl.data = data
-                tmpl.initialize()
+                tmpl.initialize(detectors=detectors)
             self._initialized = True
 
     @function_timer
@@ -954,7 +954,7 @@ class SolveAmplitudes(Operator):
         self.template_matrix.det_mask = self._save_det_mask
         self.template_matrix.det_flag_mask = 255
         self.template_matrix.view = self.binning.pixel_pointing.view
-        self.template_matrix.initialize(self._data)
+        self.template_matrix.initialize(self._data, detectors=self._detectors)
 
         # Set our binning operator to use only our new solver flags
         self.binning.shared_flag_mask = 0

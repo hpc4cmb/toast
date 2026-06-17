@@ -98,11 +98,11 @@ class Template(TraitConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def initialize(self):
+    def initialize(self, detectors=None):
         """(Re-)initialize the template"""
-        self._initialize(self.data)
+        self._initialize(self.data, detectors=detectors)
 
-    def _initialize(self, new_data):
+    def _initialize(self, new_data, detectors=None):
         # Derived classes should implement this method to do any set up (like
         # computing the number of amplitudes) whenever the data changes.
         raise NotImplementedError("Derived class must implement _initialize()")

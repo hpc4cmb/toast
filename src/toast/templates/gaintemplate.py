@@ -61,7 +61,7 @@ class GainTemplate(Template):
             L[:, i] = scipy.special.legendre(i)(x)
         return L
 
-    def _initialize(self, new_data):
+    def _initialize(self, new_data, detectors=None):
         self.norder = self.order + 1
         # Use this as an "Ordered Set".  We want the unique detectors on this process,
         # but sorted in order of occurrence.
@@ -76,7 +76,9 @@ class GainTemplate(Template):
             det_pat = re.compile(self.pattern)
         for iob, ob in enumerate(new_data.obs):
             self._obs_dets[iob] = set()
-            for d in ob.select_local_detectors(flagmask=self.det_mask):
+            for d in ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            ):
                 if d not in ob.detdata[self.det_data].detectors:
                     continue
                 if det_pat is not None and det_pat.match(d) is None:

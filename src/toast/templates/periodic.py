@@ -84,7 +84,7 @@ class Periodic(Template):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _initialize(self, new_data):
+    def _initialize(self, new_data, detectors=None):
         log = Logger.get()
         if self.key is None:
             msg = "You must set key before initializing"
@@ -165,7 +165,9 @@ class Periodic(Template):
             if self.pattern is not None:
                 det_pat = re.compile(self.pattern)
             self._obs_dets[iob] = set()
-            for d in ob.select_local_detectors(flagmask=self.det_mask):
+            for d in ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            ):
                 if d not in ob.detdata[self.det_data].detectors:
                     continue
                 if det_pat is not None and det_pat.match(d) is None:
