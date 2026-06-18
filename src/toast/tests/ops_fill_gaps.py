@@ -132,6 +132,7 @@ class FillGapsTest(MPITestCase):
             pixel_per_process=1,
             single_group=True,
             fp_width=5.0 * u.degree,
+            schedule_hours=1,
         )
 
         # Create an uncorrelated noise model from focalplane detector properties

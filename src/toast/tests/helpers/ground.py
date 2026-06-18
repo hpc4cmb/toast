@@ -162,7 +162,7 @@ def create_ground_data(
                 "--start",
                 "2020-01-01 00:00:00",
                 "--stop",
-                f"2020-01-01 {sch_hours}:00:00",
+                f"2020-01-01 {int(sch_hours)}:00:00",
                 "--out",
                 sch_file,
             ]

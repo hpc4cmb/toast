@@ -87,7 +87,9 @@ class SimCatalogTest(MPITestCase):
     def test_sim_catalog(self):
         # Create a fake ground data set for testing.  It targets a small patch at
         # RA = [40, 44], Dec = [-44, -40]
-        data = create_ground_data(self.comm, turnarounds_invalid=True, hwp_rpm=0)
+        data = create_ground_data(
+            self.comm, turnarounds_invalid=True, hwp_rpm=0, schedule_hours=1
+        )
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")

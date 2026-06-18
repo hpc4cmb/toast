@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import re
 from collections import OrderedDict
 
 import numpy as np
@@ -60,7 +61,7 @@ class GainTemplate(Template):
             L[:, i] = scipy.special.legendre(i)(x)
         return L
 
-    def _initialize(self, new_data):
+    def _initialize(self, new_data, detectors=None):
         self.norder = self.order + 1
         # Use this as an "Ordered Set".  We want the unique detectors on this process,
         # but sorted in order of occurrence.
@@ -70,10 +71,17 @@ class GainTemplate(Template):
         self._obs_dets = dict()
 
         # Build up detector list
+        det_pat = None
+        if self.pattern is not None:
+            det_pat = re.compile(self.pattern)
         for iob, ob in enumerate(new_data.obs):
             self._obs_dets[iob] = set()
-            for d in ob.select_local_detectors(flagmask=self.det_mask):
+            for d in ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            ):
                 if d not in ob.detdata[self.det_data].detectors:
+                    continue
+                if det_pat is not None and det_pat.match(d) is None:
                     continue
                 self._obs_dets[iob].add(d)
                 if d not in all_dets:

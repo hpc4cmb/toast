@@ -23,6 +23,8 @@ class Delete(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
+    global_meta = List([], help="List of global data dictionary keys to delete")
+
     meta = List([], help="List of Observation dictionary keys to delete")
 
     detdata = List([], help="List of Observation detdata keys to delete")
@@ -40,6 +42,9 @@ class Delete(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
+        for key in self.global_meta:
+            if key in data:
+                del data[key]
         for ob in data.obs:
             for key in self.detdata:
                 # This ignores non-existant keys

@@ -189,6 +189,7 @@ class IoHdf5Test(MPITestCase):
                 freqs=freq_list,
                 pixel_per_process=ppp,
                 split=split,
+                sample_rate=2.0 * u.Hz,
                 **kwargs,
             )
 

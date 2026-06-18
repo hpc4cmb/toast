@@ -949,18 +949,25 @@ class CommonModeFilter(Operator):
                     coeffs = np.zeros(ndet)
                     templates = np.vstack([np.ones(ngood), mean_template[good]])
                     invcov = np.dot(templates, templates.T)
-                    cov = np.linalg.inv(invcov)
-                    for idet, iflag in zip(data_indices, flag_indices):
-                        sig = temp_ob.detdata[self.det_data].data[idet]
-                        sig_copy = sig[good].copy()
-                        flg = det_flags[idet][good]
-                        sig_copy[flg & self.det_flag_mask != 0] = 0
-                        proj = np.dot(templates, sig_copy)
-                        coeff = np.dot(cov, proj)
-                        coeffs[idet] = coeff[1]
-                        sig -= coeff[0] + coeff[1] * mean_template
-                    if self.plot:
-                        self._plot_coeff(temp_ob, coeffs, comm, value)
+                    try:
+                        cov = np.linalg.inv(invcov)
+                        for idet, iflag in zip(data_indices, flag_indices):
+                            sig = temp_ob.detdata[self.det_data].data[idet]
+                            sig_copy = sig[good].copy()
+                            flg = det_flags[idet][good]
+                            sig_copy[flg & self.det_flag_mask != 0] = 0
+                            proj = np.dot(templates, sig_copy)
+                            coeff = np.dot(cov, proj)
+                            coeffs[idet] = coeff[1]
+                            sig -= coeff[0] + coeff[1] * mean_template
+                        if self.plot:
+                            self._plot_coeff(temp_ob, coeffs, comm, value)
+                    except np.linalg.LinAlgError:
+                        # Matrix is singular, flag these dets
+                        for det in local_dets:
+                            temp_ob.update_local_detector_flags(
+                                {det: defaults.det_mask_invalid}
+                            )
                 else:
                     subtract_mean(
                         data_indices,
