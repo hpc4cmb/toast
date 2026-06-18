@@ -744,15 +744,14 @@ class Focalplane(object):
         self.field_of_view = field_of_view
         self.sample_rate = sample_rate
         self.thinfp = thinfp
-        self._initialize()
+        self._det_to_row = {}
+        if detector_data is not None and len(detector_data) > 0:
+            # We have some dets
+            self._initialize()
 
     @function_timer
     def _initialize(self):
         log = Logger.get()
-
-        if self.detector_data is None or len(self.detector_data) > 0:
-            self._det_to_row = {}
-            return
 
         # We have some dets
 
@@ -772,7 +771,8 @@ class Focalplane(object):
             )
 
         # Build index of detector to table row
-        self._det_to_row = {y["name"]: x for x, y in enumerate(self.detector_data)}
+        for row, entry in enumerate(self.detector_data):
+            self._det_to_row[entry["name"]] = row
 
         if self.field_of_view is None:
             self._compute_fov()
