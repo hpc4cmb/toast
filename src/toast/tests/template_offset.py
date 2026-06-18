@@ -46,8 +46,9 @@ class TemplateOffsetTest(MPITestCase):
             noise_model=noise_model.noise_model,
             step_time=step_seconds * u.second,
         )
-        # Set the data
+        # Set the data and initialize
         tmpl.data = data
+        tmpl.initialize()
 
         # Get some amplitudes and set to one
         amps = tmpl.zeros()
@@ -119,8 +120,9 @@ class TemplateOffsetTest(MPITestCase):
             noise_model=noise_model.noise_model,
             step_time=step_seconds * u.second,
         )
-        # Set the data
+        # Set the data and initialize
         tmpl.data = data
+        tmpl.initialize()
 
         # Get some amplitudes and set to one
         amps = tmpl.zeros()
@@ -327,9 +329,11 @@ class TemplateOffsetTest(MPITestCase):
             kernel_implementation=ImplementationType.NUMPY,
         )
 
-        # Set the data
+        # Set the data and initialize
         tmpl.data = data
+        tmpl.initialize()
         pytmpl.data = data
+        pytmpl.initialize()
 
         # Get some amplitudes and set to one
         amps = tmpl.zeros()

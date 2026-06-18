@@ -286,7 +286,7 @@ class Demodulate(Operator):
                     # Un-demodulated observations will be deleted
                     obs.clear()
                 continue
-            hwp_angle = obs.shared[self.hwp_angle]
+            hwp_angle = obs.shared[self.hwp_angle].data
             if np.abs(np.median(np.diff(hwp_angle))) < 1e-6:
                 # Stepped or stationary HWP
                 msg = f"Obs {obs.name} has a stepped / stationary HWP, skipping"
@@ -297,7 +297,10 @@ class Demodulate(Operator):
                 continue
             n_local = len(obs.local_detectors)
             n_local_good = np.sum(
-                [1 for x, y in obs.local_detector_flags.items() if y == 0]
+                [
+                    1 for x, y in obs.local_detector_flags.items() 
+                    if y & self.det_mask == 0
+                ]
             )
             if obs.comm.comm_group is None:
                 n_dets = n_local

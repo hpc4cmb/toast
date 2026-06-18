@@ -38,6 +38,7 @@ class TemplateFourier2DTest(MPITestCase):
 
         # Set the data
         tmpl.data = data
+        tmpl.initialize()
 
         # Get some amplitudes and set to one
         amps = tmpl.zeros()

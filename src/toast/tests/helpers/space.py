@@ -10,6 +10,7 @@ import healpy as hp
 import numpy as np
 from astropy import units as u
 from astropy.table import Column
+from astropy.table import vstack as table_vstack
 
 from ... import ops
 from ... import qarray as qa
@@ -23,7 +24,11 @@ from .utils import create_comm
 
 
 def create_space_telescope(
-    group_size, sample_rate=10.0 * u.Hz, pixel_per_process=1, width=5.0 * u.degree
+    group_size,
+    sample_rate=10.0 * u.Hz,
+    pixel_per_process=1,
+    width=5.0 * u.degree,
+    freqs=None,
 ):
     """Create a fake satellite telescope with at least one pixel per process."""
     npix = 1
@@ -31,14 +36,38 @@ def create_space_telescope(
     while 2 * npix <= group_size * pixel_per_process:
         npix += 6 * ring
         ring += 1
-    fp = fake_hexagon_focalplane(
-        n_pix=npix,
-        sample_rate=sample_rate,
-        psd_fmin=1.0e-5 * u.Hz,
-        psd_net=0.05 * u.K * np.sqrt(1 * u.second),
-        psd_fknee=(sample_rate / 2000.0),
-        width=width,
-    )
+    if freqs is None:
+        fp = fake_hexagon_focalplane(
+            n_pix=npix,
+            sample_rate=sample_rate,
+            psd_fmin=1.0e-5 * u.Hz,
+            psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+            psd_fknee=(sample_rate / 2000.0),
+            width=width,
+        )
+    else:
+        fp_detdata = list()
+        fov = None
+        for freq in freqs:
+            fp_freq = fake_hexagon_focalplane(
+                n_pix=npix,
+                sample_rate=sample_rate,
+                psd_fmin=1.0e-5 * u.Hz,
+                psd_net=0.05 * u.K * np.sqrt(1 * u.second),
+                psd_fknee=(sample_rate / 2000.0),
+                bandcenter=freq,
+                width=width,
+            )
+            if fov is None:
+                fov = fp_freq.field_of_view
+            fp_detdata.append(fp_freq.detector_data)
+
+        fp_detdata = table_vstack(fp_detdata)
+        fp = Focalplane(
+            detector_data=fp_detdata,
+            sample_rate=sample_rate,
+            field_of_view=fov,
+        )
     site = SpaceSite("L2")
     return Telescope("test", focalplane=fp, site=site)
 
@@ -98,6 +127,7 @@ def create_satellite_data(
     width=5.0 * u.degree,
     single_group=False,
     flagged_pixels=True,
+    freqs=None,
 ):
     """Create a data object with a simple satellite sim.
 
@@ -128,6 +158,7 @@ def create_satellite_data(
         sample_rate=sample_rate,
         pixel_per_process=pixel_per_process,
         width=width,
+        freqs=freqs,
     )
 
     # Create a schedule

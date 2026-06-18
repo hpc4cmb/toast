@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import re
 import os
 
 import numpy as np
@@ -73,6 +74,16 @@ class MapMaker(Operator):
 
     det_data = Unicode(
         defaults.det_data, help="Observation detdata key for the timestream data"
+    )
+
+    pattern = Unicode(
+        None,
+        allow_none=True,
+        help="Regex pattern to match against detector names. Only these are mapped.",
+    )
+
+    focalplane_key = Unicode(
+        None, allow_none=True, help="Focalplane key for split mapmaking."
     )
 
     convergence = Float(1.0e-12, help="Relative convergence limit")
@@ -301,6 +312,28 @@ class MapMaker(Operator):
         self.map_name = f"{self.name}_map"
         self.noiseweighted_map_name = f"{self.name}_noiseweighted_map"
 
+        self._pattern_flags = None
+        # If we are selecting detectors with a pattern, save the per-detector
+        # flags and temporarily modify those to mark other dets as invalid.
+        if self.pattern is not None:
+            self._pattern_flags = dict()
+            self._save_detectors = self._detectors
+            self._detectors = set()
+            det_pat = re.compile(self.pattern)
+            for ob in self._data.obs:
+                # Make a copy of the original
+                self._pattern_flags[ob.uid] = dict(ob.local_detector_flags)
+                cutdets = dict()
+                for det in ob.local_detectors:
+                    if det_pat.match(det) is None:
+                        # Cut this det
+                        cutdets[det] = defaults.det_mask_invalid
+                    else:
+                        # Keep this det
+                        self._detectors.add(det)
+                ob.update_local_detector_flags(cutdets)
+            self._detectors = list(sorted(self._detectors))
+
         self._timer.start()
 
         return
@@ -371,9 +404,10 @@ class MapMaker(Operator):
                 self.map_name,
                 self.noiseweighted_map_name,
                 map_binning.pixel_dist,
+                map_binning.noiseweighted,
                 map_binning.covariance,
             ]:
-                if name in self._data:
+                if name is not None and name in self._data:
                     del self._data[name]
 
         if map_binning.pixel_dist not in self._data:
@@ -386,7 +420,9 @@ class MapMaker(Operator):
                 pixel_pointing=map_binning.pixel_pointing,
                 save_pointing=map_binning.full_pointing,
             )
-            pix_dist.apply(self._data, use_accel=self._use_accel)
+            pix_dist.apply(
+                self._data, detectors=self._detectors, use_accel=self._use_accel
+            )
             self._log.info_rank(
                 f"{self._log_prefix}  finished build of pixel distribution in",
                 comm=self._comm,
@@ -618,6 +654,13 @@ class MapMaker(Operator):
     def _closeout(self):
         """Explicitly delete members used by the _exec() method"""
 
+        # Restore detector flags, if we modified them.
+        if self._pattern_flags is not None:
+            self._detectors = self._save_detectors
+            for ob in self._data.obs:
+                orig = self._pattern_flags[ob.uid]
+                ob.set_local_detector_flags(orig)
+
         del self._log
         del self._timer
         del self._log_prefix
@@ -681,46 +724,65 @@ class MapMaker(Operator):
         else:
             # Use the same binning used in the solver.
             map_binning = self.binning
-        all_local_dets = data.all_local_detectors(
-            selection=detectors, flagmask=map_binning.det_mask
+
+        splits = data.all_detector_groups(
+            column=self.focalplane_key,
+            selection=detectors,
+            flagmask=map_binning.det_mask,
         )
-        ndet = len(all_local_dets)
-        if data.comm.comm_world is not None:
-            ndet = data.comm.comm_world.allreduce(ndet, op=MPI.SUM)
-        if ndet == 0:
+
+        if len(splits) == 0:
             # No valid detectors, no mapmaking
             return
 
         # Destripe data and make maps
 
-        self._setup(data, detectors, use_accel)
+        for split_key, split_dets in splits.items():
+            if split_key != "ALL":
+                safe_split = re.sub(r"\s", "", str(split_key))
+                self._save_reset_state = self.reset_pix_dist
+                self.reset_pix_dist = True
+                self._save_split_name = self.name
+                self.name = f"{self._save_split_name}_{safe_split}"
+            if split_dets is None:
+                split_dets = detectors
 
-        extra_header = self._get_extra_header(data, detectors)
+            self._setup(data, split_dets, use_accel)
 
-        self._memreport.prefix = "Start of mapmaking"
-        self._memreport.apply(self._data, use_accel=self._use_accel)
+            extra_header = self._get_extra_header(data, detectors)
 
-        template_amplitudes = self._fit_templates()
+            self._memreport.prefix = "Start of mapmaking"
+            self._memreport.apply(self._data, use_accel=self._use_accel)
 
-        map_binning = self._prepare_binning()
+            template_amplitudes = self._fit_templates()
 
-        self._build_pixel_covariance(map_binning)
+            map_binning = self._prepare_binning()
 
-        self._bin_and_write_raw_signal(map_binning, extra_header=extra_header)
+            self._build_pixel_covariance(map_binning)
 
-        out_cleaned = self._clean_signal(template_amplitudes)
+            self._bin_and_write_raw_signal(map_binning, extra_header=extra_header)
 
-        if self.write_noiseweighted_map or self.write_map or self.keep_final_products:
-            self._bin_cleaned_signal(map_binning, out_cleaned)
+            out_cleaned = self._clean_signal(template_amplitudes)
 
-        self._purge_cleaned_tod()  # Potentially frees memory for writing maps
+            if (
+                self.write_noiseweighted_map
+                or self.write_map
+                or self.keep_final_products
+            ):
+                self._bin_cleaned_signal(map_binning, out_cleaned)
 
-        self._write_maps(extra_header=extra_header)
+            self._purge_cleaned_tod()  # Potentially frees memory for writing maps
 
-        self._memreport.prefix = "End of mapmaking"
-        self._memreport.apply(self._data, use_accel=self._use_accel)
+            self._write_maps(extra_header=extra_header)
 
-        self._closeout()
+            self._memreport.prefix = "End of mapmaking"
+            self._memreport.apply(self._data, use_accel=self._use_accel)
+
+            self._closeout()
+
+            if split_key != "ALL":
+                self.reset_pix_dist = self._save_reset_state
+                self.name = self._save_split_name
 
         return
 

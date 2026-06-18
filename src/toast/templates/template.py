@@ -42,6 +42,12 @@ class Template(TraitConfig):
         None, allow_none=True, help="Use this view of the data in all observations"
     )
 
+    pattern = Unicode(
+        None,
+        allow_none=True,
+        help="Regex pattern to match against detector names. Only these are projected.",
+    )
+
     det_data = Unicode(
         defaults.det_data,
         allow_none=True,
@@ -89,16 +95,14 @@ class Template(TraitConfig):
                 raise traitlets.TraitError("data should be a Data instance")
         return dat
 
-    @traitlets.observe("data")
-    def initialize(self, change):
-        newdata = change["new"]
-        if newdata is not None:
-            self._initialize(newdata)
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _initialize(self, new_data):
+    def initialize(self, detectors=None):
+        """(Re-)initialize the template"""
+        self._initialize(self.data, detectors=detectors)
+
+    def _initialize(self, new_data, detectors=None):
         # Derived classes should implement this method to do any set up (like
         # computing the number of amplitudes) whenever the data changes.
         raise NotImplementedError("Derived class must implement _initialize()")

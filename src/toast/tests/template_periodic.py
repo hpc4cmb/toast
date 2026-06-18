@@ -254,6 +254,7 @@ class TemplatePeriodicTest(MPITestCase):
             pixel_per_process=7,
             single_group=True,
             fp_width=width,
+            schedule_hours=1,
         )
 
         # Create detector data for the combined input signal

@@ -26,7 +26,7 @@ class SSSTest(MPITestCase):
             rank = self.comm.rank
 
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
@@ -78,7 +78,7 @@ class SSSTest(MPITestCase):
             rank = self.comm.rank
 
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(

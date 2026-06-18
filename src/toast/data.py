@@ -102,6 +102,116 @@ class Data(MutableMapping):
                     all_dets[d] = None
         return list(all_dets.keys())
 
+    def all_detectors(self, selection=None, flagmask=0):
+        """Get the superset of global detectors in all observations.
+
+        This builds up the result from calling `select_local_detectors()` on
+        all observations and merging the results across all processes.
+
+        Args:
+            selection (list):  Only consider this list of detectors
+            flagmask (int):  Apply this det_mask to the detector selection in
+                each observation.
+
+        Returns:
+            (list):  The list of all global detectors across all observations.
+
+        """
+        all_splits = self.all_detector_groups(
+            column=None, selection=selection, flagmask=flagmask
+        )
+        return all_splits["ALL"]
+
+    def all_detector_groups(self, column=None, selection=None, flagmask=0):
+        """Get the global detectors in all observations, split into groups.
+
+        This builds up the result from calling `select_local_detectors()` on
+        all observations to find valid detectors, and then splits these into
+        groups based on the values in a focalplane column.
+
+        Args:
+            column (str):  The focalplane column to use for splitting.
+            selection (list):  Only consider this list of detectors
+            flagmask (int):  Apply this det_mask to the detector selection in
+                each observation.
+
+        Returns:
+            (dict):  The dictionary of global detectors for each unique
+                focalplane value in the specified column.
+
+        """
+        group_splits = None
+        # First gather detectors within each observation and append to the detectors
+        # within the process group.
+        for ob in self.obs:
+            # Get the local focalplane splits for all detectors
+            if column is None:
+                local_groups = {"ALL": ob.local_detectors}
+            else:
+                local_groups = ob.telescope.focalplane.detector_groups(column)
+
+            dets = set(
+                ob.select_local_detectors(selection=selection, flagmask=flagmask)
+            )
+
+            local_splits = dict()
+            for k, v in local_groups.items():
+                for d in v:
+                    if d in dets:
+                        if k not in local_splits:
+                            local_splits[k] = list()
+                        local_splits[k].append(str(d))
+
+            # Gather results along the first process column.  Recall that rank zero
+            # in the group is also rank zero along both rows and columns.
+            if ob.comm_row_rank == 0:
+                if ob.comm_col is None or ob.comm_col_size == 1:
+                    # Only one process in the column.  Append to the global group
+                    # detectors.
+                    if group_splits is None:
+                        group_splits = dict()
+                    for k, v in local_splits.items():
+                        if k not in group_splits:
+                            group_splits[k] = set()
+                        for d in v:
+                            group_splits[k].add(d)
+                else:
+                    # We need to gather local detectors across the column.
+                    proc_splits = ob.comm_col.gather(local_splits, root=0)
+                    if ob.comm_col_rank == 0:
+                        if group_splits is None:
+                            group_splits = dict()
+                        for psplits in proc_splits:
+                            for k, v in psplits.items():
+                                if k not in group_splits:
+                                    group_splits[k] = set()
+                                for d in v:
+                                    group_splits[k].add(d)
+
+        # Merge results across groups
+        all_splits = None
+        if self.comm.group_rank == 0:
+            if self.comm.comm_group_rank is None:
+                # Only one group
+                all_splits = group_splits
+            else:
+                proc_splits = self.comm.comm_group_rank.gather(group_splits, root=0)
+                if self.comm.world_rank == 0:
+                    all_splits = dict()
+                    for psplits in proc_splits:
+                        for k, v in psplits.items():
+                            if k not in all_splits:
+                                all_splits[k] = set()
+                            for d in v:
+                                all_splits[k].add(d)
+
+        if self.comm.comm_world is not None:
+            all_splits = self.comm.comm_world.bcast(all_splits, root=0)
+        ret = dict()
+        for k, v in all_splits.items():
+            ret[k] = list(sorted(v))
+        return ret
+
     def detector_units(self, det_data):
         """Get the detector data units for a given field.
 

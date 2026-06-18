@@ -18,6 +18,7 @@ from ..traits import Bool, Float, Instance, Int, List, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .arithmetic import Combine
 from .copy import Copy
+from .delete import Delete
 from .mapmaker_solve import SolverLHS, SolverRHS, solve
 from .mapmaker_utils import CovarianceAndHits
 from .memory_counter import MemoryCounter
@@ -96,8 +97,8 @@ class TemplateMatrix(Operator):
         super().__init__(**kwargs)
         self._initialized = False
 
-    def reset(self):
-        """Reset templates to allow re-initialization on a new Data object."""
+    def reset_templates(self):
+        """Mark templates to be re-initialized."""
         self._initialized = False
 
     def duplicate(self):
@@ -187,12 +188,8 @@ class TemplateMatrix(Operator):
                 n_enabled_templates += 1
         return n_enabled_templates
 
-    def reset_templates(self):
-        """Mark templates to be re-initialized on next call to exec()."""
-        self._initialized = False
-
     @function_timer
-    def initialize(self, data, use_accel=False):
+    def initialize(self, data, detectors=None, use_accel=False):
         if not self._initialized:
             if use_accel:
                 # fail when a user tries to run the initialization pipeline on GPU
@@ -209,9 +206,8 @@ class TemplateMatrix(Operator):
                 tmpl.det_mask = self.det_mask
                 tmpl.det_flags = self.det_flags
                 tmpl.det_flag_mask = self.det_flag_mask
-                # This next line will trigger calculation of the number
-                # of amplitudes within each template.
                 tmpl.data = data
+                tmpl.initialize(detectors=detectors)
             self._initialized = True
 
     @function_timer
@@ -266,7 +262,7 @@ class TemplateMatrix(Operator):
                 if ob.detdata[self.det_data].units != input_units:
                     msg = f"obs {ob.name} detdata {self.det_data}"
                     msg += f" does not have units of {input_units}"
-                    msg += f" before template matrix projection"
+                    msg += " before template matrix projection"
                     log.error(msg)
                     raise RuntimeError(msg)
 
@@ -343,7 +339,6 @@ class TemplateMatrix(Operator):
                             use_accel=use_accel,
                             **kwargs,
                         )
-        return
 
     def _finalize(self, data, use_accel=None, **kwargs):
         if self.transpose:
@@ -639,10 +634,6 @@ class SolveAmplitudes(Operator):
         repeatedly with different data objects)
         """
 
-        if self.reset_pix_dist:
-            if self.binning.pixel_dist in self._data:
-                del self._data[self.binning.pixel_dist]
-
         self._memreport.prefix = "After resetting pixel distribution"
         self._memreport.apply(self._data)
 
@@ -657,6 +648,28 @@ class SolveAmplitudes(Operator):
         if hasattr(solve_weights, "detector_pointing"):
             solve_weights.detector_pointing.det_mask = self._save_det_mask
             solve_weights.detector_pointing.det_flag_mask = self._save_det_flag_mask
+
+        if self.reset_pix_dist:
+            # Clear stale items
+            for gitem in [
+                self.solver_hits_name,
+                self.solver_cov_name,
+                self.solver_rcond_mask_name,
+                self.solver_rcond_name,
+                self.solver_rhs,
+                self.solver_bin,
+                self.binning.pixel_dist,
+            ]:
+                if gitem in self._data:
+                    del self._data[gitem]
+            Delete(
+                detdata=[
+                    solve_pixels.pixels,
+                    solve_weights.weights,
+                    solve_pixels.detector_pointing.quats,
+                    self.solver_flags,
+                ]
+            ).apply(self._data)
 
         # Set up a pipeline to scan processing and condition number masks
         self._scanner = ScanMask(
@@ -934,14 +947,14 @@ class SolveAmplitudes(Operator):
         )
 
         # Initialize the template matrix
-        self.template_matrix.reset()
+        self.template_matrix.reset_templates()
         self.template_matrix.det_data = self.det_data
         self.template_matrix.det_data_units = self._det_data_units
         self.template_matrix.det_flags = self.solver_flags
         self.template_matrix.det_mask = self._save_det_mask
         self.template_matrix.det_flag_mask = 255
         self.template_matrix.view = self.binning.pixel_pointing.view
-        self.template_matrix.initialize(self._data)
+        self.template_matrix.initialize(self._data, detectors=self._detectors)
 
         # Set our binning operator to use only our new solver flags
         self.binning.shared_flag_mask = 0
@@ -1016,6 +1029,8 @@ class SolveAmplitudes(Operator):
             timer=self._timer,
         )
 
+        Delete(detdata=[lhs_calc.det_temp]).apply(self._data)
+
         self._memreport.prefix = "After solving for amplitudes"
         self._memreport.apply(self._data)
 
@@ -1039,9 +1054,6 @@ class SolveAmplitudes(Operator):
         self.template_matrix.det_flags = self._save_tmpl_flags
         self.template_matrix.det_flag_mask = self._save_tmpl_det_mask
         self.template_matrix.det_mask = self._save_tmpl_mask
-        # FIXME: this reset does not seem needed
-        # if not self.mc_mode:
-        #    self.template_matrix.reset_templates()
 
         del self._solve_view
 
@@ -1245,6 +1257,8 @@ class ApplyAmplitudes(Operator):
             ],
         )
         pipe.apply(data, use_accel=use_accel)
+
+        Delete(detdata=[projected]).apply(data)
 
     def _finalize(self, data, **kwargs):
         return
