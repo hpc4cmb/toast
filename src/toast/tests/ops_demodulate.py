@@ -848,8 +848,6 @@ class DemodulateTest(MPITestCase):
             det_data=defaults.det_data,
         )
 
-        print(data.obs[0].detdata["signal"], flush=True)
-
         ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
 
         ops.SimAtmosphere(
@@ -858,17 +856,11 @@ class DemodulateTest(MPITestCase):
             zmax=200 * u.m,
         ).apply(data)
 
-        print(data.obs[0].detdata["signal"], flush=True)
-
         ops.SimNoise(noise_model="noise_model").apply(data)
-
-        print(data.obs[0].detdata["signal"], flush=True)
 
         hwpss_scale = 20.0
         tod_rms = np.std(data.obs[0].detdata["input"][0])
         hwpss_coeff = fake_hwpss(data, defaults.det_data, hwpss_scale * tod_rms)
-
-        print(data.obs[0].detdata["signal"], flush=True)
 
         ops.Delete(
             detdata=[
