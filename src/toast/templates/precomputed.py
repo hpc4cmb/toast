@@ -75,7 +75,7 @@ class PreComputed(Template):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _initialize(self, new_data):
+    def _initialize(self, new_data, detectors=None):
         log = Logger.get()
         if self.obs_key is None:
             msg = "You must set the obs_key before initializing"
@@ -116,7 +116,9 @@ class PreComputed(Template):
                 det_pat = re.compile(self.pattern)
             self._obs_dets[ob.uid] = list()
             ddets = set(ob.detdata[self.det_data].detectors)
-            for d in ob.select_local_detectors(flagmask=self.det_mask):
+            for d in ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            ):
                 if d not in ddets:
                     continue
                 if det_pat is not None and det_pat.match(d) is None:
@@ -239,9 +241,7 @@ class PreComputed(Template):
             # Accumulate to timestream
             for ivw, vw in enumerate(self._obs_views[ob.uid]):
                 vslc = slice(vw.first, vw.last, 1)
-                ob.detdata[self.det_data][detector][vslc] += (
-                    amps[ivw] * template[vslc]
-                )
+                ob.detdata[self.det_data][detector][vslc] += amps[ivw] * template[vslc]
 
     def _project_signal(self, detector, amplitudes, **kwargs):
         if detector not in self._all_dets:
