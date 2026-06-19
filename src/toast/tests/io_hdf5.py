@@ -13,6 +13,7 @@ from .. import ops as ops
 from ..config import build_config
 from ..data import Data
 from ..io import load_hdf5, save_hdf5, VolumeIndex
+from ..noise import Noise
 from ..utils import replace_byte_arrays, array_equal
 from ..weather import Weather
 from .helpers import (
@@ -228,6 +229,15 @@ class IoHdf5Test(MPITestCase):
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
+
+        # Make a copy of the noise model to a base Noise object, in order
+        # to test roundtrip of that object.
+        for ob in data.obs:
+            ob["alt_noise_model"] = Noise(
+                detectors=ob["noise_model"].detectors,
+                freqs=ob["noise_model"]._freqs,
+                psds=ob["noise_model"]._psds,
+            )
 
         if space:
             # Simulate noise and accumulate to signal
@@ -557,7 +567,11 @@ class IoHdf5Test(MPITestCase):
         # Version 1 did not save per-detector flags in the observation to HDF5,
         # so we disable them for this test.
         data, config = self.create_data(
-            split=True, no_meta=True, flagged_pixels=False, flagged_obs=False
+            split=True,
+            no_meta=True,
+            flagged_pixels=False,
+            flagged_obs=False,
+            flagged_proc=False,
         )
         det_data_names = ["signal", "flags", "alt_signal"]
         det_data_fields = [

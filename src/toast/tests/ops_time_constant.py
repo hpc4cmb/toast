@@ -65,7 +65,7 @@ class TimeConstantTest(MPITestCase):
         for ob in data.obs:
             nsamp = ob.n_local_samples
             mid = nsamp // 2
-            for det in ob.local_detectors:
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
                 sig = ob.detdata[defaults.det_data][det]
                 peak = np.amax(sig)
                 peak_loc = np.argmax(sig)

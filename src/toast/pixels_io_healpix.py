@@ -216,9 +216,9 @@ def read_healpix(filename, *args, **kwargs):
         header = dict(dset.attrs)
         if "ORDERING" not in header or header["ORDERING"] not in ["NESTED", "RING"]:
             raise RuntimeError("Cannot determine pixel ordering")
-        if header["ORDERING"] == "NESTED" and nest == False:
+        if header["ORDERING"] == "NESTED" and not nest:
             mapdata = hp.reorder(mapdata, n2r=True)
-        elif header["ORDERING"] == "RING" and nest == True:
+        elif header["ORDERING"] == "RING" and nest:
             mapdata = hp.reorder(mapdata, r2n=True)
         f.close()
 
@@ -228,7 +228,7 @@ def read_healpix(filename, *args, **kwargs):
         if mapdata.shape[0] == 1:
             mapdata = mapdata[0]
 
-        if "h" in kwargs and kwargs["h"] == True:
+        if "h" in kwargs and kwargs["h"]:
             result = mapdata, header
         else:
             result = mapdata
@@ -272,7 +272,7 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
         n_pix_submap = 12 * nside_submap**2
 
         mode = "w-"
-        if "overwrite" in kwargs and kwargs["overwrite"] == True:
+        if "overwrite" in kwargs and kwargs["overwrite"]:
             mode = "w"
         elif os.path.isfile(filename):
             raise FileExistsError(f"'{filename}' exists and `overwrite` is False")
@@ -291,7 +291,7 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
             raise ValueError("HDF5 does not support column_names")
 
         ordering = "RING"
-        if "nest" in kwargs and kwargs["nest"] == True:
+        if "nest" in kwargs and kwargs["nest"]:
             ordering = "NESTED"
 
         coord = None
@@ -303,7 +303,7 @@ def write_healpix(filename, mapdata, nside_submap=16, *args, **kwargs):
             units = kwargs["column_units"]
             # Only one units attribute is supported
             if not isinstance(units, str):
-                msg = f"ERROR: HDF5 map units must be a single string, "
+                msg = "ERROR: HDF5 map units must be a single string, "
                 msg += f"not {units}"
                 raise RuntimeError(msg)
 

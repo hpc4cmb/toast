@@ -55,9 +55,9 @@ class TemplateOffsetTest(MPITestCase):
         amps.local[:] = 1.0
 
         # Project.
+        ops.Reset(detdata=[defaults.det_data]).apply(data)
         for det in tmpl.detectors():
-            for ob in data.obs:
-                tmpl.add_to_signal(det, amps)
+            tmpl.add_to_signal(det, amps)
 
         # Verify
         for ob in data.obs:
@@ -66,8 +66,7 @@ class TemplateOffsetTest(MPITestCase):
 
         # Accumulate amplitudes
         for det in tmpl.detectors():
-            for ob in data.obs:
-                tmpl.project_signal(det, amps)
+            tmpl.project_signal(det, amps)
 
         # Verify
         for ob in data.obs:
@@ -143,13 +142,11 @@ class TemplateOffsetTest(MPITestCase):
 
         # Project.
         for det in tmpl.detectors():
-            for ob in data.obs:
-                tmpl.add_to_signal(det, amps, use_accel=True)
+            tmpl.add_to_signal(det, amps, use_accel=True)
 
         # Accumulate amplitudes
         for det in tmpl.detectors():
-            for ob in data.obs:
-                tmpl.project_signal(det, amps, use_accel=True)
+            tmpl.project_signal(det, amps, use_accel=True)
 
         data.accel_update_host(data_names)
         amps.accel_update_host()
@@ -343,24 +340,20 @@ class TemplateOffsetTest(MPITestCase):
 
         # Project.
         for det in tmpl.detectors():
-            for ob in data.obs:
-                tmpl.add_to_signal(det, amps)
+            tmpl.add_to_signal(det, amps)
         for det in pytmpl.detectors():
-            for ob in data.obs:
-                pytmpl.add_to_signal(det, pyamps)
+            pytmpl.add_to_signal(det, pyamps)
 
         for ob in data.obs:
             np.testing.assert_allclose(
-                ob.detdata[defaults.det_data], ob.detdata["pydata"]
+                ob.detdata[defaults.det_data].data, ob.detdata["pydata"].data
             )
 
         # Accumulate amplitudes
         for det in tmpl.detectors():
-            for ob in data.obs:
-                tmpl.project_signal(det, amps)
+            tmpl.project_signal(det, amps)
         for det in pytmpl.detectors():
-            for ob in data.obs:
-                pytmpl.project_signal(det, pyamps)
+            pytmpl.project_signal(det, pyamps)
 
         # Verify
         np.testing.assert_allclose(amps.local, pyamps.local)

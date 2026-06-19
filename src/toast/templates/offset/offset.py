@@ -735,6 +735,7 @@ class Offset(Template):
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
         amp_offset = self._det_start[detector]
+
         for iob, ob in enumerate(self.data.obs):
             if detector not in self._obs_dets[iob]:
                 continue
@@ -1129,20 +1130,26 @@ class Offset(Template):
         for iob, ob in enumerate(self.data.obs):
             if ob.name not in obs_det_amps:
                 # There were no good amplitudes in this observation
-                continue
-            obs_local_amps = obs_det_amps[ob.name]
-            if self.data.comm.group_size == 1:
-                all_obs_amps = [obs_local_amps]
+                obs_local_amps = dict()
             else:
-                all_obs_amps = self.data.comm.comm_group.gather(obs_local_amps, root=0)
+                obs_local_amps = obs_det_amps[ob.name]
+            if self.data.comm.group_size == 1:
+                proc_obs_amps = [obs_local_amps]
+            else:
+                proc_obs_amps = self.data.comm.comm_group.gather(obs_local_amps, root=0)
 
             if self.data.comm.group_rank == 0:
                 out_file = f"{out}_{ob.name}.h5"
                 det_names = set()
-                for pdata in all_obs_amps:
-                    for k in pdata.keys():
-                        if k != "bounds":
-                            det_names.add(k)
+                all_obs_amps = list()
+                for pdata in proc_obs_amps:
+                    if len(pdata) > 0:
+                        for k in pdata.keys():
+                            if k != "bounds":
+                                det_names.add(k)
+                        all_obs_amps.append(pdata)
+                if len(all_obs_amps) == 0:
+                    continue
                 det_names = list(sorted(det_names))
                 n_det = len(det_names)
                 amp_first = all_obs_amps[0]["bounds"]["amp_first"]

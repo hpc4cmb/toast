@@ -420,7 +420,9 @@ class SimAtmosphere(Operator):
                 raise RuntimeError(msg)
 
             # Get the detectors we are using for this observation
-            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
+            dets = ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            )
 
             tmr = Timer()
             tmr.start()
@@ -434,10 +436,6 @@ class SimAtmosphere(Operator):
                 detectors=dets,
                 create_units=self.det_data_units,
             )
-
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own
@@ -520,10 +518,6 @@ class SimAtmosphere(Operator):
         weather = obs.telescope.site.weather
         bandpass = obs.telescope.focalplane.bandpass
 
-        if absorption_key is None and loading_key is None:
-            # Nothing to do
-            return
-
         generate_absorption = False
         if absorption_key is not None:
             if absorption_key in obs:
@@ -533,6 +527,9 @@ class SimAtmosphere(Operator):
                         break
             else:
                 generate_absorption = True
+
+        if comm is not None:
+            generate_absorption = comm.allreduce(generate_absorption, op=MPI.LOR)
 
         generate_loading = False
         if loading_key is not None:
@@ -544,9 +541,8 @@ class SimAtmosphere(Operator):
             else:
                 generate_loading = True
 
-        if (not generate_loading) and (not generate_absorption):
-            # Nothing to do for these detectors
-            return
+        if comm is not None:
+            generate_loading = comm.allreduce(generate_loading, op=MPI.LOR)
 
         if generate_loading:
             if loading_key in obs:
@@ -563,13 +559,23 @@ class SimAtmosphere(Operator):
         # The focalplane likely has groups of detectors whose bandpass spans
         # the same frequency range.  First we build this grouping.
 
-        freq_groups = dict()
+        local_freq_groups = dict()
         for det in dets:
             dfmin, dfmax = bandpass.get_range(det=det)
             fkey = f"{dfmin} {dfmax}"
-            if fkey not in freq_groups:
-                freq_groups[fkey] = list()
-            freq_groups[fkey].append(det)
+            if fkey not in local_freq_groups:
+                local_freq_groups[fkey] = list()
+            local_freq_groups[fkey].append(det)
+        if comm is None:
+            freq_groups = local_freq_groups
+        else:
+            proc_groups = comm.gather(local_freq_groups, root=0)
+            freq_groups = None
+            if comm.rank == 0:
+                freq_groups = dict()
+                for pgroup in proc_groups:
+                    freq_groups.update(pgroup)
+            freq_groups = comm.bcast(freq_groups, root=0)
 
         # Work on each frequency group of detectors.  Collectively use the
         # processes in the group to do the calculation.

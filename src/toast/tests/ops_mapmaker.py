@@ -25,7 +25,7 @@ from .helpers import (
     create_satellite_data,
     create_ground_data,
 )
-from .mpi import MPITestCase
+from .mpi import MPITestCase, MPI
 
 
 class MapmakerTest(MPITestCase):
@@ -959,7 +959,10 @@ class MapmakerTest(MPITestCase):
 
         # Create a fake satellite data set for testing
         data = create_satellite_data(
-            self.comm, obs_per_group=self.obs_per_group, obs_time=10.0 * u.minute
+            self.comm,
+            obs_per_group=self.obs_per_group,
+            obs_time=10.0 * u.minute,
+            flagged_proc=False,
         )
 
         # Create some sky signal timestreams.
@@ -1196,6 +1199,10 @@ class MapmakerTest(MPITestCase):
             madam_hits = hp.read_map(madam_hit_path, field=None, nest=True)
             diff_hits = toast_hits - madam_hits
 
+            if np.any(diff_hits):
+                print("FAIL on band pre hits", flush=True)
+                fail = True
+
             if self.make_plots:
                 outfile = os.path.join(testdir, "madam_hits.png")
                 hp.mollview(madam_hits, xsize=1600, nest=True)
@@ -1241,8 +1248,11 @@ class MapmakerTest(MPITestCase):
 
             good = madam_hits > 0
             bad = np.logical_not(good)
+            unseen = madam_map == hp.UNSEEN
+            toast_map[unseen] = 0
+            madam_map[unseen] = 0
             diff_map = toast_map - madam_map
-            diff_map[:, bad] = np.nan
+            diff_map[:, bad] = 0
 
             for stokes, ststr in zip(range(3), ["I", "Q", "U"]):
                 if self.make_plots:
@@ -1262,7 +1272,7 @@ class MapmakerTest(MPITestCase):
                     fail = True
 
         if data.comm.comm_world is not None:
-            fail = data.comm.comm_world.bcast(fail, root=0)
+            fail = data.comm.comm_world.allreduce(fail, op=MPI.LOR)
 
         self.assertFalse(fail)
 
@@ -1279,7 +1289,10 @@ class MapmakerTest(MPITestCase):
 
         # Create a fake satellite data set for testing
         data = create_satellite_data(
-            self.comm, obs_per_group=self.obs_per_group, obs_time=10.0 * u.minute
+            self.comm,
+            obs_per_group=self.obs_per_group,
+            obs_time=10.0 * u.minute,
+            flagged_proc=False,
         )
 
         # Create some sky signal timestreams.
@@ -1543,6 +1556,10 @@ class MapmakerTest(MPITestCase):
             madam_hits = hp.read_map(madam_hit_path, field=None, nest=True)
             diff_hits = toast_hits - madam_hits
 
+            if np.any(diff_hits):
+                print("FAIL on band pre hits", flush=True)
+                fail = True
+
             if self.make_plots:
                 outfile = os.path.join(testdir, "madam_hits.png")
                 hp.mollview(madam_hits, xsize=1600, nest=True)
@@ -1588,8 +1605,11 @@ class MapmakerTest(MPITestCase):
 
             good = madam_hits > 0
             bad = np.logical_not(good)
+            unseen = madam_map == hp.UNSEEN
+            toast_map[unseen] = 0
+            madam_map[unseen] = 0
             diff_map = toast_map - madam_map
-            diff_map[:, bad] = np.nan
+            diff_map[:, bad] = 0
 
             for stokes, ststr in zip(range(3), ["I", "Q", "U"]):
                 if self.make_plots:
@@ -1608,7 +1628,7 @@ class MapmakerTest(MPITestCase):
                     fail = True
 
         if data.comm.comm_world is not None:
-            fail = data.comm.comm_world.bcast(fail, root=0)
+            fail = data.comm.comm_world.allreduce(fail, op=MPI.LOR)
 
         self.assertFalse(fail)
 
@@ -1627,7 +1647,10 @@ class MapmakerTest(MPITestCase):
 
         # Create a fake satellite data set for testing
         data = create_satellite_data(
-            self.comm, obs_per_group=self.obs_per_group, obs_time=10.0 * u.minute
+            self.comm,
+            obs_per_group=self.obs_per_group,
+            obs_time=10.0 * u.minute,
+            flagged_proc=False,
         )
 
         # Create some sky signal timestreams.
@@ -1762,7 +1785,7 @@ class MapmakerTest(MPITestCase):
         pars = {}
         pars["kfirst"] = "T"
         pars["basis_order"] = 0
-        pars["iter_max"] = 100
+        pars["iter_max"] = 50
         pars["base_first"] = step_seconds
         pars["fsample"] = sample_rate
         pars["nside_map"] = pixels.nside
@@ -1894,6 +1917,10 @@ class MapmakerTest(MPITestCase):
             madam_hits = hp.read_map(madam_hit_path, field=None, nest=True)
             diff_hits = toast_hits - madam_hits
 
+            if np.any(diff_hits):
+                print("FAIL on band pre hits", flush=True)
+                fail = True
+
             if self.make_plots:
                 outfile = os.path.join(testdir, "madam_hits.png")
                 hp.mollview(madam_hits, xsize=1600, nest=True)
@@ -1939,8 +1966,12 @@ class MapmakerTest(MPITestCase):
 
             good = madam_hits > 0
             bad = np.logical_not(good)
+            unseen = madam_map == hp.UNSEEN
+            toast_map[unseen] = 0
+            madam_map[unseen] = 0
+
             diff_map = toast_map - madam_map
-            diff_map[:, bad] = np.nan
+            diff_map[:, bad] = 0
 
             for stokes, ststr in zip(range(3), ["I", "Q", "U"]):
                 if self.make_plots:
@@ -1949,6 +1980,8 @@ class MapmakerTest(MPITestCase):
                     plt.savefig(outfile)
                     plt.close()
 
+                diff_stokes = diff_map[stokes][good]
+                rel_stokes = diff_stokes / madam_map[stokes][good]
                 if not np.allclose(
                     toast_map[stokes][good],
                     madam_map[stokes][good],
@@ -1956,10 +1989,12 @@ class MapmakerTest(MPITestCase):
                     rtol=0.05,
                 ):
                     print(f"FAIL on band pre {ststr}", flush=True)
+                    print(f"Max diff = {np.amax(np.absolute(diff_stokes))}", flush=True)
+                    print(f"Max rel = {np.amax(np.absolute(rel_stokes))}", flush=True)
                     fail = True
 
         if data.comm.comm_world is not None:
-            fail = data.comm.comm_world.bcast(fail, root=0)
+            fail = data.comm.comm_world.allreduce(fail, op=MPI.LOR)
 
         self.assertFalse(fail)
 

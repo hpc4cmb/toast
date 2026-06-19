@@ -205,14 +205,6 @@ class Periodic(Template):
 
         # Now we know the total number of local amplitudes.
 
-        if offset == 0:
-            # This means that no observations included the shared key
-            # we are using.
-            msg = f"Data has no observations with key '{self.key}'."
-            msg += "  You should disable this template."
-            log.error(msg)
-            raise RuntimeError(msg)
-
         self._n_local = offset
         if new_data.comm.comm_world is None:
             self._n_global = self._n_local
@@ -491,6 +483,8 @@ class Periodic(Template):
             with h5py.File(out, "w") as hf:
                 for obname, obamps in obs_det_amps.items():
                     n_det = len(obamps)
+                    if n_det == 0:
+                        continue
                     det_list = list(sorted(obamps.keys()))
                     det_indx = {y: x for x, y in enumerate(det_list)}
                     indx_to_det = {det_indx[x]: x for x in det_list}

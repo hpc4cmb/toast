@@ -278,7 +278,10 @@ class PolyFilterTest(MPITestCase):
         for obs in data.obs:
             fp = obs.telescope.focalplane.detector_data
             ndet = len(fp)
-            fp.add_column(Column(name="wafer", length=ndet, dtype=int))
+            if "wafer" in fp.colnames:
+                fp.replace_column("wafer", Column(name="wafer", length=ndet, dtype=int))
+            else:
+                fp.add_column(Column(name="wafer", length=ndet, dtype=int))
             for idet, det in enumerate(fp["name"]):
                 fp[idet]["wafer"] = det.endswith("A")
 

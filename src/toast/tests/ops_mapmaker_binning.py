@@ -135,7 +135,7 @@ class MapmakerBinningTest(MPITestCase):
 
         np.random.seed(123456)
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm)
+        data = create_satellite_data(self.comm, flagged_proc=False)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
