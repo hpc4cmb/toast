@@ -744,6 +744,7 @@ class Focalplane(object):
         self.field_of_view = field_of_view
         self.sample_rate = sample_rate
         self.thinfp = thinfp
+        self._det_to_row = {}
         if detector_data is not None and len(detector_data) > 0:
             # We have some dets
             self._initialize()
@@ -751,6 +752,8 @@ class Focalplane(object):
     @function_timer
     def _initialize(self):
         log = Logger.get()
+
+        # We have some dets
 
         if self.thinfp is not None:
             # Pick only every `thinfp` pixel on the focal plane
@@ -768,7 +771,8 @@ class Focalplane(object):
             )
 
         # Build index of detector to table row
-        self._det_to_row = {y["name"]: x for x, y in enumerate(self.detector_data)}
+        for row, entry in enumerate(self.detector_data):
+            self._det_to_row[entry["name"]] = row
 
         if self.field_of_view is None:
             self._compute_fov()
@@ -960,12 +964,12 @@ class Focalplane(object):
         return detgroups
 
     def __repr__(self):
-        value = "<Focalplane: {} detectors, sample_rate = {} Hz, FOV = {} deg, detectors = [".format(
-            len(self.detector_data),
-            self.sample_rate.to_value(u.Hz),
-            self.field_of_view.to_value(u.degree),
-        )
-        value += "{} .. {}".format(self.detectors[0], self.detectors[-1])
+        value = f"<Focalplane: {len(self.detector_data)} detectors, "
+        value += f"sample_rate = {self.sample_rate.to_value(u.Hz)} Hz, "
+        value += f"FOV = {self.field_of_view.to_value(u.degree)} deg, "
+        value += "detectors = ["
+        if len(self.detectors) > 0:
+            value += f"{self.detectors[0]} .. {self.detectors[-1]}"
         value += "]>"
         return value
 

@@ -102,6 +102,22 @@ class Data(MutableMapping):
                     all_dets[d] = None
         return list(all_dets.keys())
 
+    def n_obs(self):
+        """Count the current number of observations across all groups.
+
+        Must be called collectively or will cause a hang.
+        """
+        n_obs = len(self.obs)
+        if self._comm.comm_group_rank is not None:
+            # Only one process from each group sums the total
+            if self._comm.group_rank == 0:
+                n_obs = self._comm.comm_group_rank.allreduce(n_obs)
+            # Broadcast within each group
+            if self._comm.comm_group is not None:
+                n_obs = self._comm.comm_group.bcast(n_obs, root=0)
+
+        return n_obs
+
     def all_detectors(self, selection=None, flagmask=0):
         """Get the superset of global detectors in all observations.
 

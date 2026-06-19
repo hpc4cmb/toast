@@ -28,7 +28,17 @@ from ..mpi import MPI, get_world
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..timing import Timer, function_timer
-from ..traits import Bool, Float, Instance, Int, Quantity, Unicode, trait_docs
+from ..traits import (
+    Bool,
+    Float,
+    Instance,
+    Int,
+    Quantity,
+    Unicode,
+    trait_docs,
+    string_to_trait,
+    trait_to_string,
+)
 from ..utils import Logger
 from .copy import Copy
 from .delete import Delete
@@ -362,6 +372,11 @@ class FilterBin(Operator):
         help="Bit mask value for flagging samples that fail filtering",
     )
 
+    filter_detector_mask = Int(
+        defaults.shared_mask_invalid,
+        help="Bit mask value for detectors that fail filtering",
+    )
+
     det_flag_mask = Int(
         defaults.det_mask_nonscience,
         help="Bit mask value for detector sample flagging",
@@ -633,6 +648,27 @@ class FilterBin(Operator):
                     raise traitlets.TraitError(msg)
         return bin
 
+    @function_timer
+    def _load_filter_config(self):
+        log = Logger.get()
+        timer = Timer()
+        timer.start()
+        if self.filter_config_file is not None:
+            with open(self.filter_config_file, "r") as f:
+                self.filter_config = yaml.load(f)
+            # Translate strings into traits
+            for obs_name, obs_config in self.filter_config.items():
+                for key, value in obs_config.items():
+                    obs_config[key] = string_to_trait(value)
+            log.info_rank(
+                f"Loaded filter config from {self.filter_config_file} in",
+                comm=self.comm, timer=timer
+            )
+        else:
+            self.filter_config = None
+        return
+
+    @function_timer
     def _apply_filter_config(self, obs):
         """Use custom filter configuration for this observation"""
         log = Logger.get()
@@ -644,10 +680,17 @@ class FilterBin(Operator):
                     msg = f"{self.filter_config_file} specifies {key} for "
                     msg += f"{obs.name} but it is not recognized"
                     raise RuntimeError(msg)
+                log.debug_rank(
+                    f"Setting {key} = {value} for {obs.name}",
+                    comm=obs.comm.comm_group,
+                )
                 setattr(self, key, value)
         else:
             log.warning(f"No filter configuration for {obs.name}")
             success = False
+
+        if obs.comm.comm_group is not None:
+            obs.comm.comm_group.Barrier()
 
         return success
 
@@ -658,6 +701,10 @@ class FilterBin(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
         wcomm = data.comm.comm_world
+
+        if data.n_obs() == 0:
+            log.info_rank(f"There are no observations to map", comm=wcomm)
+            return
 
         timer = Timer()
         timer.start()
@@ -768,11 +815,7 @@ class FilterBin(Operator):
         memreport.prefix = "Before filtering"
         memreport.apply(data)
 
-        if self.filter_config_file is not None:
-            with open(self.filter_config_file, "r") as f:
-                self.filter_config = yaml.load(f)
-        else:
-            self.filter_config = None
+        self._load_filter_config()
 
         t1 = time()
         for iobs, obs in enumerate(data.obs):
@@ -945,7 +988,7 @@ class FilterBin(Operator):
                 if det_templates.template_covariance is None:
                     # template covariance failed to invert. Flag detector data
                     flags |= self.filter_flag_mask
-                    obs.local_detector_flags[det] |= self.filter_flag_mask
+                    obs.local_detector_flags[det] |= self.filter_detector_mask
                 else:
                     self._regress_templates(det_templates, signal, good_fit)
                     if self.grank == 0:
@@ -1812,6 +1855,10 @@ class FilterBin(Operator):
         extra_header["NDET"] = (len(all_dets), "Total number of detectors")
         extra_header["NGOOD"] = (len(good_dets), "Total number of usable detectors")
         extra_header["OPERATOR"] = ("TOAST FilterBin", "Generating code")
+        n_obs = data.n_obs()
+        if n_obs == 1:
+            extra_header["OBS"] = data.obs[0].name
+        extra_header["NOBS"] = n_obs
 
         return extra_header
 
@@ -1830,12 +1877,11 @@ class FilterBin(Operator):
             "rightleft_interval",
             "poly_filter_order",
             "poly_filter_view",
+            "precomputed_templates",
+            "precomputed_template_view",
         ]:
             key = prefix + param
-            value = getattr(self, param)
-            if value is None:
-                # Header cannot have Python objects
-                value = "None"
+            value = trait_to_string(getattr(self, param))
             header[key] = value
 
         return

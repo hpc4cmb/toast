@@ -390,7 +390,13 @@ class HWPFilter(Operator):
             msg = f"{log_prefix} {obs.comm.group_rank} HWPSS Filter: at group barrier"
             log.verbose(msg)
             if obs.comm.comm_group is not None:
-                obs.comm.comm_group.barrier()
+                if self.save_amplitudes is None:
+                    obs.comm.comm_group.barrier()
+                else:
+                    # Make copies of all templates amplitudes on all processes.
+                    all_amplitudes = obs.comm.comm_group.allgather(obs[self.save_amplitudes])
+                    for amplitudes in all_amplitudes:
+                        obs[self.save_amplitudes].update(amplitudes)
 
         if wcomm is not None:
             self.nsingular = wcomm.allreduce(self.nsingular)
