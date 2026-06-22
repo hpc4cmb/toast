@@ -107,7 +107,7 @@ class DetectorData(AcceleratorObject):
                 msg += f" than constructor shape ({self.shape[0]})"
                 log.error(msg)
                 raise RuntimeError(msg)
-            if self._shape[1:] != view_data[0].shape:
+            if self._shape[0] > 0 and self._shape[1:] != view_data[0].shape:
                 msg = f"view data sample shape ({view_data[0].shape})"
                 msg += f" does not match constructor sample shape ({self._shape[1:]})"
                 log.error(msg)
