@@ -756,7 +756,6 @@ class ConfigTest(MPITestCase):
             os.makedirs(testdir)
             with open(input_file, "w") as f:
                 f.write("""
-{% set data_names = ["satp1", "satp2", "satp3", "lat"] %}
 {% set n_realization = 5 %}
 operators:
 
