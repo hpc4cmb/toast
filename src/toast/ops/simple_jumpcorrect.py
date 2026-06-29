@@ -379,7 +379,7 @@ class SimpleJumpCorrect(Operator):
 
                 if self.apply_jumps is not None:
                     corrected_signal, flag_out = self._remove_jumps(
-                        sig, bad, ob[self.apply_jumps][det], self.jump_radius
+                        sig, bad, ob[self.apply_jumps][det],
                     )
                     sig[:] = corrected_signal
                     det_flags[flag_out] |= self.jump_mask
