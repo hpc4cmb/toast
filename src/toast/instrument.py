@@ -952,15 +952,19 @@ class Focalplane(object):
             (dict):  The detector names grouped by unique column values.
 
         """
-        if column not in self.detector_data.colnames:
+        if column is None:
+            # Return all detectors
+            detgroups = {"ALL": self.detectors}
+        elif column not in self.detector_data.colnames:
             raise RuntimeError(f"'{column}' is not a valid det data column")
-        detgroups = dict()
-        for d in self.detectors:
-            indx = self._det_to_row[d]
-            val = self.detector_data[column][indx]
-            if val not in detgroups:
-                detgroups[val] = list()
-            detgroups[val].append(d)
+        else:
+            detgroups = dict()
+            for d in self.detectors:
+                indx = self._det_to_row[d]
+                val = self.detector_data[column][indx]
+                if val not in detgroups:
+                    detgroups[val] = list()
+                detgroups[val].append(d)
         return detgroups
 
     def __repr__(self):

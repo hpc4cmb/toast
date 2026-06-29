@@ -690,12 +690,7 @@ class FlagNoiseFit(Operator):
 
             _ = obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=local_dets)
 
-            if self.focalplane_key is not None:
-                all_groups = obs.telescope.focalplane.detector_groups(
-                    self.focalplane_key
-                )
-            else:
-                all_groups = {"ALL": local_dets}
+            all_groups = obs.telescope.focalplane.detector_groups(self.focalplane_key)
             if self.focalplane_value is not None:
                 if self.focalplane_value not in all_groups:
                     msg = f"Focalplane column '{self.focalplane_key}' has no "
