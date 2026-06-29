@@ -819,8 +819,6 @@ class FlagNoiseFit(Operator):
                     obs.detdata[self.det_flags][det] & self.det_flag_mask
                 ) == 0
                 ddata = np.copy(obs.detdata[self.det_data][det, good])
-                avg = np.mean(ddata)
-                ddata -= avg
                 local_rms.append(np.std(ddata))
                 del ddata
 
