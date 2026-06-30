@@ -228,7 +228,7 @@ def read_healpix(filename, *args, **kwargs):
         if mapdata.shape[0] == 1:
             mapdata = mapdata[0]
 
-        if "h" in kwargs and kwargs["h"]:
+        if "h" in kwargs and kwargs["h"] == True:  #noqa
             result = mapdata, header
         else:
             result = mapdata
