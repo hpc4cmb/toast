@@ -72,8 +72,12 @@ class GainScrambler(Operator):
             focalplane = obs.telescope.focalplane
 
             # key1 = realization * 2^32 + telescope * 2^16 + component
-            key1 = self.realization * 4294967296 + telescope * 65536 + self.component
-            key2 = sindx
+            key1 = (
+                int(self.realization) * 4294967296
+                + int(telescope) * 65536
+                + int(self.component)
+            )
+            key2 = int(sindx)
             counter1 = 0
             counter2 = 0
 

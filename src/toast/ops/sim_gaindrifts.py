@@ -121,7 +121,7 @@ class GainDrifter(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(detectors)
-            
+
             comm = ob.comm.comm_group
             rank = ob.comm.group_rank
             # Make sure detector data output exists
@@ -141,7 +141,9 @@ class GainDrifter(Operator):
 
             if self.drift_mode == "linear_drift":
                 key1 = (
-                    self.realization * 4294967296 + telescope * 65536 + self.component
+                    int(self.realization) * 4294967296
+                    + int(telescope) * 65536
+                    + int(self.component)
                 )
                 counter2 = 0
 
@@ -195,9 +197,9 @@ class GainDrifter(Operator):
                     # only if the mismatch !=0
                     if self.detector_mismatch != 0:
                         key1 = (
-                            self.realization * 429496123345
-                            + telescope * 6512345
-                            + self.component
+                            int(self.realization) * 429496123345
+                            + int(telescope) * 6512345
+                            + int(self.component)
                         )
                         counter1 = detindx
                         counter2 = 0

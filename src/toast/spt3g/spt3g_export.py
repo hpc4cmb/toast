@@ -242,18 +242,18 @@ class export_obs_meta(object):
         # Construct observation frame
         ob = c3g.G3Frame(c3g.G3FrameType.Observation)
         ob["observation_name"] = c3g.G3String(obs.name)
-        ob["observation_uid"] = c3g.G3Int(obs.uid)
+        ob["observation_uid"] = c3g.G3Int(int(obs.uid))
         ob["observation_detector_sets"] = c3g.G3VectorVectorString(
             obs.all_detector_sets
         )
         ob["observation_detector_flags"] = json.dumps(obs.local_detector_flags)
         ob["telescope_name"] = c3g.G3String(obs.telescope.name)
         ob["telescope_class"] = c3g.G3String(object_fullname(obs.telescope.__class__))
-        ob["telescope_uid"] = c3g.G3Int(obs.telescope.uid)
+        ob["telescope_uid"] = c3g.G3Int(int(obs.telescope.uid))
         site = obs.telescope.site
         ob["site_name"] = c3g.G3String(site.name)
         ob["site_class"] = c3g.G3String(object_fullname(site.__class__))
-        ob["site_uid"] = c3g.G3Int(site.uid)
+        ob["site_uid"] = c3g.G3Int(int(site.uid))
         if isinstance(site, GroundSite):
             ob["site_lat_deg"] = c3g.G3Double(site.earthloc.lat.to_value(u.degree))
             ob["site_lon_deg"] = c3g.G3Double(site.earthloc.lon.to_value(u.degree))
@@ -268,7 +268,7 @@ class export_obs_meta(object):
                     else:
                         ob["site_weather_max_pwv"] = c3g.G3Double(site.weather.max_pwv)
                     ob["site_weather_time"] = to_g3_time(site.weather.time.timestamp())
-                    ob["site_weather_uid"] = c3g.G3Int(site.weather.site_uid)
+                    ob["site_weather_uid"] = c3g.G3Int(int(site.weather.site_uid))
                     ob["site_weather_use_median"] = c3g.G3Bool(
                         site.weather.median_weather
                     )
@@ -276,7 +276,7 @@ class export_obs_meta(object):
         if session is not None:
             ob["session_name"] = c3g.G3String(session.name)
             ob["session_class"] = c3g.G3String(object_fullname(session.__class__))
-            ob["session_uid"] = c3g.G3Int(session.uid)
+            ob["session_uid"] = c3g.G3Int(int(session.uid))
             if session.start is None:
                 ob["session_start"] = c3g.G3String("NONE")
             else:

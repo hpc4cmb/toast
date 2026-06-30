@@ -95,6 +95,7 @@ def create_ground_data(
     flagged_pixels=True,
     flagged_obs=True,
     flagged_proc=True,
+    flagged_proc_first=False,
     schedule_hours=2,
 ):
     """Create a data object with a simple ground sim.
@@ -220,12 +221,13 @@ def create_ground_data(
                 ob.update_local_detector_flags(det_flags)
 
     if flagged_proc and toastcomm.group_size > 1:
-        # Take the last process and flag all its detectors
+        if flagged_proc_first:
+            flag_rank = 0
+        else:
+            flag_rank = ob.comm.group_size - 1
+        # Take the one process and flag all its detectors
         for ob in data.obs:
-            if ob.comm.group_rank == ob.comm.group_size - 1:
-                msg = f"{ob.name} g{ob.comm.group}:p{ob.comm.group_rank} "
-                msg += "cutting all dets"
-                print(msg, flush=True)
+            if ob.comm.group_rank == flag_rank:
                 det_flags = dict()
                 for det in ob.local_detectors:
                     det_flags[det] = defaults.det_mask_invalid

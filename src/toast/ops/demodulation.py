@@ -298,7 +298,7 @@ class Demodulate(Operator):
             n_local = len(obs.local_detectors)
             n_local_good = np.sum(
                 [
-                    1 for x, y in obs.local_detector_flags.items() 
+                    1 for x, y in obs.local_detector_flags.items()
                     if y & self.det_mask == 0
                 ]
             )

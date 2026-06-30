@@ -545,11 +545,12 @@ class DetectorData(AcceleratorObject):
             # print(msg)
             return False
         # Compare array values
-        check = array_equal(
-            self.data, other.data, f32=approx, log_prefix="DetectorData"
-        )
-        if not check:
-            return False
+        if len(self.detectors) > 0:
+            check = array_equal(
+                self.data, other.data, f32=approx, log_prefix="DetectorData"
+            )
+            if not check:
+                return False
         return True
 
     def __ne__(self, other):

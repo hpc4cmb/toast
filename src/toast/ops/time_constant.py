@@ -113,7 +113,7 @@ class TimeConstant(Operator):
             # randomize tau in a reproducible manner
             counter1 = obs.session.uid
             counter2 = self.realization
-            key1 = focalplane[det]["uid"]
+            key1 = int(focalplane[det]["uid"])
             key2 = 123456
 
             x = rng.random(
