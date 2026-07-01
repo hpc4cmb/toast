@@ -112,27 +112,31 @@ class DistDetSamp(object):
             # the det sets.
             new_dets = list()
             detsets = list()
-            detectors_set = set(self.detectors)
+            detector_check = set(self.detectors)
             if isinstance(self.detector_sets, list):
                 # We have a list of lists
                 for ds in self.detector_sets:
+                    dset = list()
                     for d in ds:
-                        if d not in detectors_set:
+                        if d not in detector_check:
                             raise RuntimeError(
                                 f"detector {d} in a detset but not in detector list"
                             )
                         new_dets.append(d)
-                    detsets.append(list(ds))
+                        dset.append(d)
+                    detsets.append(dset)
             elif isinstance(self.detector_sets, dict):
                 # We have a detector group dictionary
-                for ds in self.detector_sets.values():
+                for dgroup, ds in self.detector_sets.items():
+                    dset = list()
                     for d in ds:
-                        if d not in detectors_set:
+                        if d not in detector_check:
                             raise RuntimeError(
                                 f"detector {d} in a detset but not in detector list"
                             )
                         new_dets.append(d)
-                    detsets.append(list(ds))
+                        dset.append(d)
+                    detsets.append(dset)
             else:
                 raise RuntimeError("detector_sets should be a list or dict")
 
@@ -141,6 +145,9 @@ class DistDetSamp(object):
             # distribution code.
             self.detectors = new_dets
             self.detector_sets = detsets
+        else:
+            # Create the trivial detsets which consist of one detector per set
+            self.detector_sets = [[x] for x in self.detectors]
 
         # Detector name to index
         self.det_index = {y: x for x, y in enumerate(self.detectors)}
@@ -177,6 +184,9 @@ class DistDetSamp(object):
                 dfirst = self.det_index[ds[0]]
                 dlast = self.det_index[ds[-1]]
                 self.det_indices.append(DistRange(dfirst, dlast - dfirst + 1))
+            else:
+                # No detectors for this process
+                self.det_indices.append(DistRange(-1, -1))
 
         if self.comm.group_rank == 0:
             # check that all processes have some data, otherwise print warning

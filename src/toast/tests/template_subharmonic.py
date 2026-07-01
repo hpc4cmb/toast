@@ -46,8 +46,7 @@ class TemplateSubHarmonicTest(MPITestCase):
 
         # Project.
         for det in tmpl.detectors():
-            for ob in data.obs:
-                tmpl.add_to_signal(det, amps)
+            tmpl.add_to_signal(det, amps)
 
         # Verify
         if self.comm is None or self.comm.rank == 0:
@@ -58,8 +57,7 @@ class TemplateSubHarmonicTest(MPITestCase):
 
         # Accumulate amplitudes
         for det in tmpl.detectors():
-            for ob in data.obs:
-                tmpl.project_signal(det, amps)
+            tmpl.project_signal(det, amps)
 
         # Verify
         # FIXME...

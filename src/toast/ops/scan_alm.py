@@ -19,8 +19,7 @@ from .. import qarray as qa
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..timing import Timer, function_timer
-from ..traits import (Bool, Instance, Int, List, Quantity, Unicode, Unit,
-                      trait_docs)
+from ..traits import Bool, Instance, Int, List, Quantity, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .operator import Operator
 from .pipeline import Pipeline
@@ -143,29 +142,79 @@ class ScanAlm(Operator):
         return weights
 
     def _get_sorted_dets(self, data, detectors=None):
+        """Pass through the data, grouping valid detectors.
+
+        For each observation, group valid detectors according to one or more
+        focalplane column values.  In the calling code, we must collectively
+        iterate over unique combinations of these values.  To make that
+        easier, we group things by a top-level key that is a combination of
+        these values.  The syntax of the returned value is:
+
+        {
+            <unique fp value combination string>: {
+                "key_value": <fp key / values as a dict>,
+                "obs": {
+                    <obs UID>: <list of detectors>,
+                    <obs UID>: <list of detectors>,
+                    ...
+                }
+            },
+            ...
+        }
+
+        """
+        dets_sorted = dict()
+
         if self.focalplane_keys is None:
-            dets_sorted = [ [], [] ]
+            dets_sorted["ALL"] = {"key_value": None, "obs": dict()}
             for ob in data.obs:
-                dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
-                for det in dets:
-                    dets_sorted[-2].append(ob.name)
-                    dets_sorted[-1].append(det)
-            dets_sorted = sorted(zip(*dets_sorted))
+                dets = ob.select_local_detectors(
+                    selection=detectors, flagmask=self.det_mask
+                )
+                dets_sorted["ALL"]["obs"][ob.uid] = [str(x) for x in dets]
         else:
-            dets_sorted = [[] for i in range(2 + len(self.focalplane_keys.split(",")))]
-            # Loop over all observations and local detectors, sort dets according to focalplane_keys
+            fp_keys = self.focalplane_keys.split(",")
             for ob in data.obs:
                 focalplane = ob.telescope.focalplane
-                dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
+                dets = ob.select_local_detectors(
+                    selection=detectors, flagmask=self.det_mask
+                )
                 for det in dets:
-                    for ikey, key in enumerate(self.focalplane_keys.split(",")):
+                    key_seq = []
+                    key_value = {}
+                    for ikey, key in enumerate(fp_keys):
                         if key not in focalplane.detector_data.keys():
                             msg = f"{key} is not in the focalplane during {ob.name}"
                             raise KeyError(msg)
-                        dets_sorted[ikey].append(str(focalplane[det][key]))
-                    dets_sorted[-2].append(ob.name)
-                    dets_sorted[-1].append(det)
-            dets_sorted = sorted(zip(*dets_sorted))
+                        key_seq.append(key)
+                        key_value[key] = str(focalplane[det][key])
+                    key_str = ":".join(key_seq)
+                    if key_str not in dets_sorted:
+                        dets_sorted[key_str] = {"key_value": key_value, "obs": dict()}
+                    if ob.uid not in dets_sorted[key_str]["obs"]:
+                        dets_sorted[key_str]["obs"][ob.uid] = list()
+                    dets_sorted[key_str]["obs"][ob.uid].append(str(det))
+
+        # Find the global set of key / value strings
+        if data.comm.comm_world is None:
+            all_key_str = list(sorted(dets_sorted.keys()))
+        else:
+            local_key_str = list(dets_sorted.keys())
+            proc_key_str = data.comm.comm_world.gather(local_key_str, root=0)
+            all_key_str = None
+            if data.comm.world_rank == 0:
+                all_key_str = set()
+                for pdata in proc_key_str:
+                    for kstr in pdata:
+                        all_key_str.add(kstr)
+                all_key_str = list(sorted(all_key_str))
+            all_key_str = data.comm.comm_world.bcast(all_key_str, root=0)
+
+        # Ensure we have the same top-level keys on all processes
+        for kstr in all_key_str:
+            if kstr not in dets_sorted:
+                dets_sorted[kstr] = {"key_value": {}, "obs": dict()}
+
         return dets_sorted
 
     def _parse_alm(self):
@@ -185,17 +234,24 @@ class ScanAlm(Operator):
 
     @function_timer
     def _load_alm(self, data, file_name, focalplane_key_value=None):
-        """Load, broadcast and save sky a_lm in shared memory"""
+        """Load, broadcast and save sky a_lm in shared memory.
+
+        This operation is collective on the world communicator.  All process groups
+        must work with the same sky a_lm at the same time.
+
+        """
 
         world_comm = data.comm.comm_world
         world_rank = data.comm.world_rank
 
-        #for file_name in self.file_names:
+        # for file_name in self.file_names:
         dtype = complex  # totalconvolve requires dtype=complex
         if self.focalplane_keys is not None:
             # When self.focalplane_keys is set, each group may process
-            # differnt input maps. Therefore the alms can't be shared.
-            self.alm = hp.read_alm(file_name.format(**focalplane_key_value), hdu=(1, 2, 3)).astype(dtype)
+            # different input maps. Therefore the alms can't be shared.
+            self.alm = hp.read_alm(
+                file_name.format(**focalplane_key_value), hdu=(1, 2, 3)
+            ).astype(dtype)
             alm_shape = self.alm.shape
             lmax = hp.Alm.getlmax(self.alm[0].size)
         else:
@@ -274,7 +330,7 @@ class ScanAlm(Operator):
                 msg = f"Unsupported Stokes component: {stokes}"
                 raise RuntimeError(msg)
 
-            phi[phi<0] += 2*np.pi
+            phi[phi < 0] += 2 * np.pi
             pointing = np.vstack([theta, phi, psi]).T
             signal += interpolator.interpol(pointing).ravel() * stokes_weights
 
@@ -282,7 +338,12 @@ class ScanAlm(Operator):
 
     @function_timer
     def _cache_blm(self, data):
-        """Derive polarized and unpolarized beam expansions"""
+        """Derive polarized and unpolarized beam expansions.
+
+        This operation is collective on the world communicator.  All process groups
+        must work with the same beam a_lm at the same time.
+
+        """
 
         world_comm = data.comm.comm_world
         world_rank = data.comm.world_rank
@@ -345,13 +406,19 @@ class ScanAlm(Operator):
         self.interpolators = []
         for file_name in self.file_names:
             self._load_alm(data, file_name, focalplane_key_value)
+
             if self._blm_I is None:
+                # Cache the constant beam a_lm globally
                 self._cache_blm(data)
+
             interpolators = {}
             for stokes in "I", "QU":
                 if stokes == "I":
                     kmax = 0  # Symmetric, unpolarized beam
-                    if focalplane_key_value is None and data.comm.comm_world is not None:
+                    if (
+                        focalplane_key_value is None
+                        and data.comm.comm_world is not None
+                    ):
                         alm_ref = np.atleast_2d(self.alm.data[0])
                     else:
                         alm_ref = np.atleast_2d(self.alm[0])
@@ -361,7 +428,10 @@ class ScanAlm(Operator):
                         blm = self._blm_I
                 elif stokes == "QU":
                     kmax = 2  # Symmetric, polarized beams
-                    if focalplane_key_value is None and data.comm.comm_world is not None:
+                    if (
+                        focalplane_key_value is None
+                        and data.comm.comm_world is not None
+                    ):
                         alm_ref = self.alm.data
                     else:
                         alm_ref = self.alm
@@ -382,7 +452,6 @@ class ScanAlm(Operator):
             if focalplane_key_value is None and data.comm.comm_world is not None:
                 self.alm.close()
             del self.alm
-        return
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -390,7 +459,6 @@ class ScanAlm(Operator):
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
-        gcomm = data.comm.comm_group
 
         if not ducc_available:
             msg = "ScanAlm requires ducc0"
@@ -403,15 +471,19 @@ class ScanAlm(Operator):
 
         self._parse_alm()
         self._parse_detdata_keys()
-        self._blm_I = None
+
+        # lmax will be set by the first sky a_lm that is loaded.
         self.lmax = None
 
-        dets_sorted = self._get_sorted_dets(data, detectors)
-        if self.focalplane_keys is None:
-            self._cache_interpolators(data)
+        # Mark beam a_lm as not yet loaded, so that it can be loaded after the
+        # first sky a_lm is loaded.  This way the lmax is known.
+        self._blm_I = None
 
+        # Ensure that our output detector data exists.
         for ob in data.obs:
-            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
+            dets = ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            )
             for key in self.det_data_keys:
                 # If our output detector data does not yet exist, create it
                 exists_data = ob.detdata.ensure(
@@ -420,44 +492,39 @@ class ScanAlm(Operator):
                 if self.zero:
                     ob.detdata[key].reset()
 
-        # Loop over all observations and local detectors, sampling each alm
-        timer = Timer()
-        timer.start()
-        ndet = len(dets_sorted)
-        prev_fp = None
-        for idet, fp_ob_det in enumerate(dets_sorted):
-            ob_name = fp_ob_det[-2]
-            ob_data = data.select(obs_name=ob_name)
-            ob = ob_data.obs[0]
-            det = fp_ob_det[-1]
-            fp = fp_ob_det[:-2]
-            if self.focalplane_keys is not None and fp != prev_fp:
-                # Clean up the interpolators
-                if prev_fp is not None:
-                    log.info(f"Group {data.comm.group:4} : Done detectors with {focalplane_key_value}")
-                    del self.interpolators
-                focalplane_key_value = {}
-                for ikey, key in enumerate(self.focalplane_keys.split(",")):
-                    focalplane_key_value[key] = fp_ob_det[ikey]
-                self._cache_interpolators(data, focalplane_key_value)
-                prev_fp = fp
-                log.info(f"Group {data.comm.group:4} : Done building interpolator with {focalplane_key_value}")
+        # Get the list of all valid detectors for each observation, organized
+        # by focalplane values.
+        dets_sorted = self._get_sorted_dets(data, detectors=detectors)
 
-            theta, phi, weights = self._get_pointing(ob_data, det)
-            for ialm in range(len(self.file_names)):
-                if len(self.det_data_keys) == 1:
-                    det_data_key = self.det_data_keys[0]
-                else:
-                    det_data_key = self.det_data_keys[ialm]
-                interpolators = self.interpolators[ialm]
-                sig = self._scan_alms(interpolators, theta, phi, weights)
-                if self.subtract:
-                    ob.detdata[det_data_key][det] -= sig
-                else:
-                    ob.detdata[det_data_key][det] += sig
-                del interpolators, sig, theta, phi, weights
-            if idet % 1000 == 0:
-                log.debug(f"Group {data.comm.group:4} : {idet}/{ndet} detectors finished")
+        # Loop over unique focalplane key / value combinations.  All processes
+        # Do this loop collectively, even if they have no observations or detectors
+        # that match this combination.
+        for key_val_str, props in dets_sorted.items():
+            self._cache_interpolators(data, focalplane_key_value=props["key_value"])
+
+            # Loop over all observations and local detectors, sampling each alm.
+            for obs_uid, det_list in props["obs"].items():
+                ob_data = data.select(obs_uid=obs_uid)
+                the_obs = ob_data.obs[0]
+                for idet, det in enumerate(det_list):
+                    theta, phi, weights = self._get_pointing(ob_data, det)
+                    for ialm in range(len(self.file_names)):
+                        if len(self.det_data_keys) == 1:
+                            det_data_key = self.det_data_keys[0]
+                        else:
+                            det_data_key = self.det_data_keys[ialm]
+                        interpolators = self.interpolators[ialm]
+                        sig = self._scan_alms(interpolators, theta, phi, weights)
+                        if self.subtract:
+                            the_obs.detdata[det_data_key][det] -= sig
+                        else:
+                            the_obs.detdata[det_data_key][det] += sig
+                        del interpolators, sig, theta, phi, weights
+                # Report progress after each observation for each key_value combination.
+                # this is collective on the group communicator- remember each group is
+                # working on the same observation list.
+                msg = f"ScanAlm: finished {key_val_str} for {the_obs.name}"
+                log.debug_rank(msg, comm=data.comm.comm_group)
 
         # Clean up
         del self.interpolators
@@ -465,12 +532,12 @@ class ScanAlm(Operator):
             del self._blm_I
             del self._blm_P
         else:
-            self._blm_I.close()
+            if self._blm_I is not None:
+                self._blm_I.close()
             del self._blm_I
-            self._blm_P.close()
+            if self._blm_P is not None:
+                self._blm_P.close()
             del self._blm_P
-
-        return
 
     def _finalize(self, data, **kwargs):
         return

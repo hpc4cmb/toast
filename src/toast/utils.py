@@ -642,19 +642,13 @@ def name_UID(name, int64=False):
     try:
         ind = int.from_bytes(bdet, byteorder="little")
         if int64:
-            uid = int(ind & 0x7FFFFFFFFFFFFFFF)
+            uid = np.uint64(ind & 0x7FFFFFFFFFFFFFFF)
         else:
-            # FIXME:  This commented out line is the correct thing to use
-            # for signed integers.  However it will change the random seed
-            # values everywhere.  Make this change sometime when it is less
-            # disruptive.
-            # uid = int(ind & 0x7FFFFFFF)
-            uid = int(ind & 0xFFFFFFFF)
-    except:
-        raise RuntimeError(
-            "Cannot convert detector name {} to a unique integer-\
-            maybe it is too long?".format(name)
-        )
+            uid = np.uint32(ind & 0x7FFFFFFF)
+    except Exception:
+        msg = f"Cannot convert name string {name} to a unique "
+        msg += "integer- maybe it is too long?"
+        raise RuntimeError(msg)
     return uid
 
 

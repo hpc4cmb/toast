@@ -99,18 +99,18 @@ class YieldCut(Operator):
             exists = obs.detdata.ensure(self.det_flags, dtype=np.uint8, detectors=dets)
             new_flags = dict()
             for det in dets:
-                key1 = obs.telescope.uid
+                key1 = int(obs.telescope.uid)
                 if self.fixed:
                     key2 = 0
                     counter1 = 0
                 else:
-                    key2 = self.realization
-                    counter1 = obs.session.uid
+                    key2 = int(self.realization)
+                    counter1 = int(obs.session.uid)
                 if self.focalplane_key is not None:
                     value = focalplane[det][self.focalplane_key]
-                    counter2 = name_UID(value)
+                    counter2 = int(name_UID(value))
                 else:
-                    counter2 = focalplane[det]["UID"]
+                    counter2 = int(focalplane[det]["UID"])
                 x = rng.random(
                     1,
                     sampler="uniform_01",

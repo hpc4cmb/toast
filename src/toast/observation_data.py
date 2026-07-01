@@ -94,9 +94,6 @@ class DetectorData(AcceleratorObject):
 
         self._fullsize = 0
         self._memsize = 0
-        self._raw = None
-        self._flatdata = None
-        self._data = None
 
         if view_data is None:
             # Allocate the data
@@ -110,7 +107,7 @@ class DetectorData(AcceleratorObject):
                 msg += f" than constructor shape ({self.shape[0]})"
                 log.error(msg)
                 raise RuntimeError(msg)
-            if self._shape[1:] != view_data[0].shape:
+            if self._shape[0] > 0 and self._shape[1:] != view_data[0].shape:
                 msg = f"view data sample shape ({view_data[0].shape})"
                 msg += f" does not match constructor sample shape ({self._shape[1:]})"
                 log.error(msg)
@@ -162,29 +159,24 @@ class DetectorData(AcceleratorObject):
             self.accel_delete()
 
         # Delete existing wrapper and buffer
-        if self._data is not None:
+        if hasattr(self, "_data"):
             del self._data
-        if self._flatdata is not None:
+        if hasattr(self, "_flatdata"):
             del self._flatdata
-        if self._raw is not None:
+        if hasattr(self, "_raw"):
             self._raw.clear()
             del self._raw
 
         # Allocate new host buffer
-        if self._fullsize > 0:
-            self._raw = self._storage_class.zeros(self._fullsize)
-            # Wrap _raw
-            self._flatdata = self._raw.array()[: self._flatshape]
-            self._data = self._flatdata.reshape(self._shape)
-            # Restore device buffer if needed
-            if create_accel:
-                self._accel_create(zero_out=True)
-            if on_accel:
-                self.accel_used(True)
-        else:
-            self._raw = None
-            self._flatdata = None
-            self._data = None
+        self._raw = self._storage_class.zeros(self._fullsize)
+        # Wrap _raw
+        self._flatdata = self._raw.array()[: self._flatshape]
+        self._data = self._flatdata.reshape(self._shape)
+        # Restore device buffer if needed
+        if create_accel:
+            self._accel_create(zero_out=True)
+        if on_accel:
+            self.accel_used(True)
 
     @property
     def detectors(self):
@@ -233,7 +225,7 @@ class DetectorData(AcceleratorObject):
 
     @property
     def data(self):
-        if (not hasattr(self, "_data")) or self._data is None:
+        if not hasattr(self, "_data"):
             raise RuntimeError("Cannot use DetectorData object after clearing memory")
         if self._is_view:
             msg = "DetectorData view is not guaranteed to be contiguous.  "
@@ -243,7 +235,7 @@ class DetectorData(AcceleratorObject):
 
     @property
     def flatdata(self):
-        if (not hasattr(self, "_flatdata")) or self._flatdata is None:
+        if not hasattr(self, "_flatdata"):
             raise RuntimeError("Cannot use DetectorData object after clearing memory")
         if self._is_view:
             raise RuntimeError("DetectorData view has no flat shape")
@@ -349,16 +341,12 @@ class DetectorData(AcceleratorObject):
         # then apply clear
         if hasattr(self, "_data"):
             del self._data
-            self._data = None
         if hasattr(self, "_is_view") and not self._is_view:
             if hasattr(self, "_flatdata"):
                 del self._flatdata
-                self._flatdata = None
             if hasattr(self, "_raw"):
-                if self._raw is not None:
-                    self._raw.clear()
-                    del self._raw
-                    self._raw = None
+                self._raw.clear()
+                del self._raw
 
     def reset(self, dets=None):
         """Zero the current memory.
@@ -376,13 +364,11 @@ class DetectorData(AcceleratorObject):
         if self.accel_in_use():
             self.accel_reset()
         elif dets is None:
-            if self._data is not None:
-                # Zero the whole thing
-                self._data[:] = 0
+            # Zero the whole thing
+            self._data[:] = 0
         else:
-            if self._data is not None:
-                for d in dets:
-                    self[d, :] = 0
+            for d in dets:
+                self[d, :] = 0
 
     def __del__(self):
         self.clear()
@@ -559,18 +545,19 @@ class DetectorData(AcceleratorObject):
             # print(msg)
             return False
         # Compare array values
-        check = array_equal(
-            self.data, other.data, f32=approx, log_prefix="DetectorData"
-        )
-        if not check:
-            return False
+        if len(self.detectors) > 0:
+            check = array_equal(
+                self.data, other.data, f32=approx, log_prefix="DetectorData"
+            )
+            if not check:
+                return False
         return True
 
     def __ne__(self, other):
         return not self.__eq__(other)
 
     def _accel_exists(self):
-        if self._raw is None:
+        if self._is_view:
             # We have a view.
             # FIXME: eventually we could check the state of the underlying
             # object and use that.
@@ -866,7 +853,7 @@ class DetDataManager(MutableMapping):
                         # We need to convert jax array back to numpy
                         self.accel_update_host(name)
                     else:
-                        msg = f"Should never get here: newly created detdata "
+                        msg = "Should never get here: newly created detdata "
                         msg += "using neither openmp nor jax"
                         raise RuntimeError(msg)
         return existing
@@ -1005,7 +992,7 @@ class DetDataManager(MutableMapping):
             return
         if not self._internal[key].accel_exists():
             msg = f"Detector data '{key}' type = {type(self._internal[key])} "
-            msg += f"is not present on device, cannot delete"
+            msg += "is not present on device, cannot delete"
             log.error(msg)
             raise RuntimeError(msg)
         log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_delete")
@@ -1026,7 +1013,7 @@ class DetDataManager(MutableMapping):
             return
         if not self._internal[key].accel_exists():
             msg = f"Detector data '{key}' type = {type(self._internal[key])} "
-            msg += f"is not present on device, cannot reset"
+            msg += "is not present on device, cannot reset"
             log.error(msg)
             raise RuntimeError(msg)
         log.verbose(f"DetDataMgr {key} type = {type(self._internal[key])} accel_reset")

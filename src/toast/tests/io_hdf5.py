@@ -13,6 +13,8 @@ from .. import ops as ops
 from ..config import build_config
 from ..data import Data
 from ..io import load_hdf5, save_hdf5, VolumeIndex
+from ..noise import Noise
+from ..observation import default_values as defaults
 from ..utils import replace_byte_arrays, array_equal
 from ..weather import Weather
 from .helpers import (
@@ -190,6 +192,8 @@ class IoHdf5Test(MPITestCase):
                 pixel_per_process=ppp,
                 split=split,
                 sample_rate=2.0 * u.Hz,
+                hwp_rpm=5.0,
+                schedule_hours=2,
                 **kwargs,
             )
 
@@ -228,6 +232,15 @@ class IoHdf5Test(MPITestCase):
         # Create a noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel()
         default_model.apply(data)
+
+        # Make a copy of the noise model to a base Noise object, in order
+        # to test roundtrip of that object.
+        for ob in data.obs:
+            ob["alt_noise_model"] = Noise(
+                detectors=ob["noise_model"].detectors,
+                freqs=ob["noise_model"]._freqs,
+                psds=ob["noise_model"]._psds,
+            )
 
         if space:
             # Simulate noise and accumulate to signal
@@ -403,6 +416,109 @@ class IoHdf5Test(MPITestCase):
 
         close_data(data)
 
+    def test_save_load_demod(self):
+        rank = 0
+        if self.comm is not None:
+            rank = self.comm.rank
+
+        toptestdir = os.path.join(self.outdir, "save_load_demod")
+        if rank == 0:
+            os.makedirs(toptestdir)
+        if self.comm is not None:
+            self.comm.barrier()
+
+        for opt, ddir in [(False, "flag_last"), (True, "flag_first")]:
+            datadir = os.path.join(toptestdir, ddir)
+
+            # We use a single group, so that even when running on 2 processes
+            # of the processes will have all detectors flagged.
+            data, config = self.create_data(
+                split=True,
+                single_group=True,
+                flagged_proc=True,
+                flagged_proc_first=opt,
+            )
+
+            # Pointing model for demodulation
+            detpointing_azel = ops.PointingDetectorSimple(
+                boresight=defaults.boresight_radec,
+                shared_flag_mask=0,
+            )
+            demod_weights_in = ops.StokesWeights(
+                weights="demod_weights_in",
+                mode="IQU",
+                hwp_angle=defaults.hwp_angle,
+                detector_pointing=detpointing_azel,
+            )
+
+            # Purge all but one noise model before demodulation
+            ops.Delete(meta=["noise_model", "alt_noise_model"]).apply(data)
+
+            # Demodulate the data.  The resulting detdata object will be empty
+            # for processes that have no good detectors in the input.  This way
+            # we can test save / load of data where a process has no detectors
+            # at all (not just detectors that are all flagged).
+            ops.Demodulate(
+                stokes_weights=demod_weights_in,
+                mode="IQU",
+                hwp_angle=defaults.hwp_angle,
+                noise_model="el_weighted",
+                in_place=True,
+            ).apply(data)
+
+            # Index for later comparison
+            original = dict()
+            for iob, ob in enumerate(data.obs):
+                original[ob.name] = iob
+
+            for tdir, comp, detdata_fields in zip(
+                ["nocomp", "comp"],
+                ["No", "Yes"],
+                [
+                    ["signal", "flags"],
+                    [
+                        ("signal", {"quanta": 1.0e-12}),
+                        ("flags", {}),
+                    ],
+                ],
+            ):
+                volume = os.path.join(datadir, tdir)
+                if rank == 0:
+                    os.makedirs(volume)
+                if self.comm is not None:
+                    self.comm.barrier()
+
+                saver = ops.SaveHDF5(
+                    volume=volume,
+                    detdata=detdata_fields,
+                    volume_index=None,
+                    verify=True,
+                )
+                saver.apply(data)
+
+                if data.comm.comm_world is not None:
+                    data.comm.comm_world.barrier()
+
+                check_data = Data(data.comm)
+                loader = ops.LoadHDF5(volume=volume)
+                loader.apply(check_data)
+
+                # Verify
+                for ob in check_data.obs:
+                    orig = data.obs[original[ob.name]]
+                    if not orig.__eq__(ob, approx=True):
+                        print(f"FAIL on demodulated roundtrip, comp={comp}", flush=True)
+                        print(
+                            f"-------- Proc {data.comm.world_rank} ---------\n{orig}\n{ob}"
+                        )
+                        self.assertTrue(False)
+                del check_data
+
+                if data.comm.comm_world is not None:
+                    data.comm.comm_world.barrier()
+
+            close_data(data)
+
     def test_save_load_session_dirs(self):
         rank = 0
         if self.comm is not None:
@@ -557,7 +673,11 @@ class IoHdf5Test(MPITestCase):
         # Version 1 did not save per-detector flags in the observation to HDF5,
         # so we disable them for this test.
         data, config = self.create_data(
-            split=True, no_meta=True, flagged_pixels=False, flagged_obs=False
+            split=True,
+            no_meta=True,
+            flagged_pixels=False,
+            flagged_obs=False,
+            flagged_proc=False,
         )
         det_data_names = ["signal", "flags", "alt_signal"]
         det_data_fields = [

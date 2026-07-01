@@ -162,7 +162,7 @@ class InjectCosmicRays(Operator):
 
             obstime_seconds = size / samplerate
             n_events_expected = self.eventrate * obstime_seconds
-            key1 = self.realization * 4294967296 + telescope * 65536
+            key1 = int(self.realization) * 4294967296 + int(telescope) * 65536
             counter2 = 0
 
             for kk, det in enumerate(dets):

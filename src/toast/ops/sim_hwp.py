@@ -172,8 +172,8 @@ class PerturbHWP(Operator):
             ntotal = obs.n_all_samples
 
             # Get an RNG seed
-            key1 = self.realization * 1543343 + obs.telescope.uid
-            key2 = obs.session.uid
+            key1 = int(self.realization) * 1543343 + int(obs.telescope.uid)
+            key2 = int(obs.session.uid)
             counter1 = 0
 
             # The times and hwp_angle are shared among columns of the process

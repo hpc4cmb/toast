@@ -127,6 +127,8 @@ def create_satellite_data(
     width=5.0 * u.degree,
     single_group=False,
     flagged_pixels=True,
+    flagged_obs=True,
+    flagged_proc=True,
     freqs=None,
 ):
     """Create a data object with a simple satellite sim.
@@ -152,6 +154,10 @@ def create_satellite_data(
     if flagged_pixels:
         # We are going to flag half the pixels
         pixel_per_process *= 2
+
+    if flagged_obs:
+        # We are going to flag all detectors in half the observations
+        obs_per_group *= 2
 
     tele = create_space_telescope(
         toastcomm.group_size,
@@ -201,6 +207,23 @@ def create_satellite_data(
                 if idet % 2 != 0:
                     det_flags[det] = defaults.det_mask_invalid
             ob.update_local_detector_flags(det_flags)
+
+    if flagged_obs:
+        for iob, ob in enumerate(data.obs):
+            if iob % 2 != 0:
+                det_flags = dict()
+                for det in ob.local_detectors:
+                    det_flags[det] = defaults.det_mask_invalid
+                ob.update_local_detector_flags(det_flags)
+
+    if flagged_proc and toastcomm.group_size > 1:
+        # Take the last process and flag all its detectors
+        for ob in data.obs:
+            if ob.comm.group_rank == ob.comm.group_size - 1:
+                det_flags = dict()
+                for det in ob.local_detectors:
+                    det_flags[det] = defaults.det_mask_invalid
+                ob.update_local_detector_flags(det_flags)
 
     return data
 
@@ -270,7 +293,7 @@ def create_satellite_data_big(
     # angles to achieve a more compact hit map.
     sim_sat = ops.SimSatellite(
         name="sim_sat",
-        telescope=tele,
+        telescope=new_telescope,
         schedule=sch,
         hwp_angle=defaults.hwp_angle,
         hwp_rpm=10.0,

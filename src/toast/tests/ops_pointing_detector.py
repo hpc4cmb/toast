@@ -51,7 +51,7 @@ class PointingDetectorTest(MPITestCase):
 
         for ob in data.obs:
             np.testing.assert_array_equal(
-                ob.detdata[defaults.quats], ob.detdata["pyquat"]
+                ob.detdata[defaults.quats].data, ob.detdata["pyquat"].data
             )
 
         rank = 0
