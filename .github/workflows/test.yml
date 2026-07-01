@@ -85,7 +85,10 @@ jobs:
         run: |
           ./conda_setup.sh -e toast -p ${{ matrix.python }} -x
           conda activate toast
-          python3 -m pip install 'spt3g==1.0.0'
+        # FIXME: re-enable once we migrate the toast.spt3g submodule
+        # to use the latest API rather than the one we are stuck with
+        # in so3g.
+        #conda install spt3g
 
       - name: Install
         run: |
