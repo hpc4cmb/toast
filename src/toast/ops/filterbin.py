@@ -190,7 +190,7 @@ class SparseTemplates:
         return normalized
 
     @function_timer
-    def build_template_covariance(self, good):
+    def build_template_covariance(self, good, obs, det):
         """Calculate (F^T N^-1_F F)^-1
 
         Observe that the sample noise weights in N^-1_F need not be the
@@ -233,7 +233,8 @@ class SparseTemplates:
             if self.rcond_limit < 0:
                 # Reject the data
                 log.warning(
-                    f"SparseTemplates: WARNING: template covariance matrix "
+                    f"SparseTemplates: WARNING: {ntemplate}x{ntemplate} "
+                    f"template covariance matrix for {obs.name} : {det} "
                     f"is poorly conditioned: "
                     f"rcond = {rcond}.  Rejecting the data.",
                 )
@@ -241,7 +242,8 @@ class SparseTemplates:
             else:
                 # Use pseudoinverse
                 log.warning(
-                    f"SparseTemplates: WARNING: template covariance matrix "
+                    f"SparseTemplates: WARNING: {ntemplate}x{ntemplate} "
+                    f"template covariance matrix for {obs.name} : {det} "
                     f"is poorly conditioned: "
                     f"rcond = {rcond}.  Using matrix pseudoinverse.",
                 )
@@ -721,6 +723,25 @@ class FilterBin(Operator):
                 msg = f"You must set the '{trait}' trait before calling exec()"
                 raise RuntimeError(msg)
 
+        # We may need to reconfigure the provided binner but will
+        # restore the settings in the end
+
+        if self.binning.det_data == self.det_data:
+            self.det_data_save = None
+        else:
+            self.det_data_save = self.binning.det_data
+            self.binning.det_data = self.det_data
+        if self.binning.det_flags == self.det_flags:
+            self.det_flags_save = None
+        else:
+            self.det_flags_save = self.binning.det_flags
+            self.binning.det_flags = self.det_flags
+        if self.binning.shared_flags == self.shared_flags:
+            self.shared_flags_save = None
+        else:
+            self.shared_flags_save = self.binning.shared_flags
+            self.binning.shared_flags = self.shared_flags
+
         # Check that samples that fail filtering do not contribute to maps
 
         if self.filter_flag_mask & self.det_flag_mask == 0:
@@ -781,6 +802,11 @@ class FilterBin(Operator):
         # Get the units used across the distributed data for our desired
         # input detector data
         self._det_data_units = data.detector_units(self.det_data)
+        if self.binning.det_data_units == self._det_data_units:
+            self.det_data_units_save = None
+        else:
+            self.det_data_units_save = self.binning.det_data_units
+            self.binning.det_data_units = self._det_data_units
 
         self._initialize_comm(data)
 
@@ -969,7 +995,7 @@ class FilterBin(Operator):
                 if det_templates.template_covariance is None or np.any(
                     last_good_fit != good_fit
                 ):
-                    det_templates.build_template_covariance(good_fit)
+                    det_templates.build_template_covariance(good_fit, obs, det)
                     if det_templates.template_covariance is not None:
                         last_good_fit = good_fit.copy()
 
@@ -1113,6 +1139,17 @@ class FilterBin(Operator):
 
             memreport.prefix = "After observation matrix"
             memreport.apply(data)
+
+        # Optionally restore binner configuration
+
+        if self.det_data_save is not None:
+            self.binning.det_data = self.det_data_save
+        if self.det_flags_save is not None:
+            self.binning.det_flags = self.det_flags_save
+        if self.shared_flags_save is not None:
+            self.binning.shared_flags = self.shared_flags_save
+        if self.det_data_units_save is not None:
+            self.binning.det_data_units = self.det_data_units_save
 
         return
 
@@ -2089,8 +2126,6 @@ class FilterBin(Operator):
 
         self.binning.noiseweighted = noiseweighted_map_name
         self.binning.binned = map_name
-        self.binning.det_data = self.det_data
-        self.binning.det_data_units = self._det_data_units
         self.binning.covariance = cov_name
 
         # Always (re)build the inverse covariance since detector
