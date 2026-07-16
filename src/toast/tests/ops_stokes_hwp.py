@@ -303,6 +303,7 @@ class StokesWeightsHWPTest(MPITestCase):
             mode="IQU",
             detector_pointing=detpointing,
             hwp_angle=defaults.hwp_angle,
+            weights="weights_iqu",
         )
 
         weights_hwp = ops.StokesWeightsHWP(
@@ -314,6 +315,7 @@ class StokesWeightsHWPTest(MPITestCase):
                 [0, 0, -1, 0],
                 [0, 0, 0, -1],
             ],
+            weights="weights_hwp",
         )
 
         # Binned mapmaking
@@ -322,6 +324,7 @@ class StokesWeightsHWPTest(MPITestCase):
             pixel_pointing=pixels,
             stokes_weights=weights_hwp,
             noise_model="noise_model",
+            full_pointing=True,
         )
 
         mapper = ops.MapMaker(
