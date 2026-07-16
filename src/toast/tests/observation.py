@@ -90,6 +90,7 @@ class ObservationTest(MPITestCase):
         np.random.seed(12345)
         rms = 10.0
         data = create_satellite_empty(self.comm, obs_per_group=1, samples=10)
+        n_obs = data.n_obs()  # Test observation counting
         for obs in data.obs:
             n_samp = obs.n_local_samples
             dets = obs.local_detectors
@@ -496,19 +497,13 @@ class ObservationTest(MPITestCase):
         # Populate the observations
         np.random.seed(12345)
         rms = 10.0
-        data = create_ground_data(self.comm, sample_rate=10.0 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=10.0 * u.Hz, schedule_hours=1)
         ops.DefaultNoiseModel().apply(data)
 
         for obs in data.obs:
             n_samp = obs.n_local_samples
             dets = obs.local_detectors
             n_det = len(dets)
-
-            # Delete some problematic intervals that prevent us from getting a
-            # round-trip result that matches the original
-            del obs.intervals["throw_leftright"]
-            del obs.intervals["throw_rightleft"]
-            del obs.intervals["throw"]
 
             # Create some shared objects over the whole comm
             local_array = None

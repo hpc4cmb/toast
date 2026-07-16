@@ -347,7 +347,7 @@ class NoiseEstimTest(MPITestCase):
 
     def test_noise_estim(self):
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -458,7 +458,9 @@ class NoiseEstimTest(MPITestCase):
 
     def test_noise_estim_model(self):
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=100.0 * u.Hz, fknee=5.0 * u.Hz)
+        data = create_ground_data(
+            self.comm, sample_rate=100.0 * u.Hz, fknee=5.0 * u.Hz, schedule_hours=1
+        )
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()

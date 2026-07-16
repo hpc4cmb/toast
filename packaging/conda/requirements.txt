@@ -3,7 +3,6 @@ compilers
 cmake
 make
 ninja
-python
 pip
 scikit-build-core>=0.11
 pybind11>=3.0

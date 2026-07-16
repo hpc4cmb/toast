@@ -34,7 +34,7 @@ class SimAtmTest(MPITestCase):
             rank = self.comm.rank
 
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
@@ -226,7 +226,7 @@ class SimAtmTest(MPITestCase):
             rank = self.comm.rank
 
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm, sample_rate=100 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=100 * u.Hz, schedule_hours=1)
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
@@ -276,7 +276,7 @@ class SimAtmTest(MPITestCase):
             rank = self.comm.rank
 
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
@@ -445,7 +445,7 @@ class SimAtmTest(MPITestCase):
             rank = self.comm.rank
 
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm, el_nod=True)
+        data = create_ground_data(self.comm, el_nod=True, schedule_hours=1)
 
         # Simple detector pointing
         detpointing_azel = ops.PointingDetectorSimple(
@@ -503,7 +503,7 @@ class SimAtmTest(MPITestCase):
             rank = self.comm.rank
 
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Override the simulated bandpass
         for obs in data.obs:

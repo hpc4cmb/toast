@@ -51,6 +51,8 @@ export ENVNAME=${envname}
 . "${scriptdir}/create_env.sh"
 
 # Install conda packages
+echo "Installing python-${pyversion}..."
+conda install --yes --update-all python=${pyversion}
 
 echo "Installing conda packages for development..."
 conda install --yes --update-all --file "${scriptdir}/requirements.txt"

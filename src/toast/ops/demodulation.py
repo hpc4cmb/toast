@@ -182,7 +182,7 @@ class Demodulate(Operator):
     )
 
     keep_dets_frac = Float(
-        0.1,
+        0,
         help="If less than this fraction of detectors are good, cut the observation",
     )
 
@@ -286,7 +286,7 @@ class Demodulate(Operator):
                     # Un-demodulated observations will be deleted
                     obs.clear()
                 continue
-            hwp_angle = obs.shared[self.hwp_angle]
+            hwp_angle = obs.shared[self.hwp_angle].data
             if np.abs(np.median(np.diff(hwp_angle))) < 1e-6:
                 # Stepped or stationary HWP
                 msg = f"Obs {obs.name} has a stepped / stationary HWP, skipping"
@@ -297,7 +297,10 @@ class Demodulate(Operator):
                 continue
             n_local = len(obs.local_detectors)
             n_local_good = np.sum(
-                [1 for x, y in obs.local_detector_flags.items() if y == 0]
+                [
+                    1 for x, y in obs.local_detector_flags.items()
+                    if y & self.det_mask == 0
+                ]
             )
             if obs.comm.comm_group is None:
                 n_dets = n_local
@@ -305,7 +308,7 @@ class Demodulate(Operator):
             else:
                 n_dets = obs.comm.comm_group.allreduce(n_local, op=MPI.SUM)
                 n_good = obs.comm.comm_group.allreduce(n_local_good, op=MPI.SUM)
-            if n_good / n_dets < self.keep_dets_frac:
+            if n_good / n_dets <= self.keep_dets_frac:
                 msg = f"Obs {obs.name} has only {n_good} / {n_dets} good dets, cutting"
                 log.debug_rank(msg, obs.comm.comm_group)
                 if self.in_place:
@@ -313,14 +316,6 @@ class Demodulate(Operator):
                     obs.clear()
                 continue
             demodulate_input_obs.append(obs)
-        n_obs = len(demodulate_input_obs)
-        if data.comm.comm_world is not None:
-            n_obs = data.comm.comm_world.allreduce(n_obs)
-        if n_obs == 0:
-            raise RuntimeError(
-                "None of the observations have a spinning HWP and/or enough detectors. "
-                "Nothing to demodulate."
-            )
 
         # Each modulated detector demodulates into one or more pseudo detectors
 

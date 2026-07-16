@@ -38,6 +38,7 @@ class TemplateFourier2DTest(MPITestCase):
 
         # Set the data
         tmpl.data = data
+        tmpl.initialize()
 
         # Get some amplitudes and set to one
         amps = tmpl.zeros()
@@ -45,8 +46,7 @@ class TemplateFourier2DTest(MPITestCase):
 
         # Project.
         for det in tmpl.detectors():
-            for ob in data.obs:
-                tmpl.add_to_signal(det, amps)
+            tmpl.add_to_signal(det, amps)
 
         # Verify
         if self.comm is None or self.comm.rank == 0:
@@ -57,8 +57,7 @@ class TemplateFourier2DTest(MPITestCase):
 
         # Accumulate amplitudes
         for det in tmpl.detectors():
-            for ob in data.obs:
-                tmpl.project_signal(det, amps)
+            tmpl.project_signal(det, amps)
 
         # Verify
         # FIXME...

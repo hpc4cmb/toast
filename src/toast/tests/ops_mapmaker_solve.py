@@ -113,7 +113,7 @@ class MapmakerSolveTest(MPITestCase):
         check_binned = data[binner.binned]
 
         # Verify that the binned map elements agree
-        np.testing.assert_allclose(rhs_binned.raw.array(), check_binned.raw.array())
+        np.testing.assert_allclose(rhs_binned.data, check_binned.data)
 
         # Scan the binned map and subtract from the original detector data.
         pixels.apply(data)
@@ -181,6 +181,7 @@ class MapmakerSolveTest(MPITestCase):
         # Manually set the data for this template (normally done by
         # TemplateMatrix.initialize()) so we can pre-generate amplitudes.
         tmpl.data = data
+        tmpl.initialize()
         data["amplitudes"] = AmplitudesMap()
         data["amplitudes"][tmpl.name] = tmpl.zeros()
         data["amplitudes"][tmpl.name].local[:] = np.random.uniform(

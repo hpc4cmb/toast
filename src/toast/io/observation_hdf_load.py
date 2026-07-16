@@ -202,23 +202,56 @@ def load_hdf5_detdata(obs, file_dets, hgrp, fields, log_prefix, parallel):
             keep_dets[iglobal] = True
     else:
         keep_dets = None
+
     # The MPI distribution passed to flacarray is given in terms of
-    # the detectors in the file, not the ones we are loading.
+    # the detectors in the file, not the ones we are loading.  Also,
+    # this MPI distribution should have first == last for any procs
+    # without data (since last is exclusive).  The MPI distribution
+    # is contiguous between processes (detector are excluded by the
+    # keep array).
+
     if len(dist_dets) == 1:
         mpi_dist = [(0, len(file_dets))]
     else:
         mpi_dist = list()
-        for iproc, dd in enumerate(dist_dets):
-            poff = dd.offset
-            pelem = dd.n_elem
+        # Find the first detector observation index for each process.
+        # We work backwards to more easily deal with processes that
+        # have no detectors.
+        proc_obs_first = list()
+        cur_first = len(obs.all_detectors)
+        for dd in reversed(dist_dets):
+            doff = dd.offset
+            if doff < 0:
+                # This proc has no data
+                proc_obs_first.append(cur_first)
+            else:
+                proc_obs_first.append(doff)
+                cur_first = doff
+        proc_obs_first.reverse()
+
+        nproc = len(proc_obs_first)
+        for iproc in range(nproc):
             if iproc == 0:
                 first = 0
             else:
-                first = int(det_obs_to_file[poff])
-            if iproc == obs.comm.group_size - 1:
+                cur_first = proc_obs_first[iproc]
+                if cur_first == len(obs.all_detectors):
+                    # We are the end of processes with data
+                    first = len(file_dets)
+                else:
+                    # Get the index of this first detector in the file
+                    first = det_obs_to_file[cur_first]
+            if iproc == nproc - 1:
+                # Last proc, distribution always goes to end of file dets
                 last = len(file_dets)
             else:
-                last = int(det_obs_to_file[poff + pelem])
+                # Use the next proc's start as the last
+                next_first = proc_obs_first[iproc + 1]
+                if next_first == len(obs.all_detectors):
+                    # No further processes have data
+                    last = len(file_dets)
+                else:
+                    last = det_obs_to_file[next_first]
             mpi_dist.append((first, last))
 
     cmsg = f"Compressed detdata MPI dist = {dist_dets},\n loading with flacarray"
@@ -339,9 +372,12 @@ def load_hdf5_detdata(obs, file_dets, hgrp, fields, log_prefix, parallel):
         elif serial_load:
             # Uncompressed read and distribute
             for proc, detrange in enumerate(dist_dets):
+                n_local_det = detrange.n_elem
+                if n_local_det <= 0:
+                    # No data on this process
+                    continue
                 first_det = detrange.offset
                 end_det = detrange.offset + detrange.n_elem
-                n_local_det = detrange.n_elem
                 if obs.comm.group_rank == 0:
                     buffer = np.zeros((n_local_det, obs.n_all_samples), dtype=dtype)
                     if det_subset:
@@ -390,16 +426,17 @@ def load_hdf5_detdata(obs, file_dets, hgrp, fields, log_prefix, parallel):
                     del buffer
         else:
             # Uncompressed read in parallel
-            detdata_slice = (slice(0, det_nelem, 1), slice(0, samp_nelem, 1))
-            detdata_slice += post_slice
-            hf_slice = (
-                slice(det_off, det_off + det_nelem, 1),
-                slice(samp_off, samp_off + samp_nelem, 1),
-            )
-            hf_slice += post_slice
-            msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
-            check_dataset_buffer_size(msg, hf_slice, dtype, parallel)
-            ds.read_direct(obs.detdata[field].data, hf_slice, detdata_slice)
+            if det_nelem > 0:
+                detdata_slice = (slice(0, det_nelem, 1), slice(0, samp_nelem, 1))
+                detdata_slice += post_slice
+                hf_slice = (
+                    slice(det_off, det_off + det_nelem, 1),
+                    slice(samp_off, samp_off + samp_nelem, 1),
+                )
+                hf_slice += post_slice
+                msg = f"Detdata field {field} (group rank {obs.comm.group_rank})"
+                check_dataset_buffer_size(msg, hf_slice, dtype, parallel)
+                ds.read_direct(obs.detdata[field].data, hf_slice, detdata_slice)
 
         if obs.comm.comm_group is not None:
             obs.comm.comm_group.barrier()
@@ -559,8 +596,9 @@ def load_instrument(
                             new_ds.append(d)
                     if len(new_ds) > 0:
                         new_detsets.append(new_ds)
-            else:
-                # Must be a dictionary
+            elif isinstance(file_det_sets, dict):
+                # Must be a dictionary.  This is a legacy technique.  All
+                # current detector sets should be list-of-lists.
                 new_detsets = list()
                 for dskey, ds in file_det_sets.items():
                     new_ds = list()

@@ -38,14 +38,14 @@ def offset_add_to_signal_numpy(
         None (the result is put in det_data).
     """
     offset = amp_offset
-    for interval, view_offset in zip(intervals, n_amp_views):
+    for interval, view_n_amp in zip(intervals, n_amp_views):
         samples = slice(interval.first, interval.last, 1)
         sampidx = np.arange(0, interval.last - interval.first, dtype=np.int64)
-        amp_idx = sampidx // step_length
-        amp_vals = np.array([amplitudes[offset + x] for x in amp_idx])
-        amp_flags = np.array([amplitude_flags[offset + x] for x in amp_idx])
+        view_amp_idx = sampidx // step_length
+        amp_vals = np.array([amplitudes[offset + x] for x in view_amp_idx])
+        amp_flags = np.array([amplitude_flags[offset + x] for x in view_amp_idx])
         det_data[data_index, samples] += amp_vals[amp_flags == 0]
-        offset += view_offset
+        offset += view_n_amp
 
 
 @kernel(impl=ImplementationType.NUMPY, name="offset_project_signal")
@@ -85,13 +85,10 @@ def offset_project_signal_numpy(
         None (the result is put in amplitudes).
     """
     offset = amp_offset
-    for interval, view_offset in zip(intervals, n_amp_views):
+    for interval, view_n_amp in zip(intervals, n_amp_views):
         samples = slice(interval.first, interval.last, 1)
-        ampidx = (
-            offset
-            + np.arange(0, interval.last - interval.first, dtype=np.int64)
-            // step_length
-        )
+        sampidx = np.arange(0, interval.last - interval.first, dtype=np.int64)
+        ampidx = offset + sampidx // step_length
         ddata = det_data[data_index][samples]
         # skip sample if it is flagged
         if flag_index >= 0:
@@ -104,7 +101,7 @@ def offset_project_signal_numpy(
         # updates amplitude
         # using np.add to insure atomicity
         np.add.at(amplitudes, ampidx, ddata)
-        offset += view_offset
+        offset += view_n_amp
 
 
 @kernel(impl=ImplementationType.NUMPY, name="offset_apply_diag_precond")

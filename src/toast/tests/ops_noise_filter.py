@@ -171,7 +171,7 @@ class NoiseFilterTest(MPITestCase):
 
         # Create a fake ground data set for testing.  Use a high fknee.
         data = create_ground_data(
-            self.comm, sample_rate=100.0 * u.Hz, fknee=10.0 * u.Hz
+            self.comm, sample_rate=100.0 * u.Hz, fknee=10.0 * u.Hz, schedule_hours=1
         )
 
         # Create an uncorrelated noise model from focalplane detector properties

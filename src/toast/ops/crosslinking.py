@@ -29,6 +29,122 @@ class UniformNoise:
 
 
 @trait_docs
+class CrossLinkingWeights(Operator):
+    """Helper operator to compute the crosslinking weights.
+    """
+
+    # Class traits
+
+    API = Int(0, help="Internal interface version for this operator")
+
+    detector_pointing = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="Operator that translates boresight pointing into detector frame",
+    )
+
+    weights = Unicode(
+        "crosslinking_weights", help="Observation detdata key for output weights"
+    )
+
+    temporary_signal = Unicode(
+        "crosslinking_temp", help="Observation detdata key for temp signal"
+    )
+
+    det_data_units = Unit(
+        defaults.det_data_units, help="Output units if creating detector data"
+    )
+
+    @traitlets.validate("detector_pointing")
+    def _check_detector_pointing(self, proposal):
+        detpointing = proposal["value"]
+        if detpointing is not None:
+            if not isinstance(detpointing, Operator):
+                raise traitlets.TraitError(
+                    "detector_pointing should be an Operator instance"
+                )
+            # Check that this operator has the traits we expect
+            for trt in [
+                "det_mask",
+                "quats",
+            ]:
+                if not detpointing.has_trait(trt):
+                    msg = f"detector_pointing operator should have a '{trt}' trait"
+                    raise traitlets.TraitError(msg)
+        return detpointing
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    @function_timer
+    def _exec(self, data, detectors=None, use_accel=None, **kwargs):
+
+        # Compute the detector quaternions
+        self.detector_pointing.apply(data, detectors=detectors)
+        quats_name = self.detector_pointing.quats
+
+        for obs in data.obs:
+            dets = obs.select_local_detectors(
+                detectors, flagmask=self.detector_pointing.det_mask
+            )
+            exists_signal = obs.detdata.ensure(
+                self.temporary_signal, detectors=dets, create_units=self.det_data_units
+            )
+            exists_weights = obs.detdata.ensure(
+                self.weights, sample_shape=(3,), detectors=dets
+            )
+
+            for det in dets:
+                signal = obs.detdata[self.temporary_signal][det]
+                signal[:] = 1
+                weights = obs.detdata[self.weights][det]
+                quat = obs.detdata[quats_name][det]
+
+                # Measure the scan direction wrt the local meridian for each sample
+                theta, phi, _ = qa.to_iso_angles(quat)
+                theta = np.pi / 2 - theta
+
+                # Scan direction across the reference sample
+                dphi = np.roll(phi, -1) - np.roll(phi, 1)
+                dtheta = np.roll(theta, -1) - np.roll(theta, 1)
+
+                # Except first and last sample
+                for dx, x in (dphi, phi), (dtheta, theta):
+                    dx[0] = x[1] - x[0]
+                    dx[-1] = x[-1] - x[-2]
+
+                # Scale dphi to on-sky
+                dphi *= np.cos(theta)
+
+                # Avoid overflows
+                tiny = np.abs(dphi) < 1e-30
+                if np.any(tiny):
+                    ang = np.zeros(signal.size)
+                    ang[tiny] = np.sign(dtheta[tiny]) * np.sign(dphi[tiny]) * np.pi / 2
+                    not_tiny = np.logical_not(tiny)
+                    ang[not_tiny] = np.arctan(dtheta[not_tiny] / dphi[not_tiny])
+                else:
+                    ang = np.arctan(dtheta / dphi)
+
+                weights[:] = np.vstack(
+                    [np.ones(signal.size), np.cos(2 * ang), np.sin(2 * ang)]
+                ).T
+
+    def _finalize(self, data, **kwargs):
+        return
+
+    def _requires(self):
+        req = self.detector_pointing.requires()
+        return req
+
+    def _provides(self):
+        prov = self.detector_pointing.provides()
+        prov["detdata"].append(self.temporary_signal)
+        prov["detdata"].append(self.weights)
+        return prov
+
+
+@trait_docs
 class CrossLinking(Operator):
     """Evaluate an ACT-style crosslinking map
 
@@ -89,18 +205,21 @@ class CrossLinking(Operator):
         help="Write output data products to this directory",
     )
 
+    crosslinking_map = Unicode(
+        "crosslinking_map",
+        help="The output Data object for the crosslinking map",
+    )
+
+    noise_model = Unicode(
+        "uniform_noise_weights",
+        help="The output noise model with uniform weights",
+    )
+
     sync_type = Unicode(
         "alltoallv", help="Communication algorithm: 'allreduce' or 'alltoallv'"
     )
 
     save_pointing = Bool(False, help="If True, do not clear pixel numbers after use")
-
-    # FIXME: these should be made into traits and also placed in _provides().
-
-    signal = "dummy_signal"
-    weights = "crosslinking_weights"
-    crosslinking_map = "crosslinking_map"
-    noise_model = "uniform_noise_weights"
 
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
@@ -142,58 +261,6 @@ class CrossLinking(Operator):
         super().__init__(**kwargs)
 
     @function_timer
-    def _get_weights(self, obs_data, det):
-        """Evaluate the special pointing matrix"""
-
-        obs = obs_data.obs[0]
-        exists_signal = obs.detdata.ensure(
-            self.signal, detectors=[det], create_units=self.det_data_units
-        )
-        exists_weights = obs.detdata.ensure(
-            self.weights, sample_shape=(3,), detectors=[det]
-        )
-
-        signal = obs.detdata[self.signal][det]
-        signal[:] = 1
-        weights = obs.detdata[self.weights][det]
-        # Compute the detector quaternions
-        self.pixel_pointing.detector_pointing.apply(obs_data, detectors=[det])
-        quat = obs.detdata[self.pixel_pointing.detector_pointing.quats][det]
-        # measure the scan direction wrt the local meridian for each sample
-        theta, phi, _ = qa.to_iso_angles(quat)
-        theta = np.pi / 2 - theta
-        # scan direction across the reference sample
-        dphi = np.roll(phi, -1) - np.roll(phi, 1)
-        dtheta = np.roll(theta, -1) - np.roll(theta, 1)
-        # except first and last sample
-        for dx, x in (dphi, phi), (dtheta, theta):
-            dx[0] = x[1] - x[0]
-            dx[-1] = x[-1] - x[-2]
-        # scale dphi to on-sky
-        dphi *= np.cos(theta)
-        # Avoid overflows
-        tiny = np.abs(dphi) < 1e-30
-        if np.any(tiny):
-            ang = np.zeros(signal.size)
-            ang[tiny] = np.sign(dtheta[tiny]) * np.sign(dphi[tiny]) * np.pi / 2
-            not_tiny = np.logical_not(tiny)
-            ang[not_tiny] = np.arctan(dtheta[not_tiny] / dphi[not_tiny])
-        else:
-            ang = np.arctan(dtheta / dphi)
-
-        weights[:] = np.vstack(
-            [np.ones(signal.size), np.cos(2 * ang), np.sin(2 * ang)]
-        ).T
-
-        return
-
-    def _purge_weights(self, obs):
-        """Discard special pointing matrix and dummy signal"""
-        del obs.detdata[self.signal]
-        del obs.detdata[self.weights]
-        return
-
-    @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
@@ -205,13 +272,16 @@ class CrossLinking(Operator):
         if data.comm.world_rank == 0:
             os.makedirs(self.output_dir, exist_ok=True)
 
+        # When pipelining our operations below, ensure that detector pointing
+        # uses the same mask that the user requested in this operator.
+        save_pointing_det_mask = self.pixel_pointing.detector_pointing.det_mask
+
         # Establish uniform noise weights
         noise_model = UniformNoise()
         for obs in data.obs:
             obs[self.noise_model] = noise_model
 
         # To accumulate, we need the pixel distribution.
-
         if self.pixel_dist not in data:
             pix_dist = BuildPixelDistribution(
                 pixel_dist=self.pixel_dist,
@@ -223,17 +293,23 @@ class CrossLinking(Operator):
             log.info_rank("Caching pixel distribution", comm=data.comm.comm_world)
             pix_dist.apply(data)
 
-        # Accumulation operator
+        # Weights
+        cross_weights = CrossLinkingWeights(
+            detector_pointing=self.pixel_pointing.detector_pointing,
+            det_data_units=self.det_data_units,
+        )
 
+        # Accumulation operator
         build_zmap = BuildNoiseWeighted(
             pixel_dist=self.pixel_dist,
             zmap=self.crosslinking_map,
             view=self.pixel_pointing.view,
             pixels=self.pixel_pointing.pixels,
-            weights=self.weights,
+            weights=cross_weights.weights,
             noise_model=self.noise_model,
-            det_data=self.signal,
+            det_data=cross_weights.temporary_signal,
             det_data_units=self.det_data_units,
+            det_mask=self.det_mask,
             det_flags=self.det_flags,
             det_flag_mask=self.det_flag_mask,
             shared_flags=self.shared_flags,
@@ -241,34 +317,37 @@ class CrossLinking(Operator):
             sync_type=self.sync_type,
         )
 
-        for obs in data.obs:
-            obs_data = data.select(obs_uid=obs.uid)
-            dets = obs.select_local_detectors(detectors, flagmask=self.det_flag_mask)
-            for det in dets:
-                # Pointing weights
-                self._get_weights(obs_data, det)
-                # Pixel numbers
-                self.pixel_pointing.apply(obs_data, detectors=[det])
-                # Accumulate
-                build_zmap.exec(obs_data, detectors=[det])
+        # Cleanup
+        cleanup = Delete(
+            detdata=[cross_weights.weights, cross_weights.temporary_signal],
+        )
 
-        build_zmap.finalize(data)
+        # Our accumulation pipeline
+        accum_pipe = Pipeline(
+            detector_sets=["SINGLE"],
+            operators=[
+                cross_weights,
+                self.pixel_pointing,
+                build_zmap,
+                cleanup,
+            ]
+        )
+        accum_pipe.apply(data, detectors=detectors)
+
+        # Restore detector pointing mask if it was different
+        self.pixel_pointing.detector_pointing.det_mask = save_pointing_det_mask
+
+    def _finalize(self, data, **kwargs):
+        log = Logger.get()
 
         # Write out the results
-
         fname = os.path.join(self.output_dir, f"{self.name}.fits")
         data[self.crosslinking_map].write(fname)
         log.info_rank(f"Wrote crosslinking to {fname}", comm=data.comm.comm_world)
+
+        # Cleanup
         data[self.crosslinking_map].clear()
         del data[self.crosslinking_map]
-
-        for obs in data.obs:
-            self._purge_weights(obs)
-
-        return
-
-    def _finalize(self, data, **kwargs):
-        return
 
     def _requires(self):
         req = self.pixel_pointing.detector_pointing.requires()

@@ -22,6 +22,7 @@ from ..noise import Noise
 from ..observation import default_values as defaults
 from ..pixels import PixelData, PixelDistribution
 from ..pixels_io_healpix import read_healpix
+from ..traits import trait_to_string
 from ..vis import set_matplotlib_backend
 from .helpers import close_data, create_ground_data, create_outdir, fake_flags
 from .mpi import MPITestCase
@@ -40,7 +41,7 @@ class FilterBinTest(MPITestCase):
             print(f"WARNING:  Skipping test_filterbin_with_config during wheel tests")
             return
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, turnarounds_invalid=True)
+        data = create_ground_data(self.comm, turnarounds_invalid=True, schedule_hours=1)
 
         nside = 256
 
@@ -92,9 +93,9 @@ class FilterBinTest(MPITestCase):
         config = {}
         for obs in data.obs:
             config[obs.name] = {
-                "poly_filter_order": 1,
+                "poly_filter_order": "1",
                 "poly_filter_view": "scanning",
-                "ground_filter_bin_width": None,
+                "ground_filter_bin_width": trait_to_string(1 * u.deg),
                 "ground_filter_order": None,
             }
         if data.comm.comm_world is not None:
@@ -131,7 +132,7 @@ class FilterBinTest(MPITestCase):
             print(f"WARNING:  Skipping test_filterbin during wheel tests")
             return
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, turnarounds_invalid=True)
+        data = create_ground_data(self.comm, turnarounds_invalid=True, schedule_hours=1)
 
         nside = 256
 
@@ -321,7 +322,9 @@ class FilterBinTest(MPITestCase):
             return
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=1 * u.Hz, pixel_per_process=4)
+        data = create_ground_data(
+            self.comm, sample_rate=1 * u.Hz, pixel_per_process=4, schedule_hours=1
+        )
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -421,7 +424,7 @@ class FilterBinTest(MPITestCase):
             return
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz, schedule_hours=1)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -521,7 +524,7 @@ class FilterBinTest(MPITestCase):
             return
 
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
+        data = create_ground_data(self.comm, sample_rate=1 * u.Hz, schedule_hours=1)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()
@@ -717,7 +720,7 @@ class FilterBinTest(MPITestCase):
         data = create_ground_data(self.comm, sample_rate=1 * u.Hz)
 
         # Create some detector pointing matrices
-        detpointing = ops.PointingDetectorSimple(shared_flag_mask=0)
+        detpointing = ops.PointingDetectorSimple(shared_flag_mask=0, schedule_hours=1)
         pixels = ops.PixelsHealpix(
             nside=self.nside,
             create_dist="pixel_dist",

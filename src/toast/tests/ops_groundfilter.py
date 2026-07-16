@@ -27,7 +27,7 @@ class GroundFilterTest(MPITestCase):
 
     def test_groundfilter(self):
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -91,7 +91,7 @@ class GroundFilterTest(MPITestCase):
 
     def test_groundfilter_split(self):
         # Create a fake data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -151,7 +151,7 @@ class GroundFilterTest(MPITestCase):
 
     def test_groundfilter_split_binned(self):
         # Create a fake data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")
@@ -212,7 +212,7 @@ class GroundFilterTest(MPITestCase):
 
     def test_redistributed(self):
         # Create a fake data set for testing
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Create an uncorrelated noise model from focalplane detector properties
         default_model = ops.DefaultNoiseModel(noise_model="noise_model")

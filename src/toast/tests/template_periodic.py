@@ -254,6 +254,7 @@ class TemplatePeriodicTest(MPITestCase):
             pixel_per_process=7,
             single_group=True,
             fp_width=width,
+            schedule_hours=1,
         )
 
         # Create detector data for the combined input signal
@@ -522,8 +523,11 @@ class TemplatePeriodicTest(MPITestCase):
         if data.comm.world_rank == 0 and self.make_plots:
             perplot(pfile, out_root=pplot_root)
             for ob in data.obs:
+                amp_file = f"{oroot}_{ob.name}.h5"
+                if not os.path.isfile(amp_file):
+                    continue
                 offplot(
-                    f"{oroot}_{ob.name}.h5",
+                    amp_file,
                     compare={x: ob.detdata["input"][x, :] for x in ob.local_detectors},
                     out=f"{oroot}_{ob.name}",
                 )
@@ -723,8 +727,11 @@ class TemplatePeriodicTest(MPITestCase):
         if data.comm.world_rank == 0 and self.make_plots:
             perplot(pfile, out_root=pplot_root)
             for ob in data.obs:
+                amp_file = f"{oroot}_{ob.name}.h5"
+                if not os.path.isfile(amp_file):
+                    continue
                 offplot(
-                    f"{oroot}_{ob.name}.h5",
+                    amp_file,
                     compare={x: ob.detdata["input"][x, :] for x in ob.local_detectors},
                     out=f"{oroot}_{ob.name}",
                 )

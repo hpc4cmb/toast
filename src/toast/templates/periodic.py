@@ -4,6 +4,7 @@
 
 import ast
 import json
+import re
 from collections import OrderedDict
 
 import h5py
@@ -83,7 +84,7 @@ class Periodic(Template):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def _initialize(self, new_data):
+    def _initialize(self, new_data, detectors=None):
         log = Logger.get()
         if self.key is None:
             msg = "You must set key before initializing"
@@ -160,9 +161,16 @@ class Periodic(Template):
             self._obs_incr.append(oincr)
 
             # Build up detector list
+            det_pat = None
+            if self.pattern is not None:
+                det_pat = re.compile(self.pattern)
             self._obs_dets[iob] = set()
-            for d in ob.select_local_detectors(flagmask=self.det_mask):
+            for d in ob.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            ):
                 if d not in ob.detdata[self.det_data].detectors:
+                    continue
+                if det_pat is not None and det_pat.match(d) is None:
                     continue
                 self._obs_dets[iob].add(d)
                 if d not in all_dets:
@@ -196,14 +204,6 @@ class Periodic(Template):
                 offset += self._obs_nbins[iob]
 
         # Now we know the total number of local amplitudes.
-
-        if offset == 0:
-            # This means that no observations included the shared key
-            # we are using.
-            msg = f"Data has no observations with key '{self.key}'."
-            msg += "  You should disable this template."
-            log.error(msg)
-            raise RuntimeError(msg)
 
         self._n_local = offset
         if new_data.comm.comm_world is None:
@@ -483,6 +483,8 @@ class Periodic(Template):
             with h5py.File(out, "w") as hf:
                 for obname, obamps in obs_det_amps.items():
                     n_det = len(obamps)
+                    if n_det == 0:
+                        continue
                     det_list = list(sorted(obamps.keys()))
                     det_indx = {y: x for x, y in enumerate(det_list)}
                     indx_to_det = {det_indx[x]: x for x in det_list}

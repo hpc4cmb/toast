@@ -35,7 +35,7 @@ class MadamTest(MPITestCase):
             return
 
         # Create a fake satellite data set for testing
-        data = create_satellite_data(self.comm)
+        data = create_satellite_data(self.comm, flagged_proc=False)
 
         # Create some detector pointing matrices
         detpointing = ops.PointingDetectorSimple()

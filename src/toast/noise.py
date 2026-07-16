@@ -331,7 +331,7 @@ class Noise(object):
                 for det in pdets:
                     if det in gdets:
                         msg = f"Multiple processes have detector '{det}'.  "
-                        msg += f"Are you using the grid column communicator?"
+                        msg += "Are you using the grid column communicator?"
                         raise RuntimeError(msg)
                     gdets.add(det)
                     out["mix"][det] = dict()
@@ -400,6 +400,7 @@ class Noise(object):
                 all_weights = comm.bcast(props["weights"], root=0)
             else:
                 all_weights = comm.bcast(None, root=0)
+
             self._detweights = dict()
             for d in self._dets:
                 self._detweights[d] = all_weights[d]
@@ -719,7 +720,10 @@ class Noise(object):
             # The rank zero process should always be writing
             if handle is None:
                 raise RuntimeError("HDF5 group is not open on the root process")
-        _ = self.detector_weight(self.detectors[0])
+        # If the local process has any detectors, trigger caching of the detector
+        # weights before saving.
+        if len(self.detectors) > 0:
+            _ = self.detector_weight(self.detectors[0])
         self._save_hdf5(handle, obs, **kwargs)
 
     @function_timer
@@ -807,7 +811,7 @@ class Noise(object):
                 if rank == 0:
                     freq = pds[0]
                     for key, indx, psdrow in zip(psd_keys, psd_indices, pds[1:]):
-                        props["indices"][key] = int(indx)
+                        props["indices"][key] = indx
                         props["freqs"][key] = u.Quantity(freq, u.Hz)
                         props["psds"][key] = u.Quantity(psdrow, psd_units)
                 del pds
@@ -848,8 +852,12 @@ class Noise(object):
         self._load_hdf5(handle, obs, **kwargs)
 
     def __repr__(self):
-        mix_min = np.min([len(y) for x, y in self._mixmatrix.items()])
-        mix_max = np.max([len(y) for x, y in self._mixmatrix.items()])
+        if len(self._dets) == 0:
+            mix_min = 0
+            mix_max = 0
+        else:
+            mix_min = np.min([len(y) for x, y in self._mixmatrix.items()])
+            mix_max = np.max([len(y) for x, y in self._mixmatrix.items()])
         value = f"<Noise model with {len(self._dets)} detectors each built from "
         value += f"between {mix_min} and {mix_max} independent streams"
         value += ">"
@@ -858,13 +866,19 @@ class Noise(object):
     def __eq__(self, other):
         log = Logger.get()
         fail = 0
+        if len(self._dets) == 0 and len(other._dets) == 0:
+            return True
+
         if set(self._dets) != set(other._dets):
             log.verbose(f"Noise __eq__:  dets {set(self._dets)} != {set(other._dets)}")
             fail = 1
         elif set(self._keys) != set(other._keys):
             log.verbose(f"Noise __eq__:  keys {set(self._keys)} != {set(other._keys)}")
             fail = 1
-        elif self._rates != other._rates:
+        elif not np.allclose(
+            np.array([x.to_value(u.Hz) for x in self._rates.values()]),
+            np.array([x.to_value(u.Hz) for x in other._rates.values()]),
+        ):
             log.verbose(f"Noise __eq__:  rates {self._rates} != {other._rates}")
             fail = 1
         elif self._indices != other._indices:

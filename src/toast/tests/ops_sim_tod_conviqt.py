@@ -321,8 +321,6 @@ class SimConviqtTest(MPITestCase):
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
         data[cov_and_hits.hits].write(toast_hits_path)
 
-        fail = False
-
         if self.rank == 0:
             hitsfile = os.path.join(self.outdir, "toast_hits.fits")
 
@@ -453,7 +451,6 @@ class SimConviqtTest(MPITestCase):
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
         data[cov_and_hits.hits].write(toast_hits_path)
 
-        fail = False
         if self.rank == 0:
             mapfile = os.path.join(self.outdir, f"toast_bin.{key1}.fits")
             mdata = hp.read_map(mapfile, field=range(3))
@@ -569,7 +566,6 @@ class SimConviqtTest(MPITestCase):
         toast_hits_path = os.path.join(self.outdir, "toast_hits.fits")
         data[cov_and_hits.hits].write(toast_hits_path)
 
-        fail = False
         if self.rank == 0:
             import matplotlib.pyplot as plt
 
@@ -769,7 +765,7 @@ class SimConviqtTest(MPITestCase):
         data_wo_hwp[cov_and_hits_wo_hwp.hits].write(toast_hits_path)
         toast_hits_path = os.path.join(self.outdir, "toast_hits_w_hwp.fits")
         data_w_hwp[cov_and_hits_w_hwp.hits].write(toast_hits_path)
-        fail = False
+
         if self.rank == 0:
             import matplotlib.pyplot as plt
 

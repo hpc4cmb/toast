@@ -18,6 +18,12 @@ from ..trait_utils import string_to_trait, trait_to_string
 from ..utils import Environment, Logger
 from .utils import merge_config
 
+try:
+    from jinja2 import Template
+    have_jinja = True
+except ImportError:
+    have_jinja = False
+
 yaml = YAML()
 
 
@@ -172,8 +178,14 @@ def load_yaml(file, input=None, comm=None):
     """
     raw = None
     if comm is None or comm.rank == 0:
-        with open(file, "r") as f:
-            raw = yaml.load(f)
+        if have_jinja:
+            with open(file, "r") as f:
+                template = Template(f.read())
+                rendered = template.render()
+                raw = yaml.load(rendered)
+        else:
+            with open(file, "r") as f:
+                raw = yaml.load(f)
     if comm is not None:
         raw = comm.bcast(raw, root=0)
 

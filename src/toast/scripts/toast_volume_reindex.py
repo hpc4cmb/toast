@@ -73,13 +73,16 @@ def main(opts=None):
         world.barrier()
 
     toast_comm = Comm(world=world)
-    
+
     vindx = VolumeIndex(index_file)
 
     vindx.reindex(args.volume, indexfields=indxfields, toastcomm=toast_comm)
 
 
-if __name__ == "__main__":
+def cli():
     world, procs, rank = get_world()
     with exception_guard(comm=world):
         main()
+
+if __name__ == "__main__":
+    cli()

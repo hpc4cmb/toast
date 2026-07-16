@@ -27,6 +27,7 @@ class PerturbHWPTest(MPITestCase):
             self.comm,
             sample_rate=10.0 * u.Hz,
             hwp_rpm=1.0,
+            schedule_hours=1,
         )
 
         # Copy original HWP to a different field for later comparison
@@ -95,6 +96,7 @@ class PerturbHWPTest(MPITestCase):
             self.comm,
             sample_rate=10.0 * u.Hz,
             hwp_rpm=1.0,
+            schedule_hours=1,
         )
 
         for ob in data.obs:

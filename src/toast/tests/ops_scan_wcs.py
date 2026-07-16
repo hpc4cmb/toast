@@ -30,7 +30,7 @@ class ScanWCSTest(MPITestCase):
 
     def _test_wcs(self, suffix):
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Simple detector pointing
         detpointing_radec = ops.PointingDetectorSimple(
@@ -139,7 +139,7 @@ class ScanWCSTest(MPITestCase):
 
     def test_wcs_mask(self):
         # Create fake observing of a small patch
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
 
         # Simple detector pointing
         detpointing_radec = ops.PointingDetectorSimple(

@@ -24,7 +24,9 @@ class YieldCutTest(MPITestCase):
 
     def test_yield_cut(self):
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, pixel_per_process=100)
+        data = create_ground_data(
+            self.comm, pixel_per_process=100, sample_rate=1.0 * u.Hz, schedule_hours=1
+        )
 
         cut = ops.YieldCut(
             det_mask=defaults.det_mask_invalid,

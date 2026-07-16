@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -290,7 +290,7 @@ class BinMap(Operator):
             log.verbose("  BinMap applying covariance")
         covariance_apply(cov, binned_map, use_alltoallv=(self.sync_type == "alltoallv"))
         # print("Binned final = ", data[self.binned].data)
-        
+
         return
 
     def _finalize(self, data, **kwargs):

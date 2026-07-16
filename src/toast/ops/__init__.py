@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -22,6 +22,7 @@ from .extend_flags import ExtendFlags
 from .fill_gaps import FillGaps
 from .filterbin import FilterBin, combine_observation_matrix
 from .flag_intervals import FlagIntervals
+from .flag_nans import FlagNaNs
 from .flag_sso import FlagSSO
 from .gainscrambler import GainScrambler
 from .groundfilter import GroundFilter

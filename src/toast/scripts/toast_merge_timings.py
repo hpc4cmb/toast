@@ -200,7 +200,7 @@ def merge_kernel_rows(df):
     return df_grouped
 
 
-if __name__ == "__main__":
+def main():
     folder = "."
     file_pattern = "**/timing.csv"
     csv_file_paths = find_csv_files(folder, file_pattern)
@@ -218,3 +218,10 @@ if __name__ == "__main__":
     output_file = "merged_timings.csv"
     merged_df.to_csv(output_file)
     print(f"Merged data saved to '{output_file}'")
+
+
+def cli():
+    main()
+
+if __name__ == "__main__":
+    cli()

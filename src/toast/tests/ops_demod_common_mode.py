@@ -89,13 +89,13 @@ class DemodCommonModeTest(MPITestCase):
         close_data(data)
 
     def test_demod_common_mode_IQU(self):
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
         self._test_demod_common_mode(weight_mode="IQU", data=data)
 
     def test_demod_common_mode_QU(self):
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
         self._test_demod_common_mode(weight_mode="QU", data=data)
 
     def test_demod_common_mode_I(self):
-        data = create_ground_data(self.comm)
+        data = create_ground_data(self.comm, schedule_hours=1)
         self._test_demod_common_mode(weight_mode="I", data=data)

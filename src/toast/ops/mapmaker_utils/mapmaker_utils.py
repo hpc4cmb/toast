@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -463,7 +463,9 @@ class BuildInverseCovariance(Operator):
 
             for det in dets:
                 # Process every data view
-                for pview, wview, fview, shared_fview in zip(pix, wts, flgs, shared_flgs):
+                for pview, wview, fview, shared_fview in zip(
+                    pix, wts, flgs, shared_flgs
+                ):
                     # We require that the pointing matrix has the same number of
                     # non-zero elements for every detector and every observation.
                     # We check that here.
@@ -799,7 +801,7 @@ class BuildNoiseWeighted(Operator):
                     self.noise_model, ob.name
                 )
                 raise RuntimeError(msg)
-            
+
             if len(dets) == 0:
                 # Nothing to do for this observation
                 continue
@@ -909,7 +911,7 @@ class BuildNoiseWeighted(Operator):
                 data.comm.comm_world.Reduce(zmap_min, all_zmap_min, op=MPI.MIN, root=0)
                 data.comm.comm_world.Reduce(zmap_max, all_zmap_max, op=MPI.MAX, root=0)
             if data.comm.world_rank == 0:
-                msg = f"  Noise-weighted map pixel value range:\n"
+                msg = "  Noise-weighted map pixel value range:\n"
                 for m in range(data[self.zmap].n_value):
                     msg += f"    map {m} {zmap_min[m]:1.3e} ... {zmap_max[m]:1.3e}"
                 log.debug(msg)

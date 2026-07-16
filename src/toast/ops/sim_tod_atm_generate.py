@@ -370,7 +370,7 @@ class GenerateAtmosphere(Operator):
             f"{log_prefix}Will simulate atmosphere in {ncone} concentric cones. "
             f"Scale factor between cones is {scale}. "
             f"First cone ranges from R={rmin_tot}m to R={rmin_tot * scale}m. "
-            f"Last cone ranges from R={rmin_tot * scale**(ncone-1)}m to R={rmax_tot}. "
+            f"Last cone ranges from R={rmin_tot * scale ** (ncone - 1)}m to R={rmax_tot}. "
             f"Smallest volume element: {xstep_min} x {ystep_min} x {zstep_min}. "
             f"Largest volume element: {self.xstep} x {self.ystep} x {self.zstep}. ",
             comm=comm,
@@ -485,10 +485,12 @@ class GenerateAtmosphere(Operator):
         session = obs.session.uid
 
         # site UID in higher bits, telescope UID in lower bits
-        key1 = site * 2**32 + telescope
+        key1 = int(site) * 2**32 + int(telescope)
 
         # Observation UID in higher bits, realization and component in lower bits
-        key2 = session * 2**32 + self.realization * 2**16 + self.component
+        key2 = (
+            int(session) * 2**32 + int(self.realization) * 2**16 + int(self.component)
+        )
 
         # This tracks the number of cones simulated due to the wind speed.
         counter1 = 0
@@ -558,8 +560,10 @@ class GenerateAtmosphere(Operator):
                 while istop < len(times) and times[istop] < tmax:
                     istop += 1
                 # Extend the scan to the next turnaround, if we have them
-                if self.turnaround_interval is not None \
-                   and len(obs.intervals[self.turnaround_interval]) > 0:
+                if (
+                    self.turnaround_interval is not None
+                    and len(obs.intervals[self.turnaround_interval]) > 0
+                ):
                     iturn = 0
                     while iturn < len(obs.intervals[self.turnaround_interval]) - 1 and (
                         times[istop]
@@ -803,7 +807,7 @@ class GenerateAtmosphere(Operator):
 
         if self.debug_snapshots:
             fn = os.path.join(
-                outdir, f"atm_{obsname}_{rank}_" f"t_{int(tmin)}_{int(tmax)}.pck"
+                outdir, f"atm_{obsname}_{rank}_t_{int(tmin)}_{int(tmax)}.pck"
             )
             with open(fn, "wb") as fout:
                 pickle.dump([azgrid, elgrid, my_snapshots], fout)

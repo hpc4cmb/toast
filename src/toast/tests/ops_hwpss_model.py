@@ -51,7 +51,9 @@ class HWPModelTest(MPITestCase):
         ang_per_sample = hwp_rate / sample_rate.to_value(u.Hz)
 
         # Create a fake ground observations set for testing
-        data = create_ground_data(self.comm, sample_rate=sample_rate, hwp_rpm=hwp_rpm)
+        data = create_ground_data(
+            self.comm, sample_rate=sample_rate, hwp_rpm=hwp_rpm, schedule_hours=1
+        )
 
         # Modify the HWP angle to be stopped initially and then accelerate to the
         # target velocity.

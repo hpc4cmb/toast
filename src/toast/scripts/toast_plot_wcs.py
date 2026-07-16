@@ -177,7 +177,10 @@ def main(opts=None):
     )
 
 
-if __name__ == "__main__":
+def cli():
     world, procs, rank = get_world()
     with exception_guard(comm=world):
         main()
+
+if __name__ == "__main__":
+    cli()

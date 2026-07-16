@@ -55,10 +55,12 @@ void init_template_offset(py::module & m) {
                 n_amp_views, "n_amp_views", 1, temp_shape, {n_view}
             );
 
-            int64_t * amp_view_off = new int64_t(n_view);
+            int64_t * amp_view_off = new int64_t[n_view];
             amp_view_off[0] = 0;
+            int64_t aoff = raw_n_amp_views[0];
             for (int64_t iview = 1; iview < n_view; iview++) {
-                amp_view_off[iview] = raw_n_amp_views[iview - 1];
+                amp_view_off[iview] = aoff;
+                aoff += raw_n_amp_views[iview];
             }
 
             if (offload) {
@@ -138,7 +140,7 @@ void init_template_offset(py::module & m) {
                 }
             }
 
-            delete amp_view_off;
+            delete[] amp_view_off;
 
             return;
         });
@@ -189,10 +191,12 @@ void init_template_offset(py::module & m) {
                 n_amp_views, "n_amp_views", 1, temp_shape, {n_view}
             );
 
-            int64_t * amp_view_off = new int64_t(n_view);
+            int64_t * amp_view_off = new int64_t[n_view];
             amp_view_off[0] = 0;
+            int64_t aoff = raw_n_amp_views[0];
             for (int64_t iview = 1; iview < n_view; iview++) {
-                amp_view_off[iview] = raw_n_amp_views[iview - 1];
+                amp_view_off[iview] = aoff;
+                aoff += raw_n_amp_views[iview];
             }
 
             // Optionally use flags
@@ -322,7 +326,7 @@ void init_template_offset(py::module & m) {
                     }
                 }
             }
-            delete amp_view_off;
+            delete[] amp_view_off;
             return;
         });
 

@@ -320,7 +320,9 @@ class SimConviqt(Operator):
         my_dets = set()
         for obs in data.obs:
             # Get the detectors we are using for this observation
-            obs_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
+            obs_dets = obs.select_local_detectors(
+                selection=detectors, flagmask=self.det_mask
+            )
             for det in obs_dets:
                 my_dets.add(det)
             # Make sure detector data output exists
@@ -449,7 +451,8 @@ class SimConviqt(Operator):
         all_psi_beam = []
         all_hwp_angle = []
         for obs in data.obs:
-            if det not in obs.local_detectors:
+            good_dets = set(obs.select_local_detectors(flagmask=self.det_mask))
+            if det not in good_dets:
                 continue
             focalplane = obs.telescope.focalplane
             # Loop over views
@@ -608,7 +611,8 @@ class SimConviqt(Operator):
         timer.start()
         offset = 0
         for obs in data.obs:
-            if det not in obs.local_detectors:
+            good_dets = set(obs.select_local_detectors(flagmask=self.det_mask))
+            if det not in good_dets:
                 continue
             focalplane = obs.telescope.focalplane
             epsilon = self._get_epsilon(focalplane, det)
@@ -633,7 +637,8 @@ class SimConviqt(Operator):
         offset = 0
         scale = unit_conversion(u.K, self.units)
         for obs in data.obs:
-            if det not in obs.local_detectors:
+            good_dets = set(obs.select_local_detectors(flagmask=self.det_mask))
+            if det not in good_dets:
                 continue
             # Loop over views
             views = obs.view[self.view]

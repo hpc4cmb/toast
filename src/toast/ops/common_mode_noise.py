@@ -193,8 +193,8 @@ class CommonModeNoise(Operator):
 
                 # Draw coupling strengths and record them in the mixing matrix
                 for det in dets:
-                    key1 = noise_uid + obs.telescope.uid * 3956215
-                    key2 = obs_id
+                    key1 = int(noise_uid) + int(obs.telescope.uid) * 3956215
+                    key2 = int(obs_id)
                     counter1 = realization
                     counter2 = focalplane[det]["uid"]
                     gaussian = rng.random(

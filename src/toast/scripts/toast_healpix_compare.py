@@ -115,7 +115,10 @@ def main(opts=None, comm=None):
     return
 
 
-if __name__ == "__main__":
+def cli():
     world, procs, rank = toast.mpi.get_world()
     with toast.mpi.exception_guard(comm=world):
         main(comm=world)
+
+if __name__ == "__main__":
+    cli()

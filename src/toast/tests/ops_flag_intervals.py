@@ -38,7 +38,7 @@ class FlagIntervalsTest(MPITestCase):
 
     def test_flag_intervals(self):
         # Create a fake ground data set for testing
-        data = create_ground_data(self.comm, turnarounds_invalid=True)
+        data = create_ground_data(self.comm, turnarounds_invalid=True, schedule_hours=1)
 
         mask1 = np.uint8(128)
         nflagged0 = 0
@@ -50,7 +50,7 @@ class FlagIntervalsTest(MPITestCase):
         assert nflagged0 == 0
 
         # Flag all samples in the leftright interval
-        
+
         flag_intervals = ops.FlagIntervals(
             view_mask=[(defaults.scan_leftright_interval, mask1)],
             reset=True,

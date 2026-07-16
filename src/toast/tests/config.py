@@ -741,3 +741,34 @@ class ConfigTest(MPITestCase):
         ]
 
         run_main(opts=opts, comm=self.comm)
+
+    def test_jinja2(self):
+        try:
+            from jinja2 import Template
+        except ImportError:
+            if self.comm is None or self.comm.rank == 0:
+                print("Skipping jinja2 tests- not importable", flush=True)
+            return
+        testdir = os.path.join(self.outdir, "jinja")
+        input_file = os.path.join(testdir, "test.yml")
+        output_file = os.path.join(testdir, "check.yml")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+            with open(input_file, "w") as f:
+                f.write("""
+{% set n_realization = 5 %}
+operators:
+
+  {% for real in range(n_realization) %}
+  {% set real_str = '{0:02d}'.format(real) %}
+  sim_noise_{{ real_str }}:
+    name: sim_noise_{{ real_str }}
+    class: toast.ops.sim_tod_noise.SimNoise
+    realization: {{ real }}
+
+  {% endfor %}
+"""
+                )
+        conf = load_config(input_file, comm=self.comm)
+        dump_config(output_file, conf, comm=self.comm)
+

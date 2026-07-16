@@ -267,6 +267,11 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
                     samp_nelem = dist_samps[proc].n_elem
                     det_off = dist_dets[proc].offset
                     det_nelem = dist_dets[proc].n_elem
+
+                    if det_nelem <= 0:
+                        # No detectors on this process
+                        continue
+
                     nflat = det_nelem * samp_nelem
                     shp = (det_nelem, samp_nelem)
                     detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
@@ -308,23 +313,28 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
                 det_off = dist_dets[obs.comm.group_rank].offset
                 det_nelem = dist_dets[obs.comm.group_rank].n_elem
 
-                detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
-                hf_slice = [
-                    slice(det_off, det_off + det_nelem, 1),
-                    slice(samp_off, samp_off + samp_nelem, 1),
-                ]
-                if dvalshape is not None:
-                    detdata_slice.extend([slice(0, x) for x in dvalshape])
-                    hf_slice.extend([slice(0, x) for x in dvalshape])
-                detdata_slice = tuple(detdata_slice)
-                hf_slice = tuple(hf_slice)
-                msg = f"Detector data field {field} (group rank {obs.comm.group_rank})"
-                check_dataset_buffer_size(msg, hf_slice, ddtype, True)
+                if det_nelem <= 0:
+                    do_write = False
+                else:
+                    do_write = True
+                    detdata_slice = [slice(0, det_nelem, 1), slice(0, samp_nelem, 1)]
+                    hf_slice = [
+                        slice(det_off, det_off + det_nelem, 1),
+                        slice(samp_off, samp_off + samp_nelem, 1),
+                    ]
+                    if dvalshape is not None:
+                        detdata_slice.extend([slice(0, x) for x in dvalshape])
+                        hf_slice.extend([slice(0, x) for x in dvalshape])
+                    detdata_slice = tuple(detdata_slice)
+                    hf_slice = tuple(hf_slice)
+                    msg = f"Detector data field {field} (group rank {obs.comm.group_rank})"
+                    check_dataset_buffer_size(msg, hf_slice, ddtype, True)
 
                 with hdata.collective:
-                    hdata.write_direct(
-                        local_data.data.astype(ddtype), detdata_slice, hf_slice
-                    )
+                    if do_write:
+                        hdata.write_direct(
+                            local_data.data.astype(ddtype), detdata_slice, hf_slice
+                        )
             del hdata
             log.verbose_rank(
                 f"{log_prefix}  Detdata finished {field} serial write in",
@@ -359,11 +369,15 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
                 if quanta is None and precision is None:
                     msg = "When compressing floating point data, you"
                     msg += " must specify the quanta or precision."
-                    raise RuntimeError("You must specify the quanta")
+                    raise RuntimeError(msg)
 
             # We flatten all the per-sample data when compressing
+            if local_n_det == 0:
+                flatdata = local_data.data.astype(hdtype)
+            else:
+                flatdata = local_data.data.astype(hdtype).reshape((local_n_det, -1))
             flacarray.hdf5.write_array(
-                local_data.data.astype(hdtype).reshape((local_n_det, -1)),
+                flatdata,
                 fgrp,
                 level=level,
                 quanta=quanta,
@@ -378,19 +392,20 @@ def save_hdf5_detdata(obs, hgrp, fields, log_prefix, in_place=False):
                 det_nelem = dist_dets[obs.comm.group_rank].n_elem
                 mpi_dist = [(x.offset, x.offset + x.n_elem) for x in dist_dets]
 
-                flcdata = (
-                    flacarray.hdf5.read_array(
-                        fgrp,
-                        keep=None,
-                        stream_slice=None,
-                        keep_indices=False,
-                        mpi_comm=comm,
-                        mpi_dist=mpi_dist,
-                        use_threads=False,
-                    )
-                    .astype(ddtype)
-                    .reshape(local_data.shape)
-                )
+                raw = flacarray.hdf5.read_array(
+                    fgrp,
+                    keep=None,
+                    stream_slice=None,
+                    keep_indices=False,
+                    mpi_comm=comm,
+                    mpi_dist=mpi_dist,
+                    use_threads=False,
+                ).astype(ddtype)
+                if local_n_det == 0:
+                    flcdata = raw
+                else:
+                    flcdata = raw.reshape(local_data.shape)
+
                 for idet, det in enumerate(local_data.detectors):
                     local_data.data[idet] = flcdata[idet]
                 del flcdata

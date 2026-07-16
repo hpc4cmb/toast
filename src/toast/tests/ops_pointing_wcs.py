@@ -241,7 +241,9 @@ class PointingWCSTest(MPITestCase):
 
         for proj in ["CAR"]:
             # Create fake observing of a small patch
-            data = create_ground_data(self.comm, sample_rate=self.fsample)
+            data = create_ground_data(
+                self.comm, sample_rate=self.fsample, schedule_hours=1
+            )
 
             # Simple detector pointing
             detpointing_radec = ops.PointingDetectorSimple(
@@ -579,7 +581,10 @@ class PointingWCSTest(MPITestCase):
         for proj in ["TAN"]:
             # Create fake observing of a small patch
             data = create_ground_data(
-                self.comm, sample_rate=self.fsample, pixel_per_process=10
+                self.comm,
+                sample_rate=self.fsample,
+                pixel_per_process=10,
+                schedule_hours=1,
             )
 
             # Create source motion and simulated detector data.
@@ -683,7 +688,10 @@ class PointingWCSTest(MPITestCase):
         for proj in ["SFL"]:
             # Create fake observing of a small patch
             data = create_ground_data(
-                self.comm, sample_rate=self.fsample, pixel_per_process=10
+                self.comm,
+                sample_rate=self.fsample,
+                pixel_per_process=10,
+                schedule_hours=1,
             )
 
             # We are going to hack the boresight pointing so that the RA/DEC simulated
