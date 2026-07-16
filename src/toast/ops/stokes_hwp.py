@@ -13,6 +13,7 @@ from ..traits import Bool, Instance, Int, List, Unicode, trait_docs
 from ..utils import Logger
 from .operator import Operator
 
+
 def get_group_a_detectors(focalplane, pair_group, tol_deg=1.0):
     """Return the global A detector names for the given pair_group.
 
@@ -216,7 +217,7 @@ def stokes_weights_hwp_model_mueller(
             # Stokes I
             weights[widx][samples, 0] = (
                 mueller[0, 0]
-                + eta  * mueller[1, 0] * cos2alpha2omega
+                + eta * mueller[1, 0] * cos2alpha2omega
                 - eta * mueller[2, 0] * sin2alpha2omega
             )
 
@@ -250,6 +251,7 @@ def stokes_weights_hwp_model_mueller(
 
             # Apply overall calibration
             weights[widx][samples, :] *= cal[idet]
+
 
 def stokes_weights_hwp_model_pair_diff(
     quat_index,
@@ -339,8 +341,8 @@ def stokes_weights_hwp_model_pair_diff(
             weights[widx][samples, 4] = sin4omega
 
             weights[widx][samples, :] *= cal[idx_a]
-            
-            
+
+
 @trait_docs
 class StokesWeightsHWP(Operator):
     """Operator which generates HWP systematics pointing weights.
@@ -364,7 +366,10 @@ class StokesWeightsHWP(Operator):
         help="Operator that translates boresight pointing into detector frame",
     )
 
-    mode = Unicode("nominal", help="The data model to use: 'nominal', 'mueller', or 'pair_diff'",)
+    mode = Unicode(
+        "nominal",
+        help="The data model to use: 'nominal', 'mueller', or 'pair_diff'",
+    )
 
     mueller = List([], help="In 'mueller' mode, the common Mueller matrix to use")
 
@@ -390,13 +395,13 @@ class StokesWeightsHWP(Operator):
         help="The observation key with a dictionary of pointing weight "
         "calibration for each det",
     )
-    
+
     pair_block_size = Int(
         8,
         help="In 'pair_diff' mode, the number of detectors per block. "
         "The first half of each block is paired with the second half.",
     )
-    
+
     det_data = Unicode(
         defaults.det_data,
         help="In 'pair_diff' mode, the observation detdata key for the "
@@ -441,9 +446,11 @@ class StokesWeightsHWP(Operator):
     def _check_mode(self, proposal):
         check = proposal["value"]
         if check not in ["nominal", "mueller", "pair_diff"]:
-            raise traitlets.TraitError("Invalid mode (must be 'nominal', 'mueller', or 'pair_diff')")
+            raise traitlets.TraitError(
+                "Invalid mode (must be 'nominal', 'mueller', or 'pair_diff')"
+            )
         return check
-    
+
     @traitlets.validate("pair_group")
     def _check_pair_group(self, proposal):
         check = proposal["value"]
@@ -455,7 +462,7 @@ class StokesWeightsHWP(Operator):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-    
+
     def _get_pair_dets(self, local_dets, focalplane):
         """Determine detector pairs and return the A-detector names and pair info.
 
@@ -491,9 +498,9 @@ class StokesWeightsHWP(Operator):
         # Select the target gamma angles for A and B based on pair_group
         if self.pair_group == "0-90":
             gamma_a_target = 0.0
-            gamma_b_target = np.pi / 2.0   # 90°
+            gamma_b_target = np.pi / 2.0  # 90°
         elif self.pair_group == "45-135":
-            gamma_a_target = np.pi / 4.0   # 45°
+            gamma_a_target = np.pi / 4.0  # 45°
             gamma_b_target = 3.0 * np.pi / 4.0  # 135°
         else:
             raise RuntimeError(f"Unknown pair_group: '{self.pair_group}'")
@@ -501,11 +508,23 @@ class StokesWeightsHWP(Operator):
         def matches(gamma_rad, target):
             """Check if a gamma value (wrapped to [0, 2π)) is close to target."""
             g = gamma_rad % (2.0 * np.pi)
-            return abs(g - target) < tol or abs(g - target - 2.0 * np.pi) < tol or abs(g - target + 2.0 * np.pi) < tol
+            return (
+                abs(g - target) < tol
+                or abs(g - target - 2.0 * np.pi) < tol
+                or abs(g - target + 2.0 * np.pi) < tol
+            )
 
         # Collect A and B detector names globally, preserving order
-        group_a = [d for i, d in enumerate(all_dets_global) if matches(det_gamma_global[i], gamma_a_target)]
-        group_b = [d for i, d in enumerate(all_dets_global) if matches(det_gamma_global[i], gamma_b_target)]
+        group_a = [
+            d
+            for i, d in enumerate(all_dets_global)
+            if matches(det_gamma_global[i], gamma_a_target)
+        ]
+        group_b = [
+            d
+            for i, d in enumerate(all_dets_global)
+            if matches(det_gamma_global[i], gamma_b_target)
+        ]
 
         if len(group_a) == 0 or len(group_b) == 0:
             raise RuntimeError(
@@ -573,9 +592,6 @@ class StokesWeightsHWP(Operator):
             dets = ob.select_local_detectors(
                 detectors, flagmask=self.detector_pointing.det_mask
             )
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
 
             focalplane = ob.telescope.focalplane
 
@@ -589,9 +605,8 @@ class StokesWeightsHWP(Operator):
                 if len(pairs) == 0:
                     log.verbose(
                         f"ob {ob.name}: no local pairs for "
-                        f"pair_group='{self.pair_group}', skipping."
+                        f"pair_group='{self.pair_group}'."
                     )
-                    continue
             else:
                 weight_dets = dets
 
@@ -619,7 +634,7 @@ class StokesWeightsHWP(Operator):
                 dtype=np.float32 if self.single_precision else np.float64,
                 detectors=weight_dets,
                 accel=use_accel,
-                )
+            )
 
             # Do we already have pointing for all requested detectors?
             if exists:
@@ -654,7 +669,7 @@ class StokesWeightsHWP(Operator):
                     dtype=np.float64,
                 )
                 hwp_data = ob.shared[self.hwp_angle].data
-                
+
                 stokes_weights_hwp_model_pair_diff(
                     quat_indx,
                     ob.detdata[quats_name].data,
@@ -682,9 +697,7 @@ class StokesWeightsHWP(Operator):
                 if self.cal is None:
                     cal = np.ones(len(dets), dtype=np.float64)
                 else:
-                    cal = np.array(
-                        [ob[self.cal][x] for x in dets], dtype=np.float64
-                    )
+                    cal = np.array([ob[self.cal][x] for x in dets], dtype=np.float64)
 
                 det_gamma = np.array(
                     [focalplane[d]["gamma"].to_value(u.rad) for d in dets],

@@ -181,8 +181,6 @@ class StokesWeightsHWPTest(MPITestCase):
 
         # Make a panel plot of N_pp'^-1 blocks
         invcov = read_healpix(invcov_file, field=None, nest=True)
-        print(f"invcov shape = {invcov.shape}", flush=True)
-        print(f"There are {len(goodindx)} hit pixels", flush=True)
         nnz = int((np.sqrt(1 + 8 * invcov.shape[0]) - 1) // 2)
         n_plot = len(goodindx)
 
@@ -309,6 +307,7 @@ class StokesWeightsHWPTest(MPITestCase):
         weights_hwp = ops.StokesWeightsHWP(
             mode="mueller",
             detector_pointing=detpointing,
+            hwp_angle=defaults.hwp_angle,
             mueller=[
                 [1, 0, 0, 0],
                 [0, 1, 0, 0],
@@ -319,18 +318,19 @@ class StokesWeightsHWPTest(MPITestCase):
         )
 
         # Binned mapmaking
-        binner = ops.BinMap(
+
+        binner_iqu = ops.BinMap(
+            name="binner_iqu",
             pixel_dist="pixel_dist",
             pixel_pointing=pixels,
-            stokes_weights=weights_hwp,
+            stokes_weights=weights_iqu,
             noise_model="noise_model",
             full_pointing=True,
         )
-
-        mapper = ops.MapMaker(
-            name="mapmaker_hwp",
+        mapper_iqu = ops.MapMaker(
+            name="mapmaker_iqu",
             det_data=defaults.det_data,
-            binning=binner,
+            binning=binner_iqu,
             map_rcond_threshold=1.0e-15,
             write_hits=True,
             write_map=True,
@@ -340,14 +340,35 @@ class StokesWeightsHWPTest(MPITestCase):
             output_dir=testdir,
             reset_pix_dist=True,
         )
-
-        # Make the map
-        mapper.apply(data)
+        mapper_iqu.apply(data)
 
         # Change the Stokes weights operator and re-run
-        binner.stokes_weights = weights_iqu
-        mapper.name = "mapmaker_iqu"
-        mapper.apply(data)
+
+        ops.Delete(detdata=[weights_iqu.weights, pixels.pixels]).apply(data)
+        del data["pixel_dist"]
+
+        binner_hwp = ops.BinMap(
+            name="binner_hwp",
+            pixel_dist="pixel_dist",
+            pixel_pointing=pixels,
+            stokes_weights=weights_hwp,
+            noise_model="noise_model",
+            full_pointing=True,
+        )
+        mapper_hwp = ops.MapMaker(
+            name="mapmaker_hwp",
+            det_data=defaults.det_data,
+            binning=binner_hwp,
+            map_rcond_threshold=1.0e-15,
+            write_hits=True,
+            write_map=True,
+            write_noiseweighted_map=True,
+            write_invcov=True,
+            write_rcond=True,
+            output_dir=testdir,
+            reset_pix_dist=True,
+        )
+        mapper_hwp.apply(data)
 
         close_data(data)
 
@@ -421,7 +442,8 @@ class StokesWeightsHWPTest(MPITestCase):
                 reset_pix_dist=(i > 0),
             )
 
-            mapper.apply(data, detectors=a_dets) # Pass only A dets, mapmaker ignores B dets
+             # Pass only A dets, mapmaker ignores B dets
+            mapper.apply(data, detectors=a_dets)
             file_roots.append(os.path.join(testdir, mapper.name))
 
         close_data(data)
