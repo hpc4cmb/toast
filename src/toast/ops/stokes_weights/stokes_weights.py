@@ -131,6 +131,18 @@ class StokesWeights(Operator):
             raise traitlets.TraitError("Invalid mode (must be 'I', 'QU' or 'IQU')")
         return check
 
+    @property
+    def nnz(self):
+        """The number of non-zero pointing matrix weights."""
+        if self.mode == "I":
+            return 1
+        elif self.mode == "QU":
+            return 2
+        elif self.mode == "IQU":
+            return 3
+        else:
+            return None
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 

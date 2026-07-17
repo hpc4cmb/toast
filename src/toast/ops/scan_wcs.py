@@ -141,7 +141,7 @@ class ScanWCSMap(Operator):
         if not isinstance(dist, PixelDistribution):
             raise RuntimeError("The pixel_dist must be a PixelDistribution instance")
 
-        nnz = len(self.stokes_weights.mode)
+        nnz = self.stokes_weights.nnz
 
         # Create our map to scan named after our own operator name.  Generally the
         # files on disk are stored as float32, but even if not there is no real benefit
