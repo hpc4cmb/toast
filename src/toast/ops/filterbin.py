@@ -857,8 +857,11 @@ class FilterBin(Operator):
                 if not success:
                     continue
 
+            # Get the common templates.  This may modify the shared flags.
             common_templates = self._build_common_templates(obs)
+
             if self.shared_flags is not None:
+                # No need for a copy here, since we are not modifying these below.
                 common_flags = obs.shared[self.shared_flags].data
             else:
                 common_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
@@ -1165,7 +1168,6 @@ class FilterBin(Operator):
             )
             raise RuntimeError(msg)
         hwp_angle = obs.shared[self.hwp_angle].data
-        shared_flags = np.array(obs.shared[self.shared_flags])
 
         nfilter = 2 * self.hwp_filter_order
         if nfilter < 1:
@@ -1195,7 +1197,6 @@ class FilterBin(Operator):
         # polynomial orders not present in the polynomial filter
 
         phase = self._get_phase(ob)
-        shared_flags = np.array(ob.shared[self.shared_flags])
 
         min_order = 0
         if self.poly_filter_order is not None:
@@ -1297,7 +1298,7 @@ class FilterBin(Operator):
 
         # bin numbers are positive by construction.
         # Assign flagged samples to bin = -1
-        shared_flags = np.array(ob.shared[self.shared_flags])
+        shared_flags = ob.shared[self.shared_flags].data
         bad = (shared_flags & self.shared_flag_mask) != 0
         ibin[bad] = -1
 
@@ -1411,12 +1412,18 @@ class FilterBin(Operator):
             return
         nfilter = self.poly_filter_order + 1
         intervals = obs.intervals[self.poly_filter_view]
+
+        # Make a copy of the shared flags, since we will update them
         if self.shared_flags is None:
             shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
         else:
-            shared_flags = np.array(obs.shared[self.shared_flags])
+            shared_flags = np.copy(obs.shared[self.shared_flags].data)
         bad = (shared_flags & self.shared_flag_mask) != 0
 
+        # Since the intervals are common to all processes in a column of
+        # the process grid, this block of code will produce identical
+        # outputs across all those processes (including updates to the
+        # shared flags).
         for i, ival in enumerate(intervals):
             istart = ival.first
             istop = ival.last
@@ -1442,6 +1449,8 @@ class FilterBin(Operator):
         templates.meta["poly_intervals"] = intervals.data
 
         if self.shared_flags is not None:
+            # Update the flags.  The input is ignored on all processes except the
+            # rank 0 process of the column communicator.
             obs.shared[self.shared_flags].set(shared_flags, offset=(0,), fromrank=0)
 
         return
@@ -1528,7 +1537,8 @@ class FilterBin(Operator):
         if self.shared_flags is None:
             shared_flags = np.zeros(nsample, dtype=np.uint8)
         else:
-            shared_flags = np.array(obs.shared[self.shared_flags])
+            # No need for a copy here since we are not modifying the shared flags.
+            shared_flags = obs.shared[self.shared_flags].data
         bad = (shared_flags & self.shared_flag_mask) != 0
 
         # Improve template orthogonality by projecting subscan

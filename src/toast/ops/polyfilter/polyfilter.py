@@ -462,12 +462,12 @@ class PolyFilter(Operator):
 
     det_flag_mask = Int(
         defaults.det_mask_invalid | defaults.det_mask_processing,
-        help="Bit mask value for detector sample flagging",
+        help="Input bit mask value for detector sample flagging",
     )
 
     poly_flag_mask = Int(
-        defaults.shared_mask_invalid,
-        help="Shared flag bit mask for samples outside of filtering view",
+        defaults.det_mask_invalid,
+        help="Output detector flag bit mask for samples outside of filtering view",
     )
 
     shared_flags = Unicode(
@@ -549,76 +549,48 @@ class PolyFilter(Operator):
             else:
                 shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
 
-            signals = []
-            filter_dets = []
-            last_flags = None
+            # FIXME:  The underlying kernels assume common flags for all detectors.
+            # This will likely never be true and the API should be updated to take
+            # separate flag vectors for each detector.  In the mean time just call
+            # the kernel once per detector.
+
+            # Track whether we are filtering in place (64bit data).
             in_place = True
+            if obs.detdata[self.det_data].dtype != np.dtype(np.float64):
+                in_place = False
+
             for det in dets:
                 # Test the detector pattern
                 if pat.match(det) is None:
                     continue
 
-                ref = obs.detdata[self.det_data][det]
-                if isinstance(ref[0], np.float64):
-                    signal = ref
-                else:
-                    in_place = False
-                    signal = np.array(ref, dtype=np.float64)
                 if self.det_flags is not None:
                     det_flags = obs.detdata[self.det_flags][det] & self.det_flag_mask
                     flags = shared_flags | det_flags
                 else:
                     flags = shared_flags
 
-                if last_flags is None or np.all(last_flags == flags):
-                    filter_dets.append(det)
-                    signals.append(signal)
+                if in_place:
+                    signal = obs.detdata[self.det_data][det]
                 else:
-                    filter_polynomial(
-                        self.order,
-                        last_flags,
-                        signals,
-                        local_starts,
-                        local_stops,
-                        impl=implementation,
-                        use_accel=use_accel,
-                    )
-                    if not in_place:
-                        for fdet, x in zip(filter_dets, signals):
-                            obs.detdata[self.det_data][fdet] = x
-                    signals = [signal]
-                    filter_dets = [det]
-                last_flags = flags.copy()
+                    signal = np.array(obs.detdata[self.det_data][det], dtype=np.float64)
 
-            if len(signals) > 0:
                 filter_polynomial(
                     self.order,
-                    last_flags,
-                    signals,
+                    flags,
+                    [signal],
                     local_starts,
                     local_stops,
                     impl=implementation,
                     use_accel=use_accel,
                 )
                 if not in_place:
-                    for fdet, x in zip(filter_dets, signals):
-                        obs.detdata[self.det_data][fdet] = x
+                    obs.detdata[self.det_data][det] = signal
 
-            # Optionally flag unfiltered data
-            if self.shared_flags is not None and self.poly_flag_mask is not None:
-                if obs.comm_col_rank != 0:
-                    shared_flags = None
-                else:
-                    shared_flags = np.array(obs.shared[self.shared_flags])
-                    not_filtered = np.ones(shared_flags.size, dtype=bool)
-                    for start, stop in zip(local_starts, local_stops):
-                        not_filtered[start : stop] = False
-                    shared_flags[not_filtered] |= self.poly_flag_mask
-                obs.shared[self.shared_flags].set(shared_flags, fromrank=0)
-            if obs.comm.comm_group is not None:
-                obs.comm.comm_group.barrier()
-
-        return
+                # Flag detector samples that were not filtered.
+                if self.det_flags is not None:
+                    bad = np.array(flags != 0, dtype=np.uint8)
+                    obs.detdata[self.det_flags][det] |= self.poly_flag_mask * bad
 
     def _finalize(self, data, **kwargs):
         return

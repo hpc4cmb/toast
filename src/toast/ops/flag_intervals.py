@@ -108,7 +108,7 @@ class FlagIntervals(Operator):
 
             new_flags = None
             if ob.comm_col_rank == 0:
-                new_flags = np.array(ob.shared[self.shared_flags])
+                new_flags = np.copy(ob.shared[self.shared_flags].data)
                 if self.reset:
                     for vname, vmask in self.view_mask:
                         new_flags &= ~vmask

@@ -119,9 +119,8 @@ class NoiseFilter(Operator):
                 if self.shared_flags is not None:
                     # These shared flags will effectively be propagated to
                     # detector flags by this operator
-                    shflg = self.det_flag_mask * np.array(
+                    shflg = self.det_flag_mask * (
                         obs.shared[self.shared_flags].data & self.shared_flag_mask,
-                        dtype=np.uint8,
                     )
                     for detflag in flags:
                         detflag |= shflg

@@ -503,10 +503,10 @@ class SimTotalconvolve(Operator):
                 flags = None
                 if self.apply_flags:
                     if self.shared_flags is not None:
-                        flags = np.array(views.shared[self.shared_flags][view])
+                        flags = np.copy(views.shared[self.shared_flags][view])
                         flags &= self.shared_flag_mask
                     if self.det_flags is not None:
-                        detflags = np.array(views.detdata[self.det_flags][view][det])
+                        detflags = np.copy(views.detdata[self.det_flags][view][det])
                         detflags &= self.det_flag_mask
                         if flags is not None:
                             flags |= detflags

@@ -151,10 +151,10 @@ class AzimuthIntervals(Operator):
 
             if obs.comm_col_rank == 0:
                 # The azimuth angle
-                azimuth = np.array(obs.shared[self.azimuth].data)
+                azimuth = np.copy(obs.shared[self.azimuth].data)
 
                 # The azimuth flags
-                flags = np.array(obs.shared[self.shared_flags].data)
+                flags = np.copy(obs.shared[self.shared_flags].data)
                 flags &= self.shared_flag_mask
 
                 # Scan velocity
@@ -631,10 +631,10 @@ class AzimuthRanges(Operator):
                 # Compute the good azimuth data along the top process row
 
                 # The azimuth angle
-                azimuth = np.array(obs.shared[self.azimuth].data)
+                azimuth = np.copy(obs.shared[self.azimuth].data)
 
                 # The azimuth flags
-                flags = np.array(obs.shared[self.shared_flags].data)
+                flags = np.copy(obs.shared[self.shared_flags].data)
                 flags &= self.shared_flag_mask
 
                 # The min / max Az range for this time chunk
