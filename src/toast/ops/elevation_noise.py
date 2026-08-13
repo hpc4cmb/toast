@@ -236,7 +236,7 @@ class ElevationNoise(Operator):
                 # Get the flags if needed.  Use the same flags as detector pointing.
                 flags = None
                 if self.detector_pointing.shared_flags is not None:
-                    flags = np.array(
+                    flags = np.copy(
                         views.shared[self.detector_pointing.shared_flags][vw]
                     )
                     flags &= self.detector_pointing.shared_flag_mask

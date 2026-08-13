@@ -437,7 +437,7 @@ class NoiseEstim(Operator):
                     unordered_pairs.add(tuple(sorted(pair)))
                 pairs = list(unordered_pairs)
 
-            times = np.array(obs.shared[self.times])
+            times = obs.shared[self.times].data
             nsample = times.size
 
             shared_flags = np.zeros(times.size, dtype=bool)

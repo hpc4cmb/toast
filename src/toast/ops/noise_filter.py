@@ -109,22 +109,27 @@ class NoiseFilter(Operator):
             # Sample rate for this observation
             rate = obs.telescope.focalplane.sample_rate.to_value(u.Hz)
 
+            # Shared flags
+            if self.shared_flags is not None:
+                # These shared flags will effectively be propagated to
+                # detector flags by this operator
+                shflg = np.copy(obs.shared[self.shared_flags].data)
+                shflg &= self.shared_flag_mask
+                shflg *= self.det_flag_mask
+            else:
+                shflg = None
+
             # The signal array: this is a list of detector array references.
             signal = obs.detdata[self.det_data][dets, :]
             if self.det_flags is None:
                 flags = None
                 flag_mask = None
             else:
+                # List of references to the detector flags
                 flags = obs.detdata[self.det_flags][dets, :]
-                if self.shared_flags is not None:
-                    # These shared flags will effectively be propagated to
-                    # detector flags by this operator
-                    shflg = self.det_flag_mask * np.array(
-                        obs.shared[self.shared_flags].data & self.shared_flag_mask,
-                        dtype=np.uint8,
-                    )
+                if shflg is not None:
                     for detflag in flags:
-                        detflag |= shflg
+                        detflag[:] |= shflg
                 flag_mask = self.det_flag_mask
 
             # Construct the N_tt'^-1 kernels for these detectors

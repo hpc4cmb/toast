@@ -813,7 +813,7 @@ class HWPSynchronousModel(Operator):
                 log.verbose(msg)
                 coeff[idet, :, indx] = 0
                 continue
-            sig = np.array(obs.detdata[self.det_data][det, slc])
+            sig = np.copy(obs.detdata[self.det_data][det, slc])
             dc = np.mean(sig[good_samp])
             sig -= dc
 
@@ -900,7 +900,7 @@ class HWPSynchronousModel(Operator):
         if self.shared_flags is None:
             shared_flags = np.zeros(obs.n_local_samples, dtype=np.uint8)
         else:
-            shared_flags = np.array(obs.shared[self.shared_flags].data)
+            shared_flags = np.copy(obs.shared[self.shared_flags].data)
             shared_flags &= self.shared_flag_mask
 
         # Compute flags for samples where the hwp is stopped
