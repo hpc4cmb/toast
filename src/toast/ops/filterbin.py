@@ -1943,6 +1943,8 @@ class FilterBin(Operator):
             "rightleft_interval",
             "poly_filter_order",
             "poly_filter_view",
+            "poly_filter_view_crop_start",
+            "poly_filter_view_crop_end",
             "precomputed_templates",
             "precomputed_template_view",
         ]:
