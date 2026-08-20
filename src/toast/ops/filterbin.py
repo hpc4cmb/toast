@@ -482,6 +482,14 @@ class FilterBin(Operator):
         "throw", allow_none=True, help="Intervals for polynomial filtering"
     )
 
+    poly_filter_view_crop_start = Float(
+        0, help="Crop beginning of each interval [seconds]",
+    )
+
+    poly_filter_view_crop_end = Float(
+        0, help="Crop end of each interval [seconds]",
+    )
+
     write_obs_matrix = Bool(False, help="Write the observation matrix")
 
     nskip = Int(
@@ -1419,23 +1427,31 @@ class FilterBin(Operator):
         else:
             shared_flags = np.copy(obs.shared[self.shared_flags].data)
         bad = (shared_flags & self.shared_flag_mask) != 0
+        not_filtered = np.ones(shared_flags.size, dtype=bool)
+
+        # See if we are using full intervals
+        fsample = obs.telescope.focalplane.sample_rate.to_value(u.Hz)
+        crop_start = int(self.poly_filter_view_crop_start * fsample)
+        crop_end = int(self.poly_filter_view_crop_end * fsample)
 
         # Since the intervals are common to all processes in a column of
         # the process grid, this block of code will produce identical
         # outputs across all those processes (including updates to the
         # shared flags).
         for i, ival in enumerate(intervals):
-            istart = ival.first
-            istop = ival.last
+            istart = ival.first + crop_start
+            istop = ival.last - crop_end
             # Trim flagged samples from both ends
             while istart < istop and bad[istart]:
                 istart += 1
             while istop - 1 > istart and bad[istop - 1]:
                 istop -= 1
             if istop - istart < nfilter:
-                # Not enough samples to filter, flag this interval
-                shared_flags[ival.first : ival.last] |= self.filter_flag_mask
+                # Not enough samples to filter
                 continue
+            # This interval will be filtered
+            not_filtered[istart : istop] = False
+            # Build the templates for this interval
             wbin = 2 / (istop - istart)
             phase = (np.arange(istop - istart) + 0.5) * wbin - 1
             ltemplates = np.zeros([nfilter, phase.size])
@@ -1447,6 +1463,9 @@ class FilterBin(Operator):
 
         # Save polynomial intervals for reference
         templates.meta["poly_intervals"] = intervals.data
+
+        # Flag all samples that are not filtered by the polynomials
+        shared_flags[not_filtered] |= self.filter_flag_mask
 
         if self.shared_flags is not None:
             # Update the flags.  The input is ignored on all processes except the
@@ -1924,6 +1943,8 @@ class FilterBin(Operator):
             "rightleft_interval",
             "poly_filter_order",
             "poly_filter_view",
+            "poly_filter_view_crop_start",
+            "poly_filter_view_crop_end",
             "precomputed_templates",
             "precomputed_template_view",
         ]:

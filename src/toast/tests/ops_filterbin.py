@@ -36,6 +36,138 @@ class FilterBinTest(MPITestCase):
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
         self.nside = 64
 
+    def test_extend_turnaround(self):
+        # Create a fake ground data set for testing
+        data = create_ground_data(self.comm, turnarounds_invalid=True, schedule_hours=1)
+
+        nside = 256
+
+        # Create some detector pointing matrices
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=nside,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        weights = ops.StokesWeights(
+            mode="I",  # "IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise from this model
+        sim_noise = ops.SimNoise(noise_model="noise_model", out=defaults.det_data)
+        sim_noise.apply(data)
+
+        # Add a strong gradient that should be filtered out completely
+        for obs in data.obs:
+            grad = np.arange(obs.n_local_samples)
+            for det in obs.local_detectors:
+                obs.detdata[defaults.det_data][det] += grad
+
+        # Make fake flags
+        fake_flags(data)
+
+        binning = ops.BinMap(
+            pixel_dist="pixel_dist",
+            covariance="covariance",
+            det_data=sim_noise.det_data,
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+            sync_type="allreduce",
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=defaults.shared_mask_nonscience,
+            det_flags=defaults.det_flags,
+            det_flag_mask=defaults.det_mask_invalid,
+        )
+
+        # Copy the signal
+        ops.Copy(
+            shared=[(defaults.shared_flags, "shared_flags_copy")],
+            detdata=[
+                (defaults.det_data, "signal_copy"),
+                (defaults.det_flags, "det_flags_copy"),
+            ],
+        ).apply(data)
+
+        name = "filterbin_turnaround_ref"
+        filterbin_ref = ops.FilterBin(
+            name=name,
+            det_data=defaults.det_data,
+            det_flags=defaults.det_flags,
+            det_flag_mask=defaults.det_mask_nonscience,
+            shared_flags=defaults.shared_flags,
+            shared_flag_mask=defaults.shared_mask_nonscience,
+            binning=binning,
+            poly_filter_view="scanning",
+            poly_filter_order=1,
+            output_dir=self.outdir,
+            write_binmap=True,
+            write_map=True,
+            write_hits=True,
+            write_hdf5=True,
+        )
+        filterbin_ref.apply(data)
+
+        name = "filterbin_turnaround"
+        filterbin = ops.FilterBin(
+            name=name,
+            det_data="signal_copy",
+            det_flags="det_flags_copy",
+            det_flag_mask=defaults.det_mask_nonscience,
+            shared_flags="shared_flags_copy",
+            shared_flag_mask=defaults.shared_mask_nonscience,
+            binning=binning,
+            poly_filter_view="scanning",
+            poly_filter_order=1,
+            poly_filter_view_crop_start=1,
+            poly_filter_view_crop_end=1,
+            output_dir=self.outdir,
+            write_binmap=True,
+            write_map=True,
+            write_hits=True,
+            write_hdf5=True,
+        )
+        filterbin.apply(data)
+
+        if data.comm.world_rank == 0:
+            # Check that the number of hits drops
+
+            fname_hits_ref = os.path.join(
+                self.outdir, f"{filterbin_ref.name}_filtered_hits.h5"
+            )
+            fname_hits = os.path.join(
+                self.outdir, f"{filterbin.name}_filtered_hits.h5"
+            )
+            hits_ref = read_healpix(fname_hits_ref)
+            hits = read_healpix(fname_hits)
+
+            assert np.sum(hits) < 0.9 * np.sum(hits_ref)
+
+            # Check that filtering is still effective
+
+            fname_binned = os.path.join(
+                self.outdir, f"{filterbin.name}_unfiltered_map.h5"
+            )
+            fname_filtered = os.path.join(
+                self.outdir, f"{filterbin.name}_filtered_map.h5"
+            )
+            binned = np.atleast_2d(read_healpix(fname_binned, None))
+            filtered = np.atleast_2d(read_healpix(fname_filtered, None))
+
+            good = binned != 0
+            rms1 = np.std(binned[good])
+            rms2 = np.std(filtered[good])
+
+            assert rms2 < 1e-3 * rms1
+
+        close_data(data)
+
     def test_filterbin_with_config(self):
         if "CIBUILDWHEEL" in os.environ:
             print(f"WARNING:  Skipping test_filterbin_with_config during wheel tests")
