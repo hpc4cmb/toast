@@ -1025,11 +1025,13 @@ class StokesWeightsDemod(Operator):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    @property
+    def nnz(self):
+        return len(self.mode)
+
     @function_timer
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
-
-        nnz = len(self.mode)
 
         if self.detector_pointing_in is None and self.detector_pointing_out is not None:
             raise RuntimeError(
@@ -1046,7 +1048,7 @@ class StokesWeightsDemod(Operator):
 
             exists_weights = obs.detdata.ensure(
                 self.weights,
-                sample_shape=(nnz,),
+                sample_shape=(self.nnz,),
                 dtype=dtype,
                 detectors=dets,
             )
