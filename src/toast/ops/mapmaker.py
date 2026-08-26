@@ -193,6 +193,8 @@ class MapMaker(Operator):
 
     report_memory = Bool(False, help="Report memory throughout the execution")
 
+    _log_prefix = "MapMaker"
+
     @traitlets.validate("map_binning")
     def _check_map_binning(self, proposal):
         bin = proposal["value"]
@@ -251,7 +253,8 @@ class MapMaker(Operator):
             else:
                 fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
             if self.mc_mode and not force and os.path.isfile(fname):
-                log.info_rank(f"Skipping existing file: {fname}", comm=self._comm)
+                msg = f"{self._log_prefix} Skipping existing file: {fname}"
+                log.info_rank(msg, comm=self._comm)
             else:
                 self._data[prod_key].write(
                     fname,
@@ -260,7 +263,9 @@ class MapMaker(Operator):
                     report_memory=self.report_memory,
                     extra_header=extra_header,
                 )
-            log.info_rank(f"Wrote {fname} in", comm=self._comm, timer=wtimer)
+            log.info_rank(
+                f"{self._log_prefix} Wrote {fname} in", comm=self._comm, timer=wtimer
+            )
 
         if not self.keep_final_products and not self.mc_mode:
             if prod_key in self._data:
@@ -353,7 +358,6 @@ class MapMaker(Operator):
 
         self._log = Logger.get()
         self._timer = Timer()
-        self._log_prefix = "MapMaker"
 
         self._mc_root = self.name
         if self.mc_mode:
@@ -414,9 +418,7 @@ class MapMaker(Operator):
             reset_pix_dist=self.reset_pix_dist,
             report_memory=self.report_memory,
         )
-        amplitudes_solve.apply(
-            self._data, use_accel=self._use_accel
-        )
+        amplitudes_solve.apply(self._data, use_accel=self._use_accel)
         template_amplitudes = amplitudes_solve.amplitudes
 
         self._log.info_rank(
@@ -468,9 +470,7 @@ class MapMaker(Operator):
             )
             # We intentionally build the pixel distribution with all detectors,
             # so that it will be valid for any subsets.
-            pix_dist.apply(
-                self._data, detectors=None, use_accel=self._use_accel
-            )
+            pix_dist.apply(self._data, detectors=None, use_accel=self._use_accel)
             self._log.info_rank(
                 f"{self._log_prefix}  finished build of pixel distribution in",
                 comm=self._comm,
@@ -516,9 +516,7 @@ class MapMaker(Operator):
             save_pointing=map_binning.full_pointing,
         )
 
-        final_cov.apply(
-            self._data, use_accel=self._use_accel
-        )
+        final_cov.apply(self._data, use_accel=self._use_accel)
 
         self._log.info_rank(
             f"{self._log_prefix}  finished build of final covariance in",
@@ -552,9 +550,7 @@ class MapMaker(Operator):
             f"{self._log_prefix} begin map binning",
             comm=self._comm,
         )
-        map_binning.apply(
-            self._data, use_accel=self._use_accel
-        )
+        map_binning.apply(self._data, use_accel=self._use_accel)
         self._log.info_rank(
             f"{self._log_prefix}  finished binning in",
             comm=self._comm,
@@ -601,9 +597,7 @@ class MapMaker(Operator):
                 template_matrix=self.template_matrix,
                 output=out_cleaned,
             )
-            amplitudes_apply.apply(
-                self._data, use_accel=self._use_accel
-            )
+            amplitudes_apply.apply(self._data, use_accel=self._use_accel)
 
             if not self.keep_solver_products:
                 del self._data[template_amplitudes]
@@ -637,9 +631,7 @@ class MapMaker(Operator):
         map_binning.binned = self.map_name
 
         # Do the final binning
-        map_binning.apply(
-            self._data, use_accel=self._use_accel
-        )
+        map_binning.apply(self._data, use_accel=self._use_accel)
 
         self._log.info_rank(
             f"{self._log_prefix}  finished final binning in",
@@ -702,7 +694,6 @@ class MapMaker(Operator):
 
         del self._log
         del self._timer
-        del self._log_prefix
         del self._mc_root
         del self._data
         del self._use_accel
@@ -783,12 +774,14 @@ class MapMaker(Operator):
                 self.name = f"{self._save_split_name}_{safe_split}"
             n_split_dets = len(split_dets)
             if n_split_dets == 0:
+                msg = f"{self._log_prefix} Detector split '{split_key}' "
+                msg += "has no dets, skipping"
                 log.info_rank(
-                    f"Detector split '{split_key}' has no dets, skipping",
+                    msg,
                     comm=data.comm.comm_world,
                 )
             else:
-                msg = f"Running det split '{split_key}' with "
+                msg = f"{self._log_prefix} Running det split '{split_key}' with "
                 msg += f"{n_split_dets} dets"
                 log.info_rank(msg, comm=data.comm.comm_world)
 
@@ -799,13 +792,13 @@ class MapMaker(Operator):
                 map_binning.det_mask,
             )
 
-            msg = f"After selection, split '{split_key}' has "
+            msg = f"{self._log_prefix} After selection, split '{split_key}' has "
             msg += f"{len(selected_dets)} dets"
             log.info_rank(msg, comm=data.comm.comm_world)
 
             extra_header = self._get_extra_header(selected_dets)
 
-            self._memreport.prefix = "Start of mapmaking"
+            self._memreport.prefix = f"{self._log_prefix} Start of mapmaking"
             self._memreport.apply(self._data, use_accel=self._use_accel)
 
             template_amplitudes = self._fit_templates()
@@ -829,7 +822,7 @@ class MapMaker(Operator):
 
             self._write_maps(extra_header=extra_header)
 
-            self._memreport.prefix = "End of mapmaking"
+            self._memreport.prefix = f"{self._log_prefix} End of mapmaking"
             self._memreport.apply(self._data, use_accel=self._use_accel)
 
             # Restore detector flags
