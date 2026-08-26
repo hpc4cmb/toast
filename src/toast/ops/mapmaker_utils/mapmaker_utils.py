@@ -1151,7 +1151,7 @@ class CovarianceAndHits(Operator):
                 pixel_pointing=self.pixel_pointing,
                 save_pointing=self.save_pointing,
             )
-            pix_dist.apply(data)
+            pix_dist.apply(data, detectors=detectors)
 
         # Check if map domain products exist and are consistent.  The hits
         # and inverse covariance accumulation operators support multiple

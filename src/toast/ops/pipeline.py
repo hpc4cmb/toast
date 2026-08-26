@@ -145,7 +145,7 @@ class Pipeline(Operator):
                 self._exec_operator(
                     op,
                     data,
-                    detectors=None,
+                    detectors=detectors,
                     pipe_accel=pipe_accel,
                 )
         elif len(self.detector_sets) == 1 and self.detector_sets[0] == "SINGLE":
