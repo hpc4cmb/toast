@@ -1,7 +1,8 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import re
 import os
 
 import healpy as hp
@@ -18,6 +19,7 @@ from .helpers import (
     create_ground_data,
     create_outdir,
     create_overdistributed_data,
+    fake_hwpss,
 )
 from .mpi import MPITestCase
 
@@ -187,7 +189,7 @@ class DemodulateTest(MPITestCase):
         # Pointing operators
 
         detpointing_azel = ops.PointingDetectorSimple(
-            boresight=defaults.boresight_radec,
+            boresight=defaults.boresight_azel,
             shared_flag_mask=0,
         )
         detpointing_radec = ops.PointingDetectorSimple(
@@ -498,7 +500,7 @@ class DemodulateTest(MPITestCase):
         # Pointing operators
 
         detpointing_azel = ops.PointingDetectorSimple(
-            boresight=defaults.boresight_radec,
+            boresight=defaults.boresight_azel,
             shared_flag_mask=0,
         )
 
@@ -583,7 +585,7 @@ class DemodulateTest(MPITestCase):
         # Pointing operators
 
         detpointing_azel = ops.PointingDetectorSimple(
-            boresight=defaults.boresight_radec,
+            boresight=defaults.boresight_azel,
             shared_flag_mask=0,
         )
         detpointing_radec = ops.PointingDetectorSimple(
@@ -793,3 +795,339 @@ class DemodulateTest(MPITestCase):
     def test_destripe_QU(self):
         data = create_ground_data(self.comm)
         self._test_destripe(weight_mode="QU", data=data, suffix="_destripe")
+
+    def test_destripe_precomputed(self):
+        testdir = os.path.join(self.outdir, "precomputed")
+        if self.comm is None or self.comm.rank == 0:
+            if not os.path.isdir(testdir):
+                os.mkdir(testdir)
+        if self.comm is not None:
+            self.comm.barrier()
+
+        data = create_ground_data(self.comm, schedule_hours=2)
+        nside = 128
+
+        # Simulation
+
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        detpointing_azel = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_azel,
+            shared_flag_mask=0,
+        )
+        detpointing_radec = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec,
+            shared_flag_mask=0,
+        )
+
+        pixels = ops.PixelsHealpix(
+            nside=nside,
+            detector_pointing=detpointing_radec,
+        )
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_radec,
+        )
+
+        sky_file = os.path.join(testdir, "fake_sky.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            sky_file,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=1.0 * u.deg,
+            lmax=3 * nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+
+        ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
+
+        ops.SimAtmosphere(
+            detector_pointing=detpointing_azel,
+            gain=1.0e-6,
+            zmax=200 * u.m,
+        ).apply(data)
+
+        ops.SimNoise(noise_model="noise_model").apply(data)
+
+        hwpss_scale = 20.0
+        tod_rms = np.std(data.obs[0].detdata["input"][0])
+        hwpss_coeff = fake_hwpss(data, defaults.det_data, hwpss_scale * tod_rms)
+
+        ops.Delete(
+            detdata=[
+                detpointing_azel.quats,
+                detpointing_radec.quats,
+                pixels.pixels,
+                weights.weights,
+            ]
+        )
+
+        # Data Processing
+
+        # Estimate noise.  We want to get an estimate of the 1/f spectrum prior to
+        # demodulation.  The demodulation operator will modify the input noise model
+        # appropriately.  We copy the data to a temporary location and filter the
+        # HWPSS in order to estimate noise on that TOD.
+
+        ops.Copy(detdata=[(defaults.det_data, "temp")]).apply(data)
+        ops.HWPFilter(
+            trend_order=1,
+            filter_order=7,
+            detrend=True,
+            det_data="temp",
+        ).apply(data)
+
+        ops.NoiseEstim(
+            out_model="raw_noise_model",
+            lagmax=10000,
+            view="scanning",
+            nbin_psd=64,
+            nsum=1,
+            naverage=1,
+            det_data="temp",
+        ).apply(data)
+
+        ops.FitNoiseModel(
+            noise_model="raw_noise_model",
+            out_model="noise_model",
+        ).apply(data)
+
+        ops.Delete(detdata=["temp"]).apply(data)
+
+        # Demodulate.  We intentionally leave in the HWPSS, which will be an added
+        # constant in the band-passed 4f data.
+
+        demod_weights_in = ops.StokesWeights(
+            weights="demod_weights_in",
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_azel,
+        )
+
+        downsample = 3
+        demod = ops.Demodulate(
+            stokes_weights=demod_weights_in,
+            nskip=downsample,
+            purge=False,
+            mode="IQU",
+            noise_model="noise_model",
+        )
+        demod_data = demod.apply(data)
+
+        demod_weights = ops.StokesWeightsDemod(
+            detector_pointing_in=detpointing_azel,
+            detector_pointing_out=detpointing_radec,
+            mode="IQU",
+        )
+
+        # Add T->P leakage based on the lowpassed intensity TOD.  This
+        # demod0 data should be primarily low-passed atmosphere.
+
+        for ob in demod_data.obs:
+            coeff = dict()
+            I_templates = dict()
+            det_to_key = dict()
+            pat = re.compile(r"demod0_(.*)")
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_nonscience):
+                mat = pat.match(det)
+                if mat is not None:
+                    base = mat.group(1)
+                    cf = np.random.uniform(low=0.02, high=0.1, size=2)
+                    qdet = f"demod4r_{base}"
+                    udet = f"demod4i_{base}"
+                    coeff[det] = 0.0
+                    coeff[qdet] = cf[0]
+                    coeff[udet] = cf[1]
+                    imean = np.mean(ob.detdata[defaults.det_data][det])
+                    I_templates[base] = ob.detdata[defaults.det_data][det] - imean
+                    det_to_key[qdet] = base
+                    det_to_key[udet] = base
+                    ob.detdata[defaults.det_data][qdet] += (
+                        coeff[qdet] * I_templates[base]
+                    )
+                    ob.detdata[defaults.det_data][udet] += (
+                        coeff[udet] * I_templates[base]
+                    )
+            I_templates["det_to_key"] = det_to_key
+            ob["templates"] = I_templates
+            ob["template_coeff"] = coeff
+
+        # Destriping templates.  For the intensity data, we use standard baseline
+        # offsets to model the remaining 1/f in the low-passed data (which is mainly
+        # atmosphere).  For the polarization data, we use both baseline offsets and
+        # also the precomputed intensity templates.
+
+        tmpl_I_offset = templates.Offset(
+            name="offset_I",
+            noise_model="noise_model",
+            step_time=1.0 * u.second,
+            use_noise_prior=False,
+            pattern="demod0.*",
+            view="scanning",
+        )
+        tmpl_P_offset = templates.Offset(
+            name="offset_P",
+            noise_model="noise_model",
+            step_time=1000.0 * u.second,  # Will be truncated to one baseline per scan
+            use_noise_prior=False,
+            pattern="demod4.*",
+            view="scanning",
+        )
+        tmpl_T2P = templates.PreComputed(
+            name="T2P",
+            obs_key="templates",
+            pattern="demod4.*",
+            view="scanning",
+        )
+
+        tmpl = templates.Offset(
+            name="offset",
+            noise_model="noise_model",
+            step_time=1000.0 * u.second,  # Will be truncated to one baseline per scan
+            use_noise_prior=False,
+            view="scanning",
+        )
+
+        tmatrix = ops.TemplateMatrix(
+            templates=[tmpl_I_offset, tmpl_P_offset, tmpl_T2P],
+            #templates=[tmpl_I_offset, tmpl_P_offset],
+            #templates=[tmpl],
+        )
+
+        binner = ops.BinMap(
+            pixel_pointing=pixels,
+            stokes_weights=demod_weights,
+            noise_model="noise_model",
+        )
+
+        mapper = ops.MapMaker(
+            name="mapmaker",
+            det_data=defaults.det_data,
+            binning=binner,
+            template_matrix=tmatrix,
+            write_hits=True,
+            write_map=True,
+            write_cov=True,
+            write_invcov=True,
+            write_rcond=True,
+            keep_solver_products=True,
+            keep_final_products=False,
+            output_dir=testdir,
+            solve_rcond_threshold=1e-3,
+            map_rcond_threshold=1e-3,
+            reset_pix_dist=True,
+        )
+        mapper.apply(demod_data)
+
+        # if data.comm.world_rank == 0:
+        #     set_matplotlib_backend()
+        #     import matplotlib.pyplot as plt
+
+        #     fname_mod = os.path.join(
+        #         self.outdir, f"modulated_{weight_mode}{suffix}_map.fits"
+        #     )
+        #     fname_demod = os.path.join(
+        #         self.outdir, f"demodulated_{weight_mode}{suffix}_map.fits"
+        #     )
+        #     fname_hits = os.path.join(
+        #         self.outdir, f"demodulated_{weight_mode}{suffix}_hits.fits"
+        #     )
+
+        #     map_mod = hp.read_map(fname_mod, None)
+        #     map_demod = np.atleast_2d(hp.read_map(fname_demod, None))
+        #     hits = hp.read_map(fname_hits)
+        #     map_input = np.atleast_2d(hp.read_map(sky_file, None))
+
+        #     # Develop a comparison mask that excludes poorly observed pixels
+        #     sorted_hits = np.sort(hits[hits != 0])
+        #     nhit = len(sorted_hits)
+        #     hit_min = sorted_hits[int(0.1 * nhit)]  # worst 10% of hit pixels
+        #     rms_mask = hits > hit_min
+
+        #     fig = plt.figure(figsize=[18, 12])
+        #     nrow, ncol = 3, 3
+        #     rot = [42, -42]
+        #     reso = 1
+        #     xsize = 800
+
+        #     amp = 1e-5
+        #     for i, m in enumerate(map_mod):
+        #         # Modulated map is full IQU
+        #         value = map_input[i]
+        #         good = m != 0
+        #         rms = np.sqrt(np.mean((m - value)[rms_mask] ** 2))
+        #         m[m == 0] = hp.UNSEEN
+        #         stokes = "IQU"[i]
+        #         hp.gnomview(
+        #             m,
+        #             sub=[nrow, ncol, 1 + i],
+        #             reso=reso,
+        #             xsize=xsize,
+        #             rot=rot,
+        #             title=f"Modulated {stokes} : rms = {rms}",
+        #             min=np.amin(value[good]) - amp,
+        #             max=np.amax(value[good]) + amp,
+        #             cmap="coolwarm",
+        #         )
+
+        #     all_good = True
+        #     for stokes, m in zip(weight_mode, map_demod):
+        #         # Demodulated map only has the prescribed components
+        #         i = "IQU".index(stokes)
+        #         value = map_input[i]
+        #         good = m != 0
+        #         rms0 = np.sqrt(np.mean(value[rms_mask] ** 2))
+        #         rms = np.sqrt(np.mean(m[rms_mask] ** 2))
+        #         rms1 = np.sqrt(np.mean((m - value)[rms_mask] ** 2))
+        #         m[m == 0] = hp.UNSEEN
+        #         hp.gnomview(
+        #             m,
+        #             sub=[nrow, ncol, ncol + i + 1],
+        #             reso=reso,
+        #             xsize=xsize,
+        #             rot=rot,
+        #             title=f"Demodulated {stokes} : rms = {rms / rms0:.3f} x rms(in)",
+        #             min=np.amin(value[good]) - amp,
+        #             max=np.amax(value[good]) + amp,
+        #             cmap="coolwarm",
+        #         )
+        #         resid = m - value
+        #         resid[m == 0] = hp.UNSEEN
+        #         hp.gnomview(
+        #             resid,
+        #             sub=[nrow, ncol, 2 * ncol + i + 1],
+        #             reso=reso,
+        #             xsize=xsize,
+        #             rot=rot,
+        #             title=f"Residual {stokes} : resid rms = {rms1 / rms0:.3f} x rms(in)",
+        #             min=np.amin(value[good]) - amp,
+        #             max=np.amax(value[good]) + amp,
+        #             cmap="coolwarm",
+        #         )
+        #         if rms1 / rms0 > 0.3:
+        #             print(
+        #                 f"input - demodulated map RMS = {rms1}, (input RMS = {rms0})",
+        #                 flush=True,
+        #             )
+        #             all_good = False
+
+        #     outfile = os.path.join(
+        #         self.outdir, f"map_comparison.{weight_mode}{suffix}.png"
+        #     )
+        #     fig.savefig(outfile)
+        #     self.assertTrue(all_good)
+
+        if self.comm is not None:
+            self.comm.barrier()
+
+        close_data(demod_data)
+        close_data(data)

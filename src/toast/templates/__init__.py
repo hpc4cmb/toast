@@ -9,5 +9,6 @@ from .fourier2d import Fourier2D
 from .gaintemplate import GainTemplate
 from .offset import Offset
 from .periodic import Periodic
+from .precomputed import PreComputed
 from .subharmonic import SubHarmonic
 from .template import Template
