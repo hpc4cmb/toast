@@ -170,7 +170,7 @@ class Data(MutableMapping):
                 ob.select_local_detectors(selection=selection, flagmask=flagmask)
             )
 
-            local_splits = dict()
+            local_splits = {}
             for k, v in local_groups.items():
                 for d in v:
                     if d in dets:

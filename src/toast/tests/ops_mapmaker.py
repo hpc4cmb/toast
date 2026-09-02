@@ -902,7 +902,6 @@ class MapmakerTest(MPITestCase):
             name="mapmaker",
             det_data=defaults.det_data,
             binning=binner,
-            template_matrix=tmatrix,
             solve_rcond_threshold=1.0e-6,
             map_rcond_threshold=1.0e-6,
             iter_max=5,
@@ -915,8 +914,137 @@ class MapmakerTest(MPITestCase):
             output_dir=testdir,
         )
 
-        # Make the map separately for different frequencies
-        mapper.focalplane_key = "bandcenter"
+        # Test both with and without destriping
+        for mname, tmat in [("none", None), ("offset", tmatrix)]:
+            mapper.name = f"mapmaker_{mname}"
+            mapper.template_matrix = tmat
+            # Make the map separately for different frequencies
+            mapper.focalplane_key = "bandcenter"
+            mapper.apply(data)
+
+            # Make a total map
+            mapper.focalplane_key = None
+            mapper.apply(data)
+
+            # Compare hit maps
+
+            if data.comm.world_rank == 0:
+                hit_A_file = os.path.join(testdir, f"{mapper.name}_90.0GHz_hits.fits")
+                hit_B_file = os.path.join(testdir, f"{mapper.name}_150.0GHz_hits.fits")
+                hit_total_file = os.path.join(testdir, f"{mapper.name}_hits.fits")
+                hit_A = hp.read_map(hit_A_file, field=None, nest=True)
+                hit_B = hp.read_map(hit_B_file, field=None, nest=True)
+                hit_total = hp.read_map(hit_total_file, field=None, nest=True)
+                bad = np.logical_or(
+                    hit_A < 3,
+                    hit_B < 3,
+                )
+                good = np.logical_not(bad)
+                good_idx = np.arange(len(hit_A), dtype=np.int64)[good]
+                if not np.array_equal(hit_total[good], hit_A[good] + hit_B[good]):
+                    for idx, tot, hA, hB in zip(
+                        good_idx, hit_total[good], hit_A[good], hit_B[good]
+                    ):
+                        msg = f"{mname} pix {idx}: A = {hA}, B = {hB}, Total = {tot}"
+                        print(msg, flush=True)
+                    self.assertTrue(False)
+
+        close_data(data)
+
+    def test_single_pixels(self):
+        if sys.platform.lower() == "darwin":
+            print("WARNING:  Skipping test_single_pixels on MacOS")
+            return
+
+        testdir = os.path.join(self.outdir, "single_pixels")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
+        # Create a data set for testing
+
+        data = create_satellite_data(
+            self.comm,
+            freqs=[90.0 * u.GHz, 150.0 * u.GHz],
+        )
+
+        # Create some sky signal timestreams.
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.01,
+            Q_scale=0.001,
+            U_scale=0.001,
+            det_data=defaults.det_data,
+        )
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(
+            detdata=[detpointing.quats, pixels.pixels, weights.weights],
+            meta=["pixel_dist"],
+        )
+        delete_pointing.apply(data)
+        pixels.create_dist = None
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data=defaults.det_data
+        )
+        sim_noise.apply(data)
+
+        # Copy the data for later use
+        ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
+
+        # Set up binning operator for solving
+        binner = ops.BinMap(
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        # Map maker
+        mapper = ops.MapMaker(
+            name="mapmaker",
+            det_data=defaults.det_data,
+            binning=binner,
+            map_rcond_threshold=1.0e-6,
+            write_hits=True,
+            write_map=True,
+            write_cov=False,
+            write_rcond=False,
+            keep_solver_products=False,
+            keep_final_products=False,
+            output_dir=testdir,
+        )
+
+        # Make the map separately for each pixel
+        mapper.focalplane_key = "pixel"
         mapper.apply(data)
 
         # Make a total map
@@ -925,24 +1053,171 @@ class MapmakerTest(MPITestCase):
 
         # Compare hit maps
 
+        splits = data.all_detector_groups(
+            column="pixel", flagmask=defaults.det_mask_invalid
+        )
+
         if data.comm.world_rank == 0:
-            hit_A_file = os.path.join(testdir, "mapmaker_90.0GHz_hits.fits")
-            hit_B_file = os.path.join(testdir, "mapmaker_150.0GHz_hits.fits")
-            hit_total_file = os.path.join(testdir, "mapmaker_hits.fits")
-            hit_A = hp.read_map(hit_A_file, field=None, nest=True)
-            hit_B = hp.read_map(hit_B_file, field=None, nest=True)
+            # Total map
+            hit_total_file = os.path.join(testdir, f"{mapper.name}_hits.fits")
             hit_total = hp.read_map(hit_total_file, field=None, nest=True)
-            bad = np.logical_or(
-                hit_A < 3,
-                hit_B < 3,
-            )
+
+            # Accumulate the per-pixel hit maps
+            hit_accum = np.zeros_like(hit_total)
+            for split_name in splits.keys():
+                hit_split_file = os.path.join(
+                    testdir, f"{mapper.name}_{split_name}_hits.fits"
+                )
+                hit_split = hp.read_map(hit_split_file, field=None, nest=True)
+                hit_accum += hit_split
+
+            bad = hit_accum < 3
             good = np.logical_not(bad)
-            good_idx = np.arange(len(hit_A), dtype=np.int64)[good]
-            if not np.array_equal(hit_total[good], hit_A[good] + hit_B[good]):
-                for idx, tot, hA, hB in zip(
-                    good_idx, hit_total[good], hit_A[good], hit_B[good]
-                ):
-                    msg = f"pix {idx}: A = {hA}, B = {hB}, Total = {tot}"
+            good_idx = np.arange(len(hit_accum), dtype=np.int64)[good]
+            if not np.array_equal(hit_total[good], hit_accum[good]):
+                for idx, tot, haccum in zip(good_idx, hit_total[good], hit_accum[good]):
+                    msg = f"pix {idx}: Accum = {haccum}, Total = {tot}"
+                    print(msg, flush=True)
+                self.assertTrue(False)
+
+        close_data(data)
+
+    def test_exec_detectors(self):
+        if sys.platform.lower() == "darwin":
+            print("WARNING:  Skipping test_single_pixels on MacOS")
+            return
+
+        testdir = os.path.join(self.outdir, "exec_detectors")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
+        # Create a data set for testing
+
+        data = create_satellite_data(
+            self.comm,
+            freqs=[90.0 * u.GHz, 150.0 * u.GHz],
+        )
+
+        # Create some sky signal timestreams.
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.01,
+            Q_scale=0.001,
+            U_scale=0.001,
+            det_data=defaults.det_data,
+        )
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(
+            detdata=[detpointing.quats, pixels.pixels, weights.weights],
+            meta=["pixel_dist"],
+        )
+        delete_pointing.apply(data)
+        pixels.create_dist = None
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data=defaults.det_data
+        )
+        sim_noise.apply(data)
+
+        # Copy the data for later use
+        ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
+
+        # Split the data into 2 groups
+        alldets = data.all_detectors(flagmask=defaults.det_mask_invalid)
+        group1 = []
+        group2 = []
+        for idet, det in enumerate(alldets):
+            if idet % 2 == 0:
+                group1.append(det)
+            else:
+                group2.append(det)
+
+        # Set up binning operator for solving
+        binner = ops.BinMap(
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        # Map maker
+        mapper = ops.MapMaker(
+            name="mapmaker",
+            det_data=defaults.det_data,
+            binning=binner,
+            map_rcond_threshold=1.0e-6,
+            write_hits=True,
+            write_map=True,
+            write_cov=False,
+            write_rcond=False,
+            keep_solver_products=False,
+            keep_final_products=False,
+            output_dir=testdir,
+        )
+
+        # Make total map
+        mapper.apply(data)
+
+        # Make first group
+        mapper.reset_pix_dist = True
+        mapper.name = "mapmaker_group1"
+        mapper.apply(data, detectors=group1)
+
+        # Make second group
+        mapper.name = "mapmaker_group2"
+        mapper.apply(data, detectors=group2)
+
+        # Compare hit maps
+
+        if data.comm.world_rank == 0:
+            # Total map
+            hit_total_file = os.path.join(testdir, "mapmaker_hits.fits")
+            hit_total = hp.read_map(hit_total_file, field=None, nest=True)
+
+            # Accumulate the per-pixel hit maps
+            hit_accum = np.zeros_like(hit_total)
+            for split_name in ["group1", "group2"]:
+                hit_split_file = os.path.join(
+                    testdir, f"mapmaker_{split_name}_hits.fits"
+                )
+                hit_split = hp.read_map(hit_split_file, field=None, nest=True)
+                hit_accum += hit_split
+
+            bad = hit_accum < 3
+            good = np.logical_not(bad)
+            good_idx = np.arange(len(hit_accum), dtype=np.int64)[good]
+            if not np.array_equal(hit_total[good], hit_accum[good]):
+                for idx, tot, haccum in zip(good_idx, hit_total[good], hit_accum[good]):
+                    msg = f"pix {idx}: Accum = {haccum}, Total = {tot}"
                     print(msg, flush=True)
                 self.assertTrue(False)
 

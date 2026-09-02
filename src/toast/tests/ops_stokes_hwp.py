@@ -3,10 +3,11 @@
 # a BSD-style license that can be found in the LICENSE file.
 
 import os
+import re
 
-import healpy as hp # pyright: ignore[reportMissingImports]
-import numpy as np # pyright: ignore[reportMissingImports]
-from astropy import units as u # pyright: ignore[reportMissingImports]
+import healpy as hp  # pyright: ignore[reportMissingImports]
+import numpy as np  # pyright: ignore[reportMissingImports]
+from astropy import units as u  # pyright: ignore[reportMissingImports]
 
 from .. import ops as ops
 from ..observation import default_values as defaults
@@ -80,7 +81,7 @@ class StokesWeightsHWPTest(MPITestCase):
         return data
 
     def plot_results(self, file_root, nnz):
-        import matplotlib.pyplot as plt # pyright: ignore[reportMissingModuleSource]
+        import matplotlib.pyplot as plt  # pyright: ignore[reportMissingModuleSource]
 
         hit_file = f"{file_root}_hits.fits"
         rcond_file = f"{file_root}_rcond.fits"
@@ -405,12 +406,18 @@ class StokesWeightsHWPTest(MPITestCase):
             detector_pointing=detpointing,
         )
 
-        file_roots = []
-        for i, pair_group in enumerate(["0-90", "45-135"]):
-            a_dets = get_group_a_detectors( # Compute A detectors globally so the mapmaker only processes them
-                data.obs[0].telescope.focalplane, pair_group
-            )
+        # Get the full list of "A" detectors
+        all_dets = data.all_detectors(
+            selection=None, flagmask=defaults.det_mask_nonscience
+        )
+        a_dets = set()
+        pat = re.compile(r"D.*A.*")
+        for det in all_dets:
+            if pat.match(det) is not None:
+                a_dets.add(det)
 
+        file_roots = []
+        for pair_group in ["0-90", "45-135"]:
             weights = ops.StokesWeightsHWP(
                 mode="pair_diff",
                 detector_pointing=detpointing,
@@ -427,6 +434,9 @@ class StokesWeightsHWPTest(MPITestCase):
                 noise_model="noise_model",
             )
 
+            # Compute the global set of "A" detectors.
+            group_a_dets = get_group_a_detectors(data, pair_group)
+
             mapper = ops.MapMaker(
                 name=f"mapmaker_pair_diff_{pair_group}",
                 det_data=defaults.det_data,
@@ -438,12 +448,11 @@ class StokesWeightsHWPTest(MPITestCase):
                 write_invcov=True,
                 write_rcond=True,
                 output_dir=testdir,
-                # Rebuild pixel dist for every group except the first
-                reset_pix_dist=(i > 0),
+                reset_pix_dist=True,
             )
 
-             # Pass only A dets, mapmaker ignores B dets
-            mapper.apply(data, detectors=a_dets)
+            # Pass only A dets, mapmaker ignores B dets
+            mapper.apply(data, detectors=group_a_dets)
             file_roots.append(os.path.join(testdir, mapper.name))
 
         close_data(data)

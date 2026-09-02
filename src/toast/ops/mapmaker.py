@@ -156,6 +156,8 @@ class MapMaker(Operator):
 
     write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
 
+    write_float64 = Bool(False, help="If True, write the map data in double precision.")
+
     write_solver_products = Bool(
         False, help="If True, write out equivalent solver products."
     )
@@ -193,6 +195,8 @@ class MapMaker(Operator):
 
     report_memory = Bool(False, help="Report memory throughout the execution")
 
+    _log_prefix = "MapMaker"
+
     @traitlets.validate("map_binning")
     def _check_map_binning(self, proposal):
         bin = proposal["value"]
@@ -229,10 +233,6 @@ class MapMaker(Operator):
         """Write data object to file and delete it from cache"""
         log = Logger.get()
 
-        # FIXME:  This I/O technique assumes "known" types of pixel representations.
-        # Instead, we should associate read / write functions to a particular pixel
-        # class.
-
         if self.map_binning is not None and self.map_binning.enabled:
             map_binning = self.map_binning
         else:
@@ -251,16 +251,19 @@ class MapMaker(Operator):
             else:
                 fname = os.path.join(self.output_dir, f"{rootname}_{product}.fits")
             if self.mc_mode and not force and os.path.isfile(fname):
-                log.info_rank(f"Skipping existing file: {fname}", comm=self._comm)
+                msg = f"{self._log_prefix} Skipping existing file: {fname}"
+                log.info_rank(msg, comm=self._comm)
             else:
                 self._data[prod_key].write(
                     fname,
                     force_serial=self.write_hdf5_serial,
-                    single_precision=True,
+                    single_precision=(not self.write_float64),
                     report_memory=self.report_memory,
                     extra_header=extra_header,
                 )
-            log.info_rank(f"Wrote {fname} in", comm=self._comm, timer=wtimer)
+            log.info_rank(
+                f"{self._log_prefix} Wrote {fname} in", comm=self._comm, timer=wtimer
+            )
 
         if not self.keep_final_products and not self.mc_mode:
             if prod_key in self._data:
@@ -270,15 +273,89 @@ class MapMaker(Operator):
         self._memreport.prefix = f"After writing/deleting {prod_key}"
         self._memreport.apply(self._data, use_accel=self._use_accel)
 
-        return
+    @function_timer
+    def _select_detectors(self, input_dets, flagmask):
+        """Select a subset of detectors and disable others.
+
+        This function combines information from multiple sources to choose
+        the current active set of detectors.  Other detectors are temporarily
+        flagged as invalid.
+
+        Note that detector selection happens independently from re-use or
+        clearing of the pixel distribution.  This is intentional, since often
+        the pixel distribution is computed once and is expensive.  And then
+        this distribution can be re-used for multiple detector splits.
+
+        The starting point is a list of global detectors.  A user-specified
+        regex pattern is optionally applied.
+
+        Args:
+            input_dets (list):  The list of input detectors from the calling
+                code (or None).
+            flagmask (int):  The det flagmask to use.  This comes from an
+                input binning operator.
+
+        Returns:
+            (set):  The total set of globally selected detectors across all obs.
+
+        """
+        if self.pattern is not None:
+            det_pat = re.compile(self.pattern)
+
+        self._save_data_obs_flags = {}
+        global_selected = set()
+        for ob in self._data.obs:
+            # Start with existing flags
+            new_flags = dict(ob.local_detector_flags)
+
+            # Save a copy before modifying
+            self._save_data_obs_flags[ob.uid] = dict(new_flags)
+
+            # Initial detector selection for this obs
+            starting_dets = ob.select_local_detectors(flagmask=flagmask)
+
+            # Restrict to the global input list
+            check = set(input_dets)
+            split_dets = set()
+            for det in starting_dets:
+                if det in check:
+                    split_dets.add(det)
+
+            # Apply any pattern match
+            if self.pattern is None:
+                selected = split_dets
+            else:
+                selected = set()
+                for det in split_dets:
+                    if det_pat.match(det) is not None:
+                        selected.add(det)
+
+            # Create new flags
+            for det in ob.local_detectors:
+                if det not in selected:
+                    new_flags[det] |= defaults.det_mask_invalid
+                else:
+                    global_selected.add(det)
+            ob.set_local_detector_flags(new_flags)
+        return global_selected
 
     @function_timer
-    def _setup(self, data, detectors, use_accel):
+    def _unselect_detectors(self):
+        """Restore original detector flags.
+
+        Undo the temporary flagging of detectors for purposes of detector
+        selection.
+
+        """
+        for ob in self._data.obs:
+            ob.set_local_detector_flags(self._save_data_obs_flags[ob.uid])
+
+    @function_timer
+    def _setup(self, data, use_accel):
         """Set up convenience members used in the _exec() method"""
 
         self._log = Logger.get()
         self._timer = Timer()
-        self._log_prefix = "MapMaker"
 
         self._mc_root = self.name
         if self.mc_mode:
@@ -288,7 +365,6 @@ class MapMaker(Operator):
                 self._mc_root += f"_{self.mc_index:05d}"
 
         self._data = data
-        self._detectors = detectors
         self._use_accel = use_accel
         self._memreport = MemoryCounter()
         if not self.report_memory:
@@ -312,34 +388,12 @@ class MapMaker(Operator):
         self.map_name = f"{self.name}_map"
         self.noiseweighted_map_name = f"{self.name}_noiseweighted_map"
 
-        self._pattern_flags = None
-        # If we are selecting detectors with a pattern, save the per-detector
-        # flags and temporarily modify those to mark other dets as invalid.
-        if self.pattern is not None:
-            self._pattern_flags = dict()
-            self._save_detectors = self._detectors
-            self._detectors = set()
-            det_pat = re.compile(self.pattern)
-            for ob in self._data.obs:
-                # Make a copy of the original
-                self._pattern_flags[ob.uid] = dict(ob.local_detector_flags)
-                cutdets = dict()
-                for det in ob.local_detectors:
-                    if det_pat.match(det) is None:
-                        # Cut this det
-                        cutdets[det] = defaults.det_mask_invalid
-                    else:
-                        # Keep this det
-                        self._detectors.add(det)
-                ob.update_local_detector_flags(cutdets)
-            self._detectors = list(sorted(self._detectors))
-
         self._timer.start()
 
         return
 
     @function_timer
-    def _fit_templates(self):
+    def _fit_templates(self, detectors):
         """Solve for template amplitudes"""
 
         amplitudes_solve = SolveAmplitudes(
@@ -363,7 +417,7 @@ class MapMaker(Operator):
             report_memory=self.report_memory,
         )
         amplitudes_solve.apply(
-            self._data, detectors=self._detectors, use_accel=self._use_accel
+            self._data, detectors=detectors, use_accel=self._use_accel
         )
         template_amplitudes = amplitudes_solve.amplitudes
 
@@ -379,15 +433,9 @@ class MapMaker(Operator):
         return template_amplitudes
 
     @function_timer
-    def _prepare_binning(self):
+    def _prepare_binning(self, map_binning):
         """Set up the final map binning"""
 
-        # Map binning operator
-        if self.map_binning is not None and self.map_binning.enabled:
-            map_binning = self.map_binning
-        else:
-            # Use the same binning used in the solver.
-            map_binning = self.binning
         map_binning.pre_process = None
         map_binning.covariance = self.cov_name
 
@@ -412,7 +460,7 @@ class MapMaker(Operator):
 
         if map_binning.pixel_dist not in self._data:
             self._log.info_rank(
-                f"{self._log_prefix} Caching pixel distribution",
+                f"{self._log_prefix} Caching pixel distribution with all dets",
                 comm=self._comm,
             )
             pix_dist = BuildPixelDistribution(
@@ -420,9 +468,9 @@ class MapMaker(Operator):
                 pixel_pointing=map_binning.pixel_pointing,
                 save_pointing=map_binning.full_pointing,
             )
-            pix_dist.apply(
-                self._data, detectors=self._detectors, use_accel=self._use_accel
-            )
+            # We intentionally build the pixel distribution with all detectors,
+            # so that it will be valid for any subsets.
+            pix_dist.apply(self._data, detectors=None, use_accel=self._use_accel)
             self._log.info_rank(
                 f"{self._log_prefix}  finished build of pixel distribution in",
                 comm=self._comm,
@@ -432,10 +480,8 @@ class MapMaker(Operator):
             self._memreport.prefix = "After pixel distribution"
             self._memreport.apply(self._data, use_accel=self._use_accel)
 
-        return map_binning
-
     @function_timer
-    def _build_pixel_covariance(self, map_binning):
+    def _build_pixel_covariance(self, map_binning, detectors):
         """Accumulate hits and pixel covariance"""
 
         if map_binning.covariance in self._data and self.mc_mode:
@@ -470,9 +516,7 @@ class MapMaker(Operator):
             save_pointing=map_binning.full_pointing,
         )
 
-        final_cov.apply(
-            self._data, detectors=self._detectors, use_accel=self._use_accel
-        )
+        final_cov.apply(self._data, detectors=detectors, use_accel=self._use_accel)
 
         self._log.info_rank(
             f"{self._log_prefix}  finished build of final covariance in",
@@ -493,7 +537,7 @@ class MapMaker(Operator):
         return
 
     @function_timer
-    def _bin_and_write_raw_signal(self, map_binning, extra_header=None):
+    def _bin_and_write_raw_signal(self, map_binning, detectors, extra_header=None):
         """Optionally bin and save an undestriped map"""
 
         if not self.write_binmap:
@@ -506,9 +550,7 @@ class MapMaker(Operator):
             f"{self._log_prefix} begin map binning",
             comm=self._comm,
         )
-        map_binning.apply(
-            self._data, detectors=self._detectors, use_accel=self._use_accel
-        )
+        map_binning.apply(self._data, detectors=detectors, use_accel=self._use_accel)
         self._log.info_rank(
             f"{self._log_prefix}  finished binning in",
             comm=self._comm,
@@ -528,7 +570,7 @@ class MapMaker(Operator):
         return
 
     @function_timer
-    def _clean_signal(self, template_amplitudes):
+    def _clean_signal(self, template_amplitudes, detectors):
         if (
             self.template_matrix is None
             or self.template_matrix.n_enabled_templates == 0
@@ -556,7 +598,7 @@ class MapMaker(Operator):
                 output=out_cleaned,
             )
             amplitudes_apply.apply(
-                self._data, detectors=self._detectors, use_accel=self._use_accel
+                self._data, detectors=detectors, use_accel=self._use_accel
             )
 
             if not self.keep_solver_products:
@@ -574,7 +616,7 @@ class MapMaker(Operator):
         return out_cleaned
 
     @function_timer
-    def _bin_cleaned_signal(self, map_binning, out_cleaned):
+    def _bin_cleaned_signal(self, map_binning, detectors, out_cleaned):
         """Bin and save a map of the destriped signal"""
 
         self._log.info_rank(
@@ -591,9 +633,7 @@ class MapMaker(Operator):
         map_binning.binned = self.map_name
 
         # Do the final binning
-        map_binning.apply(
-            self._data, detectors=self._detectors, use_accel=self._use_accel
-        )
+        map_binning.apply(self._data, detectors=detectors, use_accel=self._use_accel)
 
         self._log.info_rank(
             f"{self._log_prefix}  finished final binning in",
@@ -654,19 +694,10 @@ class MapMaker(Operator):
     def _closeout(self):
         """Explicitly delete members used by the _exec() method"""
 
-        # Restore detector flags, if we modified them.
-        if self._pattern_flags is not None:
-            self._detectors = self._save_detectors
-            for ob in self._data.obs:
-                orig = self._pattern_flags[ob.uid]
-                ob.set_local_detector_flags(orig)
-
         del self._log
         del self._timer
-        del self._log_prefix
         del self._mc_root
         del self._data
-        del self._detectors
         del self._use_accel
         del self._memreport
         del self._comm
@@ -675,15 +706,25 @@ class MapMaker(Operator):
         return
 
     @function_timer
-    def _get_extra_header(self, data, detectors):
-        """Extract useful information from the data object to record in
-        map headers"""
+    def _get_extra_header(self, selected_dets):
+        """Extract useful information from the data object.
+
+        This takes the set of globally selected detectors used across all
+        observations.  Various metadata is collected for writing to the
+        output map headers.
+
+        Args:
+            selected_dets (set):  The global detector list used to create outputs.
+
+        Returns:
+            (None)
+
+        """
         extra_header = {}
         start = 1e100
         stop = -1e100
-        all_dets = set()
-        good_dets = set()
-        for ob in data.obs:
+        all_dets = self._data.all_detectors()
+        for ob in self._data.obs:
             times = ob.shared[self.times].data
             if start is None:
                 start = times[0]
@@ -693,30 +734,21 @@ class MapMaker(Operator):
                 stop = times[-1]
             else:
                 stop = max(stop, times[-1])
-            all_dets.update(ob.select_local_detectors(detectors))
-            good_dets.update(
-                ob.select_local_detectors(
-                    detectors,
-                    flagmask=self.binning.det_mask,
-                )
-            )
         if self._comm is not None:
             start = self._comm.allreduce(start, op=MPI.MIN)
             stop = self._comm.allreduce(stop, op=MPI.MAX)
-            all_dets_list = self._comm.allgather(all_dets)
-            good_dets_list = self._comm.allgather(good_dets)
-            all_dets.update(*all_dets_list)
-            good_dets.update(*good_dets_list)
         extra_header["START"] = (start, "Dataset start time")
         extra_header["STOP"] = (stop, "Dataset stop time")
         extra_header["NDET"] = (len(all_dets), "Total number of detectors")
-        extra_header["NGOOD"] = (len(good_dets), "Total number of usable detectors")
+        extra_header["NGOOD"] = (len(selected_dets), "Total number of usable detectors")
         extra_header["OPERATOR"] = ("TOAST MapMaker", "Generating code")
 
         return extra_header
 
     @function_timer
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
+        log = Logger.get()
+
         # First confirm that there is at least one valid detector
 
         if self.map_binning is not None and self.map_binning.enabled:
@@ -740,48 +772,70 @@ class MapMaker(Operator):
         for split_key, split_dets in splits.items():
             if split_key != "ALL":
                 safe_split = re.sub(r"\s", "", str(split_key))
-                self._save_reset_state = self.reset_pix_dist
-                self.reset_pix_dist = True
                 self._save_split_name = self.name
                 self.name = f"{self._save_split_name}_{safe_split}"
-            if split_dets is None:
-                split_dets = detectors
+            n_split_dets = len(split_dets)
+            if n_split_dets == 0:
+                msg = f"{self._log_prefix} Detector split '{split_key}' "
+                msg += "has no dets, skipping"
+                log.info_rank(
+                    msg,
+                    comm=data.comm.comm_world,
+                )
+                continue
+            else:
+                msg = f"{self._log_prefix} Running det split '{split_key}' with "
+                msg += f"{n_split_dets} dets"
+                log.info_rank(msg, comm=data.comm.comm_world)
 
-            self._setup(data, split_dets, use_accel)
+            self._setup(data, use_accel)
 
-            extra_header = self._get_extra_header(data, detectors)
+            selected_dets = self._select_detectors(
+                split_dets,
+                map_binning.det_mask,
+            )
 
-            self._memreport.prefix = "Start of mapmaking"
+            msg = f"{self._log_prefix} After selection, split '{split_key}' has "
+            msg += f"{len(selected_dets)} dets"
+            log.info_rank(msg, comm=data.comm.comm_world)
+
+            extra_header = self._get_extra_header(selected_dets)
+
+            self._memreport.prefix = f"{self._log_prefix} Start of mapmaking"
             self._memreport.apply(self._data, use_accel=self._use_accel)
 
-            template_amplitudes = self._fit_templates()
+            template_amplitudes = self._fit_templates(selected_dets)
 
-            map_binning = self._prepare_binning()
+            self._prepare_binning(map_binning)
 
-            self._build_pixel_covariance(map_binning)
+            self._build_pixel_covariance(map_binning, selected_dets)
 
-            self._bin_and_write_raw_signal(map_binning, extra_header=extra_header)
+            self._bin_and_write_raw_signal(
+                map_binning, selected_dets, extra_header=extra_header
+            )
 
-            out_cleaned = self._clean_signal(template_amplitudes)
+            out_cleaned = self._clean_signal(template_amplitudes, selected_dets)
 
             if (
                 self.write_noiseweighted_map
                 or self.write_map
                 or self.keep_final_products
             ):
-                self._bin_cleaned_signal(map_binning, out_cleaned)
+                self._bin_cleaned_signal(map_binning, selected_dets, out_cleaned)
 
             self._purge_cleaned_tod()  # Potentially frees memory for writing maps
 
             self._write_maps(extra_header=extra_header)
 
-            self._memreport.prefix = "End of mapmaking"
+            self._memreport.prefix = f"{self._log_prefix} End of mapmaking"
             self._memreport.apply(self._data, use_accel=self._use_accel)
+
+            # Restore detector flags
+            self._unselect_detectors()
 
             self._closeout()
 
             if split_key != "ALL":
-                self.reset_pix_dist = self._save_reset_state
                 self.name = self._save_split_name
 
         return

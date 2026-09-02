@@ -12,6 +12,7 @@ from ..mpi import MPI, use_mpi
 from ..spt3g import available as spt3g_available
 from ..vis import set_matplotlib_backend
 from . import accelerator as test_accelerator
+from . import arithmetic as test_arithmetic
 from . import config as test_config
 from . import covariance as test_covariance
 from . import dist as test_dist
@@ -195,6 +196,7 @@ def test(name=None, verbosity=2):
         suite.addTest(loader.loadTestsFromModule(test_observation))
         suite.addTest(loader.loadTestsFromModule(test_dist))
         suite.addTest(loader.loadTestsFromModule(test_config))
+        suite.addTest(loader.loadTestsFromModule(test_arithmetic))
 
         suite.addTest(loader.loadTestsFromModule(test_ops_azimuth_intervals))
         suite.addTest(loader.loadTestsFromModule(test_ops_sim_satellite))
