@@ -65,12 +65,19 @@ class MapmakerUtilsTest(MPITestCase):
         # Manual check
         check_hits = PixelData(data["pixel_dist"], np.int64, n_value=1)
         for ob in data.obs:
-            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
+            shflags = (
+                ob.shared[defaults.shared_flags].data & defaults.shared_mask_nonscience
+            )
+            ob_dets = ob.select_local_detectors(flagmask=defaults.det_mask_nonscience)
+            for det in ob_dets:
                 local_sm, local_pix = data["pixel_dist"].global_pixel_to_submap(
                     ob.detdata["pixels"][det]
                 )
+                detflags = (
+                    ob.detdata[defaults.det_flags][det] & defaults.det_mask_nonscience
+                ) | shflags
                 for i in range(ob.n_local_samples):
-                    if local_pix[i] >= 0:
+                    if local_pix[i] >= 0 and not detflags[i]:
                         check_hits.data[local_sm[i], local_pix[i], 0] += 1
         check_hits.sync_allreduce()
 
@@ -78,6 +85,14 @@ class MapmakerUtilsTest(MPITestCase):
             hmap = hits[stype]
             comm = hmap.distribution.comm
             failed = not np.all(np.equal(hmap.data, check_hits.data))
+            if failed:
+                for ism, sm in enumerate(check_hits.data):
+                    for ipix, val in enumerate(sm):
+                        if val != hmap.data[ism, ipix]:
+                            print(
+                                f"  {ism}:{ipix} {val} {hmap.data[ism, ipix]}",
+                                flush=True,
+                            )
             if comm is not None:
                 failed = comm.allreduce(failed, op=MPI.LOR)
             self.assertFalse(failed)

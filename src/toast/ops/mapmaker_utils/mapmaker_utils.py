@@ -164,33 +164,36 @@ class BuildHitMap(Operator):
                 # Nothing to do for this observation
                 continue
 
-            # The pixels and weights view for this observation
-            pix = ob.view[self.view].detdata[self.pixels]
-            if self.det_flags is not None:
-                flgs = ob.view[self.view].detdata[self.det_flags]
-            else:
-                flgs = [None for x in pix]
-            if self.shared_flags is not None:
-                shared_flgs = ob.view[self.view].shared[self.shared_flags]
-            else:
-                shared_flgs = [None for x in pix]
+            views = ob.intervals[self.view]
 
             for det in dets:
                 # Process every data view
-                for pview, fview, shared_fview in zip(pix, flgs, shared_flgs):
+                for iview, view in enumerate(views):
+                    nsample = view.last - view.first
+                    vslice = slice(view.first, view.last)
+
+                    pix = ob.detdata[self.pixels][det][vslice]
+                    if self.shared_flags is not None:
+                        flgs = (
+                            ob.shared[self.shared_flags].data[vslice]
+                            & self.shared_flag_mask
+                        )
+                    else:
+                        flgs = np.zeros(nsample, dtype=np.uint8)
+                    if self.det_flags is not None:
+                        flgs |= (
+                            ob.detdata[self.det_flags][det][vslice] & self.det_flag_mask
+                        )
+
                     # Get local submap and pixels
-                    local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
+                    local_sm, local_pix = dist.global_pixel_to_submap(pix)
 
                     # Samples with telescope pointing problems are already flagged in
                     # the pointing operators by setting the pixel numbers to a negative
                     # value.  Here we optionally apply detector flags to the local
                     # pixel numbers to flag more samples.
 
-                    # Apply the flags if needed
-                    if self.det_flags is not None:
-                        local_pix[(fview[det] & self.det_flag_mask) != 0] = -1
-                    if self.shared_flags is not None:
-                        local_pix[(shared_fview & self.shared_flag_mask) != 0] = -1
+                    local_pix[flgs != 0] = -1
 
                     cov_accum_diag_hits(
                         dist.n_local_submap,
@@ -421,14 +424,16 @@ class BuildInverseCovariance(Operator):
             if data.comm.comm_world is not None:
                 weight_nnz = data.comm.comm_world.allreduce(weight_nnz, op=MPI.MAX)
             if weight_nnz == 0:
-                msg = f"No valid detectors. Could not infer the pointing matrix "
-                msg += f"dimensions from the data."
+                msg = "No valid detectors. Could not infer the pointing matrix "
+                msg += "dimensions from the data."
                 raise RuntimeError(msg)
             cov_nnz = int(weight_nnz * (weight_nnz + 1) // 2)
             data[self.inverse_covariance] = PixelData(
                 dist, np.float64, n_value=cov_nnz, units=invcov_units
             )
             invcov = data[self.inverse_covariance]
+
+        check_nnz = None
 
         for ob in data.obs:
             # Get the detectors we are using for this observation
@@ -447,42 +452,44 @@ class BuildInverseCovariance(Operator):
                 # Nothing to do for this observation
                 continue
 
-            noise = ob[self.noise_model]
+            # We require that the pointing matrix has the same number of
+            # non-zero elements for every detector and every observation.
+            # We check that here.
+            if len(ob.detdata[self.weights].detector_shape) == 1:
+                check_nnz = 1
+            else:
+                check_nnz = ob.detdata[self.weights].detector_shape[1]
+            if check_nnz != weight_nnz:
+                msg = f"observation '{ob.name}', detector '{det}', "
+                msg += f"pointing weights '{self.weights}' has {check_nnz} nnz, "
+                msg += f"not {weight_nnz}"
+                raise RuntimeError(msg)
 
-            # The pixels and weights view for this observation
-            pix = ob.view[self.view].detdata[self.pixels]
-            wts = ob.view[self.view].detdata[self.weights]
-            if self.det_flags is not None:
-                flgs = ob.view[self.view].detdata[self.det_flags]
-            else:
-                flgs = [None for x in wts]
-            if self.shared_flags is not None:
-                shared_flgs = ob.view[self.view].shared[self.shared_flags]
-            else:
-                shared_flgs = [None for x in wts]
+            noise = ob[self.noise_model]
+            views = ob.intervals[self.view]
 
             for det in dets:
                 # Process every data view
-                for pview, wview, fview, shared_fview in zip(
-                    pix, wts, flgs, shared_flgs
-                ):
-                    # We require that the pointing matrix has the same number of
-                    # non-zero elements for every detector and every observation.
-                    # We check that here.
+                for iview, view in enumerate(views):
+                    nsample = view.last - view.first
+                    vslice = slice(view.first, view.last)
 
-                    check_nnz = None
-                    if len(wview.detector_shape) == 1:
-                        check_nnz = 1
-                    else:
-                        check_nnz = wview.detector_shape[1]
-                    if check_nnz != weight_nnz:
-                        msg = "observation '{}', detector '{}', pointing weights '{}' has {} nnz, not {}".format(
-                            ob.name, det, self.weights, check_nnz, weight_nnz
+                    pix = ob.detdata[self.pixels][det][vslice]
+                    wts = ob.detdata[self.weights][det][vslice]
+                    if self.shared_flags is not None:
+                        flgs = (
+                            ob.shared[self.shared_flags].data[vslice]
+                            & self.shared_flag_mask
                         )
-                        raise RuntimeError(msg)
+                    else:
+                        flgs = np.zeros(nsample, dtype=np.uint8)
+                    if self.det_flags is not None:
+                        flgs |= (
+                            ob.detdata[self.det_flags][det][vslice] & self.det_flag_mask
+                        )
 
                     # Get local submap and pixels
-                    local_sm, local_pix = dist.global_pixel_to_submap(pview[det])
+                    local_sm, local_pix = dist.global_pixel_to_submap(pix)
 
                     # Get the detector weight from the noise model.
                     detweight = noise.detector_weight(det)
@@ -492,11 +499,7 @@ class BuildInverseCovariance(Operator):
                     # value.  Here we optionally apply detector flags to the local
                     # pixel numbers to flag more samples.
 
-                    # Apply the flags if needed
-                    if self.det_flags is not None:
-                        local_pix[(fview[det] & self.det_flag_mask) != 0] = -1
-                    if self.shared_flags is not None:
-                        local_pix[(shared_fview & self.shared_flag_mask) != 0] = -1
+                    local_pix[flgs != 0] = -1
 
                     # Accumulate
                     cov_accum_diag_invnpp(
@@ -505,7 +508,7 @@ class BuildInverseCovariance(Operator):
                         weight_nnz,
                         local_sm.astype(np.int64),
                         local_pix.astype(np.int64),
-                        wview[det].reshape(-1),
+                        wts.reshape(-1),
                         detweight.to_value(invcov_units),
                         invcov.raw,
                         impl=implementation,

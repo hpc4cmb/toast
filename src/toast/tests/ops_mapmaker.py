@@ -1082,6 +1082,147 @@ class MapmakerTest(MPITestCase):
 
         close_data(data)
 
+    def test_exec_detectors(self):
+        if sys.platform.lower() == "darwin":
+            print("WARNING:  Skipping test_single_pixels on MacOS")
+            return
+
+        testdir = os.path.join(self.outdir, "exec_detectors")
+        if self.comm is None or self.comm.rank == 0:
+            os.makedirs(testdir)
+
+        # Create a data set for testing
+
+        data = create_satellite_data(
+            self.comm,
+            freqs=[90.0 * u.GHz, 150.0 * u.GHz],
+        )
+
+        # Create some sky signal timestreams.
+        detpointing = ops.PointingDetectorSimple()
+        pixels = ops.PixelsHealpix(
+            nside=64,
+            create_dist="pixel_dist",
+            detector_pointing=detpointing,
+        )
+        pixels.apply(data)
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing,
+        )
+        weights.apply(data)
+
+        # Create fake polarized sky signal
+        skyfile = os.path.join(testdir, "input_map.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            skyfile,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=30.0 * u.arcmin,
+            lmax=3 * pixels.nside,
+            I_scale=0.01,
+            Q_scale=0.001,
+            U_scale=0.001,
+            det_data=defaults.det_data,
+        )
+
+        # Now clear the pointing and reset things for use with the mapmaking test later
+        delete_pointing = ops.Delete(
+            detdata=[detpointing.quats, pixels.pixels, weights.weights],
+            meta=["pixel_dist"],
+        )
+        delete_pointing.apply(data)
+        pixels.create_dist = None
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Simulate noise and accumulate to signal
+        sim_noise = ops.SimNoise(
+            noise_model=default_model.noise_model, det_data=defaults.det_data
+        )
+        sim_noise.apply(data)
+
+        # Copy the data for later use
+        ops.Copy(detdata=[(defaults.det_data, "input")]).apply(data)
+
+        # Split the data into 2 groups
+        alldets = data.all_detectors(flagmask=defaults.det_mask_invalid)
+        group1 = []
+        group2 = []
+        for idet, det in enumerate(alldets):
+            if idet % 2 == 0:
+                group1.append(det)
+            else:
+                group2.append(det)
+
+        # Set up binning operator for solving
+        binner = ops.BinMap(
+            pixel_pointing=pixels,
+            stokes_weights=weights,
+            noise_model=default_model.noise_model,
+        )
+
+        # Map maker
+        mapper = ops.MapMaker(
+            name="mapmaker",
+            det_data=defaults.det_data,
+            binning=binner,
+            map_rcond_threshold=1.0e-6,
+            write_hits=True,
+            write_map=True,
+            write_cov=False,
+            write_rcond=False,
+            keep_solver_products=False,
+            keep_final_products=False,
+            output_dir=testdir,
+        )
+
+        # Make total map
+        mapper.apply(data)
+
+        # Make first group
+        mapper.reset_pix_dist = True
+        mapper.name = "mapmaker_group1"
+        mapper.apply(data, detectors=group1)
+
+        # Make second group
+        mapper.name = "mapmaker_group2"
+        mapper.apply(data, detectors=group2)
+
+        # Compare hit maps
+
+        if data.comm.world_rank == 0:
+            # Total map
+            hit_total_file = os.path.join(testdir, "mapmaker_hits.fits")
+            hit_total = hp.read_map(hit_total_file, field=None, nest=True)
+
+            # Accumulate the per-pixel hit maps
+            hit_accum = np.zeros_like(hit_total)
+            for split_name in ["group1", "group2"]:
+                hit_split_file = os.path.join(
+                    testdir, f"mapmaker_{split_name}_hits.fits"
+                )
+                hit_split = hp.read_map(hit_split_file, field=None, nest=True)
+                hit_accum += hit_split
+
+            bad = hit_accum < 3
+            good = np.logical_not(bad)
+            good_idx = np.arange(len(hit_accum), dtype=np.int64)[good]
+            if not np.array_equal(hit_total[good], hit_accum[good]):
+                for idx, tot, haccum in zip(good_idx, hit_total[good], hit_accum[good]):
+                    msg = f"pix {idx}: Accum = {haccum}, Total = {tot}"
+                    print(msg, flush=True)
+                self.assertTrue(False)
+
+        close_data(data)
+
     def test_compare_madam_noprior(self):
         if not ops.madam.available():
             print("libmadam not available, skipping destriping comparison")

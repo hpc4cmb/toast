@@ -45,7 +45,7 @@ def load_map(fname, prefix="", cache=None, dtype=np.float64):
     else:
         log.info(prefix + f"Loading {fname}")
         try:
-            m = read_healpix(fname, None, nest=True, dtype=dtype)
+            m = read_healpix(fname, field=None, nest=True, dtype=dtype)
         except Exception as e:
             msg = prefix + f"Failed to load HEALPix map: {e}"
             raise RuntimeError(msg)
@@ -273,12 +273,12 @@ def parse_input_maps(args, comm, weights):
 
 
 def main(
-        opts=None,
-        comm=None,
-        cache=None,
-        result=None,
-        prefix=None,
-        weights=None,
+    opts=None,
+    comm=None,
+    cache=None,
+    result=None,
+    prefix=None,
+    weights=None,
 ):
     """Coadd the specified HEALPix maps
 
@@ -449,8 +449,7 @@ def main(
                         if pix in map_set:
                             keep_hits[i] = True
                     good_hits = good_hits[keep_hits]
-                    hits = hits[keep_hits]
-                    raise RuntimeError(msg)
+                    hits = hits[:, keep_hits]
                 if np.any(good_hits != good):
                     raise RuntimeError("Map and hits disagree on nonzeros")
             else:
@@ -497,7 +496,7 @@ def main(
         invcov_sum[:, good] += invcov
         if have_hits:
             hits_sum[:, good] += hits
-        log.info_rank(prefix + f"Co-added maps in", timer=timer1, comm=None)
+        log.info_rank(prefix + "Co-added maps in", timer=timer1, comm=None)
 
         del hits
         del invcov

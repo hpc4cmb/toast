@@ -14,19 +14,24 @@ from ..utils import Logger
 from .operator import Operator
 
 
-def get_group_a_detectors(focalplane, pair_group, tol_deg=1.0):
+def get_group_a_detectors(data, pair_group, tol_deg=1.0):
     """Return the global A detector names for the given pair_group.
 
-    Parameters
-    ----------
-    focalplane : Focalplane
-    pair_group : str, '0-90' or '45-135'
-    tol_deg : float, tolerance in degrees
+    This function will only work with focalplanes that have detector
+    orientation ("gamma") angles arranged in orthogonal pairs of
+    horizontal / vertical and rotated by 45 degrees.  It also assumes
+    that a given detector name has the same gamma angle across observations.
 
-    Returns
-    -------
-    list of str
+    Args:
+        data (Data):  The Data.
+        pair_group (str):  The group of angles ('0-90' or '45-135').
+        tol_deg (float):  Tolerance in degrees.
+
+    Returns:
+        (list):  The list of detector names.
+
     """
+
     tol = np.deg2rad(tol_deg)
     if pair_group == "0-90":
         gamma_a_target = 0.0
@@ -35,16 +40,23 @@ def get_group_a_detectors(focalplane, pair_group, tol_deg=1.0):
     else:
         raise ValueError(f"Unknown pair_group: '{pair_group}'")
 
-    result = []
-    for d in focalplane.detectors:
-        g = focalplane[d]["gamma"].to_value(u.rad) % (2.0 * np.pi)
+    all_groups = data.all_detector_groups(
+        column="gamma", flagmask=defaults.det_mask_nonscience
+    )
+
+    # Go through the sorted detector keys (which are floating point gamma angles) and
+    # combine all groups whose values are within the tolerance.
+
+    result = set()
+    for gamma_raw, dets in all_groups.items():
+        g_rad = gamma_raw.to_value(u.rad) % (2 * np.pi)
         if (
-            abs(g - gamma_a_target) < tol
-            or abs(g - gamma_a_target + 2.0 * np.pi) < tol
-            or abs(g - gamma_a_target - 2.0 * np.pi) < tol
+            abs(g_rad - gamma_a_target) < tol
+            or abs(g_rad - gamma_a_target + 2.0 * np.pi) < tol
+            or abs(g_rad - gamma_a_target - 2.0 * np.pi) < tol
         ):
-            result.append(d)
-    return result
+            result.update(dets)
+    return list(sorted(result))
 
 
 def stokes_weights_hwp_model_nominal(
@@ -590,25 +602,18 @@ class StokesWeightsHWP(Operator):
         for ob in data.obs:
             # Get the detectors we are using for this observation
             dets = ob.select_local_detectors(
-                detectors, flagmask=self.detector_pointing.det_mask
+                selection=detectors, flagmask=self.detector_pointing.det_mask
             )
 
             focalplane = ob.telescope.focalplane
 
             if self.mode == "pair_diff":
-                all_local_dets = ob.select_local_detectors(
-                    None, flagmask=self.detector_pointing.det_mask
-                )
-                a_dets, pairs = self._get_pair_dets(all_local_dets, focalplane)
-                weight_dets = a_dets
-
+                a_dets, pairs = self._get_pair_dets(dets, focalplane)
                 if len(pairs) == 0:
                     log.verbose(
                         f"ob {ob.name}: no local pairs for "
                         f"pair_group='{self.pair_group}'."
                     )
-            else:
-                weight_dets = dets
 
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own
@@ -632,7 +637,7 @@ class StokesWeightsHWP(Operator):
                 self.weights,
                 sample_shape=(self.nnz,),
                 dtype=np.float32 if self.single_precision else np.float64,
-                detectors=weight_dets,
+                detectors=dets,
                 accel=use_accel,
             )
 
@@ -642,30 +647,33 @@ class StokesWeightsHWP(Operator):
                 if data.comm.group_rank == 0:
                     msg = (
                         f"Group {data.comm.group}, ob {ob.name}, Stokes weights "
-                        f"already computed for {weight_dets}"
+                        f"already computed for {dets}"
                     )
                     log.verbose(msg)
                 continue
 
-            if self.mode == "pair_diff":
-                quat_indx = ob.detdata[quats_name].indices(all_local_dets)
-                weight_indx = ob.detdata[self.weights].indices(a_dets)
-                det_data_indx = ob.detdata[self.det_data].indices(all_local_dets)
+            if len(dets) == 0:
+                continue
 
-                det_epsilon = np.zeros(len(all_local_dets), dtype=np.float64)
+            if self.mode == "pair_diff":
+                quat_indx = ob.detdata[quats_name].indices(dets)
+                weight_indx = ob.detdata[self.weights].indices(a_dets)
+                det_data_indx = ob.detdata[self.det_data].indices(dets)
+
+                det_epsilon = np.zeros(len(dets), dtype=np.float64)
                 if "pol_leakage" in focalplane.detector_data.colnames:
-                    for idet, d in enumerate(all_local_dets):
+                    for idet, d in enumerate(dets):
                         det_epsilon[idet] = focalplane[d]["pol_leakage"]
 
                 if self.cal is None:
-                    cal = np.ones(len(all_local_dets), dtype=np.float64)
+                    cal = np.ones(len(dets), dtype=np.float64)
                 else:
                     cal = np.array(
-                        [ob[self.cal][x] for x in all_local_dets], dtype=np.float64
+                        [ob[self.cal][x] for x in dets], dtype=np.float64
                     )
 
                 det_gamma = np.array(
-                    [focalplane[d]["gamma"].to_value(u.rad) for d in all_local_dets],
+                    [focalplane[d]["gamma"].to_value(u.rad) for d in dets],
                     dtype=np.float64,
                 )
                 hwp_data = ob.shared[self.hwp_angle].data

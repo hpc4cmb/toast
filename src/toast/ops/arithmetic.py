@@ -107,7 +107,8 @@ class Combine(Operator):
                 scale_first = unit_conversion(first_units, result_units)
                 scale_second = 1.0
             else:
-                # We are creating a new field for the output.  Use units of first field.
+                # We are storing the output in a separate field.  Create if needed,
+                # and use units of first field.
                 result_units = first_units
                 scale_first = 1.0
                 scale_second = unit_conversion(second_units, result_units)
@@ -120,24 +121,24 @@ class Combine(Operator):
                 )
             if self.op == "add":
                 for d in dets:
-                    ob.detdata[self.result][d, :] = (
-                        scale_first * ob.detdata[self.first][d, :]
-                    ) + (scale_second * ob.detdata[self.second][d, :])
+                    ob.detdata[self.result][d][:] = (
+                        scale_first * ob.detdata[self.first][d]
+                    ) + (scale_second * ob.detdata[self.second][d])
             elif self.op == "subtract":
                 for d in dets:
-                    ob.detdata[self.result][d, :] = (
-                        scale_first * ob.detdata[self.first][d, :]
-                    ) - (scale_second * ob.detdata[self.second][d, :])
+                    ob.detdata[self.result][d][:] = (
+                        scale_first * ob.detdata[self.first][d]
+                    ) - (scale_second * ob.detdata[self.second][d])
             elif self.op == "multiply":
                 for d in dets:
-                    ob.detdata[self.result][d, :] = (
-                        scale_first * ob.detdata[self.first][d, :]
-                    ) * (scale_second * ob.detdata[self.second][d, :])
+                    ob.detdata[self.result][d][:] = (
+                        scale_first * ob.detdata[self.first][d]
+                    ) * (scale_second * ob.detdata[self.second][d])
             elif self.op == "divide":
                 for d in dets:
-                    ob.detdata[self.result][d, :] = (
-                        scale_first * ob.detdata[self.first][d, :]
-                    ) / (scale_second * ob.detdata[self.second][d, :])
+                    ob.detdata[self.result][d][:] = (
+                        scale_first * ob.detdata[self.first][d]
+                    ) / (scale_second * ob.detdata[self.second][d])
 
     def _finalize(self, data, **kwargs):
         return None

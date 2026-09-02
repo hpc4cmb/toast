@@ -156,6 +156,8 @@ class MapMaker(Operator):
 
     write_rcond = Bool(True, help="If True, write the reciprocal condition numbers.")
 
+    write_float64 = Bool(False, help="If True, write the map data in double precision.")
+
     write_solver_products = Bool(
         False, help="If True, write out equivalent solver products."
     )
@@ -231,10 +233,6 @@ class MapMaker(Operator):
         """Write data object to file and delete it from cache"""
         log = Logger.get()
 
-        # FIXME:  This I/O technique assumes "known" types of pixel representations.
-        # Instead, we should associate read / write functions to a particular pixel
-        # class.
-
         if self.map_binning is not None and self.map_binning.enabled:
             map_binning = self.map_binning
         else:
@@ -259,7 +257,7 @@ class MapMaker(Operator):
                 self._data[prod_key].write(
                     fname,
                     force_serial=self.write_hdf5_serial,
-                    single_precision=True,
+                    single_precision=(not self.write_float64),
                     report_memory=self.report_memory,
                     extra_header=extra_header,
                 )
@@ -395,7 +393,7 @@ class MapMaker(Operator):
         return
 
     @function_timer
-    def _fit_templates(self):
+    def _fit_templates(self, detectors):
         """Solve for template amplitudes"""
 
         amplitudes_solve = SolveAmplitudes(
@@ -418,7 +416,9 @@ class MapMaker(Operator):
             reset_pix_dist=self.reset_pix_dist,
             report_memory=self.report_memory,
         )
-        amplitudes_solve.apply(self._data, use_accel=self._use_accel)
+        amplitudes_solve.apply(
+            self._data, detectors=detectors, use_accel=self._use_accel
+        )
         template_amplitudes = amplitudes_solve.amplitudes
 
         self._log.info_rank(
@@ -481,7 +481,7 @@ class MapMaker(Operator):
             self._memreport.apply(self._data, use_accel=self._use_accel)
 
     @function_timer
-    def _build_pixel_covariance(self, map_binning):
+    def _build_pixel_covariance(self, map_binning, detectors):
         """Accumulate hits and pixel covariance"""
 
         if map_binning.covariance in self._data and self.mc_mode:
@@ -516,7 +516,7 @@ class MapMaker(Operator):
             save_pointing=map_binning.full_pointing,
         )
 
-        final_cov.apply(self._data, use_accel=self._use_accel)
+        final_cov.apply(self._data, detectors=detectors, use_accel=self._use_accel)
 
         self._log.info_rank(
             f"{self._log_prefix}  finished build of final covariance in",
@@ -537,7 +537,7 @@ class MapMaker(Operator):
         return
 
     @function_timer
-    def _bin_and_write_raw_signal(self, map_binning, extra_header=None):
+    def _bin_and_write_raw_signal(self, map_binning, detectors, extra_header=None):
         """Optionally bin and save an undestriped map"""
 
         if not self.write_binmap:
@@ -550,7 +550,7 @@ class MapMaker(Operator):
             f"{self._log_prefix} begin map binning",
             comm=self._comm,
         )
-        map_binning.apply(self._data, use_accel=self._use_accel)
+        map_binning.apply(self._data, detectors=detectors, use_accel=self._use_accel)
         self._log.info_rank(
             f"{self._log_prefix}  finished binning in",
             comm=self._comm,
@@ -570,7 +570,7 @@ class MapMaker(Operator):
         return
 
     @function_timer
-    def _clean_signal(self, template_amplitudes):
+    def _clean_signal(self, template_amplitudes, detectors):
         if (
             self.template_matrix is None
             or self.template_matrix.n_enabled_templates == 0
@@ -597,7 +597,9 @@ class MapMaker(Operator):
                 template_matrix=self.template_matrix,
                 output=out_cleaned,
             )
-            amplitudes_apply.apply(self._data, use_accel=self._use_accel)
+            amplitudes_apply.apply(
+                self._data, detectors=detectors, use_accel=self._use_accel
+            )
 
             if not self.keep_solver_products:
                 del self._data[template_amplitudes]
@@ -614,7 +616,7 @@ class MapMaker(Operator):
         return out_cleaned
 
     @function_timer
-    def _bin_cleaned_signal(self, map_binning, out_cleaned):
+    def _bin_cleaned_signal(self, map_binning, detectors, out_cleaned):
         """Bin and save a map of the destriped signal"""
 
         self._log.info_rank(
@@ -631,7 +633,7 @@ class MapMaker(Operator):
         map_binning.binned = self.map_name
 
         # Do the final binning
-        map_binning.apply(self._data, use_accel=self._use_accel)
+        map_binning.apply(self._data, detectors=detectors, use_accel=self._use_accel)
 
         self._log.info_rank(
             f"{self._log_prefix}  finished final binning in",
@@ -780,6 +782,7 @@ class MapMaker(Operator):
                     msg,
                     comm=data.comm.comm_world,
                 )
+                continue
             else:
                 msg = f"{self._log_prefix} Running det split '{split_key}' with "
                 msg += f"{n_split_dets} dets"
@@ -801,22 +804,24 @@ class MapMaker(Operator):
             self._memreport.prefix = f"{self._log_prefix} Start of mapmaking"
             self._memreport.apply(self._data, use_accel=self._use_accel)
 
-            template_amplitudes = self._fit_templates()
+            template_amplitudes = self._fit_templates(selected_dets)
 
             self._prepare_binning(map_binning)
 
-            self._build_pixel_covariance(map_binning)
+            self._build_pixel_covariance(map_binning, selected_dets)
 
-            self._bin_and_write_raw_signal(map_binning, extra_header=extra_header)
+            self._bin_and_write_raw_signal(
+                map_binning, selected_dets, extra_header=extra_header
+            )
 
-            out_cleaned = self._clean_signal(template_amplitudes)
+            out_cleaned = self._clean_signal(template_amplitudes, selected_dets)
 
             if (
                 self.write_noiseweighted_map
                 or self.write_map
                 or self.keep_final_products
             ):
-                self._bin_cleaned_signal(map_binning, out_cleaned)
+                self._bin_cleaned_signal(map_binning, selected_dets, out_cleaned)
 
             self._purge_cleaned_tod()  # Potentially frees memory for writing maps
 

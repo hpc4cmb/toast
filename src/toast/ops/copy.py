@@ -142,7 +142,7 @@ class Copy(Operator):
                         )
                     # Copy detector data
                     for d in dets:
-                        ob.detdata[out_key][d, :] = ob.detdata[in_key][d, :]
+                        ob.detdata[out_key][d][:] = ob.detdata[in_key][d]
         return
 
     def _finalize(self, data, **kwargs):
