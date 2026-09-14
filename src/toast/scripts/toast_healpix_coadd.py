@@ -38,10 +38,13 @@ def load_map(fname, prefix="", cache=None, dtype=np.float64):
         log.info(prefix + f"Loading {fname} from cache")
         m, good, npix = cache[fname]
         m = m.copy()  # Avoid modifying the contents of the cache later
-        if len(m.shape) != 2:
+        if m.size == 0:
+            nmap, ngood = 0, 0
+        elif len(m.shape) != 2:
             msg = f"Cached map '{fname}' does not have the right dimensions: {m.shape}"
             raise RuntimeError(msg)
-        nmap, ngood = m.shape
+        else:
+            nmap, ngood = m.shape
     else:
         log.info(prefix + f"Loading {fname}")
         try:
@@ -347,6 +350,9 @@ def main(
         inmap, nnz_test, npix_test, good = load_map(
             infile_map, prefix=prefix, cache=cache, dtype=np.float64,
         )
+        if len(good) == 0:
+            # An empty map -- nothing to co-add
+            continue
         if nnz is None:
             nnz = nnz_test
             npix = npix_test
