@@ -10,21 +10,20 @@ onto a hitmap.
 
 import argparse
 import os
-import sys
-import traceback
 
 import astropy.units as u
 import ephem
 import healpy as hp
 import matplotlib.pyplot as plt
 import numpy as np
-from toast.coordinates import to_DJD, to_UTC
-from toast.mpi import MPI, Comm, get_world
-from toast.pixels_io_healpix import read_healpix, write_healpix
-from toast.timing import Timer
-from toast.utils import Environment, Logger
 
-import toast
+from ..coordinates import to_DJD, to_UTC
+from ..instrument_coords import xieta_to_quat
+from ..mpi import get_world, exception_guard, MPI
+from ..schedule import GroundSchedule
+from ..timing import Timer
+from ..utils import Environment, Logger
+from .. import qarray as qa
 
 
 # tqdm provides a progress bar but it is not critical
@@ -84,6 +83,23 @@ def get_azel(args, scan):
     else:
         # Get az for an unmodulated scan
         azvec = np.arange(azmin, azmax, azstep)
+
+    if args.offset_xi_deg is not None and args.offset_eta_deg is not None:
+        # We are simulating an offset from the boresight.  Rotate our
+        # Az / El values to that location.
+        elvec = el * np.ones_like(azvec)
+        bore = qa.from_lonlat_angles(-azvec, elvec, np.zeros_like(azvec))
+        rot = xieta_to_quat(
+            np.radians(args.offset_xi_deg), np.radians(args.offset_eta_deg), 0.0
+        )
+        offset = qa.mult(bore, rot)
+        lon, lat, _ = qa.to_lonlat_angles(offset)
+        # Sanity check that the rotated elevation is constant
+        if not np.allclose(lat, lat[0]):
+            msg = f"Offset elevation not constant ({lat})"
+            raise RuntimeError(msg)
+        azvec = -lon
+        el = lat[0]
 
     return azvec, el
 
@@ -199,8 +215,8 @@ def get_hits(args, schedule, period_times, comm, rank):
         hits[iperiod], iscan = get_period_hits(
             args, schedule, period_times, iperiod, iscan
         )
-    if comm is not None:
-        hits = comm.allreduce(hits)
+    if comm is not None and comm.size > 1:
+        comm.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
 
     if rank == 0 and args.cache is not None:
         np.save(args.cache, hits)
@@ -243,8 +259,8 @@ def get_sso(args, schedule, period_times, comm, rank, sso, radius):
         hits[iperiod], iscan = get_sso_period_hits(
             args, schedule, period_times, iperiod, iscan, sso, radius
         )
-    if comm is not None:
-        hits = comm.allreduce(hits)
+    if comm is not None and comm.size > 1:
+        comm.Allreduce(MPI.IN_PLACE, hits, op=MPI.SUM)
 
     if rank == 0 and cachefile is not None:
         np.save(cachefile, hits)
@@ -322,7 +338,7 @@ def plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank):
             tstart, tstop = period_times[iperiod]
             name = period_names[iperiod]
         else:
-            fname_plot = f"hits_tot.png"
+            fname_plot = "hits_tot.png"
             hits = np.sum(all_hits, 0)
             tstart = period_times[0][0]
             tstop = period_times[-1][1]
@@ -407,6 +423,20 @@ def parse_arguments():
         type=float,
         default=5,
         help="Field of view in degrees",
+    )
+
+    parser.add_argument(
+        "--offset-xi-deg",
+        type=float,
+        default=None,
+        help="Boresight offset in focalplane Xi direction (degrees)",
+    )
+
+    parser.add_argument(
+        "--offset-eta-deg",
+        type=float,
+        default=None,
+        help="Boresight offset in focalplane Eta direction (degrees)",
     )
 
     parser.add_argument(
@@ -558,7 +588,6 @@ def parse_arguments():
 
 
 def main():
-    env = Environment.get()
     log = Logger.get()
     comm, ntask, rank = get_world()
     timer0 = Timer()
@@ -584,7 +613,7 @@ def main():
 
     # Load the observing schedule
 
-    schedule = toast.schedule.GroundSchedule()
+    schedule = GroundSchedule()
     schedule.read(args.schedule)
 
     log.info_rank(f"Loaded {args.schedule} in", timer=timer1, comm=comm)
@@ -594,7 +623,7 @@ def main():
     period_times, period_names = get_periods(args, schedule)
 
     all_hits = get_hits(args, schedule, period_times, comm, rank)
-    log.info_rank(f"Made hits in", timer=timer1, comm=comm)
+    log.info_rank("Made hits in", timer=timer1, comm=comm)
 
     sso_hits = {}
     if args.sso is not None:
@@ -613,20 +642,21 @@ def main():
     # Plot
 
     plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank)
-    log.info_rank(f"Made plots in", timer=timer1, comm=comm)
+    log.info_rank("Made plots in", timer=timer1, comm=comm)
 
     if comm is not None:
         comm.Barrier()
 
-    log.info_rank(f"All done in", timer=timer0, comm=comm)
+    log.info_rank("All done in", timer=timer0, comm=comm)
 
     return
 
 
 def cli():
-    world, procs, rank = toast.mpi.get_world()
-    with toast.mpi.exception_guard(comm=world):
+    world, procs, rank = get_world()
+    with exception_guard(comm=world):
         main()
+
 
 if __name__ == "__main__":
     cli()
