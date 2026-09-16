@@ -587,7 +587,7 @@ def parse_arguments():
     return args
 
 
-def main():
+def main(opts=None):
     log = Logger.get()
     comm, ntask, rank = get_world()
     timer0 = Timer()
@@ -595,7 +595,7 @@ def main():
     timer0.start()
     timer1.start()
 
-    args = parse_arguments()
+    args = parse_arguments(args=opts)
 
     if args.cache is not None and not args.cache.endswith(".npy"):
         msg = f"Cache file does not end with .npy: {args.cache}"
