@@ -408,7 +408,7 @@ def plot_hits(args, all_hits, sso_hits, period_times, period_names, comm, rank):
     return
 
 
-def parse_arguments():
+def parse_arguments(opts=None):
     """Parse the command line arguments"""
 
     parser = argparse.ArgumentParser(description="Project schedule to a hitmap")
@@ -583,19 +583,22 @@ def parse_arguments():
         help="Save copies of the hit maps along with the plots",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=opts)
     return args
 
 
-def main(opts=None):
+def main(opts=None, comm=None):
     log = Logger.get()
-    comm, ntask, rank = get_world()
+    if comm is None:
+        rank = 0
+    else:
+        rank = comm.rank
     timer0 = Timer()
     timer1 = Timer()
     timer0.start()
     timer1.start()
 
-    args = parse_arguments(args=opts)
+    args = parse_arguments(opts=opts)
 
     if args.cache is not None and not args.cache.endswith(".npy"):
         msg = f"Cache file does not end with .npy: {args.cache}"
@@ -655,7 +658,7 @@ def main(opts=None):
 def cli():
     world, procs, rank = get_world()
     with exception_guard(comm=world):
-        main()
+        main(comm=world)
 
 
 if __name__ == "__main__":
