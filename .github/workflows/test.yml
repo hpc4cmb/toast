@@ -37,7 +37,7 @@ jobs:
             arch: Linux-x86_64
             ompdisable: 0
           - os: ubuntu-latest
-            python: "3.13"
+            python: "3.14"
             arch: Linux-x86_64
             ompdisable: 0
           - os: macos-latest
@@ -45,7 +45,7 @@ jobs:
             arch: MacOSX-x86_64
             ompdisable: 1
           - os: macos-latest
-            python: "3.13"
+            python: "3.14"
             arch: MacOSX-x86_64
             ompdisable: 1
           - os: macos-latest
@@ -53,7 +53,7 @@ jobs:
             arch: MacOSX-arm64
             ompdisable: 1
           - os: macos-latest
-            python: "3.13"
+            python: "3.14"
             arch: MacOSX-arm64
             ompdisable: 1
     steps:

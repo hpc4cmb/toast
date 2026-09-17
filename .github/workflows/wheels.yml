@@ -55,28 +55,10 @@ jobs:
             arch: x86_64
             python: 313
             builder: manylinux
-
-          # MacOS x86_64.
-          - os: macos-15-intel
+          - os: ubuntu-latest
             arch: x86_64
-            python: 310
-            builder: macosx
-            deploy: 15.0
-          - os: macos-15-intel
-            arch: x86_64
-            python: 311
-            builder: macosx
-            deploy: 15.0
-          - os: macos-15-intel
-            arch: x86_64
-            python: 312
-            builder: macosx
-            deploy: 15.0
-          - os: macos-15-intel
-            arch: x86_64
-            python: 313
-            builder: macosx
-            deploy: 15.0
+            python: 314
+            builder: manylinux
 
           # MacOS arm64
           - os: macos-15
@@ -97,6 +79,11 @@ jobs:
           - os: macos-15
             arch: arm64
             python: 313
+            builder: macosx
+            deploy: 15.0
+          - os: macos-15
+            arch: arm64
+            python: 314
             builder: macosx
             deploy: 15.0
     env:
@@ -136,7 +123,7 @@ jobs:
 
       - name: Install cibuildwheel
         run: |
-          python -m pip install cibuildwheel==3.4.1
+          python -m pip install cibuildwheel==4.2.1
 
       - name: Build wheel
         run: |
