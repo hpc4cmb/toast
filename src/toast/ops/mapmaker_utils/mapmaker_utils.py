@@ -440,13 +440,6 @@ class BuildInverseCovariance(Operator):
             dets = ob.select_local_detectors(
                 selection=detectors, flagmask=self.det_mask
             )
-<<<<<<< HEAD
-
-=======
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
->>>>>>> a42bba63 (DerivativeWeights Operator)
             # Check that the noise model exists
             if self.noise_model not in ob:
                 msg = "Noise model {} does not exist in observation {}".format(
