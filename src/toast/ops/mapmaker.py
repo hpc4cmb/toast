@@ -296,11 +296,13 @@ class MapMaker(Operator):
                 input binning operator.
 
         Returns:
-            (set):  The total set of globally selected detectors across all obs.
+            (set):  The union of locally selected detectors across all obs.
 
         """
         if self.pattern is not None:
             det_pat = re.compile(self.pattern)
+
+        input_check = set(input_dets)
 
         self._save_data_obs_flags = {}
         global_selected = set()
@@ -315,10 +317,9 @@ class MapMaker(Operator):
             starting_dets = ob.select_local_detectors(flagmask=flagmask)
 
             # Restrict to the global input list
-            check = set(input_dets)
             split_dets = set()
             for det in starting_dets:
-                if det in check:
+                if det in input_check:
                     split_dets.add(det)
 
             # Apply any pattern match
@@ -785,7 +786,7 @@ class MapMaker(Operator):
                 continue
             else:
                 msg = f"{self._log_prefix} Running det split '{split_key}' with "
-                msg += f"{n_split_dets} dets"
+                msg += f"{n_split_dets} global dets"
                 log.info_rank(msg, comm=data.comm.comm_world)
 
             self._setup(data, use_accel)
@@ -794,10 +795,6 @@ class MapMaker(Operator):
                 split_dets,
                 map_binning.det_mask,
             )
-
-            msg = f"{self._log_prefix} After selection, split '{split_key}' has "
-            msg += f"{len(selected_dets)} dets"
-            log.info_rank(msg, comm=data.comm.comm_world)
 
             extra_header = self._get_extra_header(selected_dets)
 
