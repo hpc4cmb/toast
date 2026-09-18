@@ -440,7 +440,6 @@ class BuildInverseCovariance(Operator):
             dets = ob.select_local_detectors(
                 selection=detectors, flagmask=self.det_mask
             )
-
             # Check that the noise model exists
             if self.noise_model not in ob:
                 msg = "Noise model {} does not exist in observation {}".format(
@@ -724,6 +723,7 @@ class BuildNoiseWeighted(Operator):
             weight_nnz = zmap.n_value
         else:
             weight_nnz = 0
+            log.info_rank(str(self.weights), data.comm.comm_world)
             for ob in data.obs:
                 # Get the detectors we are using for this observation
                 dets = ob.select_local_detectors(
