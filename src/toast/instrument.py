@@ -755,12 +755,23 @@ class Focalplane(object):
 
         # We have some dets
 
-        if self.thinfp is not None:
+        if self.thinfp is not None and self.thinfp > 1:
             # Pick only every `thinfp` pixel on the focal plane
             ndet = len(self.detector_data)
-            for idet in range(ndet - 1, -1, -1):
-                if int(idet // 2) % self.thinfp != 0:
-                    del self.detector_data[idet]
+            if "pixel" in self.detector_data.colnames:
+                # Select which pixels to keep
+                pixels = sorted(np.unique(self.detector_data[:]["pixel"]))
+                pixels_keep = pixels[::self.thinfp]
+                for idet in range(ndet - 1, -1, -1):
+                    pixel = self.detector_data[idet]["pixel"]
+                    if pixel not in pixels_keep:
+                        del self.detector_data[idet]
+            else:
+                # pixel property not available.  Assume that detector
+                # rows are grouped by pixel
+                for idet in range(ndet - 1, -1, -1):
+                    if int(idet // 2) % self.thinfp != 0:
+                        del self.detector_data[idet]
 
         # Add UID if not given
         if "uid" not in self.detector_data.colnames:
