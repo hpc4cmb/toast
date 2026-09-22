@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -354,6 +354,10 @@ class Madam(Operator):
         repeat_keys = ["detset", "detset_nopol", "survey"]
 
         if self.paramfile is not None:
+            log.info_rank(
+                f"Parsing Madam parameters from {self.paramfile}",
+                comm=data.comm.comm_world,
+            )
             if data.comm.world_rank == 0:
                 line_pat = re.compile(r"(\S+)\s+=\s+(\S+)")
                 comment_pat = re.compile(r"^\s*\#.*")
@@ -364,6 +368,7 @@ class Madam(Operator):
                             if line_mat is not None:
                                 k = line_mat.group(1)
                                 v = line_mat.group(2)
+                                log.info(f"Found: {k} = {v}")
                                 if k in repeat_keys:
                                     if k not in params:
                                         params[k] = [v]
@@ -371,9 +376,22 @@ class Madam(Operator):
                                         params[k].append(v)
                                 else:
                                     params[k] = v
-            if data.comm.world_comm is not None:
-                params = data.comm.world_comm.bcast(params, root=0)
+                        else:
+                            log.info(f"Ignoring: {line}")
+            if data.comm.comm_world is not None:
+                params = data.comm.comm_world.bcast(params, root=0)
             for k, v in self.params.items():
+                if k in params:
+                    log.info_rank(
+                        f"Overriding {self.paramfile} with pipeline-provided parameter:"
+                        f" {k} = {v}",
+                        comm=data.comm.comm_world,
+                    )
+                else:
+                    log.info_rank(
+                        f"Using pipeline-provided parameter: {k} = {v}",
+                        comm=data.comm.comm_world,
+                    )
                 if k in repeat_keys:
                     if k not in params:
                         params[k] = [v]
