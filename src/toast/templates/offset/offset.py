@@ -533,7 +533,8 @@ class Offset(Template):
                                     [precond_width, n_amp_view], dtype=np.float64
                                 )
                                 if detnoise != 0:
-                                    preconditioner[0, :] = 1.0 / offsetvar_slice
+                                    good = offsetvar_slice > 0
+                                    preconditioner[0, good] = 1.0 / offsetvar_slice[good]
                                 preconditioner[:wband, :] += np.repeat(
                                     noisefilter[icenter : icenter + wband, np.newaxis],
                                     n_amp_view,
