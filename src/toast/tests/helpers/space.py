@@ -130,6 +130,8 @@ def create_satellite_data(
     flagged_obs=True,
     flagged_proc=True,
     freqs=None,
+    no_det_data=False,
+    no_det_flags=False,
 ):
     """Create a data object with a simple satellite sim.
 
@@ -195,6 +197,10 @@ def create_satellite_data(
         prec_angle=7.0 * u.degree,
         detset_key="pixel",
     )
+    if no_det_data:
+        sim_sat.det_data = None
+    if no_det_flags:
+        sim_sat.det_flags = None
     sim_sat.apply(data)
 
     if flagged_pixels:

@@ -6,9 +6,18 @@ if [ "x${nbdir}" = "x" ]; then
     exit 1
 fi
 
-# This script might be called collectively from an mpirun / srun.
-# Since find is not guaranteed to produce results in a consistent
-# order, we sort the results
+export OMP_NUM_THREADS=1
+
+launch=$2
+if [ -z "${launch}" ]; then
+    mpiexec=$(which mpirun)
+    if [ -z "${mpiexec}" ]; then
+        # No mpi, run serially
+        launch=""
+    else
+        launch="${mpiexec} -np 1"
+    fi
+fi
 
 all_nb=$(find "${nbdir}" -name "*.ipynb" | grep -v checkpoint | sort)
 
@@ -16,5 +25,5 @@ for nbfile in ${all_nb}; do
     echo "Cleaning ${nbfile}"
     nbstripout "${nbfile}"
     echo "Running ${nbfile} in place..."
-    jupyter nbconvert --to notebook --execute "${nbfile}" --inplace
+    eval ${launch} jupyter nbconvert --to notebook --execute "${nbfile}" --inplace
 done

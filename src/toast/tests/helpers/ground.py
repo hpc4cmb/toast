@@ -97,6 +97,8 @@ def create_ground_data(
     flagged_proc=True,
     flagged_proc_first=False,
     schedule_hours=2,
+    no_det_data=False,
+    no_det_flags=False,
 ):
     """Create a data object with a simple ground sim.
 
@@ -199,6 +201,10 @@ def create_ground_data(
         sim_ground.turnaround_mask = 1 + 2
     else:
         sim_ground.turnaround_mask = 2
+    if no_det_data:
+        sim_ground.det_data = None
+    if no_det_flags:
+        sim_ground.det_flags = None
     sim_ground.apply(data)
 
     if flagged_pixels:
@@ -249,6 +255,8 @@ def create_overdistributed_data(
     turnarounds_invalid=False,
     single_group=False,
     schedule_hours=2,
+    no_det_data=False,
+    no_det_flags=False,
 ):
     """Create a data object with more detectors than processes.
 
@@ -343,6 +351,10 @@ def create_overdistributed_data(
         sim_ground.turnaround_mask = 1 + 2
     else:
         sim_ground.turnaround_mask = 2
+    if no_det_data:
+        sim_ground.det_data = None
+    if no_det_flags:
+        sim_ground.det_flags = None
     sim_ground.apply(data)
 
     return data
