@@ -10,6 +10,8 @@
 
 #include <accelerator.hpp>
 
+#include <cmath>
+
 #ifdef HAVE_OPENMP_TARGET
 # pragma omp declare target
 #endif // ifdef HAVE_OPENMP_TARGET
@@ -27,6 +29,13 @@ void pointing_detector_qa_mult(double const * p, double const * q, double * r) {
            p[2] * q[3] + p[3] * q[2];
     r[3] = -p[0] * q[0] - p[1] * q[1] -
            p[2] * q[2] + p[3] * q[3];
+    // Normalize
+    double norm = 0;
+    for (size_t i=0; i < 4; ++i) norm += r[i] * r[i];
+    if (norm != 0) {
+      norm = 1 / std::sqrt(norm);
+      for (size_t i=0; i < 4; ++i) r[i] *= norm;
+    }
     return;
 }
 
