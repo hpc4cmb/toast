@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2021 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -65,6 +65,7 @@ def stage_local(
     operator=None,
 ):
     """Helper function to fill a madam buffer from a local detdata key."""
+    log = Logger.get()
     n_det = len(dets)
     interval_offset = 0
     do_flags = False
@@ -114,6 +115,16 @@ def stage_local(
                     ]
                 else:
                     madam_buffer[slc] = views.detdata[detdata_name][ivw][det].flatten()
+                # Check for NaNs
+                nnan = np.sum(np.isnan(madam_buffer[slc]))
+                if nnan != 0:
+                    log.warning(
+                        f"Found {nnan} NaNs in Obs = {ob.name}, "
+                        f"det = {idet} : {det}, "
+                        f"view = {ivw} ({vw.start} - {vw.stop}), "
+                        f"detdata = {detdata_name} "
+                        f"While staging Madam data."
+                    )
                 detflags = None
                 if do_flags:
                     if det_flags is None:
