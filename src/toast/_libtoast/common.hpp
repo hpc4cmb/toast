@@ -1,5 +1,5 @@
 
-// Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
+// Copyright (c) 2015-2026 by the parties listed in the AUTHORS file.
 // All rights reserved.  Use of this source code is governed by
 // a BSD-style license that can be found in the LICENSE file.
 
@@ -53,8 +53,9 @@ T * extract_buffer(
         // format codes for int64_t and long long:
         //   https://github.com/numpy/numpy/issues/12264
         // Here we treat them as equivalent.
-        if (((buffer_format == "q") || (buffer_format == "l"))
-            && ((target_format == "q") || (target_format == "l"))) {
+        std::replace(buffer_format.begin(), buffer_format.end(), 'q', 'l');
+        std::replace(target_format.begin(), target_format.end(), 'q', 'l');
+	if (buffer_format == target_format) {
             // What could possibly go wrong...
         } else {
             auto log = toast::Logger::get();
