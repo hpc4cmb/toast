@@ -1,4 +1,4 @@
-# Copyright (c) 2024-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2024-2026 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 """Ipython magic helpers."""
@@ -7,11 +7,8 @@ from argparse import ArgumentParser
 
 from IPython.core.magic import (
     Magics,
-    cell_magic,
-    line_cell_magic,
     line_magic,
     magics_class,
-    needs_local_scope,
 )
 
 from .startup import start_parallel
@@ -19,9 +16,6 @@ from .startup import start_parallel
 
 @magics_class
 class ToastMagics(Magics):
-    def __init__(self, shell):
-        # You must call the parent constructor
-        super(ToastMagics, self).__init__(shell)
 
     def parse_args(self, line):
         parser = ArgumentParser(prog="TOAST Interactive")
@@ -66,5 +60,4 @@ class ToastMagics(Magics):
 
 
 def load_ipython_extension(ipython):
-    magics = ToastMagics(ipython)
-    ipython.register_magics(magics)
+    ipython.register_magics(ToastMagics)
