@@ -10,7 +10,7 @@ import traitlets
 from astropy import units as u
 from scipy.optimize import Bounds, curve_fit, least_squares
 
-from ..mpi import flatten
+from ..mpi import flatten, MPI
 from ..noise import Noise
 from ..noise_sim import AnalyticNoise
 from ..observation import default_values as defaults
@@ -680,8 +680,17 @@ class FlagNoiseFit(Operator):
                 raise RuntimeError(msg)
 
             local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
+            local_demod = 0
 
             if len(local_dets) > 0 and local_dets[0].startswith("demod"):
+                local_demod = 1
+
+            if obs.comm.comm_group is not None:
+                use_demod = obs.comm.comm_group.allreduce(local_demod, op=MPI.LOR)
+            else:
+                use_demod = local_demod
+
+            if use_demod:
                 # Demodulated case. Process I/Q/U detectors separately
                 prefixes = ["demod0", "demod4r", "demod4i"]
             else:
@@ -713,7 +722,7 @@ class FlagNoiseFit(Operator):
                     )
                     nbad += len(group_flags)
                 else:
-                    group_flags = dict()
+                    group_flags = {}
                     for prefix in prefixes:
                         flags = self._process_group_prefix(
                             obs, local_dets, group, group_dets, prefix
