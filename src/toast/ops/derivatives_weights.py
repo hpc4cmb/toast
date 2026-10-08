@@ -105,6 +105,16 @@ class DerivativesWeights(Operator):
             raise traitlets.TraitError("Invalid mode (must be 'dI' or 'd2I')")
         return check
 
+    @property
+    def nnz(self):
+        """The number of non-zero pointing matrix weights."""
+        if self.mode == "d2I":
+            return 6
+        elif self.mode == "dI":
+            return 3
+        else:
+            return None
+     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 

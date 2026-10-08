@@ -74,12 +74,6 @@ class ScanHealpixMap(Operator):
         allow_none=True,
         help="This must be an instance of a Stokes weights operator",
     )
-    
-    derivatives_weights = Instance(
-        klass=Operator,
-        allow_none=True,
-        help="This must be an instance of a derivatives weights operator",
-    )
 
     save_map = Bool(False, help="If True, do not delete map during finalize")
 
@@ -176,8 +170,6 @@ class ScanHealpixMap(Operator):
         dist = data[self.pixel_dist]
         if not isinstance(dist, PixelDistribution):
             raise RuntimeError("The pixel_dist must be a PixelDistribution instance")
-            
-        
 
         # Use the pixel distribution and pointing configuration to allocate our
         # map data and read it in.
@@ -211,6 +203,7 @@ class ScanHealpixMap(Operator):
                 )
 
         # Configure the low-level map scanning operator
+        
         scanner = ScanMap(
             det_data=self.det_data_keys[0],
             det_data_units=self.det_data_units,
