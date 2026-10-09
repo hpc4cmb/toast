@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2025 by the parties listed in the AUTHORS file.
+# Copyright (c) 2015-2020 by the parties listed in the AUTHORS file.
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
@@ -6,54 +6,43 @@ import numpy as np
 import traitlets
 from astropy import units as u
 
-from ...accelerator import ImplementationType
-from ...observation import default_values as defaults
-from ...timing import function_timer
-from ...traits import Bool, Instance, Int, Unicode, trait_docs
-from ...utils import Environment, Logger
-from ..operator import Operator
-from .kernels import stokes_weights_I, stokes_weights_IQU
-
+from ..accelerator import ImplementationType
+from ..observation import default_values as defaults
+from ..timing import function_timer
+from ..traits import Bool, Instance, Int, Unicode, trait_docs
+from ..utils import Environment, Logger
+from ..qarray import mult, to_iso_angles
+from .operator import Operator
 
 @trait_docs
-class StokesWeights(Operator):
-    """Operator which generates I/Q/U pointing weights.
+class DerivativesWeights(Operator):
+    """Operator which generates pointing weights for I and derivatives of I with
+    respect to theta and phi, to order 1 (mode dI) or 2 (mode d2I).
 
     Given the individual detector pointing, this computes the pointing weights
     assuming that the detector is a linear polarizer followed by a total
     power measurement.  By definition, the detector coordinate frame has the X-axis
     aligned with the polarization sensitive direction.  An optional dictionary of
-    pointing weight calibration factors may be specified for each observation.
-
-    If the hwp_angle field is specified, then an ideal HWP Mueller matrix is inserted
-    in the optics chain before the linear polarizer.  In this case, the fp_gamma key
-    name must be specified and each detector must have a value in the focalplane
-    table.
+    beam error factors may be specified for each observation.
+    
+    These factors are an overall calibration factor cal, beam centroid error dx/dy,
+    differential beam fwhm dsigma, and ellipticity dp/dc. Since we are focused
+    on total intensity, there is no HWP term or detector polarisation efficiency.
 
     The timestream model without a HWP in COSMO convention is:
 
     .. math::
-        d = cal \\left[I + \\frac{1 - \\epsilon}{1 + \\epsilon} \\left[Q \\cos\\left(2\\alpha\\right) + U \\sin\\left(2\\alpha\\right) \\right] \\right]
+        d = cal*I + d_\\theta I \\left[ dx\\sin\\psi - dy\\cos\\psi \\right] 
+                  + d_\\phi I \\left[ -dx\\cos\\psi - dy\\sin\\psi + (dp\\sin(2\\psi) - dc\\cos(2\\psi))\frac{\\cos\\theta}{\\sin\\theta} \\right]
+                  + d^2_\\theta I \\left[dsigma + dp\\cos(2\\psi) - dc\\sin(2\\psi)\\right]
+                  + d_\\phi d_\\theta I \\left[-2dp\\sin(2\\psi) + 2dc\\cos(2\\psi) \\right]
+                  + d^2_\\phi I \\left[\\ dsigma + dp\\cos(2\\psi) + dc\\sin(2\\psi) \\right]
 
-    When a HWP is present, we have:
-
-    .. math::
-        d = cal \\left[I + \\frac{1 - \\epsilon}{1 + \\epsilon} \\left[Q \\cos\\left(2(\\alpha - 2\\omega) \\right) - U \\sin\\left(2(\\alpha - 2\\omega) \\right) \\right] \\right]
-
-    The detector orientation angle "alpha" in COSMO convention is measured in a
-    right-handed sense from the local meridian and the HWP angle "omega" is also
-    measured from the local meridian.  The omega value can be described in terms of
-    alpha, a fixed per-detector offset gamma, and the time varying HWP angle measured
-    from the focalplane coordinate frame X-axis:
-
-    .. math::
-        \\omega = \\alpha + {\\gamma}_{HWP}(t) - {\\gamma}_{DET}
-
-    See documentation for a full treatment of this math.
+    The detector orientation angle "psi" in COSMO convention is measured in a
+    right-handed sense from the local meridian.
 
     By default, this operator uses the "COSMO" convention for Q/U.  If the "IAU" trait
-    is set to True, then resulting weights will differ by the sign of the U Stokes
-    weight.
+    is set to True, then resulting weights will differ as psi will jump around.
 
     If the view trait is not specified, then this operator will use the same data
     view as the detector pointing operator when computing the pointing matrix pixels
@@ -71,18 +60,10 @@ class StokesWeights(Operator):
         help="Operator that translates boresight pointing into detector frame",
     )
 
-    mode = Unicode("I", help="The Stokes weights to generate (I, QU or IQU)")
+    mode = Unicode("dI", help="The Stokes weights to generate (dI or d2I)")
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
-    )
-
-    hwp_angle = Unicode(
-        None, allow_none=True, help="Observation shared key for HWP angle"
-    )
-
-    fp_gamma = Unicode(
-        "gamma", allow_none=True, help="Focalplane key for detector gamma offset angle"
     )
 
     weights = Unicode(
@@ -90,13 +71,6 @@ class StokesWeights(Operator):
     )
 
     single_precision = Bool(False, help="If True, use 32bit float in output")
-
-    cal = Unicode(
-        None,
-        allow_none=True,
-        help="The observation key with a dictionary of pointing weight "
-        "calibration for each det",
-    )
 
     IAU = Bool(False, help="If True, use the IAU convention rather than COSMO")
 
@@ -127,22 +101,20 @@ class StokesWeights(Operator):
     @traitlets.validate("mode")
     def _check_mode(self, proposal):
         check = proposal["value"]
-        if check not in ["I", "QU", "IQU"]:
-            raise traitlets.TraitError("Invalid mode (must be 'I', 'QU' or 'IQU')")
+        if check not in ["dI", "d2I"]:
+            raise traitlets.TraitError("Invalid mode (must be 'dI' or 'd2I')")
         return check
 
     @property
     def nnz(self):
         """The number of non-zero pointing matrix weights."""
-        if self.mode == "I":
-            return 1
-        elif self.mode == "QU":
-            return 2
-        elif self.mode == "IQU":
+        if self.mode == "d2I":
+            return 6
+        elif self.mode == "dI":
             return 3
         else:
             return None
-
+     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -156,10 +128,6 @@ class StokesWeights(Operator):
 
         if self.detector_pointing is None:
             raise RuntimeError("The detector_pointing trait must be set")
-
-        if ("QU" in self.mode) and self.hwp_angle is not None:
-            if self.fp_gamma is None:
-                raise RuntimeError("If using HWP, you must specify the fp_gamma key")
 
         # Expand detector pointing
         quats_name = self.detector_pointing.quats
@@ -177,6 +145,9 @@ class StokesWeights(Operator):
             dets = ob.select_local_detectors(
                 detectors, flagmask=self.detector_pointing.det_mask
             )
+            if len(dets) == 0:
+                # Nothing to do for this observation
+                continue
 
             # Check that our view is fully covered by detector pointing.  If the
             # detector_pointing view is None, then it has all samples.  If our own
@@ -213,89 +184,58 @@ class StokesWeights(Operator):
                     accel=use_accel,
                 )
 
-            quat_indx = ob.detdata[quats_name].indices(dets)
-            weight_indx = ob.detdata[self.weights].indices(dets)
-
             # Do we already have pointing for all requested detectors?
             if exists:
                 # Yes
                 if data.comm.group_rank == 0:
                     msg = (
-                        f"Group {data.comm.group}, ob {ob.name}, Stokes weights "
+                        f"Group {data.comm.group}, ob {ob.name}, derivative weights "
                         f"already computed for {dets}"
                     )
                     log.verbose(msg)
                 continue
 
-            if len(dets) == 0:
-                # Nothing to do for this observation
-                continue
-
             # FIXME:  temporary hack until instrument classes are also pre-staged
             # to GPU
             focalplane = ob.telescope.focalplane
-            det_epsilon = np.zeros(len(dets), dtype=np.float64)
-
-            # Get the cross polar response from the focalplane
-            if "pol_leakage" in focalplane.detector_data.colnames:
-                for idet, d in enumerate(dets):
-                    det_epsilon[idet] = focalplane[d]["pol_leakage"]
-
-            # Get the per-detector calibration
-            if self.cal is None:
-                cal = np.array([1.0 for x in dets], np.float64)
-            else:
-                cal = np.array([ob[self.cal][x] for x in dets], np.float64)
-
-            if "QU" in self.mode:
-                det_gamma = np.zeros(len(dets), dtype=np.float64)
-                if self.hwp_angle is None or self.hwp_angle not in ob.shared:
-                    hwp_data = np.zeros(1, dtype=np.float64)
-                else:
-                    hwp_data = ob.shared[self.hwp_angle].data
-                    for idet, d in enumerate(dets):
-                        det_gamma[idet] = focalplane[d]["gamma"].to_value(u.rad)
-                weight_data = ob.detdata[self.weights].data
-                if self.mode == "IQU":
-                    work_data = weight_data
-                elif self.mode == "QU":
-                    # Allocate temporary space to hold the IQU weights.
-                    # Copy the QU part into persistent storage after the call
-                    ndet, nsample, nnz = weight_data.shape
-                    work_data = np.zeros(
-                        [ndet, nsample, nnz + 1], dtype=weight_data.dtype
-                    )
-                else:
-                    raise RuntimeError(f"Unexpected mode: {self.mode}")
-                stokes_weights_IQU(
-                    quat_indx,
-                    ob.detdata[quats_name].data,
-                    weight_indx,
-                    work_data,
-                    hwp_data,
-                    ob.intervals[self.view].data,
-                    det_epsilon,
-                    det_gamma,
-                    cal,
-                    bool(self.IAU),
-                    impl=implementation,
-                    use_accel=use_accel,
-                )
-                if self.mode == "QU":
-                    # Copy the QU weights out of the temporary array
-                    for i in weight_indx:
-                        weight_data[i, :, :] = work_data[i, :, 1:3]
-                    del work_data
-            else:
-                stokes_weights_I(
-                    weight_indx,
-                    ob.detdata[self.weights].data,
-                    ob.intervals[self.view].data,
-                    cal,
-                    impl=implementation,
-                    use_accel=use_accel,
-                )
+            focalplane.detector_data
+            #Get the boresight pointing
+            qbore = ob.shared["boresight_radec"]
+            nsamp = len(qbore)
+            ndets = len(dets)
+            theta = np.empty(nsamp) 
+            psi = np.empty(nsamp) 
+            # Get the per-detector pointing for orientation/sine theta purposes
+            for idet, d in enumerate(dets):
+                theta, _, psi = to_iso_angles(mult(qbore, focalplane[d]["quat"]))
+                psi -= focalplane[d]["pol_angle"].value
+                wc = np.cos(psi) 
+                wc2 = np.cos(2*psi)
+                ws = np.sin(psi)
+                ws2 = np.sin(2*psi)
+                inv_tan_theta = np.cos(theta)/np.sin(theta)
+                # Get the per-detector calibration. For now we sidestep with the Nones
+                cal = focalplane[d].get("cal", 1.0)
+                fwhm = focalplane[d].get("FWHM", 1.4*u.arcmin).to(u.rad).value
+                dx = focalplane[d].get("dx", 0.0)
+                dy = focalplane[d].get("dy", 0.0)
+                dsigma = focalplane[d].get("dsigma", 0.0)
+                dp = focalplane[d].get("dp", 0.0)
+                dc = focalplane[d].get("dc", 0.0) 
+                
+                b_std = fwhm/np.sqrt(8*np.log(2)) #beam standard deviation
+            
+                weights = np.empty((nsamp, self.nnz))
+                weights[:,0] = cal # gain error
+                weights[:,1] = dx * ws - dy * wc #dtheta
+                weights[:,2] = -dx * wc - dy * ws + b_std**2 * (dp * ws2 - dc * wc2) * inv_tan_theta #dphi
+                if self.mode == "d2I":      
+                    weights[:,3] = b_std * dsigma + 0.5 * b_std * b_std * (dp * wc2 - dc * ws2) #d2theta
+                    weights[:,4] = b_std**2 * (-2.0 * dp * ws2 + 2.0 * dc * wc2) #dphi dtheta
+                    weights[:,5] = b_std * dsigma +  b_std**2 * (dp * wc2 + dc * ws2) #dphi2
+                ob.detdata[self.weights][d, :] = weights
         return
+
 
     def _finalize(self, data, **kwargs):
         return
