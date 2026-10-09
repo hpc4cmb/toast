@@ -119,7 +119,7 @@ class ScanHealpixMap(Operator):
                     msg = f"stokes_weights operator should have a '{trt}' trait"
                     raise traitlets.TraitError(msg)
         return weights
-    
+
     def __init__(self, **kwargs):
         self.map_names = []
         super().__init__(**kwargs)
