@@ -151,8 +151,6 @@ class StokesWeights(Operator):
         env = Environment.get()
         log = Logger.get()
 
-        self._nnz = len(self.mode)
-
         # Kernel selection
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
 
@@ -201,7 +199,7 @@ class StokesWeights(Operator):
             if self.single_precision:
                 exists = ob.detdata.ensure(
                     self.weights,
-                    sample_shape=(self._nnz,),
+                    sample_shape=(self.nnz,),
                     dtype=np.float32,
                     detectors=dets,
                     accel=use_accel,
@@ -209,7 +207,7 @@ class StokesWeights(Operator):
             else:
                 exists = ob.detdata.ensure(
                     self.weights,
-                    sample_shape=(self._nnz,),
+                    sample_shape=(self.nnz,),
                     dtype=np.float64,
                     detectors=dets,
                     accel=use_accel,

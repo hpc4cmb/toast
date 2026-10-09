@@ -122,10 +122,6 @@ class DerivativesWeights(Operator):
     def _exec(self, data, detectors=None, use_accel=None, **kwargs):
         env = Environment.get()
         log = Logger.get()
-        if self.mode == "d2I":      
-            self._nnz = 6
-        else:
-            self._nnz = 3 
 
         # Kernel selection
         implementation, use_accel = self.select_kernels(use_accel=use_accel)
@@ -174,7 +170,7 @@ class DerivativesWeights(Operator):
             if self.single_precision:
                 exists = ob.detdata.ensure(
                     self.weights,
-                    sample_shape=(self._nnz,),
+                    sample_shape=(self.nnz,),
                     dtype=np.float32,
                     detectors=dets,
                     accel=use_accel,
@@ -182,7 +178,7 @@ class DerivativesWeights(Operator):
             else:
                 exists = ob.detdata.ensure(
                     self.weights,
-                    sample_shape=(self._nnz,),
+                    sample_shape=(self.nnz,),
                     dtype=np.float64,
                     detectors=dets,
                     accel=use_accel,
@@ -229,7 +225,7 @@ class DerivativesWeights(Operator):
                 
                 b_std = fwhm/np.sqrt(8*np.log(2)) #beam standard deviation
             
-                weights = np.empty((nsamp, self._nnz))
+                weights = np.empty((nsamp, self.nnz))
                 weights[:,0] = cal # gain error
                 weights[:,1] = dx * ws - dy * wc #dtheta
                 weights[:,2] = -dx * wc - dy * ws + b_std**2 * (dp * ws2 - dc * wc2) * inv_tan_theta #dphi
@@ -239,60 +235,6 @@ class DerivativesWeights(Operator):
                     weights[:,5] = b_std * dsigma +  b_std**2 * (dp * wc2 + dc * ws2) #dphi2
                 ob.detdata[self.weights][d, :] = weights
         return
-    """
-    # Get the per-detector calibration
-    if self.cal is None:
-        cal = np.array([1.0 for x in dets], np.float64)
-    else:
-        cal = np.array([ob[self.cal][x] for x in dets], np.float64)
-    cal = np.stack([cal for _ in range(nsamp)], axis=1)
-    # Per-detector pointing error
-    if self.dx is None:
-        dx = np.array([0.0 for x in dets], np.float64)
-    else:
-        dx = np.array([ob[self.dx][x] for x in dets], np.float64)
-    if self.dy is None:
-        dy = np.array([0.0 for x in dets], np.float64)
-    else:
-        dy = np.array([ob[self.dy][x] for x in dets], np.float64)
-    dx = np.stack([dx for _ in range(nsamp)], axis=1)
-    dy = np.stack([dy for _ in range(nsamp)], axis=1)
-    #Per-detector fwhm/sigma error    
-    if self.dsigma is None:
-        dsigma = np.array([0.0 for x in dets], np.float64)
-    else:
-        dsigma = np.array([ob[self.dsigma][x] for x in dets], np.float64)
-    dsigma = np.stack([dsigma for _ in range(nsamp)], axis=1)
-    #Per-detector ellipticity
-    if self.dp is None:
-        dp = np.array([0.0 for x in dets], np.float64)
-    else:
-        dp = np.array([ob[self.dp][x] for x in dets], np.float64)
-    if self.dc is None:
-        dc = np.array([0.0 for x in dets], np.float64)
-    else:
-        dc = np.array([ob[self.dc][x] for x in dets], np.float64)
-    dp = np.stack([dp for _ in range(nsamp)], axis=1)
-    dc = np.stack([dc for _ in range(nsamp)], axis=1)
-
-    wc = np.cos(psi) 
-    wc2 = np.cos(2*psi)
-    ws = np.sin(psi)
-    ws2 = np.sin(2*psi)
-    inv_tan_theta = np.cos(theta)/np.sin(theta)
-
-    weights = np.empty((ndets,nsamp,self._nnz))
-    weights[:,:,0] = cal # gain error
-    weights[:,:,1] = dx * ws - dy * wc #dtheta
-    weights[:,:,2] = -dx * wc - dy * ws + (dp * ws2 - dc * wc2) * inv_tan_theta #dphi
-    if self.mode == "d2I":      
-        weights[:,:,3] = dsigma + dp * wc2 - dc * ws2 #d2theta
-        weights[:,:,4] = -2.0 * dp * ws2 + 2.0 * dc * wc2 #dphi dtheta
-        weights[:,:,5] = dsigma + dp * wc2 + dc * ws2 #dphi2
-
-    for idet, d in enumerate(dets):
-        ob.detdata[self.weights][d, :] = weights[idet]
-    """
 
 
     def _finalize(self, data, **kwargs):

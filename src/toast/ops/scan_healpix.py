@@ -120,21 +120,6 @@ class ScanHealpixMap(Operator):
                     raise traitlets.TraitError(msg)
         return weights
     
-    @traitlets.validate("derivatives_weights")
-    def _check_derivatives_weights(self, proposal):
-        weights = proposal["value"]
-        if weights is not None:
-            if not isinstance(weights, Operator):
-                raise traitlets.TraitError(
-                    "derivatives_weights should be an Operator instance"
-                )
-            # Check that this operator has the traits we expect
-            for trt in ["weights", "view"]:
-                if not weights.has_trait(trt):
-                    msg = f"derivatives_weights operator should have a '{trt}' trait"
-                    raise traitlets.TraitError(msg)
-        return weights
-    
     def __init__(self, **kwargs):
         self.map_names = []
         super().__init__(**kwargs)
@@ -203,7 +188,7 @@ class ScanHealpixMap(Operator):
                 )
 
         # Configure the low-level map scanning operator
-        
+
         scanner = ScanMap(
             det_data=self.det_data_keys[0],
             det_data_units=self.det_data_units,
