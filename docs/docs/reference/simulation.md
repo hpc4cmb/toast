@@ -63,12 +63,14 @@ These operators generate detector data containing sources of power from outside 
 ### Scanning a Healpix Map
 
 ::: toast.ops.ScanHealpixMap
+::: toast.ops.ScanHealpixDetectorMap
 ::: toast.ops.ScanHealpixMask
 ::: toast.ops.InterpolateHealpixMap
 
 ### Scanning a WCS Projected Map
 
 ::: toast.ops.ScanWCSMap
+::: toast.ops.ScanWCSDetectorMap
 ::: toast.ops.ScanWCSMask
 
 ### Scanning an Arbitrary Map
@@ -76,6 +78,10 @@ These operators generate detector data containing sources of power from outside 
 ::: toast.ops.ScanMap
 ::: toast.ops.ScanMask
 ::: toast.ops.ScanScale
+
+### Scanning a Sky Expansion
+
+::: toast.ops.ScanAlm
 
 ### Point Sources
 

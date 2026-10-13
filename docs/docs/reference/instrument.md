@@ -10,6 +10,8 @@ For each Observation (see Data Containers), a unique instrument model is specifi
 
 ::: toast.instrument.Bandpass
 
+::: toast.instrument.AnalyticNoise
+
 ::: toast.instrument.Focalplane
 
 ::: toast.instrument.Telescope

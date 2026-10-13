@@ -12,6 +12,18 @@ TOAST uses several key classes for storing time ordered data, instrument propert
 
 ::: toast.observation.Observation
 
+::: toast.observation.DistDetSamp
+
+::: toast.observation.IntervalList
+::: toast.observation.IntervalsManager
+
+::: toast.observation.SharedDataManager
+::: toast.observation.DetDataManager
+
+::: toast.observation.ViewInterface
+
+::: toast.observation.Session
+
 Each `Observation` has its own instrument model (see Instrument Model section).
 
 
