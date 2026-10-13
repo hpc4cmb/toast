@@ -10,6 +10,8 @@
 
 ::: toast.ops.CalibrateDetectors
 
+::: toast.ops.DecimateFocalplane
+
 ::: toast.ops.MemoryCounter
 ::: toast.ops.Statistics
 
@@ -20,14 +22,21 @@
 ## Flagging
 
 ::: toast.ops.AzimuthIntervals
+::: toast.ops.AzimuthRanges
 ::: toast.ops.FlagIntervals
 
 ::: toast.ops.FlagSSO
 
+::: toast.ops.FlagNaNs
+
 ::: toast.ops.SimpleDeglitch
 ::: toast.ops.SimpleJumpCorrect
 
+::: toast.ops.SimpleStatCut
+
 ::: toast.ops.FillGaps
+
+::: toast.ops.ExtendFlags
 
 ## Filtering
 
@@ -43,22 +52,32 @@
 
 ::: toast.ops.MitigateCrossTalk
 
+::: toast.ops.NoiseFilter
+
+::: toast.ops.Detrend
+
 ### Half Wave Plate Tools
 
 ::: toast.ops.HWPSynchronousModel
 ::: toast.ops.HWPFilter
 
 ::: toast.ops.Demodulate
+::: toast.ops.DemodCommonModeFilter
+::: toast.ops.T2PFilter
 ::: toast.ops.StokesWeightsDemod
 
 ## Pointing Matrix
 
 ::: toast.ops.PointingDetectorSimple
+::: toast.ops.PointingDetectorFP
 
 ::: toast.ops.PixelsHealpix
 ::: toast.ops.PixelsWCS
 
 ::: toast.ops.StokesWeights
+::: toast.ops.StokesWeightsHWP
+
+::: toast.ops.DerivativesWeights
 
 ## Scan Strategy Characterization
 
