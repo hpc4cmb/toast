@@ -411,6 +411,8 @@ class BuildInverseCovariance(Operator):
                 dets = ob.select_local_detectors(
                     selection=detectors, flagmask=self.det_mask
                 )
+                if len(dets) == 0:
+                    continue
                 if self.weights in ob.detdata:
                     if len(ob.detdata[self.weights].detector_shape) == 1:
                         cur_nnz = 1
@@ -729,6 +731,8 @@ class BuildNoiseWeighted(Operator):
                 dets = ob.select_local_detectors(
                     selection=detectors, flagmask=self.det_mask
                 )
+                if len(dets) == 0:
+                    continue
                 if self.weights in ob.detdata:
                     if len(ob.detdata[self.weights].detector_shape) == 1:
                         weight_nnz = 1
