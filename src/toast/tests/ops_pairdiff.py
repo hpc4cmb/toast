@@ -112,7 +112,7 @@ class PairDiffTest(MPITestCase):
 
         # Pairdifference
 
-        pairdiff = ops.PairDifference(fpkeys=["pixel"])
+        pairdiff = ops.PairDifference(fpkeys=["pixel"], mode=weight_mode)
         pairdiff_data = pairdiff.apply(data)
 
         # Map again

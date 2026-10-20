@@ -233,42 +233,27 @@ class PairDifference(Operator):
 
             # Find the subset of pairs that are operational
 
-            local_dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
-            my_dets = []
+            local_dets = temp_ob.select_local_detectors()
             my_pairs = []  # list of detector pairs
             local_pairs = {}  # dictionary of detector pairs
             for det_pair, (det1, det2) in detector_pairs.items():
                 if det1 in local_dets and det2 in local_dets:
                     my_pairs.append(det_pair)
-                    my_dets.append(det1)
-                    my_dets.append(det2)
                     local_pairs[det_pair] = [det1, det2]
 
             if obs.comm.comm_group is None:
-                all_pairs = my_pairs
-                all_dets = my_dets
+                detector_sets = None
             else:
-                proc_pairs = obs.comm.comm_group.gather(my_pairs, root=0)
-                proc_dets = obs.comm.comm_group.gather(my_dets, root=0)
-                all_dets = []
-                all_pairs = []
-                if obs.comm.comm_group.rank == 0:
-                    for ppairs in proc_pairs:
-                        all_pairs += ppairs
-                    for pdets in proc_dets:
-                        all_dets += pdets
-                all_pairs = obs.comm.comm_group.bcast(all_pairs, root=0)
-                all_dets = obs.comm.comm_group.bcast(all_dets, root=0)
+                proc_pairs = obs.comm.comm_group.allgather(my_pairs)
+                # Use detector_sets to prevent redistribution
+                detector_sets = []
+                for ppairs in proc_pairs:
+                    detector_set = []
+                    for pair in ppairs:
+                        for prefix in self.prefixes:
+                            detector_set.append(f"{prefix}_{pair}")
+                    detector_sets.append(detector_set)
 
-            all_pairs = set(all_pairs)
-            all_dets = set(all_dets)
-            dropped_pairs = []
-            for det_pair in detector_pairs:
-                if det_pair not in all_pairs:
-                    dropped_pairs.append(det_pair)
-            for dropped_pair in dropped_pairs:
-                del detector_pairs[dropped_pair]
-            
             # Create a new observation to hold the pairsum/diff data
 
             pairdiff_telescope = self._pairdiff_telescope(temp_ob, detector_pairs)
@@ -281,7 +266,7 @@ class PairDifference(Operator):
                 name=pairdiff_name,
                 uid=name_UID(pairdiff_name),
                 session=temp_ob.session,
-                detector_sets=None,  # FIXME : translate detector sets
+                detector_sets=detector_sets,
                 process_rows=temp_ob.dist.process_rows,
                 sample_sets=temp_ob.dist.sample_sets,
             )
@@ -295,15 +280,16 @@ class PairDifference(Operator):
 
             self._pairdiff_shared_data(temp_ob, pairdiff_ob)
 
+            local_pairdiff_dets = pairdiff_ob.detdata.detectors
             for det_data in self.det_data.split(";"):
                 exists_data = pairdiff_ob.detdata.ensure(
                     det_data,
-                    detectors=pairdiff_dets,
+                    detectors=local_pairdiff_dets,
                     dtype=np.float64,
                     create_units=temp_ob.detdata[det_data].units,
                 )
             exists_flags = pairdiff_ob.detdata.ensure(
-                self.det_flags, detectors=pairdiff_dets, dtype=np.uint8
+                self.det_flags, detectors=local_pairdiff_dets, dtype=np.uint8
             )
 
             self._pairdiff_flags(temp_ob, pairdiff_ob, local_pairs)
