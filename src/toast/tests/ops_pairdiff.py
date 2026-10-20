@@ -27,7 +27,7 @@ class PairDiffTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
-    def _test_pairdiff(self, weight_mode, data, suffix=""):
+    def _test_pairdiff(self, weight_mode, data):
         nside = 256
 
         # Create an uncorrelated noise model from focalplane detector properties
@@ -55,7 +55,7 @@ class PairDiffTest(MPITestCase):
             detector_pointing=detpointing_radec,
         )
 
-        sky_file = os.path.join(self.outdir, f"fake_sky_{weight_mode}{suffix}.fits")
+        sky_file = os.path.join(self.outdir, f"fake_sky_{weight_mode}.fits")
         map_key = "fake_map"
         create_fake_healpix_scanned_tod(
             data,
@@ -81,7 +81,7 @@ class PairDiffTest(MPITestCase):
         )
 
         mapper = ops.MapMaker(
-            name=f"undiff_{weight_mode}{suffix}",
+            name=f"undiff_{weight_mode}",
             det_data=defaults.det_data,
             binning=binner,
             template_matrix=None,
@@ -106,7 +106,7 @@ class PairDiffTest(MPITestCase):
             for dname in valid_dets:
                 tod_input = os.path.join(
                     self.outdir,
-                    f"tod_{oname}_{dname}{suffix}_in.np",
+                    f"tod_{oname}_{dname}{weight_mode}_in.np",
                 )
                 data.obs[0].detdata[defaults.det_data][dname].tofile(tod_input)
 
@@ -120,9 +120,10 @@ class PairDiffTest(MPITestCase):
         pairdiff_weights = ops.StokesWeightsPairDiff(
             detector_pointing=detpointing_radec,
             mode=weight_mode,
+            hwp_angle=defaults.hwp_angle,
         )
 
-        mapper.name = f"pairdiff_{weight_mode}{suffix}"
+        mapper.name = f"pairdiff_{weight_mode}"
         binner.stokes_weights = pairdiff_weights
         mapper.apply(pairdiff_data)
 
@@ -147,15 +148,15 @@ class PairDiffTest(MPITestCase):
             oname = data.obs[0].name
             tod_in_file1 = os.path.join(
                 self.outdir,
-                f"tod_{oname}_{det1}{suffix}_in.np",
+                f"tod_{oname}_{det1}{weight_mode}_in.np",
             )
             tod_in_file2 = os.path.join(
                 self.outdir,
-                f"tod_{oname}_{det2}{suffix}_in.np",
+                f"tod_{oname}_{det2}{weight_mode}_in.np",
             )
             tod_in1 = np.fromfile(tod_in_file1)
             tod_in2 = np.fromfile(tod_in_file2)
-            tod_plot = os.path.join(self.outdir, f"tod_{oname}_{pair}{suffix}.pdf")
+            tod_plot = os.path.join(self.outdir, f"tod_{oname}_{pair}{weight_mode}.pdf")
 
             slc = slice(0, 50)
 
@@ -199,13 +200,13 @@ class PairDiffTest(MPITestCase):
             plt.close()
 
             fname_undiff = os.path.join(
-                self.outdir, f"undiff_{weight_mode}{suffix}_map.fits"
+                self.outdir, f"undiff_{weight_mode}_map.fits"
             )
             fname_pairdiff = os.path.join(
-                self.outdir, f"pairdiff_{weight_mode}{suffix}_map.fits"
+                self.outdir, f"pairdiff_{weight_mode}_map.fits"
             )
             fname_hits = os.path.join(
-                self.outdir, f"pairdiff_{weight_mode}{suffix}_hits.fits"
+                self.outdir, f"pairdiff_{weight_mode}_hits.fits"
             )
 
             map_undiff = hp.read_map(fname_undiff, None)
@@ -287,7 +288,7 @@ class PairDiffTest(MPITestCase):
                     all_good = False
 
             outfile = os.path.join(
-                self.outdir, f"map_comparison.{weight_mode}{suffix}.png"
+                self.outdir, f"map_comparison.{weight_mode}.png"
             )
             fig.savefig(outfile)
             self.assertTrue(all_good)
