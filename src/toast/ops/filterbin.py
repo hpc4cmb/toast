@@ -2230,6 +2230,13 @@ class FilterBin(Operator):
                             f"Skipping existing file: {fname}", comm=self.comm
                         )
                         continue
+                if key not in data:
+                    if self.comm is None or self.comm.rank == 0:
+                        log.warning(
+                            f"Data does not contain '{key}' to write '{fname}'. "
+                            "Most likely binning failed without valid data."
+                        )
+                    continue
                 data[key].write(
                     fname,
                     force_serial=self.write_hdf5_serial,

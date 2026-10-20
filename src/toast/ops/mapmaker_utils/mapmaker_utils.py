@@ -426,9 +426,9 @@ class BuildInverseCovariance(Operator):
             if data.comm.comm_world is not None:
                 weight_nnz = data.comm.comm_world.allreduce(weight_nnz, op=MPI.MAX)
             if weight_nnz == 0:
-                msg = "No valid detectors. Could not infer the pointing matrix "
-                msg += "dimensions from the data."
-                raise RuntimeError(msg)
+                if data.comm.world_rank == 0:
+                    log.warning("No valid detectors.")
+                return
             cov_nnz = int(weight_nnz * (weight_nnz + 1) // 2)
             data[self.inverse_covariance] = PixelData(
                 dist, np.float64, n_value=cov_nnz, units=invcov_units
@@ -742,6 +742,10 @@ class BuildNoiseWeighted(Operator):
                     raise RuntimeError(
                         f"Stokes weights '{self.weights}' not in obs {ob.name}"
                     )
+            if weight_nnz == 0:
+                if data.comm.world_rank == 0:
+                    log.warning("No valid detectors.")
+                return
             if data.comm.comm_world is not None:
                 weight_nnz = data.comm.comm_world.allreduce(weight_nnz, op=MPI.MAX)
             data[self.zmap] = PixelData(
@@ -1233,6 +1237,12 @@ class CovarianceAndHits(Operator):
         ]
 
         pipe_out = accum.apply(data, detectors=detectors)
+
+        # If all data were flagged, inverse covariance was not created
+        if self.covariance not in data:
+            if data.comm.world_rank == 0:
+                log.warning("No valid detectors.")
+            return
 
         # Optionally, store the inverse covariance
         if self.inverse_covariance is not None:

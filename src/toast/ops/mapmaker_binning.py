@@ -189,9 +189,13 @@ class BinMap(Operator):
         log.verbose_rank("  BinMap building pipeline", comm=data.comm.comm_world)
 
         if self.covariance not in data:
-            msg = f"Data does not contain noise covariance '{self.covariance}'"
-            log.error(msg)
-            raise RuntimeError(msg)
+            if data.comm.world_rank == 0:
+                log.warning(
+                    f"Data does not contain noise covariance '{self.covariance}'. "
+                    "Either there was no valid data for CovarianceAndHits() or it "
+                    "was not called."
+                )
+            return
 
         cov = data[self.covariance]
 
