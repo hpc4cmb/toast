@@ -13,6 +13,7 @@ from astropy import units as u
 from astropy.table import QTable
 from scipy.signal import fftconvolve, firwin
 
+from .stokes_weights import StokesWeights
 from .. import qarray as qa
 from ..data import Data
 from ..instrument import Focalplane, Telescope
@@ -51,7 +52,7 @@ class PairDifference(Operator):
     det_data = Unicode(
         defaults.det_data,
         help="Observation detdata key apply filtering to.  Use ';' if multiple "
-        "signal flavors should be demodulated.",
+        "signal flavors should be differenced.",
     )
 
     det_mask = Int(
@@ -99,8 +100,6 @@ class PairDifference(Operator):
     in_place = Bool(False, help="Modify the data object in-place.  Implies purge=True.")
 
     mode = Unicode("IQU", help="Return I, QU or IQU timestreams.")
-
-    # Intervals?
 
     @traitlets.validate("det_mask")
     def _check_det_mask(self, proposal):
@@ -178,7 +177,7 @@ class PairDifference(Operator):
                 continue
             elif ndet == 2:
                 det1, det2 = sorted(detector_set)
-                det_pair = "{det1}_{det2}"
+                det_pair = f"{det1}&{det2}"
                 detector_pairs[det_pair] = [det1, det2]
                 det2pair[det1] = det_pair
                 det2pair[det2] = det_pair
@@ -240,8 +239,9 @@ class PairDifference(Operator):
             local_pairs = {}  # dictionary of detector pairs
             for det_pair, (det1, det2) in detector_pairs.items():
                 if det1 in local_dets and det2 in local_dets:
-                    my_pairs += det_pair
-                    my_dets += [det1, det2]
+                    my_pairs.append(det_pair)
+                    my_dets.append(det1)
+                    my_dets.append(det2)
                     local_pairs[det_pair] = [det1, det2]
 
             if obs.comm.comm_group is None:
@@ -269,7 +269,7 @@ class PairDifference(Operator):
             for dropped_pair in dropped_pairs:
                 del detector_pairs[dropped_pair]
             
-            # Create a new observation to hold the demodulated and downsampled data
+            # Create a new observation to hold the pairsum/diff data
 
             pairdiff_telescope = self._pairdiff_telescope(temp_ob, detector_pairs)
 
@@ -281,7 +281,7 @@ class PairDifference(Operator):
                 name=pairdiff_name,
                 uid=name_UID(pairdiff_name),
                 session=temp_ob.session,
-                detector_sets=temp_ob.dist.detector_sets,
+                detector_sets=None,  # FIXME : translate detector sets
                 process_rows=temp_ob.dist.process_rows,
                 sample_sets=temp_ob.dist.sample_sets,
             )
@@ -295,10 +295,10 @@ class PairDifference(Operator):
 
             self._pairdiff_shared_data(temp_ob, pairdiff_ob)
 
-            for det_data in self.det_data:
+            for det_data in self.det_data.split(";"):
                 exists_data = pairdiff_ob.detdata.ensure(
                     det_data,
-                    detectors=demod_dets,
+                    detectors=pairdiff_dets,
                     dtype=np.float64,
                     create_units=temp_ob.detdata[det_data].units,
                 )
@@ -421,7 +421,7 @@ class PairDifference(Operator):
             if key in pairdiff_obs:
                 # Already pairdifferenced
                 continue
-            demod_obs[key] = value
+            pairdiff_obs[key] = value
 
         # Other observation attributes
 
@@ -431,7 +431,7 @@ class PairDifference(Operator):
             if hasattr(pairdiff_obs, key):
                 # Already pairdifferenced
                 continue
-            setattr(demod_obs, key, value)
+            setattr(pairdiff_obs, key, value)
 
         return
 
@@ -440,9 +440,9 @@ class PairDifference(Operator):
         """Pairdifference signal TOD"""
 
         for det_pair, (det1, det2) in detector_pairs.items():
-            for flavor in self.det_data:
-                signal1 = obs[flavor][det1]
-                signal2 = obs[flavor][det2]
+            for flavor in self.det_data.split(";"):
+                signal1 = obs.detdata[flavor][det1]
+                signal2 = obs.detdata[flavor][det2]
                 for prefix in self.prefixes:
                     pairdiff_det = f"{prefix}_{det_pair}"
                     if prefix == "pairsum":
@@ -452,7 +452,7 @@ class PairDifference(Operator):
                     else:
                         msg = "Unknown pairdiff prefix: {prefix}"
                         raise RuntimeError(msg)
-                    pairdiff_obs[flavor][pairdiff_det] = signal
+                    pairdiff_obs.detdata[flavor][pairdiff_det] = signal
 
         return
 
@@ -485,7 +485,12 @@ class PairDifference(Operator):
 
     @function_timer
     def _pairdiff_noise(self, obs, pairdiff_obs, detector_pairs):
-        """Add Noise objects for the new detectors"""
+        """Add Noise objects for the new detectors
+
+        This are simple estimates that work for uncorrelated detectors.
+        If correlations are suspected, new noise estimation should be
+        performed.
+        """
         if self.noise_model is None:
             return
 
@@ -498,8 +503,8 @@ class PairDifference(Operator):
         pairdiff_weights = {}
 
         for det_pair, (det1, det2) in detector_pairs.items():
-            weight1 = noise.weight(det1)
-            weight2 = noise.weight(det2)
+            weight1 = noise.detector_weight(det1)
+            weight2 = noise.detector_weight(det2)
             weight = (weight1 + weight2) / 2
             # index  - ignored
             rate = noise.rate(det1)
@@ -525,7 +530,7 @@ class PairDifference(Operator):
         return
 
     def _finalize(self, data, **kwargs):
-        return self.demod_data
+        return self.pairdiff_data
 
     def _requires(self):
         req = {
@@ -548,7 +553,21 @@ class StokesWeightsPairDiff(Operator):
 
     API = Int(0, help="Internal interface version for this operator")
 
+    detector_pointing = Instance(
+        klass=Operator,
+        allow_none=True,
+        help="Operator that translates boresight pointing into detector frame",
+    )
+
     mode = Unicode("IQU", help="The Stokes weights to generate")
+
+    hwp_angle = Unicode(
+        None, allow_none=True, help="Observation shared key for HWP angle"
+    )
+
+    fp_gamma = Unicode(
+        "gamma", allow_none=True, help="Focalplane key for detector gamma offset angle"
+    )
 
     view = Unicode(
         None, allow_none=True, help="Use this view of the data in all observations"
@@ -560,20 +579,14 @@ class StokesWeightsPairDiff(Operator):
 
     single_precision = Bool(False, help="If True, use 32bit float in output")
 
-    detector_pointing_in = Instance(
-        klass=Operator,
+    cal = Unicode(
+        None,
         allow_none=True,
-        help="Pointing operator in the native Q/U frame, typically az/el.  "
-        "Must be set if `detector_pointing_out` is set.  Has no effect if "
-        " `detector_pointing_out` is not set.",
+        help="The observation key with a dictionary of pointing weight "
+        "calibration for each det",
     )
 
-    detector_pointing_out = Instance(
-        klass=Operator,
-        allow_none=True,
-        help="Pointing operator for the desired frame, typically RA/Dec.  "
-        "Requires `detector_pointing_in` to be set.",
-    )
+    IAU = Bool(False, help="If True, use the IAU convention rather than COSMO")
 
     det_mask = Int(
         defaults.det_mask_nonscience,
@@ -612,67 +625,6 @@ class StokesWeightsPairDiff(Operator):
                     raise traitlets.TraitError(msg)
         return detpointing
 
-    @traitlets.validate("detector_pointing_out")
-    def _check_detector_pointing_out(self, proposal):
-        detpointing = proposal["value"]
-        if detpointing is not None:
-            if not isinstance(detpointing, Operator):
-                raise traitlets.TraitError(
-                    "detector_pointing should be an Operator instance"
-                )
-            # Check that this operator has the traits we expect
-            for trt in [
-                "view",
-                "boresight",
-                "shared_flags",
-                "shared_flag_mask",
-                "det_mask",
-                "quats",
-                "coord_in",
-                "coord_out",
-            ]:
-                if not detpointing.has_trait(trt):
-                    msg = f"detector_pointing operator should have a '{trt}' trait"
-                    raise traitlets.TraitError(msg)
-        return detpointing
-
-    @function_timer
-    def _get_delta(self, data, ob, det):
-        """Get the polarization angle in the input and output
-        frames to rotate Q and U accordingly
-
-        """
-        if self.detector_pointing_out is None:
-            return None
-
-        if det.startswith("demod4r") or det.startswith("demod4i"):
-            # Get input and output detector pointing
-            ob_data = data.select(obs_name=ob.name)
-            # detector pointing will short-circuit if detdata already has the required key
-            reset = self.detector_pointing_in.quats == self.detector_pointing_out.quats
-            if reset and self.detector_pointing_in.quats in ob_data.obs[0].detdata:
-                del ob_data.obs[0].detdata[self.detector_pointing_in.quats]
-            # Get input pointing
-            self.detector_pointing_in.apply(ob_data, detectors=[det])
-            quats_in = ob_data.obs[0].detdata[self.detector_pointing_in.quats][det]
-            psi_in = qa.to_iso_angles(quats_in)[2]
-            if reset and self.detector_pointing_out.quats in ob_data.obs[0].detdata:
-                del ob_data.obs[0].detdata[self.detector_pointing_out.quats]
-            # Get output pointing
-            self.detector_pointing_out.apply(ob_data, detectors=[det])
-            quats_out = ob_data.obs[0].detdata[self.detector_pointing_out.quats][det]
-            psi_out = qa.to_iso_angles(quats_out)[2]
-            if reset:
-                # Purge the quaternions to avoid confusion later
-                del ob_data.obs[0].detdata[self.detector_pointing_out.quats]
-            # Get the difference in position angle
-            delta = psi_out - psi_in
-            delta = delta[:, np.newaxis]
-        else:
-            delta = None
-
-        return delta
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -680,87 +632,40 @@ class StokesWeightsPairDiff(Operator):
     def _exec(self, data, detectors=None, **kwargs):
         log = Logger.get()
 
-        nnz = len(self.mode)
+        stokes_weights_full = StokesWeights(
+            detector_pointing=self.detector_pointing,
+            mode=self.mode,
+            view=self.view,
+            hwp_angle=self.hwp_angle,
+            fp_gamma=self.fp_gamma,
+            weights=self.weights,
+            single_precision=self.single_precision,
+            cal=self.cal,
+            IAU=self.IAU,
+        )
 
-        if self.detector_pointing_in is None and self.detector_pointing_out is not None:
-            raise RuntimeError(
-                "You must set the input detector pointing with output pointing"
-            )
-
-        if self.single_precision:
-            dtype = np.float32
-        else:
-            dtype = np.float64
-
-        for obs in data.obs:
-            dets = obs.select_local_detectors(detectors, flagmask=self.det_mask)
-
-            exists_weights = obs.detdata.ensure(
-                self.weights,
-                sample_shape=(nnz,),
-                dtype=dtype,
-                detectors=dets,
-            )
-
-            if len(dets) == 0:
-                continue
-
-            nsample = obs.n_local_samples
-            ones = np.ones(nsample, dtype=dtype)
-            zeros = np.zeros(nsample, dtype=dtype)
-            weights = obs.detdata[self.weights]
-            if self.mode == "I":
-                i_weights = ones
-                q_weights = zeros
-                u_weights = zeros
-                no_weights = zeros
-            elif self.mode == "QU":
-                i_weights = np.column_stack([zeros, zeros])
-                q_weights = np.column_stack([ones, zeros])
-                u_weights = np.column_stack([zeros, ones])
-                no_weights = np.column_stack([zeros, zeros])
-            elif self.mode == "IQU":
-                i_weights = np.column_stack([ones, zeros, zeros])
-                q_weights = np.column_stack([zeros, ones, zeros])
-                u_weights = np.column_stack([zeros, zeros, ones])
-                no_weights = np.column_stack([zeros, zeros, zeros])
+        for ob in data.obs:
+            dets = ob.select_local_detectors(detectors, flagmask=self.det_mask)
+            ob_data = data.select(obs_name=ob.name)
 
             for det in dets:
-                props = obs.telescope.focalplane[det]
-                if "pol_efficiency" in props.colnames:
-                    eta = props["pol_efficiency"]
+                stokes_weights_full.apply(ob_data, detectors=[det])
+                weights = ob_data.obs[0].detdata[self.weights][det]
+                if det.startswith("pairsum"):
+                    # zero polarization weights
+                    if self.mode == "IQU":
+                        weights[:, 1:] = 0
+                    elif self.mode == "QU":
+                        weights[:, :] = 0
+                elif det.startswith("pairdiff"):
+                    # zero intensity weights
+                    if self.mode == "IQU":
+                        weights[:, 0] = 0
+                    elif self.mode == "I":
+                        weights[:] = 0
                 else:
-                    eta = 1.0
-
-                # Check if we need to rotate Q/U weights between reference frames
-                delta = self._get_delta(data, obs, det)
-
-                if det.startswith("demod0"):
-                    # Stokes I only
-                    weights[det] = i_weights
-                elif det.startswith("demod4r"):
-                    # Stokes Q only
-                    if delta is None:
-                        weights[det] = q_weights * eta
-                    else:
-                        # Q' = Qcos(2psi) + Usin(2psi)
-                        weights[det] = (
-                            np.cos(2 * delta) * q_weights
-                            + np.sin(2 * delta) * u_weights
-                        ) * eta
-                elif det.startswith("demod4i"):
-                    # Stokes U only
-                    if delta is None:
-                        weights[det] = u_weights * eta
-                    else:
-                        # U' = Ucos(2psi) - Qsin(2psi)
-                        weights[det] = (
-                            np.cos(2 * delta) * u_weights
-                            - np.sin(2 * delta) * q_weights
-                        ) * eta
-                else:
-                    # Not an I/Q/U pseudo detector
-                    weights[det] = no_weights
+                    # Not a pairdiff pseudo detector
+                    weights[:, :] = 0
 
         return
 
