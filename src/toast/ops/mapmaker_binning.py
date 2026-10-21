@@ -282,6 +282,14 @@ class BinMap(Operator):
 
         # print("Binned zmap = ", data[self.binned].data)
 
+        if self.binned not in data:
+            if data.comm.world_rank == 0:
+                log.warning(
+                    f"Data does not contain noise-weighted map '{self.binned}'. "
+                    "Most likely there was no valid data for BuildNoiseWeighted()"
+                )
+            return
+
         # Optionally, store the noise-weighted map
         if self.noiseweighted is not None:
             data[self.noiseweighted] = data[self.binned].duplicate()

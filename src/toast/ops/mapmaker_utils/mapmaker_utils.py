@@ -427,7 +427,7 @@ class BuildInverseCovariance(Operator):
                 weight_nnz = data.comm.comm_world.allreduce(weight_nnz, op=MPI.MAX)
             if weight_nnz == 0:
                 if data.comm.world_rank == 0:
-                    log.warning("No valid detectors.")
+                    log.warning("No valid detectors in BuildInverseCovariance.")
                 return
             cov_nnz = int(weight_nnz * (weight_nnz + 1) // 2)
             data[self.inverse_covariance] = PixelData(
@@ -742,12 +742,12 @@ class BuildNoiseWeighted(Operator):
                     raise RuntimeError(
                         f"Stokes weights '{self.weights}' not in obs {ob.name}"
                     )
-            if weight_nnz == 0:
-                if data.comm.world_rank == 0:
-                    log.warning("No valid detectors.")
-                return
             if data.comm.comm_world is not None:
                 weight_nnz = data.comm.comm_world.allreduce(weight_nnz, op=MPI.MAX)
+            if weight_nnz == 0:
+                if data.comm.world_rank == 0:
+                    log.warning("No valid detectors in BuildNoiseWeighted.")
+                return
             data[self.zmap] = PixelData(
                 dist, np.float64, n_value=weight_nnz, units=zmap_units
             )
@@ -1241,7 +1241,11 @@ class CovarianceAndHits(Operator):
         # If all data were flagged, inverse covariance was not created
         if self.covariance not in data:
             if data.comm.world_rank == 0:
-                log.warning("No valid detectors.")
+                log.warning(
+                    "Data does not contain inverse pixel covariance "
+                    f"'{self.covariance}'. Most likely there was no valid data for "
+                    "BuildNoiseWeighted()"
+                )
             return
 
         # Optionally, store the inverse covariance
