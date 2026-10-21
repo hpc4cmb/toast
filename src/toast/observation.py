@@ -806,6 +806,10 @@ class Observation(MutableMapping):
                 # Create the object on the corresponding communicator in the new obs
                 new_obs.shared.assign_mpishared(name, data, self.shared.comm_type(name))
         for name, data in self.intervals.items():
+            if name == self.intervals.all_name:
+                # Do not copy, the default interval is automatically
+                # generated
+                continue
             if intervals is None or name in intervals:
                 timespans = [(x.start, x.stop) for x in data]
                 new_obs.intervals[name] = IntervalList(
