@@ -124,9 +124,7 @@ def _beam_sum(quats, nside, maps, node_dirs, weights_I, weights_P):
         los = qa.rotate(q, _ZAXIS)
 
         pix, wts = _stencil(nside, rot_x, rot_y, los, node_dirs)
-        result[0, first:last] = np.einsum(
-            "jsn,jsn,n->s", wts, maps[0][pix], weights_I
-        )
+        result[0, first:last] = np.einsum("jsn,jsn,n->s", wts, maps[0][pix], weights_I)
         if n_map == 1:
             continue
 

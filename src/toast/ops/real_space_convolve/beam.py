@@ -9,7 +9,9 @@ class RealSpaceBeam(object):
     """A beam discretized as weighted nodes around the beam center.
 
     Each node is a rotation from the beam center to the node, in the detector
-    frame.  Each node has a weight for I and a weight shared by Q and U.
+    frame, whose Z axis is the line of sight and whose X axis is the direction of
+    polarization sensitivity.  Each node has a weight for I and a weight shared by
+    Q and U.
 
     Args:
         quats (array):  The node quaternions, shape (n_node, 4).
@@ -26,8 +28,9 @@ class RealSpaceBeam(object):
         if weights_P is not None:
             self.weights_P = np.ascontiguousarray(weights_P, dtype=np.float64)
         n_node = len(self.quats)
-        if self.quats.shape != (n_node, 4):
-            msg = f"Beam quaternions have shape {self.quats.shape}, expected (n_node, 4)"
+        if n_node == 0 or self.quats.shape != (n_node, 4):
+            msg = f"Beam quaternions have shape {self.quats.shape}, "
+            msg += "expected (n_node, 4) with n_node > 0"
             raise ValueError(msg)
         for name in ("weights_I", "weights_P"):
             weights = getattr(self, name)
