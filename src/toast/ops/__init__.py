@@ -56,7 +56,7 @@ from .pointing import BuildPixelDistribution
 from .pointing_detector import PointingDetectorSimple
 from .pointing_detector_fp import PointingDetectorFP
 from .polyfilter import CommonModeFilter, PolyFilter, PolyFilter2D
-from .real_space_convolve import RealSpaceBeam
+from .real_space_convolve import RealSpaceBeam, SimRealSpaceConvolve
 from .reset import Reset
 from .run_spt3g import RunSpt3g
 from .save_hdf5 import SaveHDF5

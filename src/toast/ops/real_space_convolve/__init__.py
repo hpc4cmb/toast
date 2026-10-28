@@ -5,3 +5,4 @@
 # Namespace imports
 
 from .beam import RealSpaceBeam
+from .real_space_convolve import SimRealSpaceConvolve
