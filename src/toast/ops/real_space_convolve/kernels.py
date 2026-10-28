@@ -17,9 +17,8 @@ def real_space_convolve(
     intervals,
     nside,
     maps,
-    node_quats_I,
+    node_quats,
     node_weights_I,
-    node_quats_P,
     node_weights_P,
     use_accel=False,
 ):
@@ -43,12 +42,9 @@ def real_space_convolve(
         nside (int):  The NSIDE of the map.
         maps (array):  The full-sky RING map, shape (1, n_pix) for I or (3, n_pix)
             for IQU.
-        node_quats_I (array):  The quaternions of the I beam nodes, shape
-            (n_node, 4).
-        node_weights_I (array):  The weights of the I beam nodes.
-        node_quats_P (array):  The quaternions of the Q and U beam nodes, unused
-            for an I map.
-        node_weights_P (array):  The weights of the Q and U beam nodes, unused for
+        node_quats (array):  The beam node quaternions, shape (n_node, 4).
+        node_weights_I (array):  The I weight of each beam node.
+        node_weights_P (array):  The Q and U weight of each beam node, unused for
             an I map.
         use_accel (bool):  Whether to use the accelerator for this call (if supported).
 
@@ -66,9 +62,8 @@ def real_space_convolve(
         intervals,
         nside,
         maps,
-        node_quats_I,
+        node_quats,
         node_weights_I,
-        node_quats_P,
         node_weights_P,
         impl=ImplementationType.NUMPY,
         use_accel=use_accel,

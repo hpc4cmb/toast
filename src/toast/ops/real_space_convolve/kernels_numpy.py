@@ -92,7 +92,7 @@ def _stencil(nside, rot_x, rot_y, los, node_dirs):
     return pix.reshape(shape), wts.reshape(shape)
 
 
-def _beam_sum(quats, nside, maps, dirs_I, weights_I, dirs_P, weights_P):
+def _beam_sum(quats, nside, maps, node_dirs, weights_I, weights_P):
     """Convolve the map with the beam at each sample.
 
     Each node direction is read from the RING map with bilinear interpolation.  Q
@@ -103,9 +103,8 @@ def _beam_sum(quats, nside, maps, dirs_I, weights_I, dirs_P, weights_P):
         quats (array):  The detector quaternions, shape (n_samp, 4).
         nside (int):  The map NSIDE.
         maps (array):  The RING map, shape (1, n_pix) for I or (3, n_pix) for IQU.
-        dirs_I (array):  The I node directions in the detector frame, (n_node, 3).
+        node_dirs (array):  The node directions in the detector frame, (n_node, 3).
         weights_I (array):  The I node weights.
-        dirs_P (array):  The Q and U node directions, unused for an I map.
         weights_P (array):  The Q and U node weights, unused for an I map.
 
     Returns:
@@ -114,9 +113,8 @@ def _beam_sum(quats, nside, maps, dirs_I, weights_I, dirs_P, weights_P):
     """
     n_samp = len(quats)
     n_map = maps.shape[0]
-    n_node = max(len(dirs_I), len(dirs_P))
     result = np.zeros((n_map, n_samp), dtype=np.float64)
-    n_chunk = max(1, _CHUNK_ENTRIES // (4 * n_node))
+    n_chunk = max(1, _CHUNK_ENTRIES // (4 * len(node_dirs)))
 
     for first in range(0, n_samp, n_chunk):
         last = min(first + n_chunk, n_samp)
@@ -125,14 +123,13 @@ def _beam_sum(quats, nside, maps, dirs_I, weights_I, dirs_P, weights_P):
         rot_y = qa.rotate(q, _YAXIS)
         los = qa.rotate(q, _ZAXIS)
 
-        pix, wts = _stencil(nside, rot_x, rot_y, los, dirs_I)
+        pix, wts = _stencil(nside, rot_x, rot_y, los, node_dirs)
         result[0, first:last] = np.einsum(
             "jsn,jsn,n->s", wts, maps[0][pix], weights_I
         )
         if n_map == 1:
             continue
 
-        pix, wts = _stencil(nside, rot_x, rot_y, los, dirs_P)
         theta_pix, phi_pix = hp.pix2ang(nside, pix)
         cos_2d, sin_2d = _spin2_transport(
             np.cos(theta_pix),
@@ -166,14 +163,12 @@ def real_space_convolve_numpy(
     intervals,
     nside,
     maps,
-    node_quats_I,
+    node_quats,
     node_weights_I,
-    node_quats_P,
     node_weights_P,
     use_accel=False,
 ):
-    dirs_I = qa.rotate(node_quats_I, _ZAXIS)
-    dirs_P = qa.rotate(node_quats_P, _ZAXIS)
+    node_dirs = qa.rotate(node_quats, _ZAXIS)
     for idet in range(len(quat_index)):
         dquats = quats[quat_index[idet]]
         dweights = weights[weight_index[idet]].reshape((len(dquats), -1))
@@ -184,9 +179,8 @@ def real_space_convolve_numpy(
                 dquats[vslice],
                 nside,
                 maps,
-                dirs_I,
+                node_dirs,
                 node_weights_I,
-                dirs_P,
                 node_weights_P,
             )
             tod[vslice] += np.sum(dweights[vslice].T * stokes, axis=0)
