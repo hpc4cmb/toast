@@ -6,6 +6,7 @@ import healpy as hp
 import numpy as np
 from pshmem import MPIShared
 
+from ...accelerator import ImplementationType
 from ...observation import default_values as defaults
 from ...pixels_io_healpix import read_healpix
 from ...timing import function_timer
@@ -184,3 +185,10 @@ class SimRealSpaceConvolve(Operator):
 
     def _provides(self):
         return {"detdata": [self.det_data]}
+
+    def _implementations(self):
+        return [
+            ImplementationType.DEFAULT,
+            ImplementationType.COMPILED,
+            ImplementationType.NUMPY,
+        ]

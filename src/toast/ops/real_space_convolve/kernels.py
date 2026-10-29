@@ -2,6 +2,10 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import numpy as np
+
+from ... import qarray as qa
+from ..._libtoast import ops_real_space_convolve as libtoast_real_space_convolve
 from ...accelerator import ImplementationType, kernel
 from .kernels_numpy import real_space_convolve_numpy
 
@@ -52,7 +56,7 @@ def real_space_convolve(
         None.
 
     """
-    return real_space_convolve_numpy(
+    return _real_space_convolve_compiled(
         quat_index,
         quats,
         weight_index,
@@ -65,6 +69,48 @@ def real_space_convolve(
         node_quats,
         node_weights_I,
         node_weights_P,
-        impl=ImplementationType.NUMPY,
         use_accel=use_accel,
+    )
+
+
+@kernel(impl=ImplementationType.COMPILED, name="real_space_convolve")
+def real_space_convolve_compiled(*args, use_accel=False):
+    return _real_space_convolve_compiled(*args, use_accel=use_accel)
+
+
+def _real_space_convolve_compiled(
+    quat_index,
+    quats,
+    weight_index,
+    weights,
+    det_data_index,
+    det_data,
+    intervals,
+    nside,
+    maps,
+    node_quats,
+    node_weights_I,
+    node_weights_P,
+    use_accel=False,
+):
+    if use_accel:
+        raise NotImplementedError("real_space_convolve has no accelerator support")
+    if weights.ndim == 2:
+        # Intensity-only weights have one value per sample, but the compiled
+        # kernel expects a 3D array.
+        weights = weights.reshape(weights.shape + (1,))
+    node_dirs = qa.rotate(node_quats, np.array([0.0, 0.0, 1.0]))
+    libtoast_real_space_convolve(
+        quat_index,
+        quats,
+        weight_index,
+        weights,
+        det_data_index,
+        det_data,
+        intervals,
+        nside,
+        maps,
+        node_dirs,
+        node_weights_I,
+        node_weights_P,
     )
