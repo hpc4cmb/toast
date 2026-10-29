@@ -100,10 +100,11 @@ void real_space_convolve_ring_pair(
     z = ring_angles[3 * ring + 1];
     sth = ring_angles[3 * ring + 2];
     double dphi = 2.0 * M_PI / (double)n_ring_pix;
+    double inv_dphi = (double)n_ring_pix / (2.0 * M_PI);
     double shift = shifted ? 0.5 : 0.0;
-    double tmp = phi / dphi - shift;
+    double tmp = phi * inv_dphi - shift;
     int64_t i1 = (tmp < 0.0) ? (int64_t)tmp - 1 : (int64_t)tmp;
-    double w1 = (phi - ((double)i1 + shift) * dphi) / dphi;
+    double w1 = (phi - ((double)i1 + shift) * dphi) * inv_dphi;
     int64_t i2 = i1 + 1;
 
     // Phi comes from atan2 and lies in [-pi, pi], so either index can fall
@@ -329,6 +330,8 @@ void real_space_convolve_inner(
         } else {
             theta = M_PI - ::asin(sth);
         }
+
+        // TODO: look into how to speed up this atan2
         double phi = ::atan2(vec[1], vec[0]);
         real_space_convolve_interp(
             nside, ring_angles, z, theta, phi, pix, wgt, pix_z, pix_sth, pix_phi
