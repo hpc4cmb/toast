@@ -11,9 +11,11 @@ from astropy import units as u
 
 from .. import ops as ops
 from .. import qarray as qa
+from ..accelerator import ImplementationType
 from ..intervals import IntervalList
 from ..observation import default_values as defaults
-from ..ops.real_space_convolve.kernels_numpy import _beam_sum, _spin2_transport
+from ..ops.real_space_convolve.kernels import real_space_convolve
+from ..ops.real_space_convolve.kernels_numpy import _spin2_transport
 from .helpers import close_data, create_outdir, create_satellite_data
 from .mpi import MPITestCase
 
@@ -363,7 +365,7 @@ class RealSpaceConvolveTest(MPITestCase):
 
     def test_polar_pointing(self):
         # The test observations stay at low latitudes, so the transport near the
-        # poles is checked on the beam sum directly, against the two-bearing
+        # poles is checked on the kernels directly, against the two-bearing
         # transport, within 1 degree of both poles.
         nside = 64
         maps = self.random_map(nside, 3.0)
@@ -373,14 +375,79 @@ class RealSpaceConvolveTest(MPITestCase):
         theta[n // 2 :] = np.pi - theta[n // 2 :]
         phi = np.random.uniform(0, 2 * np.pi, n)
         psi = np.random.uniform(0, 2 * np.pi, n)
-        quats = qa.from_iso_angles(theta, phi, psi)
-        center = np.array([[0.0, 0.0, 1.0]])
-        result = _beam_sum(quats, nside, maps, center, np.ones(1), np.ones(1))
+        quats = qa.from_iso_angles(theta, phi, psi).reshape((1, n, 4))
         expected = interp_iqu(maps, theta, phi)
-        for i in range(3):
-            nt.assert_allclose(
-                result[i], expected[i], rtol=0, atol=1e-10 * np.std(maps)
+        index = np.zeros(1, dtype=np.int32)
+        times = np.arange(n, dtype=np.float64)
+        intervals = IntervalList(times, samplespans=[(0, n)]).data
+        for impl in (ImplementationType.NUMPY, ImplementationType.COMPILED):
+            for i in range(3):
+                # A unit weight on one Stokes component selects that component.
+                weights = np.zeros((1, n, 3))
+                weights[0, :, i] = 1.0
+                result = np.zeros((1, n))
+                real_space_convolve(
+                    index,
+                    quats,
+                    index,
+                    weights,
+                    index,
+                    result,
+                    intervals,
+                    nside,
+                    maps,
+                    np.array([[0.0, 0.0, 0.0, 1.0]]),
+                    np.ones(1),
+                    np.ones(1),
+                    impl=impl,
+                )
+                nt.assert_allclose(
+                    result[0], expected[i], rtol=0, atol=1e-10 * np.std(maps)
+                )
+
+    def test_compiled_numpy(self):
+        # The compiled kernel matches the NumPy kernel on a beam with many nodes,
+        # with a half-wave plate and a view that skips part of each observation.
+        data = create_satellite_data(self.comm, obs_time=1 * u.minute)
+        maps = self.random_map(32, 5.0)
+        path = self.write_map("compiled.fits", maps)
+        n_node = 50
+        directions = np.random.normal(scale=0.02, size=(n_node, 3))
+        directions[:, 0] = 1.0
+        beam = beam_from_directions(
+            directions, np.random.uniform(size=n_node), np.random.uniform(size=n_node)
+        )
+        beam_file = self.write_beam("compiled.npz", beam)
+        detpointing, weights = self.pointing("IQU")
+        detpointing.view = "skip"
+        for ob in data.obs:
+            n = ob.n_local_samples
+            ob.intervals["skip"] = IntervalList(
+                ob.shared[defaults.times], samplespans=[(0, n // 3), (n // 2, n)]
             )
+        for key, impl in (
+            ("numpy", ImplementationType.NUMPY),
+            ("compiled", ImplementationType.COMPILED),
+        ):
+            ops.SimRealSpaceConvolve(
+                file=path,
+                beam_file=beam_file,
+                det_data=key,
+                stokes_weights=weights,
+                kernel_implementation=impl,
+            ).apply(data)
+        for ob in data.obs:
+            n = ob.n_local_samples
+            for det in ob.select_local_detectors(flagmask=defaults.det_mask_invalid):
+                compiled = ob.detdata["compiled"][det]
+                nt.assert_allclose(
+                    compiled,
+                    ob.detdata["numpy"][det],
+                    rtol=0,
+                    atol=1e-12 * np.std(maps),
+                )
+                nt.assert_array_equal(compiled[n // 3 : n // 2], 0.0)
+        close_data(data)
 
     def test_pipeline_single(self):
         # A pipeline that runs one detector at a time calls exec once per detector,
