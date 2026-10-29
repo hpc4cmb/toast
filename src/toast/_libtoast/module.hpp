@@ -422,5 +422,6 @@ void init_ops_pixels_healpix(py::module & m);
 void init_ops_mapmaker_utils(py::module & m);
 void init_ops_noise_weight(py::module & m);
 void init_ops_scan_map(py::module & m);
+void init_ops_real_space_convolve(py::module & m);
 
 #endif // ifndef LIBTOAST_HPP

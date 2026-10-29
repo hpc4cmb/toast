@@ -39,6 +39,7 @@ pybind11_add_module(_libtoast MODULE
     _libtoast/ops_mapmaker_utils.cpp
     _libtoast/ops_noise_weight.cpp
     _libtoast/ops_scan_map.cpp
+    _libtoast/ops_real_space_convolve.cpp
 )
 
 # Handle recursion limit on NVC++ / PGI

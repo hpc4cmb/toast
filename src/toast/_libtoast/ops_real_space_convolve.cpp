@@ -6,6 +6,8 @@
 
 #include <qarray.hpp>
 
+#include <intervals.hpp>
+
 #include <cmath>
 
 
@@ -323,5 +325,109 @@ void real_space_convolve_inner(
         stokes[1] += node_weights_P[inode] * val_Q;
         stokes[2] += node_weights_P[inode] * val_U;
     }
+    return;
+}
+
+void init_ops_real_space_convolve(py::module & m) {
+    m.def("ops_real_space_convolve",
+          [](
+              py::buffer quat_index,
+              py::buffer quats,
+              py::buffer weight_index,
+              py::buffer weights,
+              py::buffer det_data_index,
+              py::buffer det_data,
+              py::buffer intervals,
+              int64_t nside,
+              py::buffer maps,
+              py::buffer node_dirs,
+              py::buffer node_weights_I,
+              py::buffer node_weights_P)
+          {
+              // This is used to return the actual shape of each buffer
+              std::vector <int64_t> temp_shape(3);
+
+              int32_t * raw_quat_index = extract_buffer <int32_t> (
+                  quat_index, "quat_index", 1, temp_shape, {-1}
+              );
+              int64_t n_det = temp_shape[0];
+
+              double * raw_quats = extract_buffer <double> (
+                  quats, "quats", 3, temp_shape, {-1, -1, 4}
+              );
+              int64_t n_samp = temp_shape[1];
+
+              int32_t * raw_weight_index = extract_buffer <int32_t> (
+                  weight_index, "weight_index", 1, temp_shape, {n_det}
+              );
+              double * raw_weights = extract_buffer <double> (
+                  weights, "weights", 3, temp_shape, {-1, n_samp, -1}
+              );
+              int64_t nnz = temp_shape[2];
+
+              int32_t * raw_det_data_index = extract_buffer <int32_t> (
+                  det_data_index, "det_data_index", 1, temp_shape, {n_det}
+              );
+              double * raw_det_data = extract_buffer <double> (
+                  det_data, "det_data", 2, temp_shape, {-1, n_samp}
+              );
+
+              Interval * raw_intervals = extract_buffer <Interval> (
+                  intervals, "intervals", 1, temp_shape, {-1}
+              );
+              int64_t n_view = temp_shape[0];
+
+              double * raw_maps = extract_buffer <double> (
+                  maps, "maps", 2, temp_shape, {nnz, 12 * nside * nside}
+              );
+
+              double * raw_node_dirs = extract_buffer <double> (
+                  node_dirs, "node_dirs", 2, temp_shape, {-1, 3}
+              );
+              int64_t n_node = temp_shape[0];
+
+              double * raw_node_weights_I = extract_buffer <double> (
+                  node_weights_I, "node_weights_I", 1, temp_shape, {n_node}
+              );
+              double * raw_node_weights_P = extract_buffer <double> (
+                  node_weights_P, "node_weights_P", 1, temp_shape,
+                  {(nnz == 3) ? n_node : -1}
+              );
+
+              for (int64_t idet = 0; idet < n_det; idet++) {
+                  int64_t off_q = raw_quat_index[idet] * n_samp;
+                  int64_t off_w = raw_weight_index[idet] * n_samp;
+                  int64_t off_d = raw_det_data_index[idet] * n_samp;
+                  for (int64_t iview = 0; iview < n_view; iview++) {
+                      #pragma omp parallel for default(shared) schedule(static)
+                      for (
+                          int64_t isamp = raw_intervals[iview].first;
+                          isamp < raw_intervals[iview].last;
+                          isamp++
+                      ) {
+                          double stokes[3];
+                          real_space_convolve_inner(
+                              nside,
+                              nnz,
+                              raw_maps,
+                              n_node,
+                              raw_node_dirs,
+                              raw_node_weights_I,
+                              raw_node_weights_P,
+                              &(raw_quats[4 * (off_q + isamp)]),
+                              stokes
+                          );
+                          double const * wt = &(raw_weights[nnz * (off_w + isamp)]);
+                          double val = 0.0;
+                          for (int64_t iweight = 0; iweight < nnz; iweight++) {
+                              val += wt[iweight] * stokes[iweight];
+                          }
+                          raw_det_data[off_d + isamp] += val;
+                      }
+                  }
+              }
+              return;
+          }
+    );
     return;
 }
