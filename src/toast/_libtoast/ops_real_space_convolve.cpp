@@ -23,15 +23,36 @@ int64_t real_space_convolve_ring_above(int64_t const & nside, double const & z) 
     return (z > 0.0) ? iring : 4 * nside - iring - 1;
 }
 
-// First pixel, pixel count and longitude shift of a ring (1 to 4 nside - 1), and
-// the colatitude, cosine and sine of the colatitude of its pixel centers.
+// First pixel, pixel count and longitude shift of a ring (1 to 4 nside - 1).
 
-void real_space_convolve_ring_info(
+void real_space_convolve_ring_layout(
     int64_t const & nside,
     int64_t const & ring,
     int64_t & first_pix,
     int64_t & n_ring_pix,
-    bool & shifted,
+    bool & shifted
+) {
+    int64_t north_ring = (ring > 2 * nside) ? 4 * nside - ring : ring;
+    if (north_ring < nside) {
+        n_ring_pix = 4 * north_ring;
+        shifted = true;
+        first_pix = 2 * north_ring * (north_ring - 1);
+    } else {
+        n_ring_pix = 4 * nside;
+        shifted = ((north_ring - nside) & 1) == 0;
+        first_pix = 2 * nside * (nside - 1) + (north_ring - nside) * n_ring_pix;
+    }
+    if (north_ring != ring) {
+        first_pix = 12 * nside * nside - first_pix - n_ring_pix;
+    }
+    return;
+}
+
+// Colatitude, and its cosine and sine, of the pixel centers of a ring.
+
+void real_space_convolve_ring_angles(
+    int64_t const & nside,
+    int64_t const & ring,
     double & theta,
     double & z,
     double & sth
@@ -44,21 +65,14 @@ void real_space_convolve_ring_info(
         z = 1.0 - tmp;
         sth = ::sqrt(tmp * (2.0 - tmp));
         theta = ::atan2(sth, z);
-        n_ring_pix = 4 * north_ring;
-        shifted = true;
-        first_pix = 2 * north_ring * (north_ring - 1);
     } else {
         z = (double)(2 * nside - north_ring) * fact1;
         sth = ::sqrt((1.0 - z) * (1.0 + z));
         theta = ::acos(z);
-        n_ring_pix = 4 * nside;
-        shifted = ((north_ring - nside) & 1) == 0;
-        first_pix = 2 * nside * (nside - 1) + (north_ring - nside) * n_ring_pix;
     }
     if (north_ring != ring) {
         theta = M_PI - theta;
         z = -z;
-        first_pix = 12 * nside * nside - first_pix - n_ring_pix;
     }
     return;
 }
@@ -68,6 +82,7 @@ void real_space_convolve_ring_info(
 
 void real_space_convolve_ring_pair(
     int64_t const & nside,
+    double const * ring_angles,
     int64_t const & ring,
     double const & phi,
     int64_t * pix,
@@ -80,9 +95,10 @@ void real_space_convolve_ring_pair(
     int64_t first_pix;
     int64_t n_ring_pix;
     bool shifted;
-    real_space_convolve_ring_info(
-        nside, ring, first_pix, n_ring_pix, shifted, theta, z, sth
-    );
+    real_space_convolve_ring_layout(nside, ring, first_pix, n_ring_pix, shifted);
+    theta = ring_angles[3 * ring];
+    z = ring_angles[3 * ring + 1];
+    sth = ring_angles[3 * ring + 2];
     double dphi = 2.0 * M_PI / (double)n_ring_pix;
     double shift = shifted ? 0.5 : 0.0;
     double tmp = phi / dphi - shift;
@@ -113,10 +129,12 @@ void real_space_convolve_ring_pair(
 
 // Bilinear interpolation on a RING map at colatitude theta, with z = cos(theta),
 // and longitude phi.  Returns the four pixels, their weights, and the cosine and
-// sine of the colatitude and the longitude of each pixel center.
+// sine of the colatitude and the longitude of each pixel center.  The ring_angles
+// table holds the output of real_space_convolve_ring_angles for every ring.
 
 void real_space_convolve_interp(
     int64_t const & nside,
+    double const * ring_angles,
     double const & z,
     double const & theta,
     double const & phi,
@@ -136,12 +154,14 @@ void real_space_convolve_interp(
     double sth2 = 0.0;
     if (ring1 > 0) {
         real_space_convolve_ring_pair(
-            nside, ring1, phi, &pix[0], &wgt[0], &pix_phi[0], theta1, z1, sth1
+            nside, ring_angles, ring1, phi, &pix[0], &wgt[0], &pix_phi[0],
+            theta1, z1, sth1
         );
     }
     if (ring2 < 4 * nside) {
         real_space_convolve_ring_pair(
-            nside, ring2, phi, &pix[2], &wgt[2], &pix_phi[2], theta2, z2, sth2
+            nside, ring_angles, ring2, phi, &pix[2], &wgt[2], &pix_phi[2],
+            theta2, z2, sth2
         );
     }
     if (ring1 == 0) {
@@ -242,6 +262,7 @@ void real_space_convolve_spin2_transport(
 
 void real_space_convolve_inner(
     int64_t const & nside,
+    double const * ring_angles,
     int64_t const & nnz,
     double const * maps,
     int64_t const & n_node,
@@ -310,7 +331,7 @@ void real_space_convolve_inner(
         }
         double phi = ::atan2(vec[1], vec[0]);
         real_space_convolve_interp(
-            nside, z, theta, phi, pix, wgt, pix_z, pix_sth, pix_phi
+            nside, ring_angles, z, theta, phi, pix, wgt, pix_z, pix_sth, pix_phi
         );
 
         double val_I = 0.0;
@@ -415,6 +436,16 @@ void init_ops_real_space_convolve(py::module & m) {
                   {(nnz == 3) ? n_node : -1}
               );
 
+              // Ring angles are shared by all samples, so they are computed once.
+              // Rings are numbered from 1.
+              std::vector <double> ring_angles(3 * 4 * nside);
+              for (int64_t ring = 1; ring < 4 * nside; ring++) {
+                  real_space_convolve_ring_angles(
+                      nside, ring, ring_angles[3 * ring], ring_angles[3 * ring + 1],
+                      ring_angles[3 * ring + 2]
+                  );
+              }
+
               for (int64_t idet = 0; idet < n_det; idet++) {
                   int64_t off_q = raw_quat_index[idet] * n_samp;
                   int64_t off_w = raw_weight_index[idet] * n_samp;
@@ -429,6 +460,7 @@ void init_ops_real_space_convolve(py::module & m) {
                           double stokes[3];
                           real_space_convolve_inner(
                               nside,
+                              ring_angles.data(),
                               nnz,
                               raw_maps,
                               n_node,
