@@ -273,6 +273,21 @@ void real_space_convolve_inner(
     double pix_phi[4];
     double vec[3];
 
+    // Nearby nodes share stencil pixels, so the transport of each pixel to this
+    // line of sight is kept in a direct-mapped table.  The slot is a
+    // multiplicative hash of the pixel index, because the low bits alias between
+    // adjacent rings, whose lengths are multiples of a power of two.
+    constexpr int64_t cache_bits = 10;
+    constexpr int64_t n_cache = 1 << cache_bits;
+    int64_t cache_pix[n_cache];
+    double cache_cos[n_cache];
+    double cache_sin[n_cache];
+    if (nnz == 3) {
+        for (int64_t slot = 0; slot < n_cache; slot++) {
+            cache_pix[slot] = -1;
+        }
+    }
+
     stokes[0] = 0.0;
     stokes[1] = 0.0;
     stokes[2] = 0.0;
@@ -311,12 +326,18 @@ void real_space_convolve_inner(
         double val_Q = 0.0;
         double val_U = 0.0;
         for (int64_t j = 0; j < 4; j++) {
-            double cos_2d;
-            double sin_2d;
-            real_space_convolve_spin2_transport(
-                pix_z[j], pix_sth[j], pix_phi[j], z_los, sth_los, phi_los,
-                cos_2d, sin_2d
+            int64_t slot = (int64_t)(
+                ((uint64_t)pix[j] * 0x9E3779B97F4A7C15ull) >> (64 - cache_bits)
             );
+            if (cache_pix[slot] != pix[j]) {
+                real_space_convolve_spin2_transport(
+                    pix_z[j], pix_sth[j], pix_phi[j], z_los, sth_los, phi_los,
+                    cache_cos[slot], cache_sin[slot]
+                );
+                cache_pix[slot] = pix[j];
+            }
+            double cos_2d = cache_cos[slot];
+            double sin_2d = cache_sin[slot];
             double q_pix = maps[n_pix + pix[j]];
             double u_pix = maps[2 * n_pix + pix[j]];
             val_Q += wgt[j] * (q_pix * cos_2d - u_pix * sin_2d);

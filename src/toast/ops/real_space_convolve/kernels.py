@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+import healpy as hp
 import numpy as np
 
 from ... import qarray as qa
@@ -100,6 +101,11 @@ def _real_space_convolve_compiled(
         # kernel expects a 3D array.
         weights = weights.reshape(weights.shape + (1,))
     node_dirs = qa.rotate(node_quats, np.array([0.0, 0.0, 1.0]))
+    # Consecutive nodes in NESTED pixel order are close on the sky, so they share
+    # map pixels and the kernel reuses their transport.
+    order = np.argsort(hp.vec2pix(2**20, *node_dirs.T, nest=True), kind="stable")
+    if len(node_weights_P) > 0:
+        node_weights_P = node_weights_P[order]
     libtoast_real_space_convolve(
         quat_index,
         quats,
@@ -110,7 +116,7 @@ def _real_space_convolve_compiled(
         intervals,
         nside,
         maps,
-        node_dirs,
-        node_weights_I,
+        node_dirs[order],
+        node_weights_I[order],
         node_weights_P,
     )
