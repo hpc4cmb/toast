@@ -21,11 +21,12 @@ class SimRealSpaceConvolve(Operator):
     """Operator which convolves a HEALPix map with a beam in real space.
 
     The beam is a set of nodes around the line of sight, each with a weight for I
-    and a weight shared by Q and U (see `RealSpaceBeam`).  At each sample, the map
-    is read at every node with bilinear interpolation, Q and U are parallel
-    transported to the line of sight, and the weighted sums give the beam-convolved
-    I, Q and U in the meridian basis of the line of sight.  These are contracted
-    with the Stokes weights and added to the detector data.
+    and a weight shared by Q and U (see `RealSpaceBeam`).  The same beam is used
+    for every detector.  At each sample, the map is read at every node with
+    bilinear interpolation, Q and U are parallel transported to the line of sight,
+    and the weighted sums give the beam-convolved I, Q and U in the meridian basis
+    of the line of sight.  These are contracted with the Stokes weights and added
+    to the detector data.
 
     Because a single weight acts on both Q and U, it commutes with the rotation of
     the polarization basis, so the contraction with the Stokes weights is exact for

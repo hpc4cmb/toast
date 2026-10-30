@@ -14,6 +14,9 @@
 // The RING helpers below follow healpix_base.cc in HEALPix C++, so the bilinear
 // stencil matches healpy.get_interp_weights.
 
+// The ring just north of z = cos(theta), numbered from 1, or 0 north of the first
+// ring.
+
 int64_t real_space_convolve_ring_above(int64_t const & nside, double const & z) {
     double az = ::fabs(z);
     if (az <= 2.0 / 3.0) {
@@ -130,7 +133,8 @@ void real_space_convolve_ring_pair(
 
 // Bilinear interpolation on a RING map at colatitude theta, with z = cos(theta),
 // and longitude phi.  Returns the four pixels, their weights, and the cosine and
-// sine of the colatitude and the longitude of each pixel center.  The ring_angles
+// sine of the colatitude and the longitude of each pixel center, with the first
+// two pixels on the northern ring, as healpy orders them.  The ring_angles
 // table holds the output of real_space_convolve_ring_angles for every ring.
 
 void real_space_convolve_interp(
@@ -346,7 +350,7 @@ void real_space_convolve_inner(
             continue;
         }
 
-        // Q + iU of each pixel, multiplied by exp(2i delta)
+        // Q + iU of each pixel, multiplied by exp(2i delta).
         double val_Q = 0.0;
         double val_U = 0.0;
         for (int64_t j = 0; j < 4; j++) {

@@ -138,7 +138,7 @@ def _beam_sum(quats, nside, maps, node_dirs, weights_I, weights_P):
             np.arctan2(los[:, 1], los[:, 0])[None, :, None],
         )
 
-        # Q + iU of each pixel, multiplied by exp(2i delta)
+        # Q + iU of each pixel, multiplied by exp(2i delta).
         q_pix = maps[1][pix]
         u_pix = maps[2][pix]
         result[1, first:last] = np.einsum(
