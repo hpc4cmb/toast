@@ -229,6 +229,10 @@ def load_meta_object(parent):
         (object):  The populated python container
 
     """
+
+    if len(parent) == 0:
+        return list()  # Must return an iterable
+
     if "python_data_type" not in parent.attrs:
         raise RuntimeError(
             "metadata group does not contain 'python_data_type' attribute"
