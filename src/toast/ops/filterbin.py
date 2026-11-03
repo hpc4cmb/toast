@@ -899,7 +899,10 @@ class FilterBin(Operator):
                     )
 
                 signal = obs.detdata[self.det_data][det]
-                flags = obs.detdata[self.det_flags][det]
+                if self.det_flags is None:
+                    flags = np.isnan(signal)
+                else:
+                    flags = obs.detdata[self.det_flags][det]
                 # `good` is essentially the diagonal noise matrix used in
                 # template regression.  All good detector samples have the
                 # same noise weight and rest have zero weight.
