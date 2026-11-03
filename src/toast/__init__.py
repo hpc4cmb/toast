@@ -66,7 +66,7 @@ from ._libtoast import Environment
 
 from .config import load_config, parse_config
 from .data import Data
-from .instrument import Focalplane, GroundSite, SpaceSite, Telescope
+from .instrument import Focalplane, GroundSite, Session, SpaceSite, Telescope
 from .instrument_sim import fake_hexagon_focalplane
 from .intervals import IntervalList, interval_dtype
 from .job import job_group_size
