@@ -12,7 +12,7 @@ from ..timing import Timer, function_timer
 from ..traits import Bool, Instance, Int, Unicode, Unit, trait_docs
 from ..utils import Logger
 from .delete import Delete
-from .mapmaker_utils import BuildHitMap, BuildInverseCovariance, BuildNoiseWeighted
+from .mapmaker_utils import BuildNoiseWeighted
 from .operator import Operator
 from .pipeline import Pipeline
 
