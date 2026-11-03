@@ -809,7 +809,14 @@ class FilterBin(Operator):
 
         # Get the units used across the distributed data for our desired
         # input detector data
-        self._det_data_units = data.detector_units(self.det_data)
+        units = data.detector_units(self.det_data)
+        if units is None:
+            log.warning(
+                f"FilterBin: Could not determine the units of '{self.det_data}'. "
+                "Most likely it does not exist in data. No map was made."
+            )
+            return
+        self._det_data_units = units
         if self.binning.det_data_units == self._det_data_units:
             self.det_data_units_save = None
         else:
