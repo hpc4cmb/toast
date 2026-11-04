@@ -70,6 +70,15 @@ inventories = ["https://docs.python.org/3/objects.inv"]
 #paths = ["src"]
 
 [project.plugins.mkdocstrings.handlers.python.options]
+# Use dynamic analysis (import the package) so that the trait docs appended to
+# class docstrings at import time by the @trait_docs decorator are included.
+force_inspection = true
+# Dynamic inspection exposes private members (including the traitlets
+# machinery); exclude everything starting with an underscore.
+filters = ["!^_"]
+# Traitlets have no useful value repr, and the trait docs from the docstring
+# appendix are rendered as an Attributes table, so hide the raw values.
+show_attribute_values = false
 docstring_style = "google"
 show_root_heading = true
 inherited_members = false
