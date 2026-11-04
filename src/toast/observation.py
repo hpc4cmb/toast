@@ -218,6 +218,9 @@ class Observation(MutableMapping):
         if self._name is None:
             rng = np.random.default_rng()
             int_name = rng.integers(0, high=2147483647, size=None, dtype=np.int32)
+            # Ensure that all processes in a group use the same value
+            if comm.comm_group is not None:
+                int_name = comm.comm_group.bcast(int_name, root=0)
             self._name = f"{int_name:010d}"
             if self._uid is None:
                 # Set the UID to the same random integer
@@ -227,13 +230,12 @@ class Observation(MutableMapping):
                 self._uid = name_UID(self._name)
 
         if self._session is None:
-            if self._name is not None:
-                self._session = Session(
-                    name=self._name,
-                    uid=self._uid,
-                    start=None,
-                    end=None,
-                )
+            self._session = Session(
+                name=self._name,
+                uid=self._uid,
+                start=None,
+                end=None,
+            )
         elif not isinstance(self._session, Session):
             raise RuntimeError("session should be a Session instance or None")
 
