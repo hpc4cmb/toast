@@ -762,7 +762,7 @@ def load_hdf5_obs_meta(
         # Now load regular metadata into a python dictionary
         meta_other = meta_group["other"]
         other = None
-        if len(meta_other.keys()) > 0:
+        if len(meta_other.attrs) > 0:
             # We have some data
             other = load_meta_object(meta_other)
             meta_load.update(other)
@@ -990,14 +990,16 @@ def load_hdf5(
     if intervals is None or len(intervals) > 0:
         intervals_group = None
         intervals_times = None
+        have_intervals = False
         if hgroup is not None:
             if "intervals" in hgroup:
+                have_intervals = True
                 intervals_group = hgroup["intervals"]
                 intervals_times = intervals_group.attrs["times"]
         if not parallel and nproc > 1:
-            intervals_group = comm.comm_group.bcast(intervals_group, root=0)
+            have_intervals = comm.comm_group.bcast(have_intervals, root=0)
             intervals_times = comm.comm_group.bcast(intervals_times, root=0)
-        if intervals_group is not None:
+        if have_intervals:
             load_hdf5_intervals(
                 obs,
                 intervals_group,
