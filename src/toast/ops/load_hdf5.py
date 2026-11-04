@@ -254,7 +254,14 @@ class LoadHDF5(Operator):
                         # We are using the index.  Get the full list of obs and then
                         # apply the regex.  We use the number of valid detector-samples
                         # for load balancing.
-                        pattern = re.compile(self.pattern)
+                        try:
+                            pattern = re.compile(self.pattern)
+                        except Exception as e:
+                            print(
+                                "LoadHDF5: Failed to compile filename pattern = "
+                                f"'{self.pattern}'"
+                            )
+                            raise(e)
                         all_obs = vindx.select(select_prefix)
                         for oname, opath, osamples, odets in all_obs:
                             if pattern.search(opath) is not None:
