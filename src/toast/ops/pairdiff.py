@@ -364,8 +364,7 @@ class PairDifference(Operator):
                 pairdiff_obs.shared.assign_mpishared(field, shobj, commtype)
             elif commtype == "row":
                 # Shared in the sample direction (per-detector object like a beam,
-                # bandpass, etc).  This means that downsampling does not effect the
-                # shared object.  Just copy to the new obs.
+                # bandpass, etc).  Just copy to the new obs.
                 pairdiff_obs.shared.assign_mpishared(field, shobj, commtype)
             elif commtype == "column":
                 # Shared in the detector direction.
