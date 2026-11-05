@@ -77,7 +77,11 @@ class PairDiffTest(MPITestCase):
 
         # Pairdifference into a new data object
 
-        pairdiff = ops.PairDifference(fpkeys=["pixel"], mode="IQU")
+        pairdiff = ops.PairDifference(
+            mode="IQU",
+            fpkeys=["pixel", "bandcenter"],
+            pair_name="{pixel} {bandcenter}",
+        )
         pairdiff_data = pairdiff.apply(data)
 
         # Pairdifference in place
@@ -181,7 +185,7 @@ class PairDiffTest(MPITestCase):
 
         # Pairdifference
 
-        pairdiff = ops.PairDifference(fpkeys=["pixel"], mode=weight_mode)
+        pairdiff = ops.PairDifference(mode=weight_mode)
         pairdiff_data = pairdiff.apply(data)
 
         # Map again
@@ -211,7 +215,7 @@ class PairDiffTest(MPITestCase):
                 pair = first_det.replace("pairdiff_", "")
             else:
                 raise RuntimeError(f"Cannot parse '{first_det}'")
-            det1, det2 = pair.split("&")
+            det1, det2 = pair.split(" & ")
 
             # Plot undifferenced timestreams for comparison
             oname = data.obs[0].name

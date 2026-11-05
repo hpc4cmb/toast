@@ -2,6 +2,7 @@
 # All rights reserved.  Use of this source code is governed by
 # a BSD-style license that can be found in the LICENSE file.
 
+from collections import OrderedDict
 import os
 import re
 import warnings
@@ -40,6 +41,13 @@ class PairDifference(Operator):
         help="List of focalplane keys that must match for detectors to "
         "be differenced.  If more than two detectors match, an error "
         "is raised",
+    )
+
+    pair_name = Unicode(
+        "{det1} & {det2}",
+        help="String defining the detector pair naming scheme.  It will be "
+        "decoded using the `.format()` method.  You can use `{det1}`, `{det2}` "
+        "and all keys defined in `fpkeys`"
     )
 
     times = Unicode(
@@ -146,13 +154,12 @@ class PairDifference(Operator):
 
         detector_sets = {}
         for det in fp.detectors:
-            full_key = None
+            # Put reqested properties in a dictionary
+            full_key = OrderedDict()
             for fpkey in self.fpkeys:
-                value = str(fp[det][fpkey])
-                if full_key is None:
-                    full_key = f"{fpkey}={value}"
-                else:
-                    full_key += f";{fpkey}={value}"
+                full_key[fpkey] = str(fp[det][fpkey])
+            # Cast the dictionary as a string for hashing
+            full_key = str(full_key)
             if full_key not in detector_sets:
                 detector_sets[full_key] = [det]
             elif len(detector_sets[full_key]) == 1:
@@ -169,13 +176,14 @@ class PairDifference(Operator):
         nkeep = 0
         ndrop = 0
         for full_key, detector_set in detector_sets.items():
+            props = eval(full_key)
             ndet = len(detector_set)
             if ndet == 1:
                 ndrop += 1
                 continue
             elif ndet == 2:
                 det1, det2 = sorted(detector_set)
-                det_pair = f"{det1}&{det2}"
+                det_pair = self.pair_name.format(det1=det1, det2=det2, **props)
                 detector_pairs[det_pair] = [det1, det2]
                 det2pair[det1] = det_pair
                 det2pair[det2] = det_pair
