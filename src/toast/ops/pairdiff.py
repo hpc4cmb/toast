@@ -11,10 +11,8 @@ import numpy as np
 import traitlets
 from astropy import units as u
 from astropy.table import QTable
-from scipy.signal import fftconvolve, firwin
 
 from .stokes_weights import StokesWeights
-from .. import qarray as qa
 from ..data import Data
 from ..instrument import Focalplane, Telescope
 from ..intervals import IntervalList
@@ -224,7 +222,10 @@ class PairDifference(Operator):
             detector_pairs, det2pair = self._get_detector_pairs(obs)
 
             # Redistribute so pairs are always on a single task
-            temp_ob = obs.duplicate(times=self.times)
+            if self.in_place or self.purge:
+                temp_ob = obs
+            else:
+                temp_ob = obs.duplicate(times=self.times)
             temp_ob.redistribute(
                 obs.comm.group_size,
                 times=self.times,
@@ -296,7 +297,7 @@ class PairDifference(Operator):
             self._pairdiff_signal(data, temp_ob, pairdiff_ob, local_pairs)
             self._pairdiff_noise(temp_ob, pairdiff_ob, local_pairs)
 
-            pairdiff_ob.intervals = temp_ob.intervals
+            self._pairdiff_intervals(temp_ob, pairdiff_ob)
             self._pairdiff_metadata(temp_ob, pairdiff_ob)
 
             pairdiff_obs.append(pairdiff_ob)
@@ -395,6 +396,22 @@ class PairDifference(Operator):
                 msg = "Only shared objects using the group, row, and column "
                 msg += "communicators can be pairdifferenced"
                 raise RuntimeError(msg)
+        return
+
+    @function_timer
+    def _pairdiff_intervals(self, obs, pairdiff_obs):
+        """Copy the intervals"""
+
+        timestamps = pairdiff_obs.shared[self.times]
+        for key, interval_list in obs.intervals.items():
+            if key == obs.intervals.all_name:
+                # Do not copy, the default interval is automatically
+                # generated
+                continue
+            pairdiff_obs.intervals[key] = IntervalList(
+                timestamps, intervals=interval_list
+            )
+
         return
 
     @function_timer

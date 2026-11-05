@@ -27,6 +27,75 @@ class PairDiffTest(MPITestCase):
         fixture_name = os.path.splitext(os.path.basename(__file__))[0]
         self.outdir = create_outdir(self.comm, subdir=fixture_name)
 
+    def test_pairdiff_in_place(self):
+        data = create_ground_data(self.comm, flagged_obs=False)
+        nside = 256
+
+        # Create an uncorrelated noise model from focalplane detector properties
+        default_model = ops.DefaultNoiseModel(noise_model="noise_model")
+        default_model.apply(data)
+
+        # Pointing operators
+
+        detpointing_azel = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec,
+            shared_flag_mask=0,
+        )
+        detpointing_radec = ops.PointingDetectorSimple(
+            boresight=defaults.boresight_radec,
+            shared_flag_mask=0,
+        )
+
+        pixels = ops.PixelsHealpix(
+            nside=nside,
+            detector_pointing=detpointing_radec,
+        )
+        weights = ops.StokesWeights(
+            mode="IQU",
+            hwp_angle=defaults.hwp_angle,
+            detector_pointing=detpointing_radec,
+        )
+
+        sky_file = os.path.join(self.outdir, f"fake_sky.fits")
+        map_key = "fake_map"
+        create_fake_healpix_scanned_tod(
+            data,
+            pixels,
+            weights,
+            sky_file,
+            "pixel_dist",
+            map_key=map_key,
+            fwhm=1.0 * u.deg,
+            lmax=3 * nside,
+            I_scale=0.001,
+            Q_scale=0.0001,
+            U_scale=0.0001,
+            det_data=defaults.det_data,
+        )
+
+        # Make a copy of the data
+
+        # Pairdifference into a new data object
+
+        pairdiff = ops.PairDifference(fpkeys=["pixel"], mode="IQU")
+        pairdiff_data = pairdiff.apply(data)
+
+        # Pairdifference in place
+
+        pairdiff.in_place = True
+        pairdiff.apply(data)
+
+        # Compare
+
+        self.assertTrue(len(data.obs) == len(pairdiff_data.obs))
+        for ob1, ob2 in zip(data.obs, pairdiff_data.obs):
+            self.assertTrue(ob1 == ob2)
+
+        if self.comm is not None:
+            self.comm.barrier()
+        close_data(data)
+        close_data(pairdiff_data)
+
     def _test_pairdiff(self, weight_mode, data):
         nside = 256
 
