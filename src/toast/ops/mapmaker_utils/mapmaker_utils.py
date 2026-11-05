@@ -733,9 +733,9 @@ class BuildNoiseWeighted(Operator):
             if data.comm.comm_world is not None:
                 weight_nnz = data.comm.comm_world.allreduce(weight_nnz, op=MPI.MAX)
             if weight_nnz == 0:
-                if data.comm.world_rank == 0:
-                    log.warning("No valid detectors in BuildNoiseWeighted.")
-                return
+                msg = "No valid detectors. Could not infer the pointing matrix "
+                msg += "dimensions from the data."
+                raise RuntimeError(msg)
             data[self.zmap] = PixelData(
                 dist, np.float64, n_value=weight_nnz, units=zmap_units
             )
