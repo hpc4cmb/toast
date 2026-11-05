@@ -136,6 +136,16 @@ class IntervalList(Sequence, AcceleratorObject):
             # No data yet
             self.data = np.zeros(0, dtype=interval_dtype).view(np.recarray)
 
+    def duplicate(self):
+        """ Return a copy of the IntervalList that references the same timestamps
+
+        """
+        intervals = np.array(
+            [(ival.start, ival.stop, ival.first, ival.last) for ival in self.data],
+            dtype=interval_dtype,
+        ).view(np.recarray)
+        return IntervalList(self.timestamps, intervals=intervals)
+
     def _sample_time(self, sample):
         nsample = len(self.timestamps)
         if sample < 0 or sample > nsample:

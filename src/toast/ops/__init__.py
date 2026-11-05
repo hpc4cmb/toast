@@ -49,6 +49,7 @@ from .noise_model import DefaultNoiseModel, FitNoiseModel, FlagNoiseFit
 from .noise_weight import NoiseWeight
 from .obsmat import ObsMat, coadd_observation_matrix
 from .operator import Operator
+from .pairdiff import PairDifference, StokesWeightsPairDiff
 from .pipeline import Pipeline
 from .pixels_healpix import PixelsHealpix
 from .pixels_wcs import PixelsWCS
