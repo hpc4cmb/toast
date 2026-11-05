@@ -13,6 +13,7 @@ from pshmem import MPIShared
 
 from .. import ops
 from ..data import Data
+from ..io import save_hdf5, load_hdf5
 from ..mpi import MPI, Comm
 from ..observation import Observation
 from ..observation import default_values as defaults
@@ -84,6 +85,25 @@ class ObservationTest(MPITestCase):
         tele = create_space_telescope(comm.group_size)
         obs = Observation(comm, tele, 10)
         self.assertTrue(obs.uid == int(obs.name))
+        self.assertTrue(obs.session.uid == obs.uid)
+        self.assertTrue(obs.session.name == obs.name)
+        self.assertTrue(obs.session.start is None)
+        self.assertTrue(obs.session.end is None)
+
+    def test_empty_save_load(self):
+        comm = Comm(world=self.comm)
+        tele = create_space_telescope(comm.group_size)
+        obs = Observation(comm, tele, 10)
+
+        save_hdf5(obs, self.outdir)
+        out_path = os.path.join(self.outdir, f"{obs.name}.h5")
+        check_obs = load_hdf5(out_path, comm)
+
+        if check_obs != obs:
+            msg = "Empty obs mismatch in HDF5 round trip "
+            msg += f"{check_obs} != {obs}"
+            print(msg, flush=True)
+            self.assertTrue(False)
 
     def test_observation(self):
         # Populate the observations
